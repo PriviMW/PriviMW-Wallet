@@ -22,7 +22,7 @@ import com.privimemobile.protocol.DAppManager
 import com.privimemobile.ui.theme.C
 
 @Composable
-fun DAppsScreen() {
+fun DAppsScreen(onBrowseStore: () -> Unit = {}) {
     val context = LocalContext.current
     var dapps by remember { mutableStateOf(DAppManager.getInstalled(context)) }
 
@@ -55,7 +55,7 @@ fun DAppsScreen() {
                     Text("No DApps installed", color = C.textSecondary, fontSize = 16.sp)
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { /* TODO: DApp Store browse */ },
+                        onClick = onBrowseStore,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                     ) {

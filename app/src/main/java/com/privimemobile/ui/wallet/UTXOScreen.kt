@@ -1,0 +1,373 @@
+package com.privimemobile.ui.wallet
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.WalletApi
+import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.WalletEventBus
+import org.json.JSONArray
+
+// UTXO status codes from Beam C++ core
+private object UtxoStatus {
+    const val AVAILABLE = 1
+    const val MATURING = 2
+    const val UNAVAILABLE = 3
+    const val OUTGOING = 4
+    const val INCOMING = 5
+    const val SPENT = 6
+    const val CONSUMED = 7
+}
+
+private data class Utxo(
+    val id: Long,
+    val stringId: String,
+    val amount: Long,
+    val status: Int,
+    val maturity: Long,
+    val confirmHeight: Long,
+    val createTxId: String,
+    val spentTxId: String,
+    val assetId: Int,
+    val isShielded: Boolean,
+)
+
+private enum class UtxoFilter(val label: String) {
+    ALL("All"),
+    AVAILABLE("Available"),
+    MATURING("Maturing"),
+    SPENT("Spent"),
+}
+
+@Composable
+fun UTXOScreen(onBack: () -> Unit = {}) {
+    // Request UTXOs on mount
+    LaunchedEffect(Unit) {
+        WalletApi.call("get_utxo") {}
+    }
+
+    // Listen for UTXO data via apiResult (get_utxo response)
+    val apiJson by WalletEventBus.apiResult.collectAsState(initial = "")
+    var utxos by remember { mutableStateOf<List<Utxo>>(emptyList()) }
+    var filter by remember { mutableStateOf(UtxoFilter.ALL) }
+
+    // Parse UTXOs from API responses
+    LaunchedEffect(apiJson) {
+        if (apiJson.isBlank()) return@LaunchedEffect
+        try {
+            val json = org.json.JSONObject(apiJson)
+            val result = json.optJSONObject("result") ?: return@LaunchedEffect
+            val arr = result.optJSONArray("utxos") ?: return@LaunchedEffect
+            utxos = parseUtxos(arr)
+        } catch (_: Exception) {}
+    }
+
+    val filtered = remember(utxos, filter) {
+        val list = when (filter) {
+            UtxoFilter.ALL -> utxos
+            UtxoFilter.AVAILABLE -> utxos.filter { it.status == UtxoStatus.AVAILABLE }
+            UtxoFilter.MATURING -> utxos.filter {
+                it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING
+            }
+            UtxoFilter.SPENT -> utxos.filter {
+                it.status == UtxoStatus.SPENT ||
+                        it.status == UtxoStatus.CONSUMED ||
+                        it.status == UtxoStatus.OUTGOING
+            }
+        }
+        list.sortedWith(compareBy<Utxo> { it.status }.thenByDescending { it.amount })
+    }
+
+    val totalAvailable = utxos
+        .filter { it.status == UtxoStatus.AVAILABLE }
+        .sumOf { it.amount }
+
+    val totalMaturing = utxos
+        .filter { it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING }
+        .sumOf { it.amount }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(C.bg),
+    ) {
+        // Back button
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+        ) {
+            Text("< Back", color = C.textSecondary)
+        }
+
+        // Summary card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = C.card),
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryItem(
+                    label = "Available",
+                    value = Helpers.formatBeam(totalAvailable),
+                    valueColor = C.text,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .background(C.border),
+                )
+                SummaryItem(
+                    label = "Maturing",
+                    value = Helpers.formatBeam(totalMaturing),
+                    valueColor = C.warning,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .background(C.border),
+                )
+                SummaryItem(
+                    label = "Total UTXOs",
+                    value = utxos.size.toString(),
+                    valueColor = C.text,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        // Filter tabs
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            UtxoFilter.entries.forEach { f ->
+                FilterChip(
+                    label = f.label,
+                    selected = filter == f,
+                    onClick = { filter = f },
+                )
+            }
+        }
+
+        // UTXO list
+        if (filtered.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(40.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (utxos.isEmpty()) "No UTXOs yet -- waiting for data..."
+                    else "No UTXOs match this filter",
+                    color = C.textSecondary,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(filtered, key = { "${it.stringId}-${it.id}" }) { utxo ->
+                    UtxoCard(utxo)
+                }
+                item { Spacer(Modifier.height(20.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryItem(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(label, color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = valueColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) Color(0x1A25D4D0) else Color.Transparent,
+        border = ButtonDefaults.outlinedButtonBorder(true).copy(
+            brush = androidx.compose.ui.graphics.SolidColor(
+                if (selected) C.accent else C.border
+            )
+        ),
+    ) {
+        Text(
+            text = label,
+            color = if (selected) C.accent else C.textSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun UtxoCard(utxo: Utxo) {
+    val statusColor = utxoStatusColor(utxo.status)
+    val statusLabel = utxoStatusLabel(utxo.status)
+    val ticker = if (utxo.assetId == 0) "BEAM" else "#${utxo.assetId}"
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = C.card),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header: amount + status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(statusColor),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${Helpers.formatBeam(utxo.amount)} $ticker",
+                        color = C.text,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Transparent,
+                    border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(statusColor)
+                    ),
+                ) {
+                    Text(
+                        text = statusLabel,
+                        color = statusColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+
+            // Detail rows
+            Spacer(Modifier.height(4.dp))
+
+            if (utxo.isShielded) {
+                UtxoDetailRow("Type", "Shielded")
+            }
+            if (utxo.maturity > 0) {
+                UtxoDetailRow("Maturity", "Block #${utxo.maturity}")
+            }
+            if (utxo.confirmHeight > 0) {
+                UtxoDetailRow("Confirmed", "Block #${utxo.confirmHeight}")
+            }
+            if (utxo.createTxId.isNotEmpty()) {
+                UtxoDetailRow("Created by", Helpers.truncateKey(utxo.createTxId, 6, 6))
+            }
+            if (utxo.spentTxId.isNotEmpty()) {
+                UtxoDetailRow("Spent by", Helpers.truncateKey(utxo.spentTxId, 6, 6))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UtxoDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, color = C.textSecondary.copy(alpha = 0.7f), fontSize = 12.sp)
+        Text(
+            value,
+            color = C.textSecondary,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+}
+
+private fun utxoStatusColor(status: Int): Color = when (status) {
+    UtxoStatus.AVAILABLE -> C.online
+    UtxoStatus.MATURING, UtxoStatus.INCOMING -> C.warning
+    UtxoStatus.OUTGOING -> C.outgoing
+    UtxoStatus.SPENT, UtxoStatus.CONSUMED -> C.textSecondary.copy(alpha = 0.5f)
+    else -> C.textSecondary
+}
+
+private fun utxoStatusLabel(status: Int): String = when (status) {
+    UtxoStatus.AVAILABLE -> "Available"
+    UtxoStatus.MATURING -> "Maturing"
+    UtxoStatus.UNAVAILABLE -> "Unavailable"
+    UtxoStatus.OUTGOING -> "Outgoing"
+    UtxoStatus.INCOMING -> "Incoming"
+    UtxoStatus.SPENT -> "Spent"
+    UtxoStatus.CONSUMED -> "Consumed"
+    else -> "Unknown"
+}
+
+private fun parseUtxos(arr: JSONArray): List<Utxo> {
+    return (0 until arr.length()).mapNotNull { i ->
+        val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+        Utxo(
+            id = obj.optLong("id"),
+            stringId = obj.optString("stringId", ""),
+            amount = obj.optLong("amount"),
+            status = obj.optInt("status"),
+            maturity = obj.optLong("maturity"),
+            confirmHeight = obj.optLong("confirmHeight"),
+            createTxId = obj.optString("createTxId", ""),
+            spentTxId = obj.optString("spentTxId", ""),
+            assetId = obj.optInt("assetId"),
+            isShielded = obj.optBoolean("isShielded"),
+        )
+    }
+}

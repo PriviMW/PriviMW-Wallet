@@ -25,6 +25,12 @@ import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
 import com.privimemobile.ui.wallet.SendScreen
 import com.privimemobile.ui.wallet.ReceiveScreen
+import com.privimemobile.ui.wallet.TransactionDetailScreen
+import com.privimemobile.ui.wallet.UTXOScreen
+import com.privimemobile.ui.wallet.AddressesScreen
+import com.privimemobile.ui.wallet.QRScannerScreen
+import com.privimemobile.ui.wallet.SendConfirmScreen
+import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
 import com.privimemobile.ui.chat.NewChatScreen
@@ -112,6 +118,25 @@ fun AppNavigation() {
             composable("receive") {
                 ReceiveScreen(onBack = { navController.popBackStack() })
             }
+            composable("tx_detail/{txId}") { backStackEntry ->
+                val txId = backStackEntry.arguments?.getString("txId") ?: ""
+                TransactionDetailScreen(txId = txId, onBack = { navController.popBackStack() })
+            }
+            composable("utxos") {
+                UTXOScreen(onBack = { navController.popBackStack() })
+            }
+            composable("addresses") {
+                AddressesScreen(onBack = { navController.popBackStack() })
+            }
+            composable("qr_scanner") {
+                QRScannerScreen(
+                    onScanned = { address ->
+                        navController.popBackStack()
+                        navController.navigate("send") // TODO: pass scanned address
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(Tab.CHATS.route) {
                 ChatsScreen(
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },
@@ -140,7 +165,12 @@ fun AppNavigation() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(Tab.DAPPS.route) { DAppsScreen() }
+            composable(Tab.DAPPS.route) {
+                DAppsScreen(onBrowseStore = { navController.navigate("dapp_store") })
+            }
+            composable("dapp_store") {
+                DAppStoreBrowseScreen(onBack = { navController.popBackStack() })
+            }
             composable(Tab.SETTINGS.route) { SettingsScreen() }
         }
     }

@@ -46,11 +46,24 @@ object ProtocolStartup {
     fun init(context: Context, scope: CoroutineScope) {
         Log.d(TAG, "Initializing protocol...")
 
-        // Load PriviMe shader
+        // Init subsystems
+        ProtocolStorage.init(context)
+        FileCache.init(context)
         ShaderInvoker.loadShader(context)
-
-        // Load DApp Store shader
         DAppStore.loadShader(context)
+        NodeReconnect.start(scope)
+
+        // Load persisted state
+        val savedConvs = ProtocolStorage.loadConversations()
+        val savedContacts = ProtocolStorage.loadContacts()
+        val savedUnread = ProtocolStorage.loadUnreadCounts()
+        contractStartTs = ProtocolStorage.getContractStartTs()
+        deletedConvs.putAll(ProtocolStorage.loadDeletedConvs())
+        blockedUsers.addAll(ProtocolStorage.loadBlockedUsers())
+
+        if (savedConvs.isNotEmpty()) _conversations.value = savedConvs
+        if (savedContacts.isNotEmpty()) _contacts.value = savedContacts
+        if (savedUnread.isNotEmpty()) _unreadCounts.value = savedUnread
 
         // Wire wallet events to protocol actions
         WalletApi.onSystemStateChanged = { checkIdentity() }
@@ -66,16 +79,35 @@ object ProtocolStartup {
     fun shutdown() {
         pollingJob?.cancel()
         pollingJob = null
+        NodeReconnect.stop()
         WalletApi.onSystemStateChanged = null
         WalletApi.onTxsChanged = null
+
+        // Persist state
+        ProtocolStorage.saveAll(
+            _conversations.value,
+            _contacts.value,
+            deletedConvs,
+            _unreadCounts.value,
+        )
     }
 
     /** Check our own PriviMe identity on-chain. */
     fun checkIdentity() {
         ContactResolver.checkOwnIdentity { id ->
+            val previousHandle = _identity.value?.handle
             _identity.value = id
             if (id.registered) {
                 Log.d(TAG, "Identity: @${id.handle} (${id.displayName})")
+                // Set storage scope when identity is first discovered or changes
+                if (previousHandle != id.handle) {
+                    ProtocolStorage.setUserScope(id.handle)
+                    // Set contract start timestamp on first run
+                    if (contractStartTs == 0L) {
+                        contractStartTs = System.currentTimeMillis() / 1000
+                        ProtocolStorage.setContractStartTs(contractStartTs)
+                    }
+                }
             } else {
                 Log.d(TAG, "Not registered")
             }

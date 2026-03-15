@@ -171,7 +171,12 @@ fun AppNavigation() {
             composable("dapp_store") {
                 DAppStoreBrowseScreen(onBack = { navController.popBackStack() })
             }
-            composable(Tab.SETTINGS.route) { SettingsScreen() }
+            composable(Tab.SETTINGS.route) {
+                SettingsScreen(
+                    onNavigateAddresses = { navController.navigate("addresses") },
+                    onNavigateUtxo = { navController.navigate("utxos") },
+                )
+            }
         }
     }
 }

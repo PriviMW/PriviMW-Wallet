@@ -28,15 +28,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
-// TX status codes from Beam core
-private object TxStatus {
-    const val PENDING = 0
-    const val IN_PROGRESS = 1
-    const val CANCELLED = 2
-    const val COMPLETED = 3
-    const val FAILED = 4
-    const val REGISTERING = 5
-}
+// Uses TxStatus from WalletScreen.kt (internal visibility)
 
 private val FAILURE_REASONS = mapOf(
     1 to "Invalid peer signature",

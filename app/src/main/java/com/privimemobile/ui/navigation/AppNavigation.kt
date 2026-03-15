@@ -13,23 +13,27 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
 import com.privimemobile.ui.wallet.SendScreen
 import com.privimemobile.ui.wallet.ReceiveScreen
+import com.privimemobile.ui.wallet.SendConfirmScreen
 import com.privimemobile.ui.wallet.TransactionDetailScreen
 import com.privimemobile.ui.wallet.UTXOScreen
 import com.privimemobile.ui.wallet.AddressesScreen
+import com.privimemobile.ui.wallet.AssetDetailScreen
 import com.privimemobile.ui.wallet.QRScannerScreen
-import com.privimemobile.ui.wallet.SendConfirmScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
@@ -59,41 +63,57 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    // Hide bottom bar on certain screens
+    val hideBottomBar = currentDestination?.route?.let { route ->
+        route.startsWith("chat/") ||
+                route == "send" ||
+                route.startsWith("send_confirm") ||
+                route == "receive" ||
+                route == "qr_scanner" ||
+                route.startsWith("tx_detail") ||
+                route.startsWith("asset_detail") ||
+                route == "dapp_store" ||
+                route == "new_chat" ||
+                route == "register"
+    } ?: false
+
     Scaffold(
         containerColor = C.bg,
         bottomBar = {
-            NavigationBar(
-                containerColor = C.card,
-                contentColor = C.text,
-            ) {
-                Tab.entries.forEach { tab ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (!hideBottomBar) {
+                NavigationBar(
+                    containerColor = C.card,
+                    contentColor = C.text,
+                ) {
+                    Tab.entries.forEach { tab ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                contentDescription = tab.label,
-                            )
-                        },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = C.accent,
-                            selectedTextColor = C.accent,
-                            unselectedIconColor = C.textSecondary,
-                            unselectedTextColor = C.textSecondary,
-                            indicatorColor = C.cardAlt,
-                        ),
-                    )
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                    contentDescription = tab.label,
+                                )
+                            },
+                            label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = C.accent,
+                                selectedTextColor = C.accent,
+                                unselectedIconColor = C.textSecondary,
+                                unselectedTextColor = C.textSecondary,
+                                indicatorColor = C.cardAlt,
+                            ),
+                        )
+                    }
                 }
             }
         },
@@ -107,12 +127,70 @@ fun AppNavigation() {
                 WalletScreen(
                     onSend = { navController.navigate("send") },
                     onReceive = { navController.navigate("receive") },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                    onAssetDetail = { assetId -> navController.navigate("asset_detail/$assetId") },
+                )
+            }
+            composable(
+                "send?address={address}",
+                arguments = listOf(navArgument("address") { type = NavType.StringType; defaultValue = "" }),
+            ) { backStackEntry ->
+                val scannedAddress = backStackEntry.arguments?.getString("address") ?: ""
+                SendScreen(
+                    onBack = { navController.popBackStack() },
+                    onSent = { navController.popBackStack() },
+                    onScanQr = { navController.navigate("qr_scanner") },
+                    scannedAddress = scannedAddress.ifEmpty { null },
+                    onNavigateConfirm = { address, amount, fee, comment, assetId ->
+                        navController.navigate(
+                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId"
+                        )
+                    },
                 )
             }
             composable("send") {
                 SendScreen(
                     onBack = { navController.popBackStack() },
                     onSent = { navController.popBackStack() },
+                    onScanQr = { navController.navigate("qr_scanner") },
+                    onNavigateConfirm = { address, amount, fee, comment, assetId ->
+                        navController.navigate(
+                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId"
+                        )
+                    },
+                )
+            }
+            composable(
+                "send_confirm/{address}/{amount}/{fee}/{comment}/{assetId}",
+                arguments = listOf(
+                    navArgument("address") { type = NavType.StringType },
+                    navArgument("amount") { type = NavType.LongType },
+                    navArgument("fee") { type = NavType.LongType },
+                    navArgument("comment") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("assetId") { type = NavType.IntType; defaultValue = 0 },
+                ),
+            ) { backStackEntry ->
+                val address = backStackEntry.arguments?.getString("address") ?: ""
+                val amount = backStackEntry.arguments?.getLong("amount") ?: 0L
+                val fee = backStackEntry.arguments?.getLong("fee") ?: 0L
+                val comment = try {
+                    java.net.URLDecoder.decode(
+                        backStackEntry.arguments?.getString("comment") ?: "", "UTF-8"
+                    )
+                } catch (_: Exception) { "" }
+                val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
+
+                SendConfirmScreen(
+                    address = address,
+                    amountGroth = amount,
+                    fee = fee,
+                    comment = comment,
+                    assetId = assetId,
+                    onApproved = {
+                        // Pop back to wallet home
+                        navController.popBackStack(Tab.WALLET.route, inclusive = false)
+                    },
+                    onRejected = { navController.popBackStack() },
                 )
             }
             composable("receive") {
@@ -121,6 +199,13 @@ fun AppNavigation() {
             composable("tx_detail/{txId}") { backStackEntry ->
                 val txId = backStackEntry.arguments?.getString("txId") ?: ""
                 TransactionDetailScreen(txId = txId, onBack = { navController.popBackStack() })
+            }
+            composable(
+                "asset_detail/{assetId}",
+                arguments = listOf(navArgument("assetId") { type = NavType.IntType; defaultValue = 0 }),
+            ) { backStackEntry ->
+                val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
+                AssetDetailScreen(assetId = assetId, onBack = { navController.popBackStack() })
             }
             composable("utxos") {
                 UTXOScreen(onBack = { navController.popBackStack() })
@@ -132,7 +217,8 @@ fun AppNavigation() {
                 QRScannerScreen(
                     onScanned = { address ->
                         navController.popBackStack()
-                        navController.navigate("send") // TODO: pass scanned address
+                        // Navigate to send with the scanned address
+                        navController.navigate("send?address=$address")
                     },
                     onBack = { navController.popBackStack() },
                 )

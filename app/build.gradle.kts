@@ -82,6 +82,9 @@ dependencies {
     implementation(libs.camerax.view)
     implementation(libs.zxing.core)
 
+    // Image loading
+    implementation(libs.coil.compose)
+
     // Core Android
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)

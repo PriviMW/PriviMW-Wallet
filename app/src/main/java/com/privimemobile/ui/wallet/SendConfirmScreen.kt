@@ -14,10 +14,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -27,15 +29,10 @@ import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 
 /**
- * Send confirmation screen — shows TX details and requires user approval.
+ * Send confirmation screen -- shows TX details and requires user approval.
+ * Supports biometric authentication and password fallback.
  *
- * @param address Recipient address.
- * @param amountGroth Amount in groth (1 BEAM = 100,000,000 groth).
- * @param fee Fee in groth.
- * @param comment Optional transaction comment.
- * @param assetId Asset ID (0 = BEAM).
- * @param onApproved Called after TX is successfully submitted.
- * @param onRejected Called when user rejects the TX.
+ * Fully ports SendConfirmScreen.tsx.
  */
 @Composable
 fun SendConfirmScreen(
@@ -52,8 +49,17 @@ fun SendConfirmScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var biometricAvailable by remember { mutableStateOf(false) }
 
+    // Password modal state
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf("") }
+
     val ticker = if (assetId == 0) "BEAM" else "Asset #$assetId"
     val totalGroth = amountGroth + fee
+
+    // Determine TX type from address format (SBBS = short hex)
+    val isSbbs = Regex("^[0-9a-fA-F]{62,68}$").matches(address.trim())
+    val txTypeLabel = if (isSbbs) "SBBS (Online)" else "Regular (Offline)"
 
     // Check biometric availability
     LaunchedEffect(Unit) {
@@ -109,7 +115,7 @@ fun SendConfirmScreen(
                     }
                 }
                 override fun onAuthenticationFailed() {
-                    // User can retry, don't show error
+                    // User can retry
                 }
             }
         )
@@ -138,28 +144,19 @@ fun SendConfirmScreen(
         }
 
         // Header
-        Column(
+        Text(
+            "SEND CONFIRMATION",
+            color = C.textSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(top = 8.dp, bottom = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                "Confirm Transaction",
-                color = C.text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Review the details below before sending",
-                color = C.textSecondary,
-                fontSize = 14.sp,
-            )
-        }
+                .padding(bottom = 16.dp),
+        )
 
-        // Amount display
+        // Details card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,73 +165,142 @@ fun SendConfirmScreen(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = C.card),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("SENDING", color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "-${Helpers.formatBeam(amountGroth)} $ticker",
-                    color = C.outgoing,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                // Sending to
+                ConfirmRow("Sending to") {
+                    Text(
+                        address,
+                        color = C.text,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.End,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                HorizontalDivider(color = C.border, thickness = 1.dp)
 
-        // Transaction details card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = C.card),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                ConfirmRow("Recipient", address, mono = true)
+                // Transaction type
+                ConfirmRow("Transaction type") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    if (isSbbs) C.warning else Color(0xFF25D4D0),
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                ),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            txTypeLabel,
+                            color = C.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
-                ConfirmRow("Amount", "${Helpers.formatBeam(amountGroth)} $ticker")
+
+                // Amount
+                ConfirmRow("Amount") {
+                    Text(
+                        "${Helpers.formatBeam(amountGroth)} $ticker",
+                        color = C.outgoing,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
-                ConfirmRow("Fee", "${Helpers.formatBeam(fee)} BEAM")
+
+                // Fee
+                ConfirmRow("Transaction fee") {
+                    Text(
+                        "${Helpers.formatBeam(fee)} BEAM",
+                        color = C.textSecondary,
+                        fontSize = 14.sp,
+                    )
+                }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
-                ConfirmRow(
-                    "Total",
-                    "${Helpers.formatBeam(totalGroth)} ${if (assetId == 0) "BEAM" else "$ticker + fee"}",
-                    valueColor = C.text,
-                    bold = true,
-                )
+
+                // Total
+                ConfirmRow("Total") {
+                    Text(
+                        "${Helpers.formatBeam(totalGroth)} BEAM",
+                        color = C.text,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                // Comment
                 if (comment.isNotEmpty()) {
                     HorizontalDivider(color = C.border, thickness = 1.dp)
-                    ConfirmRow("Comment", comment)
+                    ConfirmRow("Comment") {
+                        Text(
+                            comment,
+                            color = C.textSecondary,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
                 }
             }
         }
 
-        // Warning note
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = Color(0x14F4CE4A),
-        ) {
-            Row {
-                Box(
-                    modifier = Modifier
-                        .width(3.dp)
-                        .height(40.dp)
-                        .background(C.warning),
-                )
-                Text(
-                    "Transactions cannot be reversed once confirmed.",
-                    color = C.textSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.padding(12.dp),
-                )
+        // SBBS warning
+        if (isSbbs) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x14F0A030),
+            ) {
+                Row {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(IntrinsicSize.Min)
+                            .background(C.warning),
+                    )
+                    Text(
+                        "SBBS transaction \u2014 recipient must be online within 12 hours or the transaction will expire.",
+                        color = C.warning,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+        } else {
+            // Non-reversible warning
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x14F4CE4A),
+            ) {
+                Row {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(40.dp)
+                            .background(C.warning),
+                    )
+                    Text(
+                        "Transactions cannot be reversed once confirmed.",
+                        color = C.textSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
             }
         }
 
@@ -259,63 +325,37 @@ fun SendConfirmScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Approve with biometric
-            if (biometricAvailable) {
-                Button(
-                    onClick = { authenticateAndSend() },
-                    enabled = !sending,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                ) {
-                    if (sending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = C.textDark,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(
-                            "Approve with Biometrics",
-                            color = C.textDark,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                        )
-                    }
-                }
-            }
-
-            // Approve without biometric (or fallback)
+            // Send button (with biometric if available)
             Button(
-                onClick = { sendTransaction() },
+                onClick = {
+                    if (biometricAvailable) authenticateAndSend()
+                    else sendTransaction()
+                },
                 enabled = !sending,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (biometricAvailable) C.card else C.accent,
-                ),
+                colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
             ) {
-                if (sending && !biometricAvailable) {
+                if (sending) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = if (biometricAvailable) C.accent else C.textDark,
+                        color = Color.White,
                         strokeWidth = 2.dp,
                     )
                 } else {
                     Text(
-                        if (biometricAvailable) "Approve without Biometrics" else "Approve & Send",
-                        color = if (biometricAvailable) C.accent else C.textDark,
+                        if (biometricAvailable) "SEND (Biometric)" else "SEND",
+                        color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
+                        letterSpacing = 1.sp,
                     )
                 }
             }
 
-            // Reject
+            // Back / Edit button
             OutlinedButton(
                 onClick = onRejected,
                 enabled = !sending,
@@ -324,52 +364,128 @@ fun SendConfirmScreen(
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp),
                 border = ButtonDefaults.outlinedButtonBorder(true).copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(C.error)
+                    brush = androidx.compose.ui.graphics.SolidColor(C.border)
                 ),
             ) {
                 Text(
-                    "Reject",
-                    color = C.error,
-                    fontWeight = FontWeight.SemiBold,
+                    "Back \u2014 Edit",
+                    color = C.textSecondary,
                     fontSize = 15.sp,
                 )
+            }
+        }
+    }
+
+    // Password confirmation dialog
+    if (showPasswordDialog) {
+        Dialog(onDismissRequest = { showPasswordDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = C.card),
+                modifier = Modifier.widthIn(max = 340.dp),
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        "Enter Password",
+                        color = C.text,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Confirm your wallet password to send",
+                        color = C.textSecondary,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = {
+                            passwordInput = it
+                            passwordError = ""
+                        },
+                        placeholder = { Text("Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = C.border,
+                            unfocusedBorderColor = C.border,
+                            cursorColor = C.accent,
+                            focusedContainerColor = C.bg,
+                            unfocusedContainerColor = C.bg,
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                    )
+                    if (passwordError.isNotEmpty()) {
+                        Text(
+                            passwordError,
+                            color = C.error,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { showPasswordDialog = false },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(C.border)
+                            ),
+                        ) {
+                            Text("Cancel", color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = {
+                                if (passwordInput.isNotBlank()) {
+                                    showPasswordDialog = false
+                                    sendTransaction()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
+                        ) {
+                            Text("Confirm", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ConfirmRow(
-    label: String,
-    value: String,
-    mono: Boolean = false,
-    valueColor: Color = C.textSecondary,
-    bold: Boolean = false,
-) {
+private fun ConfirmRow(label: String, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 14.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = label,
+            label,
             color = C.textSecondary,
             fontSize = 13.sp,
-            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-            modifier = Modifier.padding(end = 12.dp),
+            modifier = Modifier.weight(1f),
         )
-        Text(
-            text = value,
-            color = if (bold) C.text else valueColor,
-            fontSize = if (mono) 11.sp else 13.sp,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            textAlign = TextAlign.End,
-            maxLines = if (mono) 3 else 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        Row(
+            modifier = Modifier.weight(2f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content()
+        }
     }
 }

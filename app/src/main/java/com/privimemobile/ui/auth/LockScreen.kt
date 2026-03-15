@@ -1,5 +1,9 @@
 package com.privimemobile.ui.auth
 
+import android.widget.Toast
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,17 +13,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import com.privimemobile.R
 import com.privimemobile.protocol.Config
+import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
@@ -28,21 +37,27 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun LockScreen(onUnlocked: () -> Unit) {
+    val context = LocalContext.current
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    fun unlock() {
-        if (password.isBlank()) {
-            error = "Enter your password"
-            return
-        }
+    // Check biometric availability
+    val biometricEnabled = remember { SecureStorage.getBoolean(SecureStorage.KEY_FINGERPRINT_ENABLED) }
+    val biometricAvailable = remember {
+        val mgr = BiometricManager.from(context)
+        mgr.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+    val canUseBiometric = biometricEnabled && biometricAvailable
+
+    fun openWallet(pass: String) {
         loading = true
         error = null
         scope.launch {
+            val nodeAddr = SecureStorage.getNodeAddress()
             val ok = withContext(Dispatchers.Main) {
-                WalletManager.openWallet(password = password, nodeAddr = Config.DEFAULT_NODE)
+                WalletManager.openWallet(password = pass, nodeAddr = nodeAddr)
             }
             loading = false
             if (ok) {
@@ -51,6 +66,42 @@ fun LockScreen(onUnlocked: () -> Unit) {
                 error = "Wrong password"
                 password = ""
             }
+        }
+    }
+
+    fun showBiometricPrompt() {
+        val activity = context as? FragmentActivity ?: return
+        val storedPass = SecureStorage.getWalletPassword() ?: return
+
+        val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(context),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    openWallet(storedPass)
+                }
+                override fun onAuthenticationFailed() {
+                    // Single attempt failed — prompt stays open
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        Toast.makeText(context, errString, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            })
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock PriviMW")
+            .setSubtitle("Authenticate to unlock your wallet")
+            .setNegativeButtonText("Use Password")
+            .build()
+
+        prompt.authenticate(promptInfo)
+    }
+
+    // Auto-trigger biometric prompt on mount
+    LaunchedEffect(canUseBiometric) {
+        if (canUseBiometric) {
+            showBiometricPrompt()
         }
     }
 
@@ -63,10 +114,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 painter = painterResource(R.drawable.privimw_logo),
                 contentDescription = "PriviMW Logo",
@@ -84,6 +132,24 @@ fun LockScreen(onUnlocked: () -> Unit) {
         )
         Spacer(Modifier.height(48.dp))
 
+        // Biometric button (if enabled)
+        if (canUseBiometric) {
+            OutlinedButton(
+                onClick = { showBiometricPrompt() },
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(C.accent)
+                ),
+            ) {
+                Text("Unlock with Biometrics", color = C.accent, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("or enter password", color = C.textSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(16.dp))
+        }
+
         OutlinedTextField(
             value = password,
             onValueChange = { password = it; error = null },
@@ -93,9 +159,10 @@ fun LockScreen(onUnlocked: () -> Unit) {
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Go,
             ),
-            keyboardActions = KeyboardActions(onGo = { unlock() }),
+            keyboardActions = KeyboardActions(onGo = { openWallet(password) }),
             singleLine = true,
             enabled = !loading,
+            autoFocus = !canUseBiometric,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = C.accent,
@@ -113,8 +180,8 @@ fun LockScreen(onUnlocked: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Button(
-            onClick = { unlock() },
-            enabled = !loading,
+            onClick = { openWallet(password) },
+            enabled = !loading && password.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
@@ -130,4 +197,40 @@ fun LockScreen(onUnlocked: () -> Unit) {
             }
         }
     }
+}
+
+// Extension to support autoFocus on OutlinedTextField
+@Composable
+private fun OutlinedTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: @Composable (() -> Unit)?,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation,
+    keyboardOptions: KeyboardOptions,
+    keyboardActions: KeyboardActions,
+    singleLine: Boolean,
+    enabled: Boolean,
+    autoFocus: Boolean,
+    modifier: Modifier,
+    colors: TextFieldColors,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(autoFocus) {
+        if (autoFocus) {
+            kotlinx.coroutines.delay(300)
+            try { focusRequester.requestFocus() } catch (_: Exception) {}
+        }
+    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        singleLine = singleLine,
+        enabled = enabled,
+        modifier = modifier.then(androidx.compose.ui.Modifier.focusRequester(focusRequester)),
+        colors = colors,
+    )
 }

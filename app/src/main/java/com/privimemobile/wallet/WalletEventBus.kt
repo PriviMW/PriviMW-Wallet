@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 object WalletEventBus {
 
-    // Wallet status (balance, height, etc.)
-    private val _walletStatus = MutableSharedFlow<WalletStatusEvent>(extraBufferCapacity = 1)
-    val walletStatus: SharedFlow<WalletStatusEvent> = _walletStatus.asSharedFlow()
+    // Wallet status (balance, height, etc.) — StateFlow for always-current value
+    private val _walletStatus = kotlinx.coroutines.flow.MutableStateFlow(WalletStatusEvent(0, 0, 0, 0))
+    val walletStatus: kotlinx.coroutines.flow.StateFlow<WalletStatusEvent> = _walletStatus
 
     // Transaction list updates
     private val _transactions = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -25,9 +25,9 @@ object WalletEventBus {
     private val _syncProgress = MutableSharedFlow<SyncProgressEvent>(extraBufferCapacity = 1)
     val syncProgress: SharedFlow<SyncProgressEvent> = _syncProgress.asSharedFlow()
 
-    // Node connection state
-    private val _nodeConnection = MutableSharedFlow<NodeConnectionEvent>(extraBufferCapacity = 1)
-    val nodeConnection: SharedFlow<NodeConnectionEvent> = _nodeConnection.asSharedFlow()
+    // Node connection state — uses StateFlow so UI always has current value
+    private val _nodeConnection = kotlinx.coroutines.flow.MutableStateFlow(NodeConnectionEvent(connected = false))
+    val nodeConnection: kotlinx.coroutines.flow.StateFlow<NodeConnectionEvent> = _nodeConnection
 
     // API results (invoke_contract responses, wallet_status, etc.)
     private val _apiResult = MutableSharedFlow<String>(extraBufferCapacity = 64)
@@ -51,10 +51,10 @@ object WalletEventBus {
 
     // --- Emit functions (called from WalletListener on UI thread) ---
 
-    fun emitWalletStatus(event: WalletStatusEvent) { _walletStatus.tryEmit(event) }
+    fun emitWalletStatus(event: WalletStatusEvent) { _walletStatus.value = event }
     fun emitTransactions(json: String) { _transactions.tryEmit(json) }
     fun emitSyncProgress(event: SyncProgressEvent) { _syncProgress.tryEmit(event) }
-    fun emitNodeConnection(event: NodeConnectionEvent) { _nodeConnection.tryEmit(event) }
+    fun emitNodeConnection(event: NodeConnectionEvent) { _nodeConnection.value = event }
     fun emitApiResult(json: String) { _apiResult.tryEmit(json) }
     fun emitContractConsent(event: ContractConsentEvent) { _contractConsent.tryEmit(event) }
     fun emitSendConsent(event: SendConsentEvent) { _sendConsent.tryEmit(event) }

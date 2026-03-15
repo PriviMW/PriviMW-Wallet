@@ -25,7 +25,10 @@ import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
 import com.privimemobile.ui.wallet.SendScreen
 import com.privimemobile.ui.wallet.ReceiveScreen
+import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
+import com.privimemobile.ui.chat.NewChatScreen
+import com.privimemobile.ui.chat.RegisterScreen
 import com.privimemobile.ui.dapps.DAppsScreen
 import com.privimemobile.ui.settings.SettingsScreen
 
@@ -109,7 +112,34 @@ fun AppNavigation() {
             composable("receive") {
                 ReceiveScreen(onBack = { navController.popBackStack() })
             }
-            composable(Tab.CHATS.route) { ChatsScreen() }
+            composable(Tab.CHATS.route) {
+                ChatsScreen(
+                    onOpenChat = { handle -> navController.navigate("chat/$handle") },
+                    onNewChat = { navController.navigate("new_chat") },
+                )
+            }
+            composable("chat/{handle}") { backStackEntry ->
+                val handle = backStackEntry.arguments?.getString("handle") ?: ""
+                ChatScreen(
+                    handle = handle,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("new_chat") {
+                NewChatScreen(
+                    onStartChat = { handle ->
+                        navController.popBackStack()
+                        navController.navigate("chat/$handle")
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("register") {
+                RegisterScreen(
+                    onRegistered = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(Tab.DAPPS.route) { DAppsScreen() }
             composable(Tab.SETTINGS.route) { SettingsScreen() }
         }

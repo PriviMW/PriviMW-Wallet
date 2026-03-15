@@ -2,6 +2,8 @@ package com.privimemobile.ui.wallet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,15 +12,55 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletStatusEvent
+import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.*
+
+/** Simple transaction display model. */
+private data class TxItem(
+    val txId: String,
+    val amount: Long,
+    val fee: Long,
+    val sender: Boolean,
+    val status: Int,
+    val message: String,
+    val createTime: Long,
+    val assetId: Int,
+    val peerId: String,
+)
 
 @Composable
-fun WalletScreen() {
+fun WalletScreen(onSend: () -> Unit = {}, onReceive: () -> Unit = {}) {
     val walletStatus by WalletEventBus.walletStatus.collectAsState(
         initial = WalletStatusEvent(0, 0, 0, 0)
     )
+    val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
+
+    val transactions = remember(txJson) {
+        try {
+            val arr = JSONArray(txJson)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                TxItem(
+                    txId = obj.optString("txId"),
+                    amount = obj.optLong("amount"),
+                    fee = obj.optLong("fee"),
+                    sender = obj.optBoolean("sender"),
+                    status = obj.optInt("status"),
+                    message = obj.optString("message", ""),
+                    createTime = obj.optLong("createTime"),
+                    assetId = obj.optInt("assetId"),
+                    peerId = obj.optString("peerId", ""),
+                )
+            }.sortedByDescending { it.createTime }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -39,7 +81,7 @@ fun WalletScreen() {
                 Text("Available Balance", color = C.textSecondary, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = formatBeam(walletStatus.available),
+                    text = Helpers.formatBeam(walletStatus.available),
                     color = C.text,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
@@ -56,7 +98,7 @@ fun WalletScreen() {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Receiving", color = C.textSecondary, fontSize = 11.sp)
                                 Text(
-                                    formatBeam(walletStatus.receiving),
+                                    Helpers.formatBeam(walletStatus.receiving),
                                     color = C.incoming,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
@@ -67,7 +109,7 @@ fun WalletScreen() {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Sending", color = C.textSecondary, fontSize = 11.sp)
                                 Text(
-                                    formatBeam(walletStatus.sending),
+                                    Helpers.formatBeam(walletStatus.sending),
                                     color = C.outgoing,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
@@ -87,7 +129,7 @@ fun WalletScreen() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Button(
-                onClick = { /* TODO: navigate to send */ },
+                onClick = onSend,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
@@ -95,7 +137,7 @@ fun WalletScreen() {
                 Text("Send", color = C.text, fontWeight = FontWeight.Bold)
             }
             Button(
-                onClick = { /* TODO: navigate to receive */ },
+                onClick = onReceive,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.incoming),
@@ -105,24 +147,83 @@ fun WalletScreen() {
         }
 
         Spacer(Modifier.height(24.dp))
-
-        // Transaction list header
         Text("Transactions", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
-        // Placeholder
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("No transactions yet", color = C.textSecondary, fontSize = 14.sp)
+        if (transactions.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("No transactions yet", color = C.textSecondary, fontSize = 14.sp)
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(transactions, key = { it.txId }) { tx ->
+                    TxCard(tx)
+                }
+            }
         }
     }
 }
 
-/** Convert groth (10^-8 BEAM) to display string */
-private fun formatBeam(groth: Long): String {
-    if (groth == 0L) return "0"
-    val beam = groth / 100_000_000.0
-    return String.format("%.8f", beam).trimEnd('0').trimEnd('.')
+@Composable
+private fun TxCard(tx: TxItem) {
+    val isSend = tx.sender
+    val statusText = when (tx.status) {
+        0 -> "Pending"
+        1 -> "In Progress"
+        2 -> "Cancelled"
+        3 -> "Completed"
+        4 -> "Failed"
+        5 -> "Registering"
+        else -> "Unknown"
+    }
+    val statusColor = when (tx.status) {
+        3 -> C.online          // completed
+        4, 2 -> C.error        // failed, cancelled
+        else -> C.textSecondary // pending, in progress
+    }
+
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = C.card),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (isSend) "Sent" else "Received",
+                    color = C.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    statusText,
+                    color = statusColor,
+                    fontSize = 11.sp,
+                )
+                if (tx.createTime > 0) {
+                    Text(
+                        formatDate(tx.createTime),
+                        color = C.textSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
+            Text(
+                text = "${if (isSend) "-" else "+"}${Helpers.formatBeam(tx.amount)} BEAM",
+                color = if (isSend) C.outgoing else C.incoming,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+private val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
+private fun formatDate(timestamp: Long): String {
+    return try { dateFormat.format(Date(timestamp * 1000)) } catch (_: Exception) { "" }
 }

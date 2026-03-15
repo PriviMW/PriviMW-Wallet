@@ -23,6 +23,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
+import com.privimemobile.ui.wallet.SendScreen
+import com.privimemobile.ui.wallet.ReceiveScreen
 import com.privimemobile.ui.chat.ChatsScreen
 import com.privimemobile.ui.dapps.DAppsScreen
 import com.privimemobile.ui.settings.SettingsScreen
@@ -92,7 +94,21 @@ fun AppNavigation() {
             startDestination = Tab.WALLET.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Tab.WALLET.route) { WalletScreen() }
+            composable(Tab.WALLET.route) {
+                WalletScreen(
+                    onSend = { navController.navigate("send") },
+                    onReceive = { navController.navigate("receive") },
+                )
+            }
+            composable("send") {
+                SendScreen(
+                    onBack = { navController.popBackStack() },
+                    onSent = { navController.popBackStack() },
+                )
+            }
+            composable("receive") {
+                ReceiveScreen(onBack = { navController.popBackStack() })
+            }
             composable(Tab.CHATS.route) { ChatsScreen() }
             composable(Tab.DAPPS.route) { DAppsScreen() }
             composable(Tab.SETTINGS.route) { SettingsScreen() }

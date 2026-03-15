@@ -30,15 +30,20 @@ object WalletListener {
     @JvmStatic
     fun onStatus(status: Array<WalletStatusDTO>?) {
         if (status == null) return
+        // Mark data received for error 4 suppression (matches RN lastDataTs pattern)
+        com.privimemobile.protocol.NodeReconnect.onDataReceived()
         status.forEach { asset ->
             uiHandler.post {
                 WalletEventBus.emitWalletStatus(
                     WalletStatusEvent(
+                        assetId = asset.assetId,
                         available = asset.available,
                         receiving = asset.receiving,
                         sending = asset.sending,
                         maturing = asset.maturing,
                         height = asset.system.height,
+                        shielded = asset.shielded,
+                        maxPrivacy = asset.maxPrivacy,
                     )
                 )
             }
@@ -58,6 +63,7 @@ object WalletListener {
 
     @JvmStatic
     fun onTxStatus(action: Int, tx: Array<TxDescriptionDTO>?) {
+        com.privimemobile.protocol.NodeReconnect.onDataReceived()
         val arr = JSONArray()
         tx?.forEach { t ->
             val obj = JSONObject()
@@ -93,11 +99,13 @@ object WalletListener {
 
     @JvmStatic
     fun onSyncProgressUpdated(done: Int, total: Int) {
+        com.privimemobile.protocol.NodeReconnect.onDataReceived()
         uiHandler.post { WalletEventBus.emitSyncProgress(SyncProgressEvent(done, total)) }
     }
 
     @JvmStatic
     fun onNodeSyncProgressUpdated(done: Int, total: Int) {
+        com.privimemobile.protocol.NodeReconnect.onDataReceived()
         uiHandler.post { WalletEventBus.emitSyncProgress(SyncProgressEvent(done, total)) }
     }
 
@@ -106,6 +114,10 @@ object WalletListener {
     @JvmStatic
     fun onNodeConnectedStatusChanged(isNodeConnected: Boolean) {
         Log.d(TAG, "onNodeConnected: $isNodeConnected")
+        if (isNodeConnected) {
+            // Mark data received — connection itself proves data flow
+            com.privimemobile.protocol.NodeReconnect.onDataReceived()
+        }
         uiHandler.post {
             WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = isNodeConnected))
             if (isNodeConnected) {
@@ -116,7 +128,17 @@ object WalletListener {
 
     @JvmStatic
     fun onNodeConnectionFailed(error: Int) {
-        Log.d(TAG, "onNodeConnectionFailed: $error")
+        // On Beam 7.x, error 4 fires for secondary connections even when primary is fine.
+        // Suppress UI update if we received real data within 10 seconds (matches RN useBeamEvents.ts L213-214)
+        val timeSinceData = System.currentTimeMillis() - com.privimemobile.protocol.NodeReconnect.lastDataTs
+        if (timeSinceData < 10_000) {
+            // Got data recently — not a real failure, don't update UI
+            return
+        }
+        Log.d(TAG, "onNodeConnectionFailed: $error (timeSinceData=${timeSinceData}ms)")
+        // Notify NodeReconnect directly (so it can count failures and switch nodes)
+        com.privimemobile.protocol.NodeReconnect.onConnectionFailed(error)
+        // Update UI — show disconnected
         uiHandler.post {
             WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = false, error = error))
         }
@@ -144,13 +166,21 @@ object WalletListener {
 
     @JvmStatic
     fun onAddressesChanged(action: Int, addresses: Array<WalletAddressDTO>?) {
-        // Re-fetch addresses on change
+        // Re-fetch own addresses to update UI
+        uiHandler.post {
+            try {
+                WalletManager.walletInstance?.getAddresses(true)
+            } catch (_: Exception) {}
+        }
     }
 
     @JvmStatic
     fun onGeneratedNewAddress(addr: WalletAddressDTO) {
+        // Re-fetch full address list so UI gets updated array
         uiHandler.post {
-            WalletEventBus.emitAddresses(AddressesEvent(true, addr.walletID))
+            try {
+                WalletManager.walletInstance?.getAddresses(true)
+            } catch (_: Exception) {}
         }
     }
 
@@ -195,44 +225,123 @@ object WalletListener {
 
     // === Other callbacks (must exist for JNI) ===
 
-    @JvmStatic fun onCantSendToExpired() { }
+    @JvmStatic fun onCantSendToExpired() {
+        Log.w(TAG, "onCantSendToExpired")
+        uiHandler.post { WalletEventBus.emitWalletEvent("cant_send_expired") }
+    }
     @JvmStatic fun onStartedNode() { }
     @JvmStatic fun onStoppedNode() { }
     @JvmStatic fun onNodeCreated() { }
     @JvmStatic fun onNodeThreadFinished() { }
     @JvmStatic fun onFailedToStartNode() { Log.w(TAG, "onFailedToStartNode") }
 
-    @JvmStatic fun onPaymentProofExported(txId: String, proof: PaymentInfoDTO) { }
+    @JvmStatic fun onPaymentProofExported(txId: String, proof: PaymentInfoDTO) {
+        uiHandler.post {
+            WalletEventBus.emitPaymentProof(
+                PaymentProofEvent(
+                    txId = txId,
+                    senderId = proof.senderId,
+                    receiverId = proof.receiverId,
+                    amount = proof.amount,
+                    kernelId = proof.kernelId,
+                    isValid = proof.isValid,
+                    rawProof = proof.rawProof,
+                    assetId = proof.assetId,
+                )
+            )
+        }
+    }
 
     @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { }
     @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { }
     @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { }
-    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) { }
+    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) {
+        // Refresh UTXO list for UTXOScreen
+        uiHandler.post {
+            try { WalletManager.walletInstance?.getAllUtxosStatus() } catch (_: Exception) {}
+        }
+    }
 
-    @JvmStatic fun onChangeCalculated(amount: Long) { }
-    @JvmStatic fun onCoinsSelected(explicitFee: Long, change: Long, minimalExplicitFee: Long, max: Long) { }
+    @JvmStatic fun onChangeCalculated(amount: Long) {
+        uiHandler.post { WalletEventBus.emitCoinSelection(CoinSelectionEvent(change = amount)) }
+    }
+    @JvmStatic fun onCoinsSelected(explicitFee: Long, change: Long, minimalExplicitFee: Long, max: Long) {
+        uiHandler.post {
+            WalletEventBus.emitCoinSelection(CoinSelectionEvent(
+                explicitFee = explicitFee, change = change,
+                minimalFee = minimalExplicitFee, maxAmount = max,
+            ))
+        }
+    }
     @JvmStatic fun onNeedExtractShieldedCoins(value: Boolean) { }
 
     @JvmStatic fun onImportRecoveryProgress(done: Long, total: Long) {
         uiHandler.post { WalletEventBus.emitSyncProgress(SyncProgressEvent(done.toInt(), total.toInt())) }
     }
 
-    @JvmStatic fun onImportDataFromJson(isOk: Boolean) { }
-    @JvmStatic fun onExportDataToJson(data: String) { }
+    @JvmStatic fun onImportDataFromJson(isOk: Boolean) {
+        Log.d(TAG, "onImportDataFromJson: $isOk")
+        uiHandler.post { WalletEventBus.emitWalletEvent(if (isOk) "import_ok" else "import_failed") }
+        if (isOk) {
+            uiHandler.post {
+                try {
+                    WalletManager.walletInstance?.getWalletStatus()
+                    WalletManager.walletInstance?.getTransactions()
+                    WalletManager.walletInstance?.getAddresses(true)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    @JvmStatic fun onTransactionCompletedNotification(action: Int, notificationInfo: NotificationDTO, content: TxDescriptionDTO) {
+        // Refresh state on TX completion (matches RN onTransactionCompleted)
+        uiHandler.post {
+            try {
+                WalletManager.walletInstance?.getWalletStatus()
+                WalletManager.walletInstance?.getTransactions()
+            } catch (_: Exception) {}
+        }
+    }
+    @JvmStatic fun onTransactionFailedNotification(action: Int, notificationInfo: NotificationDTO, content: TxDescriptionDTO) {
+        // Refresh state on TX failure (matches RN onTransactionFailed)
+        uiHandler.post {
+            try {
+                WalletManager.walletInstance?.getWalletStatus()
+                WalletManager.walletInstance?.getTransactions()
+            } catch (_: Exception) {}
+        }
+    }
+    @JvmStatic fun onExportDataToJson(data: String) {
+        Log.d(TAG, "onExportDataToJson: ${data.length} chars")
+        uiHandler.post { WalletEventBus.emitExportData(data) }
+    }
 
     @JvmStatic fun onExchangeRates(rates: Array<ExchangeRateDTO>?) { }
 
     @JvmStatic fun onNewVersionNotification(action: Int, notificationInfo: NotificationDTO, content: VersionInfoDTO) { }
     @JvmStatic fun onAddressChangedNotification(action: Int, notificationInfo: NotificationDTO, content: WalletAddressDTO) { }
-    @JvmStatic fun onTransactionFailedNotification(action: Int, notificationInfo: NotificationDTO, content: TxDescriptionDTO) { }
-    @JvmStatic fun onTransactionCompletedNotification(action: Int, notificationInfo: NotificationDTO, content: TxDescriptionDTO) { }
     @JvmStatic fun onBeamNewsNotification(action: Int) { }
 
     @JvmStatic fun onGetAddress(offlinePayments: Int) { }
-    @JvmStatic fun onPublicAddress(value: String) { }
-    @JvmStatic fun onMaxPrivacyAddress(value: String) { }
-    @JvmStatic fun onRegularAddress(value: String) { }
-    @JvmStatic fun onOfflineAddress(value: String) { }
-    @JvmStatic fun onExportTxHistoryToCsv(value: String) { }
+    @JvmStatic fun onPublicAddress(value: String) {
+        Log.d(TAG, "onPublicAddress: ${value.take(20)}...")
+        uiHandler.post { WalletEventBus.emitAddresses(AddressesEvent(own = true, json = value)) }
+    }
+    @JvmStatic fun onMaxPrivacyAddress(value: String) {
+        Log.d(TAG, "onMaxPrivacyAddress: ${value.take(20)}...")
+        uiHandler.post { WalletEventBus.emitAddresses(AddressesEvent(own = true, json = value)) }
+    }
+    @JvmStatic fun onRegularAddress(value: String) {
+        Log.d(TAG, "onRegularAddress: ${value.take(20)}...")
+        uiHandler.post { WalletEventBus.emitAddresses(AddressesEvent(own = true, json = value)) }
+    }
+    @JvmStatic fun onOfflineAddress(value: String) {
+        Log.d(TAG, "onOfflineAddress: ${value.take(20)}...")
+        uiHandler.post { WalletEventBus.emitAddresses(AddressesEvent(own = true, json = value)) }
+    }
+    @JvmStatic fun onExportTxHistoryToCsv(value: String) {
+        Log.d(TAG, "onExportTxHistoryToCsv: ${value.length} chars")
+        uiHandler.post { WalletEventBus.emitExportCsv(value) }
+    }
     @JvmStatic fun onExportContractTxHistoryToCsv(value: String) { }
 }

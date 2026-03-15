@@ -76,10 +76,8 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.security.crypto)
 
-    // Camera (QR)
-    implementation(libs.camerax.camera2)
-    implementation(libs.camerax.lifecycle)
-    implementation(libs.camerax.view)
+    // Camera (QR) — zxing-android-embedded (same as official Beam wallet)
+    implementation(libs.zxing.embedded)
     implementation(libs.zxing.core)
 
     // Image loading

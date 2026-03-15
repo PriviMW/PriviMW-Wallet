@@ -25,6 +25,9 @@ import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.AddressesEvent
 import com.privimemobile.wallet.WalletEventBus
+import com.privimemobile.wallet.WalletManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
@@ -47,15 +50,16 @@ private enum class AddressFilter(val label: String) {
 @Composable
 fun AddressesScreen(onBack: () -> Unit = {}) {
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
     var addresses by remember { mutableStateOf<List<WalletAddress>>(emptyList()) }
     var filter by remember { mutableStateOf(AddressFilter.ALL) }
     var editingAddress by remember { mutableStateOf<WalletAddress?>(null) }
     var editLabel by remember { mutableStateOf("") }
     var snackMessage by remember { mutableStateOf<String?>(null) }
 
-    // Request addresses on mount
+    // Request addresses on mount via JNI (triggers onAddresses -> WalletEventBus.addresses)
     LaunchedEffect(Unit) {
-        WalletApi.call("addr_list", mapOf("own" to true)) {}
+        WalletManager.walletInstance?.getAddresses(true)
     }
 
     // Collect address events
@@ -141,7 +145,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
             // Address list
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 160.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (filtered.isEmpty()) {
@@ -172,7 +176,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             },
                             onDelete = {
                                 WalletApi.call("delete_address", mapOf("address" to addr.walletID)) {
-                                    WalletApi.call("addr_list", mapOf("own" to true)) {}
+                                    WalletManager.walletInstance?.getAddresses(true)
                                 }
                             },
                         )
@@ -206,34 +210,6 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                     )
                 }
             }
-        }
-
-        // Generate new address button (floating at bottom)
-        Button(
-            onClick = {
-                WalletApi.call("create_address", mapOf(
-                    "type" to "regular",
-                    "label" to "",
-                    "expiration" to "auto",
-                )) {
-                    snackMessage = "New SBBS address generated"
-                    WalletApi.call("addr_list", mapOf("own" to true)) {}
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 20.dp)
-                .height(52.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-        ) {
-            Text(
-                "+ New SBBS Address",
-                color = C.textDark,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
         }
 
         // Snack message
@@ -328,7 +304,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                     "address" to addr.walletID,
                                     "label" to editLabel.trim(),
                                 )) {
-                                    WalletApi.call("addr_list", mapOf("own" to true)) {}
+                                    WalletManager.walletInstance?.getAddresses(true)
                                     editingAddress = null
                                     snackMessage = "Label updated"
                                 }

@@ -1,8 +1,13 @@
 package com.privimemobile.ui.chat
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -83,10 +88,18 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
 
-    // Mark chat as active, clear unread
+    // Mark chat as active, clear unread, send read receipts
     LaunchedEffect(handle) {
         ProtocolStartup.activeChat = convKey
         ProtocolStartup.clearUnread(convKey)
+
+        // Send read receipts (matches RN ChatScreen mount)
+        val convs = ProtocolStartup.conversations.value.toMutableMap().mapValues { it.value.toMutableList() }.toMutableMap()
+        val contacts = ProtocolStartup.contacts.value
+        val identity = ProtocolStartup.identity.value
+        SbbsMessaging.sendReadReceipts(convKey, convs, contacts, identity, identity?.walletId) {
+            // Persist after marking acked
+        }
 
         // Re-resolve contact wallet_id
         ContactResolver.resolveHandle(handle) { resolved ->
@@ -109,10 +122,19 @@ fun ChatScreen(
     // Load cached file paths for file messages
     LaunchedEffect(messages) {
         messages.forEach { msg ->
-            if (msg.fileHash.isNotEmpty() && !filePaths.containsKey(msg.fileHash)) {
-                val path = FileSharing.getLocalFilePath(msg.fileHash)
-                if (path != null) filePaths[msg.fileHash] = path
+            val fileCid = msg.file?.cid ?: ""
+            if (fileCid.isNotEmpty() && !filePaths.containsKey(fileCid)) {
+                val path = FileSharing.getLocalFilePath(fileCid)
+                if (path != null) filePaths[fileCid] = path
             }
+        }
+    }
+
+    // Auto-download small images (matches RN autoDownloadImages)
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            val results = FileSharing.autoDownloadImages(context, messages)
+            results.forEach { (cid, path) -> filePaths[cid] = path }
         }
     }
 
@@ -261,8 +283,8 @@ fun ChatScreen(
                     }
                     MessageBubble(
                         msg = msg,
-                        filePath = filePaths[msg.fileHash],
-                        downloadStatus = downloadStatuses[msg.fileHash] ?: "idle",
+                        filePath = filePaths[msg.file?.cid ?: ""],
+                        downloadStatus = downloadStatuses[msg.file?.cid ?: ""] ?: "idle",
                         onDownload = { cid, key, iv, mime, data ->
                             handleDownload(cid, key, iv, mime, data)
                         },
@@ -283,12 +305,12 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        if (FileSharing.isImageMime(pendingFile!!.mimeType)) "\uD83D\uDDBC" else "\uD83D\uDCCE",
+                        if (Helpers.isImageMime(pendingFile!!.mimeType)) "\uD83D\uDDBC" else "\uD83D\uDCCE",
                         fontSize = 20.sp,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "${pendingFile!!.name} (${FileSharing.formatFileSize(pendingFile!!.size)})",
+                        "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
                         color = C.text,
                         fontSize = 13.sp,
                         maxLines = 1,
@@ -387,9 +409,10 @@ private fun MessageBubble(
     downloadStatus: String,
     onDownload: (cid: String, key: String, iv: String, mime: String, inlineData: String?) -> Unit,
 ) {
+    val context = LocalContext.current
     val isMine = msg.sent
-    val isFileMsg = msg.fileHash.isNotEmpty()
-    val isImage = msg.type == "file" && FileSharing.isImageMime(msg.fileName.substringAfterLast('.', "").let { ext ->
+    val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
+    val isImage = msg.type == "file" && Helpers.isImageMime((msg.file?.name ?: "").substringAfterLast('.', "").let { ext ->
         when (ext.lowercase()) {
             "jpg", "jpeg" -> "image/jpeg"
             "png" -> "image/png"
@@ -417,9 +440,9 @@ private fun MessageBubble(
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Tip label
-                if (msg.type == "tip") {
+                if (msg.isTip) {
                     Text(
-                        "Tip",
+                        "Tip: ${Helpers.formatBeam(msg.tipAmount)} BEAM",
                         color = C.accent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -427,16 +450,64 @@ private fun MessageBubble(
                     )
                 }
 
+                // Reply display
+                if (msg.reply != null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = C.bg.copy(alpha = 0.5f),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .height(IntrinsicSize.Min),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .fillMaxHeight()
+                                    .background(C.accent)
+                            )
+                            Text(
+                                msg.reply,
+                                color = C.textSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
+                }
+
                 // File content
                 if (isFileMsg) {
+                    val fName = msg.file?.name ?: ""
+                    val fMime = fName.substringAfterLast('.', "").lowercase().let { ext ->
+                        when (ext) {
+                            "jpg", "jpeg" -> "image/jpeg"
+                            "png" -> "image/png"
+                            "gif" -> "image/gif"
+                            "webp" -> "image/webp"
+                            "pdf" -> "application/pdf"
+                            "txt" -> "text/plain"
+                            "zip" -> "application/zip"
+                            else -> "application/octet-stream"
+                        }
+                    }
                     FileContent(
-                        cid = msg.fileHash,
-                        fileName = msg.fileName,
-                        fileSize = msg.fileSize,
+                        cid = msg.file?.cid ?: "",
+                        fileName = fName,
+                        fileSize = msg.file?.size ?: 0L,
                         filePath = filePath,
                         downloadStatus = downloadStatus,
                         isImage = isImage,
-                        onDownload = { onDownload(msg.fileHash, "", "", "", null) },
+                        onDownload = { onDownload(msg.file?.cid ?: "", "", "", "", null) },
+                        onSave = {
+                            if (filePath != null) {
+                                saveFileToDownloads(context, filePath, fName, fMime)
+                            }
+                        },
                     )
                 }
 
@@ -458,15 +529,21 @@ private fun MessageBubble(
                         fontSize = 10.sp,
                     )
                     // Read receipt indicator for sent messages
-                    // The ChatMessage type doesn't have a 'read' field yet
-                    // but we show "sent" indicator
                     if (isMine) {
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            "sent",
-                            color = C.accent,
-                            fontSize = 10.sp,
-                        )
+                        if (msg.read) {
+                            Text(
+                                "\u2713\u2713",
+                                color = C.accent,
+                                fontSize = 10.sp,
+                            )
+                        } else {
+                            Text(
+                                "\u2713",
+                                color = C.textSecondary,
+                                fontSize = 10.sp,
+                            )
+                        }
                     }
                 }
             }
@@ -483,6 +560,7 @@ private fun FileContent(
     downloadStatus: String,
     isImage: Boolean,
     onDownload: () -> Unit,
+    onSave: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 2.dp)) {
         if (isImage && filePath != null) {
@@ -496,6 +574,23 @@ private fun FileContent(
                     .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop,
             )
+            // Save button for downloaded images
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Text(
+                    "Save",
+                    color = C.accent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable { onSave() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
         } else if (isImage && (downloadStatus == "downloading" || downloadStatus == "decrypting")) {
             // Loading placeholder
             Surface(
@@ -544,7 +639,7 @@ private fun FileContent(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onDownload() },
+                    .clickable { if (filePath != null) onSave() else onDownload() },
                 shape = RoundedCornerShape(8.dp),
                 color = C.border,
             ) {
@@ -568,7 +663,7 @@ private fun FileContent(
                         )
                         Text(
                             buildString {
-                                append(FileSharing.formatFileSize(fileSize))
+                                append(Helpers.formatFileSize(fileSize))
                                 if (downloadStatus == "error") append(" \u2014 tap to retry")
                             },
                             color = C.textSecondary,
@@ -627,6 +722,49 @@ private fun getFileInfo(context: Context, uri: Uri): FileInfo? {
 }
 
 private data class FileInfo(val name: String, val size: Long, val mimeType: String)
+
+/**
+ * Save a cached file to the public Downloads folder using MediaStore.
+ * Works on API 29+ (scoped storage) and falls back for older APIs.
+ */
+private fun saveFileToDownloads(context: Context, srcPath: String, fileName: String, mimeType: String = "application/octet-stream") {
+    try {
+        val srcFile = java.io.File(srcPath)
+        if (!srcFile.exists()) {
+            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Scoped storage (API 29+)
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { out ->
+                    srcFile.inputStream().use { input -> input.copyTo(out) }
+                }
+                Toast.makeText(context, "Saved to Downloads/$fileName", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Save failed", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            // Legacy storage (API < 29)
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val destFile = java.io.File(downloadsDir, fileName)
+            srcFile.inputStream().use { input ->
+                destFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            Toast.makeText(context, "Saved to Downloads/$fileName", Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
 
 // Date formatting
 private val msgTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())

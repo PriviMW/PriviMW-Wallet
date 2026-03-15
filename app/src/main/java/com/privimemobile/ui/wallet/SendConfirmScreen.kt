@@ -27,6 +27,7 @@ import androidx.fragment.app.FragmentActivity
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.assetTicker
 
 /**
  * Send confirmation screen -- shows TX details and requires user approval.
@@ -41,6 +42,7 @@ fun SendConfirmScreen(
     fee: Long,
     comment: String = "",
     assetId: Int = 0,
+    txType: String = "offline",
     onApproved: () -> Unit,
     onRejected: () -> Unit,
 ) {
@@ -54,12 +56,11 @@ fun SendConfirmScreen(
     var passwordInput by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
 
-    val ticker = if (assetId == 0) "BEAM" else "Asset #$assetId"
-    val totalGroth = amountGroth + fee
+    val ticker = assetTicker(assetId)
 
-    // Determine TX type from address format (SBBS = short hex)
-    val isSbbs = Regex("^[0-9a-fA-F]{62,68}$").matches(address.trim())
-    val txTypeLabel = if (isSbbs) "SBBS (Online)" else "Regular (Offline)"
+    // TX type passed from SendScreen — matches RN: "regular" = SBBS online, "offline" = offline
+    val isOffline = txType == "offline"
+    val txTypeLabel = if (txType == "regular") "SBBS (Online)" else "Regular (Offline)"
 
     // Check biometric availability
     LaunchedEffect(Unit) {
@@ -70,63 +71,86 @@ fun SendConfirmScreen(
         ) == BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    fun sendTransaction() {
+    // Use JNI sendTransaction (matches RN — different methods for online vs offline)
+    fun executeSend() {
+        val wallet = com.privimemobile.wallet.WalletManager.walletInstance
+        if (wallet == null) {
+            error = "Wallet not connected"
+            return
+        }
         sending = true
         error = null
-        WalletApi.call("tx_send", mapOf(
-            "address" to address,
-            "value" to amountGroth,
-            "fee" to fee,
-            "comment" to comment,
-            "asset_id" to assetId,
-        )) { result ->
+        try {
+            // Use txType from SendScreen — matches RN: sendTransaction(false) vs sendOfflineTransaction(true)
+            wallet.sendTransaction(address, comment, amountGroth, fee, assetId, isOffline)
+            onApproved()
+        } catch (e: Exception) {
             sending = false
-            if (result.containsKey("error")) {
-                val err = result["error"]
-                error = when (err) {
-                    is Map<*, *> -> err["message"] as? String ?: "Send failed"
-                    is String -> err
-                    else -> "Send failed"
-                }
-            } else {
-                onApproved()
-            }
+            error = e.message ?: "Send failed"
         }
     }
 
+    // Check if auth is required — matches RN: ONLY askPasswordOnSend triggers auth
+    val askPasswordOnSend = remember {
+        com.privimemobile.protocol.SecureStorage.getBoolean(
+            com.privimemobile.protocol.SecureStorage.KEY_ASK_PASSWORD_ON_SEND
+        )
+    }
+    val biometricsEnabled = remember {
+        com.privimemobile.protocol.SecureStorage.getBoolean(
+            com.privimemobile.protocol.SecureStorage.KEY_FINGERPRINT_ENABLED
+        )
+    }
+
     fun authenticateAndSend() {
-        val activity = context as? FragmentActivity
-        if (activity == null || !biometricAvailable) {
-            sendTransaction()
+        // If askPasswordOnSend is OFF, send directly (matches RN lines 63-66)
+        if (!askPasswordOnSend) {
+            executeSend()
             return
         }
 
-        val executor = ContextCompat.getMainExecutor(context)
-        val prompt = BiometricPrompt(activity, executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    sendTransaction()
-                }
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
-                    ) {
-                        error = errString.toString()
+        // askPasswordOnSend is ON — try biometric first if enabled + available
+        if (biometricsEnabled && biometricAvailable) {
+            val activity = context as? FragmentActivity
+            if (activity != null) {
+                val executor = ContextCompat.getMainExecutor(context)
+                val prompt = BiometricPrompt(activity, executor,
+                    object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                            executeSend()
+                        }
+                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                            if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                                errorCode == BiometricPrompt.ERROR_USER_CANCELED) {
+                                // Fall back to password dialog
+                                passwordInput = ""
+                                passwordError = ""
+                                showPasswordDialog = true
+                            } else {
+                                error = errString.toString()
+                            }
+                        }
+                        override fun onAuthenticationFailed() {
+                            // Single attempt failed — prompt stays open for retry
+                        }
                     }
-                }
-                override fun onAuthenticationFailed() {
-                    // User can retry
-                }
+                )
+
+                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Confirm Transaction")
+                    .setSubtitle("Authenticate to send ${Helpers.formatBeam(amountGroth)} $ticker")
+                    .setNegativeButtonText("Use Password")
+                    .build()
+
+                prompt.authenticate(promptInfo)
+                return
             }
-        )
+        }
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Confirm Transaction")
-            .setSubtitle("Authenticate to send ${Helpers.formatBeam(amountGroth)} $ticker")
-            .setNegativeButtonText("Cancel")
-            .build()
-
-        prompt.authenticate(promptInfo)
+        // Fallback to password dialog
+        passwordInput = ""
+        passwordError = ""
+        showPasswordDialog = true
     }
 
     Column(
@@ -166,16 +190,18 @@ fun SendConfirmScreen(
             colors = CardDefaults.cardColors(containerColor = C.card),
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                // Sending to
+                // Sending to — show front + back so user can verify both ends
                 ConfirmRow("Sending to") {
+                    val displayAddr = if (address.length > 30) {
+                        "${address.take(14)}...${address.takeLast(14)}"
+                    } else address
                     Text(
-                        address,
+                        displayAddr,
                         color = C.text,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         textAlign = TextAlign.End,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 1,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }
@@ -188,7 +214,7 @@ fun SendConfirmScreen(
                             modifier = Modifier
                                 .size(8.dp)
                                 .background(
-                                    if (isSbbs) C.warning else Color(0xFF25D4D0),
+                                    if (txType == "regular") C.warning else Color(0xFF25D4D0),
                                     shape = androidx.compose.foundation.shape.CircleShape,
                                 ),
                         )
@@ -224,14 +250,30 @@ fun SendConfirmScreen(
                 }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
-                // Total
+                // Total — for BEAM: amount + fee. For other assets: show both separately
                 ConfirmRow("Total") {
-                    Text(
-                        "${Helpers.formatBeam(totalGroth)} BEAM",
-                        color = C.text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    if (assetId == 0) {
+                        Text(
+                            "${Helpers.formatBeam(amountGroth + fee)} BEAM",
+                            color = C.text,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    } else {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "${Helpers.formatBeam(amountGroth)} $ticker",
+                                color = C.text,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "+ ${Helpers.formatBeam(fee)} BEAM (fee)",
+                                color = C.textSecondary,
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
                 }
 
                 // Comment
@@ -251,7 +293,7 @@ fun SendConfirmScreen(
         }
 
         // SBBS warning
-        if (isSbbs) {
+        if (txType == "regular") {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -328,8 +370,7 @@ fun SendConfirmScreen(
             // Send button (with biometric if available)
             Button(
                 onClick = {
-                    if (biometricAvailable) authenticateAndSend()
-                    else sendTransaction()
+                    authenticateAndSend()
                 },
                 enabled = !sending,
                 modifier = Modifier
@@ -346,7 +387,7 @@ fun SendConfirmScreen(
                     )
                 } else {
                     Text(
-                        if (biometricAvailable) "SEND (Biometric)" else "SEND",
+                        "SEND",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -446,8 +487,16 @@ fun SendConfirmScreen(
                         Button(
                             onClick = {
                                 if (passwordInput.isNotBlank()) {
+                                    val wallet = com.privimemobile.wallet.WalletManager.walletInstance
+                                    if (wallet != null) {
+                                        val valid = wallet.checkWalletPassword(passwordInput.trim())
+                                        if (!valid) {
+                                            passwordError = "Incorrect password"
+                                            return@Button
+                                        }
+                                    }
                                     showPasswordDialog = false
-                                    sendTransaction()
+                                    executeSend()
                                 }
                             },
                             modifier = Modifier

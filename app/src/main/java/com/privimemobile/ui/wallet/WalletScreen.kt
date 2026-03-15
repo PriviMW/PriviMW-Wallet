@@ -28,13 +28,14 @@ import com.privimemobile.wallet.WalletStatusEvent
 import com.privimemobile.wallet.SyncProgressEvent
 import com.privimemobile.wallet.NodeConnectionEvent
 import com.privimemobile.wallet.AssetInfoEvent
+import com.privimemobile.wallet.assetTicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
 
-// TX status codes
+// TX status codes — shared with TransactionDetailScreen
 internal object TxStatus {
     const val PENDING = 0
     const val IN_PROGRESS = 1
@@ -44,8 +45,8 @@ internal object TxStatus {
     const val REGISTERING = 5
 }
 
-/** Transaction display model. */
-private data class TxItem(
+/** Transaction display model — shared with AssetDetailScreen. */
+internal data class TxItem(
     val txId: String,
     val amount: Long,
     val fee: Long,
@@ -74,7 +75,7 @@ private data class AssetBalance(
     val name: String,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletScreen(
     onSend: () -> Unit = {},
@@ -82,9 +83,6 @@ fun WalletScreen(
     onTxDetail: (String) -> Unit = {},
     onAssetDetail: (Int) -> Unit = {},
 ) {
-    val walletStatus by WalletEventBus.walletStatus.collectAsState(
-        initial = WalletStatusEvent(0, 0, 0, 0)
-    )
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
     val syncProgress by WalletEventBus.syncProgress.collectAsState(
         initial = SyncProgressEvent(0, 0)
@@ -93,8 +91,22 @@ fun WalletScreen(
         initial = NodeConnectionEvent(connected = false)
     )
 
-    // Collect asset info events to build asset name map
-    val assetInfoMap = remember { mutableStateMapOf<Int, AssetInfoEvent>() }
+    // Per-asset balance map — initialized from persistent singleton, updated by flow
+    val assetBalanceMap = remember { mutableStateMapOf<Int, WalletStatusEvent>().apply {
+        putAll(WalletEventBus.assetBalances)
+    }}
+    LaunchedEffect(Unit) {
+        WalletEventBus.walletStatus.collect { event ->
+            assetBalanceMap[event.assetId] = event
+        }
+    }
+    // BEAM balance (assetId=0) for the balance card
+    val beamStatus = assetBalanceMap[0] ?: WalletEventBus.beamStatus.value
+
+    // Collect asset info events to build asset name map — pre-populate from persistent cache
+    val assetInfoMap = remember { mutableStateMapOf<Int, AssetInfoEvent>().apply {
+        putAll(WalletEventBus.assetInfoCache)
+    }}
     LaunchedEffect(Unit) {
         WalletEventBus.assetInfo.collect { event ->
             assetInfoMap[event.id] = event
@@ -102,6 +114,14 @@ fun WalletScreen(
     }
 
     val scope = rememberCoroutineScope()
+
+    // Fetch transactions and addresses on mount (like RN useEffect)
+    LaunchedEffect(Unit) {
+        try {
+            WalletManager.walletInstance?.getTransactions()
+            WalletManager.walletInstance?.getAddresses(true)
+        } catch (_: Exception) {}
+    }
 
     // Parse transactions from JSON
     val transactions = remember(txJson) {
@@ -130,30 +150,25 @@ fun WalletScreen(
         }
     }
 
-    // Build other-asset balances from TX data + asset info
-    // In production this would come from wallet_status asset breakdown
-    val otherAssets = remember(txJson, assetInfoMap.size) {
-        val assetAmounts = mutableMapOf<Int, MutableList<TxItem>>()
-        transactions.forEach { tx ->
-            if (tx.assetId != 0) {
-                assetAmounts.getOrPut(tx.assetId) { mutableListOf() }.add(tx)
+    // Build other-asset balances from per-asset status events + asset info
+    val otherAssets = remember(assetBalanceMap.size, assetInfoMap.size) {
+        assetBalanceMap
+            .filterKeys { it != 0 }
+            .filter { (_, s) -> s.available > 0 || s.maturing > 0 || s.sending > 0 || s.receiving > 0 || s.maxPrivacy > 0 }
+            .map { (assetId, status) ->
+                val info = assetInfoMap[assetId]
+                AssetBalance(
+                    assetId = assetId,
+                    available = status.available,
+                    maturing = status.maturing,
+                    sending = status.sending,
+                    receiving = status.receiving,
+                    maxPrivacy = status.maxPrivacy,
+                    unitName = info?.unitName ?: "",
+                    shortName = info?.shortName ?: "",
+                    name = info?.name ?: "",
+                )
             }
-        }
-        // Build AssetBalance from the info we have
-        assetAmounts.keys.mapNotNull { assetId ->
-            val info = assetInfoMap[assetId]
-            AssetBalance(
-                assetId = assetId,
-                available = 0, // Would come from wallet_status per-asset
-                maturing = 0,
-                sending = 0,
-                receiving = 0,
-                maxPrivacy = 0,
-                unitName = info?.unitName ?: "",
-                shortName = info?.shortName ?: "",
-                name = info?.name ?: "",
-            )
-        }.filter { it.available > 0 || it.unitName.isNotEmpty() }
             .sortedBy { it.assetId }
     }
 
@@ -191,17 +206,19 @@ fun WalletScreen(
         isSyncing && syncProgress.total > 0 ->
             "Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks)"
         isSyncing -> "Syncing..."
-        walletStatus.height > 0 -> "$nodeLabel \u00B7 Block #${walletStatus.height}"
+        beamStatus.height > 0 -> "$nodeLabel \u00B7 Block #${beamStatus.height}"
         else -> "$nodeLabel \u00B7 Connected"
     }
 
     val statusDotColor = when {
-        !isConnected -> Color(0xFF666666) // offline gray
+        !isConnected -> C.offline
         isSyncing -> C.warning
-        else -> C.online
+        else -> C.accent
     }
 
-    val hasPending = walletStatus.sending > 0 || walletStatus.receiving > 0 || walletStatus.maturing > 0
+    // In-flight amounts — matches RN exactly (includes maxPrivacy)
+    val hasPending = beamStatus.sending > 0 || beamStatus.receiving > 0 ||
+            beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -224,10 +241,12 @@ fun WalletScreen(
                     colors = CardDefaults.cardColors(containerColor = C.card),
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        // Status row
+                        // Status row — centered
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(bottom = 16.dp),
@@ -259,35 +278,43 @@ fun WalletScreen(
                         Text("Available", color = C.textSecondary, fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "${Helpers.formatBeam(walletStatus.available)} BEAM",
+                            text = "${Helpers.formatBeam(beamStatus.available)} BEAM",
                             color = C.text,
                             fontSize = 36.sp,
                             fontWeight = FontWeight.Bold,
                         )
 
-                        // Pending amounts
+                        // Pending amounts — wrapping FlowRow like RN flexWrap
                         if (hasPending) {
                             Spacer(Modifier.height(8.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                if (walletStatus.sending > 0) {
+                                if (beamStatus.sending > 0) {
                                     Text(
-                                        "Sending: ${Helpers.formatBeam(walletStatus.sending)}",
+                                        "Sending: ${Helpers.formatBeam(beamStatus.sending)}",
                                         color = C.textSecondary,
                                         fontSize = 12.sp,
                                     )
                                 }
-                                if (walletStatus.receiving > 0) {
+                                if (beamStatus.receiving > 0) {
                                     Text(
-                                        "Receiving: ${Helpers.formatBeam(walletStatus.receiving)}",
+                                        "Receiving: ${Helpers.formatBeam(beamStatus.receiving)}",
                                         color = C.accent,
                                         fontSize = 12.sp,
                                     )
                                 }
-                                if (walletStatus.maturing > 0) {
+                                if (beamStatus.maturing > 0) {
                                     Text(
-                                        "Locked: ${Helpers.formatBeam(walletStatus.maturing)}",
+                                        "Locked: ${Helpers.formatBeam(beamStatus.maturing)}",
+                                        color = Color(0xFFFF9800),
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                                if (beamStatus.maxPrivacy > 0) {
+                                    Text(
+                                        "Max Privacy (locked): ${Helpers.formatBeam(beamStatus.maxPrivacy)}",
                                         color = Color(0xFFFF9800),
                                         fontSize = 12.sp,
                                     )
@@ -295,7 +322,7 @@ fun WalletScreen(
                             }
                         }
 
-                        // Send / Receive buttons
+                        // Send / Receive buttons — centered, same width, side by side
                         Spacer(Modifier.height(20.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -325,7 +352,7 @@ fun WalletScreen(
                 }
             }
 
-            // BEAM asset row
+            // BEAM asset row — tappable
             item {
                 Card(
                     modifier = Modifier
@@ -340,24 +367,18 @@ fun WalletScreen(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // BEAM icon circle
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0x2625D4D0)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("B", color = C.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
+                        com.privimemobile.ui.components.AssetIcon(assetId = 0, ticker = "BEAM", size = 36.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("BEAM", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            if (hasPending) {
+                            // Show sub-text for in-flight amounts (matches RN exactly)
+                            if (beamStatus.sending > 0 || beamStatus.receiving > 0 ||
+                                beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0) {
                                 val subParts = mutableListOf<String>()
-                                if (walletStatus.sending > 0) subParts.add("Sending: ${Helpers.formatBeam(walletStatus.sending)}")
-                                if (walletStatus.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(walletStatus.receiving)}")
-                                if (walletStatus.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(walletStatus.maturing)}")
+                                if (beamStatus.sending > 0) subParts.add("Sending: ${Helpers.formatBeam(beamStatus.sending)}")
+                                if (beamStatus.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(beamStatus.receiving)}")
+                                if (beamStatus.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(beamStatus.maturing)}")
+                                if (beamStatus.maxPrivacy > 0) subParts.add("Max Privacy: ${Helpers.formatBeam(beamStatus.maxPrivacy)}")
                                 Text(
                                     subParts.joinToString("  "),
                                     color = C.textSecondary,
@@ -367,7 +388,7 @@ fun WalletScreen(
                             }
                         }
                         Text(
-                            Helpers.formatBeam(walletStatus.available),
+                            Helpers.formatBeam(beamStatus.available),
                             color = C.text,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -389,7 +410,7 @@ fun WalletScreen(
                     )
                 }
                 items(otherAssets, key = { it.assetId }) { asset ->
-                    val assetLabel = asset.unitName.ifEmpty { asset.shortName.ifEmpty { asset.name.ifEmpty { "Asset #${asset.assetId}" } } }
+                    val assetLabel = assetTicker(asset.assetId)
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -403,20 +424,7 @@ fun WalletScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0x2625D4D0)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    assetLabel.first().uppercase(),
-                                    color = C.accent,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
+                            com.privimemobile.ui.components.AssetIcon(assetId = asset.assetId, ticker = assetLabel, size = 36.dp)
                             Spacer(Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(assetLabel, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -467,7 +475,7 @@ fun WalletScreen(
                     ) {
                         Text(
                             if (isSyncing) "Syncing blockchain..." else "No transactions yet",
-                            color = C.textSecondary,
+                            color = C.textMuted,
                             fontSize = 14.sp,
                         )
                     }
@@ -482,7 +490,6 @@ fun WalletScreen(
                 }
             }
         }
-
     }
 }
 
@@ -494,14 +501,18 @@ private fun TxCard(
 ) {
     val isSend = tx.sender
 
-    // Status text and color
-    val statusText = when (tx.status) {
-        TxStatus.PENDING -> "Pending"
-        TxStatus.IN_PROGRESS -> "In Progress"
-        TxStatus.CANCELLED -> "Cancelled"
-        TxStatus.COMPLETED -> "Completed"
-        TxStatus.FAILED -> "Failed"
-        TxStatus.REGISTERING -> "Registering"
+    // Status text — online SBBS waiting = "Waiting for receiver" (matches TransactionDetailScreen)
+    val isOnlineTx = !tx.isShielded && !tx.isMaxPrivacy && !tx.isOffline && !tx.isPublicOffline
+    val isWaitingForReceiver = isSend && isOnlineTx &&
+            (tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS)
+    val statusText = when {
+        isWaitingForReceiver -> "Waiting for receiver"
+        tx.status == TxStatus.PENDING -> "Pending"
+        tx.status == TxStatus.IN_PROGRESS -> "In Progress"
+        tx.status == TxStatus.CANCELLED -> "Cancelled"
+        tx.status == TxStatus.COMPLETED -> "Completed"
+        tx.status == TxStatus.FAILED -> "Failed"
+        tx.status == TxStatus.REGISTERING -> "In Progress"
         else -> "Unknown"
     }
 
@@ -516,7 +527,7 @@ private fun TxCard(
         else -> C.textSecondary
     }
 
-    // Peer address display
+    // Peer address display — matches RN txAddressTypeLabel fallback
     val peerAddr = if (tx.peerId.isNotEmpty()) {
         if (tx.peerId.length > 12)
             "${tx.peerId.take(6)}...${tx.peerId.takeLast(6)}"
@@ -531,10 +542,7 @@ private fun TxCard(
     }
 
     // Asset label for non-BEAM assets
-    val assetLabel = if (tx.assetId != 0) {
-        val info = assetInfoMap[tx.assetId]
-        info?.unitName?.ifEmpty { null } ?: info?.name?.ifEmpty { null } ?: "Asset #${tx.assetId}"
-    } else ""
+    val assetLabel = if (tx.assetId != 0) assetTicker(tx.assetId) else ""
 
     Card(
         modifier = Modifier

@@ -27,7 +27,9 @@ import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
-import com.privimemobile.wallet.WalletStatusEvent
+import com.privimemobile.wallet.WalletManager
+import com.privimemobile.wallet.assetTicker
+
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -52,7 +54,8 @@ private fun addrTypeLabel(type: AddrType?): String = when (type) {
  * Full send screen — address input, validation, amount, asset selector,
  * fee display, send mode toggle, comment.
  *
- * Ports SendScreen.tsx fully.
+ * Ports SendScreen.tsx fully — includes ownNode detection, multi-asset support,
+ * fee insufficiency checks, and txType passing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,11 +64,9 @@ fun SendScreen(
     onSent: () -> Unit,
     onScanQr: () -> Unit = {},
     scannedAddress: String? = null,
-    onNavigateConfirm: (address: String, amountGroth: Long, fee: Long, comment: String, assetId: Int) -> Unit = { _, _, _, _, _ -> },
+    onNavigateConfirm: (address: String, amountGroth: Long, fee: Long, comment: String, assetId: Int, txType: String) -> Unit = { _, _, _, _, _, _ -> },
 ) {
-    val walletStatus by WalletEventBus.walletStatus.collectAsState(
-        initial = WalletStatusEvent(0, 0, 0, 0)
-    )
+    val beamStatus by WalletEventBus.beamStatus.collectAsState()
     val scope = rememberCoroutineScope()
 
     var address by remember { mutableStateOf("") }
@@ -80,8 +81,50 @@ fun SendScreen(
     var sendOffline by remember { mutableStateOf(false) }
     var validateReqId by remember { mutableIntStateOf(0) }
 
-    // Asset selection
+    // Own node detection — matches RN isConnectionTrusted()
+    var ownNode by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
+            ownNode = trusted
+            if (trusted) sendOffline = true // default offline for own node
+        } catch (_: Exception) {}
+    }
+
+    // Per-asset balances + asset info for picker
+    val assetBalanceMap = remember { mutableStateMapOf<Int, com.privimemobile.wallet.WalletStatusEvent>().apply {
+        putAll(WalletEventBus.assetBalances)
+    }}
+    LaunchedEffect(Unit) {
+        WalletEventBus.walletStatus.collect { event -> assetBalanceMap[event.assetId] = event }
+    }
+    val assetInfoMap = remember { mutableStateMapOf<Int, com.privimemobile.wallet.AssetInfoEvent>().apply {
+        putAll(WalletEventBus.assetInfoCache)
+    }}
+    LaunchedEffect(Unit) {
+        WalletEventBus.assetInfo.collect { event -> assetInfoMap[event.id] = event }
+    }
+
+    // Build asset list: BEAM + any other assets with balance
+    data class AssetOption(val assetId: Int, val available: Long, val ticker: String)
+    val assetList = remember(assetBalanceMap.size, assetInfoMap.size) {
+        val list = mutableListOf<AssetOption>()
+        val beam = assetBalanceMap[0]
+        list.add(AssetOption(0, beam?.available ?: 0, "BEAM"))
+        assetBalanceMap.filterKeys { it != 0 }.forEach { (id, status) ->
+            if (status.available > 0 || status.sending > 0 || status.receiving > 0) {
+                list.add(AssetOption(id, status.available, assetTicker(id)))
+            }
+        }
+        list.sortedBy { it.assetId }
+    }
+
     var selectedAssetId by remember { mutableIntStateOf(0) }
+    var assetPickerOpen by remember { mutableStateOf(false) }
+    val selectedAsset = assetList.find { it.assetId == selectedAssetId } ?: assetList[0]
+    val ticker = selectedAsset.ticker
+    val assetAvailable = selectedAsset.available
+    val beamAvailable = assetBalanceMap[0]?.available ?: beamStatus.available
 
     // Listen for scanned address from QR scanner
     LaunchedEffect(scannedAddress) {
@@ -121,7 +164,7 @@ fun SendScreen(
         }
     }
 
-    // Fee depends on address type
+    // Fee depends on address type and send mode — matches RN exactly
     val fee = when {
         addrType is AddrType.Sbbs -> FEE_SBBS
         addrType is AddrType.Regular && !sendOffline -> FEE_SBBS
@@ -129,24 +172,25 @@ fun SendScreen(
     }
 
     val amountGroth = Helpers.parseBeamToGroth(amount)
-    val beamAvailable = walletStatus.available
 
-    // Validation
-    val assetInsufficient = amountGroth > 0 && amountGroth > beamAvailable
+    // Validation — matches RN's 3-part check
+    val assetInsufficient = amountGroth > 0 && amountGroth > assetAvailable
+    val feeInsufficient = addrType != null && selectedAssetId != 0 && beamAvailable < fee
     val beamInsufficient = selectedAssetId == 0 && amountGroth > 0 && (amountGroth + fee) > beamAvailable
-    val insufficient = assetInsufficient || beamInsufficient
+    val insufficient = assetInsufficient || feeInsufficient || beamInsufficient
     val canNext = addressValid == true && amountGroth > 0 && !insufficient && !validatingAddr
 
     val amountError = when {
         amount.isEmpty() -> ""
         (amount.toDoubleOrNull() ?: 0.0) <= 0.0 -> "Amount must be greater than 0"
-        assetInsufficient -> "Insufficient BEAM balance"
+        assetInsufficient -> "Insufficient $ticker balance"
+        feeInsufficient -> "Insufficient BEAM for fee (need ${Helpers.formatBeam(fee)} BEAM)"
         beamInsufficient -> "Insufficient funds \u2014 need ${Helpers.formatBeam(amountGroth + fee - beamAvailable)} more BEAM"
         else -> ""
     }
 
     val addressBorderColor = when (addressValid) {
-        true -> Color(0xFF25D4D0)
+        true -> C.incoming  // matches RN C.received (green/teal)
         false -> C.error
         null -> C.border
     }
@@ -197,12 +241,10 @@ fun SendScreen(
                         validatingAddr = true
                         addressValid = null
                         addrType = null
-                        val id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
-                        validateReqId = id
                         validateAddress(trimmed) { validateReqId = it }
                     },
                     placeholder = {
-                        Text("Paste address or token", color = C.textSecondary)
+                        Text("Paste address or token", color = C.textMuted)
                     },
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -254,7 +296,7 @@ fun SendScreen(
                                 .size(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (addrType is AddrType.Sbbs) C.warning else Color(0xFF25D4D0)
+                                    if (addrType is AddrType.Sbbs) C.warning else C.incoming
                                 ),
                         )
                         Spacer(Modifier.width(6.dp))
@@ -276,6 +318,53 @@ fun SendScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+
+            // === ASSET SELECTOR === (tappable, opens picker if multiple assets)
+            Text(
+                "ASSET",
+                color = C.textSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(C.card, RoundedCornerShape(12.dp))
+                    .border(1.dp, C.border, RoundedCornerShape(12.dp))
+                    .clickable { if (assetList.size > 1) assetPickerOpen = true }
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.privimemobile.ui.components.AssetIcon(assetId = selectedAssetId, ticker = ticker, size = 36.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(ticker, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Available: ${Helpers.formatBeam(assetAvailable)} $ticker",
+                        color = C.textMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                if (assetList.size > 1) {
+                    Text("\u25BE", color = C.textSecondary, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+
+            // Non-BEAM: show BEAM available for fee
+            if (selectedAssetId != 0) {
+                Text(
+                    "BEAM available for fee: ${Helpers.formatBeam(beamAvailable)} BEAM",
+                    color = C.textMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
 
             // === AMOUNT ===
             Text(
@@ -308,7 +397,7 @@ fun SendScreen(
                         if (parts.size == 2 && parts[1].length > MAX_DECIMALS) return@OutlinedTextField
                         amount = cleaned
                     },
-                    placeholder = { Text("0", color = C.textSecondary) },
+                    placeholder = { Text("0", color = C.textMuted) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -325,7 +414,7 @@ fun SendScreen(
                     singleLine = true,
                 )
                 Text(
-                    "BEAM",
+                    ticker,
                     color = C.textSecondary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -333,7 +422,7 @@ fun SendScreen(
                 )
             }
 
-            // Available + Send All
+            // Available + Send All — matches RN layout
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -342,18 +431,21 @@ fun SendScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Available: ${Helpers.formatBeam(beamAvailable)} BEAM",
-                    color = C.textSecondary,
+                    "Available: ${Helpers.formatBeam(assetAvailable)} $ticker",
+                    color = C.textMuted,
                     fontSize = 13.sp,
                 )
                 TextButton(
                     onClick = {
-                        val maxAmount = beamAvailable - fee
-                        if (maxAmount > 0) {
-                            amount = Helpers.formatBeam(maxAmount)
+                        // Send All — BEAM: subtract fee; other assets: send full available
+                        if (selectedAssetId == 0) {
+                            val maxAmount = beamAvailable - fee
+                            if (maxAmount > 0) amount = Helpers.formatBeam(maxAmount)
+                        } else {
+                            if (assetAvailable > 0) amount = Helpers.formatBeam(assetAvailable)
                         }
                     },
-                    enabled = beamAvailable > 0,
+                    enabled = assetAvailable > 0,
                 ) {
                     Text(
                         "SEND ALL",
@@ -372,9 +464,9 @@ fun SendScreen(
                 )
             }
 
-            // === SEND MODE TOGGLE (for regular addresses) ===
+            // === SEND MODE TOGGLE — only for regular addresses on own node (matches RN) ===
             AnimatedVisibility(
-                visible = addrType is AddrType.Regular,
+                visible = addrType is AddrType.Regular && ownNode,
                 enter = expandVertically(),
                 exit = shrinkVertically(),
             ) {
@@ -417,7 +509,7 @@ fun SendScreen(
                         Text(
                             if (sendOffline) "Recipient does not need to be online"
                             else "Both wallets must be online within 12h",
-                            color = C.textSecondary,
+                            color = C.textMuted,
                             fontSize = 11.sp,
                         )
                     }
@@ -441,7 +533,9 @@ fun SendScreen(
                     ),
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -456,7 +550,7 @@ fun SendScreen(
                             Text(
                                 if (addrType is AddrType.Sbbs || !sendOffline) "Online \u2014 lower fee"
                                 else "Offline \u2014 higher fee",
-                                color = C.textSecondary,
+                                color = C.textMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 3.dp),
                             )
@@ -503,7 +597,7 @@ fun SendScreen(
                     value = comment,
                     onValueChange = { if (it.length <= 1024) comment = it },
                     placeholder = {
-                        Text("Local note (not sent on-chain)", color = C.textSecondary)
+                        Text("Local note (not sent on-chain)", color = C.textMuted)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -526,12 +620,17 @@ fun SendScreen(
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
+                    // Determine txType like RN: SBBS = 'regular', otherwise depends on sendOffline
+                    val txType = if (addrType is AddrType.Sbbs) "regular"
+                        else if (sendOffline) "offline"
+                        else "regular"
                     onNavigateConfirm(
                         address.trim(),
                         amountGroth,
                         fee,
                         comment.trim(),
                         selectedAssetId,
+                        txType,
                     )
                 },
                 enabled = canNext,
@@ -554,6 +653,64 @@ fun SendScreen(
             }
 
             Spacer(Modifier.height(40.dp))
+        }
+    }
+
+    // === ASSET PICKER MODAL ===
+    if (assetPickerOpen) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { assetPickerOpen = false }) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = C.card),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        "SELECT ASSET",
+                        color = C.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    assetList.forEach { asset ->
+                        val isSelected = asset.assetId == selectedAssetId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) Color(0x1425D4D0) else Color.Transparent)
+                                .clickable {
+                                    selectedAssetId = asset.assetId
+                                    amount = ""
+                                    assetPickerOpen = false
+                                }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            com.privimemobile.ui.components.AssetIcon(assetId = asset.assetId, ticker = asset.ticker, size = 36.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    asset.ticker,
+                                    color = if (isSelected) C.accent else C.text,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "${Helpers.formatBeam(asset.available)} ${asset.ticker}",
+                                    color = C.textMuted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            if (isSelected) {
+                                Text("\u2713", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -600,5 +757,5 @@ private fun validateAddress(address: String, onIdAssigned: (Int) -> Unit) {
             put("address", address)
         })
     }.toString()
-    com.privimemobile.wallet.WalletManager.callWalletApi(payload)
+    WalletManager.callWalletApi(payload)
 }

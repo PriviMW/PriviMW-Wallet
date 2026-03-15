@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
@@ -260,11 +261,18 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                         if (activeWordIdx >= 0) {
                             restoreWords = restoreWords.toMutableList().also { it[activeWordIdx] = word }
                             suggestions = emptyList()
-                            // Move to next empty word
-                            val nextIdx = restoreWords.indexOfFirst { idx ->
-                                restoreWords.indexOf(idx) > activeWordIdx && idx.isEmpty()
+                            // Move to next empty word after current index
+                            var nextIdx = -1
+                            for (i in (activeWordIdx + 1) until 12) {
+                                if (restoreWords[i].isEmpty()) { nextIdx = i; break }
                             }
-                            activeWordIdx = if (nextIdx >= 0) nextIdx else -1
+                            // If no empty after current, wrap around and check before
+                            if (nextIdx < 0) {
+                                for (i in 0 until activeWordIdx) {
+                                    if (restoreWords[i].isEmpty()) { nextIdx = i; break }
+                                }
+                            }
+                            activeWordIdx = if (nextIdx >= 0) nextIdx else activeWordIdx + 1
                         }
                     },
                     onFocusWord = { idx ->
@@ -479,7 +487,25 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0x1AFFC107),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFFC107)),
+        ) {
+            Text(
+                "This seed phrase can only be used on one device at a time. " +
+                "Running the same seed on multiple devices will cause transaction conflicts. " +
+                "To monitor your wallet from another device, use your owner key with your own node.",
+                color = Color(0xFFFFC107),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
         Button(
             onClick = onConfirm,
             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -633,6 +659,16 @@ private fun RestoreSeedScreen(
             Spacer(Modifier.height(12.dp))
         }
 
+        // FocusRequesters for each word field — auto-focus next on suggestion tap
+        val focusRequesters = remember { List(12) { FocusRequester() } }
+
+        // When activeWordIdx changes, request focus on that field
+        LaunchedEffect(activeWordIdx) {
+            if (activeWordIdx in 0..11) {
+                try { focusRequesters[activeWordIdx].requestFocus() } catch (_: Exception) {}
+            }
+        }
+
         // 12 word inputs in scrollable grid
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -667,6 +703,7 @@ private fun RestoreSeedScreen(
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
+                            .focusRequester(focusRequesters[idx])
                             .onFocusChanged { if (it.isFocused) onFocusWord(idx) },
                         textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                         colors = OutlinedTextFieldDefaults.colors(

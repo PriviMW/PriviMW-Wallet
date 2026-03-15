@@ -2,7 +2,7 @@ package com.privimemobile.protocol
 
 /**
  * Domain types for the PriviMe protocol.
- * Ports beam/types.ts to Kotlin data classes.
+ * Fully ports beam/types.ts to Kotlin data classes.
  */
 
 /** A registered PriviMe user (resolved from handle or wallet_id). */
@@ -12,21 +12,36 @@ data class Contact(
     val walletId: String,
     val avatarHash: String = "",
     val lastSeen: Long = 0,
+    val resolving: Boolean = false,
+)
+
+/** File attachment embedded in a chat message. */
+data class FileAttachment(
+    val cid: String = "",      // IPFS content ID
+    val key: String = "",      // AES key (hex)
+    val iv: String = "",       // AES IV (hex)
+    val name: String = "",     // filename
+    val size: Long = 0,        // file size in bytes
+    val mime: String = "",     // MIME type
+    val data: String? = null,  // inline base64 data (for small files)
 )
 
 /** A chat message (sent or received via SBBS). */
 data class ChatMessage(
-    val id: String,         // unique: "$ts-$from-$to"
-    val from: String,       // sender handle
-    val to: String,         // recipient handle
-    val text: String,       // message text
-    val timestamp: Long,    // unix seconds
-    val sent: Boolean,      // true if we sent it
+    val id: String,            // unique: "$ts-$from-$to"
+    val from: String,          // sender handle or wallet_id
+    val to: String,            // recipient handle or wallet_id
+    val text: String,          // message text
+    val timestamp: Long,       // unix seconds
+    val sent: Boolean,         // true if we sent it
     val displayName: String = "",
-    val fileHash: String = "",   // IPFS hash for file attachments
-    val fileName: String = "",
-    val fileSize: Long = 0,
-    val type: String = "dm",     // "dm" or "system"
+    val read: Boolean = false,       // read receipt received
+    val acked: Boolean = false,      // delivery ack received
+    val isTip: Boolean = false,      // is a tip message
+    val tipAmount: Long = 0,         // tip amount in groth
+    val reply: String? = null,       // quoted message text (for replies)
+    val file: FileAttachment? = null, // file attachment
+    val type: String = "dm",         // "dm", "file", "tip", "system"
 )
 
 /** A conversation (aggregated from messages). */
@@ -45,4 +60,36 @@ data class Identity(
     val displayName: String,
     val walletId: String,
     val registered: Boolean = false,
+    val registeredHeight: Long = 0,
+)
+
+/** Raw SBBS message payload (before parsing). */
+data class MessagePayload(
+    val v: Int = 0,             // version
+    val t: String = "",         // type: "dm", "ack", "file", "tip"
+    val msg: String? = null,    // message text
+    val ts: Long = 0,           // timestamp
+    val from: String? = null,   // sender handle
+    val to: String? = null,     // recipient handle
+    val dn: String? = null,     // display name
+    val amount: Long? = null,   // tip amount
+    val reply: String? = null,  // reply text
+    val read: Long? = null,     // read receipt timestamp
+    val file: Map<String, Any>? = null, // file info
+)
+
+/** Handle resolution result from shader. */
+data class HandleResult(
+    val registered: Boolean = false,
+    val handle: String = "",
+    val walletId: String = "",
+    val displayName: String = "",
+    val registeredHeight: Long = 0,
+    val error: String? = null,
+)
+
+/** Pool info result (registration fee, etc). */
+data class PoolResult(
+    val registrationFee: Long = 0,
+    val error: String? = null,
 )

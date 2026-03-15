@@ -23,6 +23,7 @@ import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
+import com.privimemobile.wallet.assetTicker
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -133,6 +134,24 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
     var proofRequested by remember { mutableStateOf(false) }
     var snackMessage by remember { mutableStateOf<String?>(null) }
 
+    // Listen for payment proof event from JNI callback (matches RN onPaymentProofExported)
+    LaunchedEffect(txId) {
+        WalletEventBus.paymentProof.collect { event ->
+            if (event.txId == txId) {
+                proof = PaymentProof(
+                    senderId = event.senderId,
+                    receiverId = event.receiverId,
+                    amount = event.amount,
+                    kernelId = event.kernelId,
+                    isValid = event.isValid,
+                    rawProof = event.rawProof,
+                    assetId = event.assetId,
+                )
+                proofLoading = false
+            }
+        }
+    }
+
     if (tx == null) {
         Column(
             modifier = Modifier
@@ -173,7 +192,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             TxStatus.CANCELLED -> "Cancelled"
             TxStatus.COMPLETED -> "Completed"
             TxStatus.FAILED -> "Failed"
-            TxStatus.REGISTERING -> "Registering"
+            TxStatus.REGISTERING -> "In Progress"
             else -> "Unknown"
         }
     }
@@ -197,7 +216,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
 
     val failureMsg = FAILURE_REASONS[tx.failureReason] ?: ""
 
-    val ticker = if (tx.assetId == 0) "BEAM" else "Asset #${tx.assetId}"
+    val ticker = assetTicker(tx.assetId)
 
     fun copyToClipboard(label: String, value: String) {
         clipboard.setText(AnnotatedString(value))
@@ -287,17 +306,10 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                         if (!proofRequested) {
                             proofRequested = true
                             proofLoading = true
-                            WalletApi.call("get_payment_info", mapOf("txId" to txId)) { result ->
-                                val p = result
-                                proof = PaymentProof(
-                                    senderId = p["senderId"] as? String ?: "",
-                                    receiverId = p["receiverId"] as? String ?: "",
-                                    amount = (p["amount"] as? Number)?.toLong() ?: 0L,
-                                    kernelId = p["kernelId"] as? String ?: "",
-                                    isValid = p["isValid"] as? Boolean ?: false,
-                                    rawProof = p["rawProof"] as? String ?: "",
-                                    assetId = (p["assetId"] as? Number)?.toInt() ?: 0,
-                                )
+                            // Use JNI getPaymentInfo — result comes via onPaymentProofExported callback
+                            try {
+                                com.privimemobile.wallet.WalletManager.walletInstance?.getPaymentInfo(txId)
+                            } catch (_: Exception) {
                                 proofLoading = false
                             }
                         }
@@ -403,10 +415,11 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 if (isCancelable) {
                     OutlinedButton(
                         onClick = {
-                            WalletApi.call("tx_cancel", mapOf("txId" to tx.txId)) {
-                                WalletApi.call("tx_list") {}
-                                onBack()
-                            }
+                            try {
+                                com.privimemobile.wallet.WalletManager.walletInstance?.cancelTx(tx.txId)
+                                com.privimemobile.wallet.WalletManager.walletInstance?.getTransactions()
+                            } catch (_: Exception) {}
+                            onBack()
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -507,7 +520,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                                 { copyToClipboard("Receiver signature", p.receiverId) }
                             } else null,
                         )
-                        val proofTicker = if (p.assetId == 0) "BEAM" else "Asset #${p.assetId}"
+                        val proofTicker = assetTicker(p.assetId)
                         DetailRow("Amount", "${Helpers.formatBeam(p.amount)} $proofTicker")
                         DetailRow(
                             label = "Kernel ID",

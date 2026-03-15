@@ -20,19 +20,6 @@ import kotlin.coroutines.resumeWithException
  */
 object FileSharing {
     private const val TAG = "FileSharing"
-    private const val MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-    private const val INLINE_MAX_SIZE = 200 * 1024     // 200KB — inline in SBBS message
-    private const val AUTO_DL_MAX_SIZE = 500 * 1024    // 500KB — auto-download threshold
-    private const val COMPRESS_MAX_DIM = 1200
-    private const val COMPRESS_QUALITY = 82
-    private const val COMPRESS_MIN_SIZE = 100 * 1024   // Only compress images > 100KB
-
-    private val ALLOWED_MIME_TYPES = setOf(
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
-        "application/pdf", "text/plain",
-        "application/zip", "application/x-zip-compressed",
-        "audio/mpeg", "audio/ogg", "video/mp4",
-    )
 
     // In-memory cache: CID -> local file path
     private val downloadedFiles = mutableMapOf<String, String>()
@@ -42,17 +29,30 @@ object FileSharing {
     var uploadInProgress = false
         private set
 
-    fun isImageMime(mime: String): Boolean = mime.startsWith("image/")
+    // === Download status listeners ===
 
-    fun formatFileSize(bytes: Long): String = when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${"%.1f".format(bytes / 1024.0)} KB"
-        else -> "${"%.1f".format(bytes / (1024.0 * 1024))} MB"
+    enum class DownloadStatus { IDLE, DOWNLOADING, DECRYPTING, DONE, ERROR }
+
+    private val statusListeners = mutableSetOf<(String, DownloadStatus, String?) -> Unit>()
+
+    fun onDownloadStatus(listener: (cid: String, status: DownloadStatus, path: String?) -> Unit): () -> Unit {
+        statusListeners.add(listener)
+        return { statusListeners.remove(listener) }
+    }
+
+    private fun emitStatus(cid: String, status: DownloadStatus, path: String? = null) {
+        statusListeners.forEach { it(cid, status, path) }
     }
 
     /** Get local file path for a cached file. */
     fun getLocalFilePath(cid: String): String? {
         return downloadedFiles[cid] ?: FileCache.getCachedFilePath(cid)
+    }
+
+    /** Check if a file is already downloaded/cached. */
+    suspend fun isFileDownloaded(cid: String): Boolean {
+        if (downloadedFiles.containsKey(cid)) return true
+        return FileCache.getCachedFilePath(cid) != null
     }
 
     /**
@@ -83,10 +83,10 @@ object FileSharing {
             ?: throw IllegalStateException("Contact not resolved")
         if (contact.walletId.isEmpty()) throw IllegalStateException("Recipient address not resolved")
 
-        if (fileSize > MAX_FILE_SIZE) throw IllegalArgumentException("File too large (max ${formatFileSize(MAX_FILE_SIZE.toLong())})")
+        if (fileSize > Config.MAX_FILE_SIZE) throw IllegalArgumentException("File too large (max ${Helpers.formatFileSize(Config.MAX_FILE_SIZE.toLong())})")
 
         var mime = mimeType
-        if (mime !in ALLOWED_MIME_TYPES) throw IllegalArgumentException("Unsupported file type: $mime")
+        if (mime !in Config.ALLOWED_MIME_TYPES) throw IllegalArgumentException("Unsupported file type: $mime")
 
         uploadInProgress = true
         try {
@@ -97,8 +97,8 @@ object FileSharing {
             }
 
             // 2. Compress image if applicable
-            if (isImageMime(mime) && plaintext.size > COMPRESS_MIN_SIZE && mime != "image/gif") {
-                val compressed = compressImage(plaintext, COMPRESS_MAX_DIM, COMPRESS_QUALITY)
+            if (Helpers.isImageMime(mime) && plaintext.size > Config.COMPRESS_MIN_SIZE && mime != "image/gif") {
+                val compressed = compressImage(plaintext, Config.IMAGE_MAX_DIM, Config.IMAGE_QUALITY)
                 if (compressed != null && compressed.size < plaintext.size) {
                     plaintext = compressed
                     mime = "image/jpeg"
@@ -115,7 +115,7 @@ object FileSharing {
             val fileCid: String
             var inlineData: String? = null
 
-            if (ciphertext.size <= INLINE_MAX_SIZE) {
+            if (ciphertext.size <= Config.MAX_INLINE_SIZE) {
                 inlineData = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
                 fileCid = "inline-${System.currentTimeMillis().toString(36)}${(Math.random() * 1000000).toLong().toString(36)}"
             } else {
@@ -157,15 +157,14 @@ object FileSharing {
                 timestamp = ts,
                 sent = true,
                 displayName = identity.displayName,
-                fileHash = fileCid,
-                fileName = truncName,
+                file = FileAttachment(cid = fileCid, name = truncName, size = fileSize),
                 type = "file",
             )
             val convs = ProtocolStartup.conversations.value.toMutableMap()
             val msgs = convs.getOrPut(convKey) { emptyList() }.toMutableList()
             msgs.add(msg)
             convs[convKey] = msgs
-            // ProtocolStartup would need a setter — skip for now
+            ProtocolStartup.updateConversations(convs)
         } finally {
             uploadInProgress = false
         }
@@ -174,6 +173,7 @@ object FileSharing {
     /**
      * Download and decrypt a file.
      * Returns local file path for display.
+     * Emits download status events for UI progress tracking.
      */
     suspend fun downloadFile(
         context: Context,
@@ -184,9 +184,13 @@ object FileSharing {
         inlineData: String? = null,
     ): String {
         // Check caches
-        downloadedFiles[cid]?.let { return it }
+        downloadedFiles[cid]?.let {
+            emitStatus(cid, DownloadStatus.DONE, it)
+            return it
+        }
         FileCache.getCachedFilePath(cid)?.let {
             downloadedFiles[cid] = it
+            emitStatus(cid, DownloadStatus.DONE, it)
             return it
         }
 
@@ -198,6 +202,8 @@ object FileSharing {
 
         activeDownloads.add(cid)
         try {
+            emitStatus(cid, DownloadStatus.DOWNLOADING)
+
             val ciphertext: ByteArray = if (inlineData != null) {
                 // Inline: data embedded in message
                 Base64.decode(inlineData, Base64.DEFAULT)
@@ -206,9 +212,10 @@ object FileSharing {
                 downloadFromIpfs(cid)
             }
 
-            if (ciphertext.size > MAX_FILE_SIZE) throw IllegalStateException("File exceeds size limit")
+            if (ciphertext.size > Config.MAX_FILE_SIZE) throw IllegalStateException("File exceeds size limit")
 
             // Decrypt
+            emitStatus(cid, DownloadStatus.DECRYPTING)
             val plaintext = withContext(Dispatchers.Default) {
                 FileCrypto.decrypt(ciphertext, keyHex, ivHex)
             }
@@ -219,10 +226,45 @@ object FileSharing {
             }
 
             downloadedFiles[cid] = localPath
+            emitStatus(cid, DownloadStatus.DONE, localPath)
             return localPath
+        } catch (e: Exception) {
+            emitStatus(cid, DownloadStatus.ERROR)
+            throw e
         } finally {
             activeDownloads.remove(cid)
         }
+    }
+
+    /**
+     * Auto-download images under size threshold (up to 3 concurrent).
+     * Returns map of CID -> local file path for successfully downloaded files.
+     */
+    suspend fun autoDownloadImages(
+        context: Context,
+        messages: List<ChatMessage>,
+    ): Map<String, String> {
+        val results = mutableMapOf<String, String>()
+        val toDownload = messages.filter { msg ->
+            val file = msg.file ?: return@filter false
+            !downloadedFiles.containsKey(file.cid) &&
+            !activeDownloads.contains(file.cid) &&
+            (file.data != null || (Helpers.isImageMime(file.mime) && file.size <= Config.AUTO_DL_MAX_SIZE))
+        }
+        // Download up to 3 concurrently
+        val batch = toDownload.take(3)
+        coroutineScope {
+            batch.map { msg ->
+                async {
+                    val file = msg.file ?: return@async
+                    try {
+                        val path = downloadFile(context, file.cid, file.key, file.iv, file.mime, file.data)
+                        results[file.cid] = path
+                    } catch (_: Exception) { /* non-fatal */ }
+                }
+            }.awaitAll()
+        }
+        return results
     }
 
     private suspend fun uploadToIpfs(data: ByteArray): String = suspendCancellableCoroutine { cont ->

@@ -13,13 +13,25 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 object WalletEventBus {
 
-    // Wallet status (balance, height, etc.) — StateFlow for always-current value
-    private val _walletStatus = kotlinx.coroutines.flow.MutableStateFlow(WalletStatusEvent(0, 0, 0, 0))
-    val walletStatus: kotlinx.coroutines.flow.StateFlow<WalletStatusEvent> = _walletStatus
+    // Per-asset status events (fires once per asset from onStatus)
+    private val _walletStatus = MutableSharedFlow<WalletStatusEvent>(extraBufferCapacity = 16)
+    val walletStatus: SharedFlow<WalletStatusEvent> = _walletStatus.asSharedFlow()
 
-    // Transaction list updates
-    private val _transactions = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val transactions: SharedFlow<String> = _transactions.asSharedFlow()
+    // BEAM-only status (assetId=0) — convenience for screens that only need BEAM balance
+    private val _beamStatus = kotlinx.coroutines.flow.MutableStateFlow(WalletStatusEvent(0, 0, 0, 0, 0, 0))
+    val beamStatus: kotlinx.coroutines.flow.StateFlow<WalletStatusEvent> = _beamStatus
+
+    // Per-asset balance map — persistent singleton (survives navigation, like RN Zustand store)
+    val assetBalances = java.util.concurrent.ConcurrentHashMap<Int, WalletStatusEvent>()
+
+    // Per-asset metadata cache — persistent singleton (like Beam wallet's AssetManager)
+    val assetInfoCache = java.util.concurrent.ConcurrentHashMap<Int, AssetInfoEvent>()
+    // Track which asset IDs we've already requested info for (avoid duplicate JNI calls)
+    private val requestedAssetIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
+
+    // Transaction list updates — StateFlow so detail screen always has current data
+    private val _transactions = kotlinx.coroutines.flow.MutableStateFlow("[]")
+    val transactions: kotlinx.coroutines.flow.StateFlow<String> = _transactions
 
     // Sync progress
     private val _syncProgress = MutableSharedFlow<SyncProgressEvent>(extraBufferCapacity = 1)
@@ -49,26 +61,63 @@ object WalletEventBus {
     private val _assetInfo = MutableSharedFlow<AssetInfoEvent>(extraBufferCapacity = 8)
     val assetInfo: SharedFlow<AssetInfoEvent> = _assetInfo.asSharedFlow()
 
+    // Payment proof results
+    private val _paymentProof = MutableSharedFlow<PaymentProofEvent>(extraBufferCapacity = 1)
+    val paymentProof: SharedFlow<PaymentProofEvent> = _paymentProof.asSharedFlow()
+
+    // Export data results (wallet JSON backup, TX CSV)
+    private val _exportData = MutableSharedFlow<ExportDataEvent>(extraBufferCapacity = 1)
+    val exportData: SharedFlow<ExportDataEvent> = _exportData.asSharedFlow()
+
+    // Coin selection results (fee calculation, change)
+    private val _coinSelection = MutableSharedFlow<CoinSelectionEvent>(extraBufferCapacity = 1)
+    val coinSelection: SharedFlow<CoinSelectionEvent> = _coinSelection.asSharedFlow()
+
+    // Generic wallet events (import results, errors)
+    private val _walletEvent = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val walletEvent: SharedFlow<String> = _walletEvent.asSharedFlow()
+
     // --- Emit functions (called from WalletListener on UI thread) ---
 
-    fun emitWalletStatus(event: WalletStatusEvent) { _walletStatus.value = event }
-    fun emitTransactions(json: String) { _transactions.tryEmit(json) }
+    fun emitWalletStatus(event: WalletStatusEvent) {
+        assetBalances[event.assetId] = event
+        _walletStatus.tryEmit(event)
+        if (event.assetId == 0) _beamStatus.value = event
+        // Auto-request asset info for non-BEAM assets (like RN useBeamEvents + Beam AssetManager)
+        if (event.assetId != 0 && requestedAssetIds.add(event.assetId)) {
+            try {
+                WalletManager.walletInstance?.getAssetInfo(event.assetId)
+            } catch (_: Exception) {}
+        }
+    }
+    fun emitTransactions(json: String) { _transactions.value = json }
     fun emitSyncProgress(event: SyncProgressEvent) { _syncProgress.tryEmit(event) }
     fun emitNodeConnection(event: NodeConnectionEvent) { _nodeConnection.value = event }
     fun emitApiResult(json: String) { _apiResult.tryEmit(json) }
     fun emitContractConsent(event: ContractConsentEvent) { _contractConsent.tryEmit(event) }
     fun emitSendConsent(event: SendConsentEvent) { _sendConsent.tryEmit(event) }
     fun emitAddresses(event: AddressesEvent) { _addresses.tryEmit(event) }
-    fun emitAssetInfo(event: AssetInfoEvent) { _assetInfo.tryEmit(event) }
+    fun emitPaymentProof(event: PaymentProofEvent) { _paymentProof.tryEmit(event) }
+    fun emitAssetInfo(event: AssetInfoEvent) {
+        assetInfoCache[event.id] = event
+        _assetInfo.tryEmit(event)
+    }
+    fun emitExportData(json: String) { _exportData.tryEmit(ExportDataEvent("json", json)) }
+    fun emitExportCsv(csv: String) { _exportData.tryEmit(ExportDataEvent("csv", csv)) }
+    fun emitCoinSelection(event: CoinSelectionEvent) { _coinSelection.tryEmit(event) }
+    fun emitWalletEvent(event: String) { _walletEvent.tryEmit(event) }
 }
 
 // Event data classes
 data class WalletStatusEvent(
+    val assetId: Int = 0,
     val available: Long,
     val receiving: Long,
     val sending: Long,
     val maturing: Long,
     val height: Long = 0,
+    val shielded: Long = 0,
+    val maxPrivacy: Long = 0,
 )
 
 data class SyncProgressEvent(val done: Int, val total: Int)
@@ -95,4 +144,41 @@ data class AssetInfoEvent(
     val nthUnitName: String,
     val shortName: String,
     val name: String,
+) {
+    /** Resolve display ticker: unitName > shortName > name > "Asset #id" */
+    fun ticker(): String =
+        unitName.ifEmpty { null } ?: shortName.ifEmpty { null } ?: name.ifEmpty { null } ?: "Asset #$id"
+}
+
+/** Global helper — resolve assetId to display ticker from cache */
+fun assetTicker(assetId: Int): String {
+    if (assetId == 0) return "BEAM"
+    return WalletEventBus.assetInfoCache[assetId]?.ticker() ?: "Asset #$assetId"
+}
+
+/** Global helper — resolve assetId to full name from cache */
+fun assetFullName(assetId: Int): String {
+    if (assetId == 0) return "Beam"
+    val info = WalletEventBus.assetInfoCache[assetId] ?: return "Asset #$assetId"
+    return info.name.ifEmpty { null } ?: info.ticker()
+}
+
+data class PaymentProofEvent(
+    val txId: String,
+    val senderId: String,
+    val receiverId: String,
+    val amount: Long,
+    val kernelId: String,
+    val isValid: Boolean,
+    val rawProof: String,
+    val assetId: Int,
+)
+
+data class ExportDataEvent(val type: String, val data: String) // type: "json" or "csv"
+
+data class CoinSelectionEvent(
+    val explicitFee: Long = 0,
+    val change: Long = 0,
+    val minimalFee: Long = 0,
+    val maxAmount: Long = 0,
 )

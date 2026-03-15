@@ -1,15 +1,19 @@
 package com.privimemobile.ui.chat
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,11 +23,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Conversation
+import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.ui.theme.C
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatsScreen(
     onOpenChat: (String) -> Unit = {},
@@ -31,7 +39,11 @@ fun ChatsScreen(
 ) {
     val identity by ProtocolStartup.identity.collectAsState()
 
-    // If not registered, show register prompt
+    // SBBS re-registration state (restored wallet)
+    val sbbsNeedsUpdate by ProtocolStartup.sbbsNeedsUpdate.collectAsState()
+    val sbbsUpdating by ProtocolStartup.sbbsUpdating.collectAsState()
+
+    // Landing page 1: Not registered — show register prompt
     if (identity == null || identity?.registered != true) {
         Column(
             modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
@@ -45,12 +57,103 @@ fun ChatsScreen(
                 color = C.textSecondary, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Spacer(Modifier.height(24.dp))
-            androidx.compose.material3.Button(
+            Button(
                 onClick = onNewChat, // Navigate to register screen
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
             ) {
                 Text("Register Handle", color = C.textDark, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
+    // Landing page 2: Registered but SBBS address belongs to old device — re-register
+    if (sbbsNeedsUpdate) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("Welcome Back", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "@${identity!!.handle}",
+                color = C.accent,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Your wallet was restored on a new device. Your messaging address needs to be updated so others can reach you.",
+                color = C.textSecondary,
+                fontSize = 14.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 20.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0x1AFFC107),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFFC107)),
+            ) {
+                Text(
+                    "Your @handle is safe on-chain. Previous conversations cannot be restored as messages are stored locally on each device. A small transaction fee applies to update your address.",
+                    color = Color(0xFFFFC107),
+                    fontSize = 12.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+            // Show balance warning if wallet is empty
+            val beamStatus by com.privimemobile.wallet.WalletEventBus.beamStatus.collectAsState()
+            val hasBalance = beamStatus.available > 0
+
+            if (!hasBalance) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0x1AFF6B6B),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFF6B6B)),
+                ) {
+                    Text(
+                        "You need BEAM in your wallet to pay the transaction fee. Send some BEAM to this wallet first.",
+                        color = C.error,
+                        fontSize = 12.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = {
+                    ProtocolStartup.reRegisterSbbsAddress()
+                },
+                enabled = !sbbsUpdating && hasBalance,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = C.accent,
+                    disabledContainerColor = C.accent.copy(alpha = 0.3f),
+                ),
+            ) {
+                if (sbbsUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = C.textDark,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Updating Address...", color = C.textDark, fontWeight = FontWeight.Bold)
+                } else {
+                    Text("Update Messaging Address", color = C.textDark, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
         return
@@ -69,7 +172,11 @@ fun ChatsScreen(
             Conversation(
                 handle = key.removePrefix("@"),
                 displayName = contact?.displayName ?: key.removePrefix("@"),
-                lastMessage = last.text.ifEmpty { if (last.fileHash.isNotEmpty()) "[File]" else "" },
+                lastMessage = when {
+                    last.isTip -> "Tip: ${Helpers.formatBeam(last.tipAmount)} BEAM"
+                    (last.file?.cid ?: "").isNotEmpty() -> "\uD83D\uDCCE ${last.file?.name ?: "File"}"
+                    else -> last.text
+                },
                 lastTimestamp = last.timestamp,
                 unreadCount = rawUnread[key] ?: 0,
                 walletId = contact?.walletId ?: "",
@@ -77,7 +184,24 @@ fun ChatsScreen(
         }.sortedByDescending { it.lastTimestamp }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(C.bg)) {
+    var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
+
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            ProtocolStartup.loadMessages(true)
+            scope.launch {
+                delay(2000)
+                refreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize().background(C.bg),
+    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,7 +234,11 @@ fun ChatsScreen(
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(conversations, key = { it.handle }) { conv ->
-                        ConversationCard(conv, onClick = { onOpenChat(conv.handle) })
+                        ConversationCard(
+                            conv,
+                            onClick = { onOpenChat(conv.handle) },
+                            onLongPress = { deleteTarget = conv },
+                        )
                     }
                 }
             }
@@ -128,14 +256,41 @@ fun ChatsScreen(
             Icon(Icons.Filled.Add, contentDescription = "New Chat")
         }
     }
+    } // PullToRefreshBox
+
+    if (deleteTarget != null) {
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Delete Conversation", color = C.text) },
+            text = { Text("Delete conversation with @${deleteTarget!!.handle}? This cannot be undone.", color = C.textSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        ProtocolStartup.deleteConversation("@${deleteTarget!!.handle}")
+                        deleteTarget = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = C.error),
+                    shape = RoundedCornerShape(8.dp),
+                ) { Text("Delete", color = C.text, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deleteTarget = null }, shape = RoundedCornerShape(8.dp)) {
+                    Text("Cancel", color = C.textSecondary)
+                }
+            },
+            containerColor = C.card,
+            shape = RoundedCornerShape(12.dp),
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConversationCard(conv: Conversation, onClick: () -> Unit) {
+private fun ConversationCard(conv: Conversation, onClick: () -> Unit, onLongPress: () -> Unit = {}) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .combinedClickable(onClick = { onClick() }, onLongClick = { onLongPress() }),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = C.card),
     ) {

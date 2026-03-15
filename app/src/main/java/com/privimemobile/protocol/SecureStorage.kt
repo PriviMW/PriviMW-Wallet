@@ -45,6 +45,7 @@ object SecureStorage {
 
     fun getString(key: String, default: String? = null): String? = prefs?.getString(key, default)
     fun getBoolean(key: String, default: Boolean = false): Boolean = prefs?.getBoolean(key, default) ?: default
+    fun getInt(key: String, default: Int = 0): Int = prefs?.getInt(key, default) ?: default
 
     fun putString(key: String, value: String) {
         prefs?.edit()?.putString(key, value)?.apply()
@@ -52,6 +53,10 @@ object SecureStorage {
 
     fun putBoolean(key: String, value: Boolean) {
         prefs?.edit()?.putBoolean(key, value)?.apply()
+    }
+
+    fun putInt(key: String, value: Int) {
+        prefs?.edit()?.putInt(key, value)?.apply()
     }
 
     fun remove(key: String) {

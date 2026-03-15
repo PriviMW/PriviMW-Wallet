@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -131,43 +132,32 @@ fun AppNavigation() {
                     onAssetDetail = { assetId -> navController.navigate("asset_detail/$assetId") },
                 )
             }
-            composable(
-                "send?address={address}",
-                arguments = listOf(navArgument("address") { type = NavType.StringType; defaultValue = "" }),
-            ) { backStackEntry ->
-                val scannedAddress = backStackEntry.arguments?.getString("address") ?: ""
+            composable("send") { backStackEntry ->
+                // Read QR result passed back via savedStateHandle
+                val scannedAddress = backStackEntry.savedStateHandle
+                    ?.getStateFlow<String?>("scanned_address", null)
+                    ?.collectAsState()?.value
                 SendScreen(
                     onBack = { navController.popBackStack() },
                     onSent = { navController.popBackStack() },
                     onScanQr = { navController.navigate("qr_scanner") },
-                    scannedAddress = scannedAddress.ifEmpty { null },
-                    onNavigateConfirm = { address, amount, fee, comment, assetId ->
+                    scannedAddress = scannedAddress,
+                    onNavigateConfirm = { address, amount, fee, comment, assetId, txType ->
                         navController.navigate(
-                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId"
-                        )
-                    },
-                )
-            }
-            composable("send") {
-                SendScreen(
-                    onBack = { navController.popBackStack() },
-                    onSent = { navController.popBackStack() },
-                    onScanQr = { navController.navigate("qr_scanner") },
-                    onNavigateConfirm = { address, amount, fee, comment, assetId ->
-                        navController.navigate(
-                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId"
+                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId/$txType"
                         )
                     },
                 )
             }
             composable(
-                "send_confirm/{address}/{amount}/{fee}/{comment}/{assetId}",
+                "send_confirm/{address}/{amount}/{fee}/{comment}/{assetId}/{txType}",
                 arguments = listOf(
                     navArgument("address") { type = NavType.StringType },
                     navArgument("amount") { type = NavType.LongType },
                     navArgument("fee") { type = NavType.LongType },
                     navArgument("comment") { type = NavType.StringType; defaultValue = "" },
                     navArgument("assetId") { type = NavType.IntType; defaultValue = 0 },
+                    navArgument("txType") { type = NavType.StringType; defaultValue = "offline" },
                 ),
             ) { backStackEntry ->
                 val address = backStackEntry.arguments?.getString("address") ?: ""
@@ -179,6 +169,7 @@ fun AppNavigation() {
                     )
                 } catch (_: Exception) { "" }
                 val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
+                val txType = backStackEntry.arguments?.getString("txType") ?: "offline"
 
                 SendConfirmScreen(
                     address = address,
@@ -186,6 +177,7 @@ fun AppNavigation() {
                     fee = fee,
                     comment = comment,
                     assetId = assetId,
+                    txType = txType,
                     onApproved = {
                         // Pop back to wallet home
                         navController.popBackStack(Tab.WALLET.route, inclusive = false)
@@ -205,7 +197,13 @@ fun AppNavigation() {
                 arguments = listOf(navArgument("assetId") { type = NavType.IntType; defaultValue = 0 }),
             ) { backStackEntry ->
                 val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
-                AssetDetailScreen(assetId = assetId, onBack = { navController.popBackStack() })
+                AssetDetailScreen(
+                    assetId = assetId,
+                    onBack = { navController.popBackStack() },
+                    onSend = { navController.navigate("send") },
+                    onReceive = { navController.navigate("receive") },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                )
             }
             composable("utxos") {
                 UTXOScreen(onBack = { navController.popBackStack() })
@@ -216,9 +214,10 @@ fun AppNavigation() {
             composable("qr_scanner") {
                 QRScannerScreen(
                     onScanned = { address ->
+                        // Pass result back to the existing Send screen via savedStateHandle
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle?.set("scanned_address", address)
                         navController.popBackStack()
-                        // Navigate to send with the scanned address
-                        navController.navigate("send?address=$address")
                     },
                     onBack = { navController.popBackStack() },
                 )

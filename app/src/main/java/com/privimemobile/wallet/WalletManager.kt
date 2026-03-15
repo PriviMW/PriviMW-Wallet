@@ -85,7 +85,12 @@ object WalletManager {
     ): Boolean {
         Log.d(TAG, "Restoring wallet, node=$nodeAddr")
         cleanWalletFiles()
-        val result = Api.createWallet(APP_VERSION, nodeAddr, getDbPath(), password, seed, restore = true)
+        // CRITICAL: restore=false! When restore=true, the JNI layer starts a LOCAL
+        // embedded Beam node and ignores the remote nodeAddr entirely — scanning 33M+
+        // blocks on a local node takes hours on mobile.
+        // Instead: create wallet normally with the seed (connects to remote/own node).
+        // With own node + owner key, sync is instant because the node already tracks UTXOs.
+        val result = Api.createWallet(APP_VERSION, nodeAddr, getDbPath(), password, seed, restore = false)
         if (result != null) {
             walletInstance = result
             try { result.launchApp("PriviMe", "") } catch (_: Exception) {}

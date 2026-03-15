@@ -2,31 +2,71 @@ package com.privimemobile.protocol
 
 /**
  * Protocol configuration constants.
- * Ports config.ts from the RN prototype.
+ * Ports config.ts from the RN build — 1:1 match.
  */
 object Config {
-    /** Default Beam mainnet node (load-balanced) */
-    const val DEFAULT_NODE = "eu-nodes.mainnet.beam.mw:8100"
-    const val US_NODE = "us-nodes.mainnet.beam.mw:8100"
+    /** Beam mainnet node pool (both EU and US, same as RN MAINNET_NODES) */
+    val MAINNET_NODES = listOf(
+        "eu-nodes.mainnet.beam.mw:8100",
+        "us-nodes.mainnet.beam.mw:8100",
+    )
+    /** Default node (first in pool) */
+    val DEFAULT_NODE = MAINNET_NODES[0]
 
-    /** PriviMe mainnet production contract CID */
-    const val PRIVIME_CID = "32c6e5836eb5d2d428acce7ca4e262c8bf9f615c142811f7cf4ee4717f8747a9"
+    /** PriviMe contract CID — staging for testing, switch to production when ready */
+    // Staging: 97db059a347227d2d71fd0cb7fb5d993343ab1540d2eaf40fe48d131b611635f
+    // Production: 32c6e5836eb5d2d428acce7ca4e262c8bf9f615c142811f7cf4ee4717f8747a9
+    const val PRIVIME_CID = "97db059a347227d2d71fd0cb7fb5d993343ab1540d2eaf40fe48d131b611635f"
 
-    /** Message refresh interval (ms) */
+    /** Unit conversion */
+    const val GROTH_PER_BEAM = 100_000_000L
+
+    /** Max chars per SBBS message (1024 byte limit with JSON overhead) */
+    const val MAX_MSG_CHARS = 950
+
+    /** Message refresh interval (ms) — fallback poll, ev_txs_changed is primary trigger */
     const val MSG_REFRESH_MS = 30_000L
+
+    /** Conversation storage version — bump to force re-import on format change */
+    const val CONV_VERSION = 2
+
+    // === File sharing ===
+
+    /** Max file size for upload (5 MB) */
+    const val MAX_FILE_SIZE = 5 * 1024 * 1024
+
+    /** Max inline file size before using IPFS (200 KB) — embed in SBBS message */
+    const val MAX_INLINE_SIZE = 200 * 1024
+
+    /** IPFS upload timeout (ms) */
+    const val IPFS_ADD_TIMEOUT = 60_000
 
     /** IPFS download timeout (ms) */
     const val IPFS_GET_TIMEOUT = 30_000
 
-    /** DApp Store contract CID */
-    const val DAPP_STORE_CID = "e2d24b686e8d31a0fe97eade9cd23281e7059b74b5757bdb96c820ef9e2af41c"
+    /** Max filename display length */
+    const val MAX_FILENAME_LEN = 60
 
-    /** Max inline message size before using IPFS (bytes) */
-    const val MAX_INLINE_SIZE = 1024
+    /** Auto-download images under this size (2 MB) */
+    const val AUTO_DL_MAX_SIZE = 2 * 1024 * 1024
 
-    /** Image compression max dimension (px) */
+    /** Allowed MIME types for file sharing */
+    val ALLOWED_MIME_TYPES = listOf(
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        "application/pdf", "text/plain",
+    )
+
+    // === Image compression before upload ===
+
+    /** Max dimension for image compression (px) */
     const val IMAGE_MAX_DIM = 1200
 
-    /** Image compression quality (0-100) */
-    const val IMAGE_QUALITY = 75
+    /** Image compression quality (0-100) — RN uses 0.82 = 82% */
+    const val IMAGE_QUALITY = 82
+
+    /** Min file size to trigger compression (100 KB) */
+    const val COMPRESS_MIN_SIZE = 100 * 1024
+
+    /** DApp Store contract CID */
+    const val DAPP_STORE_CID = "e2d24b686e8d31a0fe97eade9cd23281e7059b74b5757bdb96c820ef9e2af41c"
 }

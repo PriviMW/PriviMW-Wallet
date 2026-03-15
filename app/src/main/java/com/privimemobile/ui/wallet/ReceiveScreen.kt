@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
@@ -37,16 +38,34 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
- * Receive screen — address type selection (Regular/SBBS/Max Privacy),
- * QR code display, copy, share, generate new address.
+ * Receive screen — address type selection, QR code display, copy, share, generate new.
  *
- * Fully ports ReceiveScreen.tsx.
+ * Fully ports ReceiveScreen.tsx including:
+ * - Own node vs remote node detection (different tabs)
+ * - Offline address type (own node only)
+ * - Dynamic max privacy lock hours from settings
+ * - Remote node info banner
  */
-private enum class AddressType(val label: String, val desc: String, val fee: String) {
-    REGULAR("Regular", "Default address. Sender can pay online or offline.", "Fee: 0.011 BEAM"),
-    SBBS("SBBS", "Classic short address. Both wallets must be open simultaneously.", "Fee: 0.001 BEAM"),
-    MAX_PRIVACY("Max Privacy", "Maximum anonymity. Sender does not need to be online.", "Fee: 0.011 BEAM"),
-}
+
+private data class TabInfo(
+    val key: String,
+    val label: String,
+    val desc: String,
+    val fee: String,
+)
+
+// Tabs when connected to own node (offline + sbbs + max privacy)
+private val OWN_NODE_TABS = listOf(
+    TabInfo("offline", "Regular", "Default address. Sender can pay online or offline.", "Fee: 0.011 BEAM"),
+    TabInfo("sbbs", "SBBS", "Classic short address. Both wallets must be open simultaneously.", "Fee: 0.001 BEAM"),
+    TabInfo("max_privacy", "Max Privacy", "Maximum anonymity. Sender does not need to be online.", "Fee: 0.011 BEAM"),
+)
+
+// Tabs when connected to remote node (regular + sbbs only)
+private val REMOTE_NODE_TABS = listOf(
+    TabInfo("regular", "Regular", "Sender can pay online or offline. Both transaction types supported.", "Fee: 0.011 BEAM"),
+    TabInfo("sbbs", "SBBS", "Classic short address. Both wallets must be open simultaneously.", "Fee: 0.001 BEAM"),
+)
 
 @Composable
 fun ReceiveScreen(onBack: () -> Unit) {
@@ -54,17 +73,23 @@ fun ReceiveScreen(onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    var addressType by remember { mutableStateOf(AddressType.REGULAR) }
+    var ownNode by remember { mutableStateOf(false) }
+    var addressType by remember { mutableStateOf("regular") }
     var currentAddress by remember { mutableStateOf<String?>(null) }
     var generating by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
+    var lockHours by remember { mutableIntStateOf(72) }
 
-    val availableTabs = listOf(AddressType.REGULAR, AddressType.SBBS, AddressType.MAX_PRIVACY)
-
-    // Listen for generated address responses
+    // SBBS request tracking
     var sbbsReqId by remember { mutableIntStateOf(0) }
 
-    // Listen for API results (for SBBS create_address)
+    // Load max privacy lock time setting
+    LaunchedEffect(Unit) {
+        val hours = SecureStorage.getInt("max_privacy_hours", 72)
+        lockHours = hours
+    }
+
+    // Listen for API results (SBBS create_address + native address generation)
     LaunchedEffect(Unit) {
         WalletEventBus.apiResult.collect { json ->
             try {
@@ -85,16 +110,29 @@ fun ReceiveScreen(onBack: () -> Unit) {
         }
     }
 
-    // Listen for address events from native module
+    // Listen for native address generation events (onRegularAddress, onOfflineAddress, onMaxPrivacyAddress)
     LaunchedEffect(Unit) {
         WalletEventBus.addresses.collect { event ->
             if (event.own) {
                 try {
-                    val arr = org.json.JSONArray(event.json)
-                    if (arr.length() > 0) {
-                        val addr = arr.optString(0, "")
-                        if (addr.length > 10) {
-                            currentAddress = addr
+                    val json = event.json.trim()
+                    when {
+                        // JSON array of address objects (from getAddresses) — ignore for receive screen
+                        json.startsWith("[") -> { /* full list refresh, not a generated address */ }
+                        // JSON object (single address DTO) — extract the address/token field
+                        json.startsWith("{") -> {
+                            val obj = JSONObject(json)
+                            val addr = obj.optString("address", "")
+                                .ifEmpty { obj.optString("token", "") }
+                                .ifEmpty { obj.optString("walletID", "") }
+                            if (addr.length > 10) {
+                                currentAddress = addr
+                                generating = false
+                            }
+                        }
+                        // Plain address string (from onRegularAddress etc.)
+                        json.length > 10 -> {
+                            currentAddress = json
                             generating = false
                         }
                     }
@@ -103,51 +141,38 @@ fun ReceiveScreen(onBack: () -> Unit) {
         }
     }
 
-    // Generate address function
-    fun generateAddress(type: AddressType) {
+    // Generate address function — matches RN exactly
+    fun generateAddress(type: String) {
         generating = true
         currentAddress = null
         copied = false
 
+        val wallet = WalletManager.walletInstance
+
         when (type) {
-            AddressType.SBBS -> {
+            "offline" -> {
+                // Own node: use native generateOfflineAddress
+                wallet?.generateOfflineAddress(0, 0)
+            }
+            "max_privacy" -> {
+                wallet?.generateMaxPrivacyAddress(0, 0)
+            }
+            "regular" -> {
+                wallet?.generateRegularAddress(0, 0)
+            }
+            "sbbs" -> {
                 val id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
                 sbbsReqId = id
-                WalletApi.call("create_address", mapOf(
-                    "type" to "regular",
-                    "expiration" to "never",
-                    "comment" to "sbbs receive",
-                )) { result ->
-                    val addr = result["result"] as? String
-                        ?: result["address"] as? String
-                        ?: result["token"] as? String
-                    if (addr != null && addr.length > 10) {
-                        currentAddress = addr
-                    }
-                    generating = false
-                }
-            }
-            AddressType.REGULAR -> {
-                WalletApi.call("create_address", mapOf(
-                    "type" to "regular",
-                    "label" to "PriviMW Receive",
-                    "expiration" to "auto",
-                )) { result ->
-                    val addr = result["address"] as? String ?: result["token"] as? String ?: ""
-                    if (addr.length > 10) currentAddress = addr
-                    generating = false
-                }
-            }
-            AddressType.MAX_PRIVACY -> {
-                WalletApi.call("create_address", mapOf(
-                    "type" to "max_privacy",
-                    "label" to "PriviMW Max Privacy",
-                    "expiration" to "auto",
-                )) { result ->
-                    val addr = result["address"] as? String ?: result["token"] as? String ?: ""
-                    if (addr.length > 10) currentAddress = addr
-                    generating = false
-                }
+                val payload = JSONObject().apply {
+                    put("jsonrpc", "2.0")
+                    put("id", id)
+                    put("method", "create_address")
+                    put("params", JSONObject().apply {
+                        put("expiration", "never")
+                        put("comment", "sbbs receive")
+                    })
+                }.toString()
+                WalletManager.callWalletApi(payload)
             }
         }
 
@@ -158,10 +183,25 @@ fun ReceiveScreen(onBack: () -> Unit) {
         }
     }
 
-    // Generate initial address on mount
+    // Detect own node vs remote on mount — then generate initial address
     LaunchedEffect(Unit) {
-        generateAddress(addressType)
+        try {
+            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
+            ownNode = trusted
+            if (trusted) {
+                addressType = "offline"
+                generateAddress("offline")
+            } else {
+                addressType = "regular"
+                generateAddress("regular")
+            }
+        } catch (_: Exception) {
+            generateAddress("regular")
+        }
     }
+
+    val tabs = if (ownNode) OWN_NODE_TABS else REMOTE_NODE_TABS
+    val currentTab = tabs.find { it.key == addressType } ?: tabs[0]
 
     Column(
         modifier = Modifier
@@ -191,16 +231,16 @@ fun ReceiveScreen(onBack: () -> Unit) {
                     .background(C.card, RoundedCornerShape(12.dp))
                     .padding(4.dp),
             ) {
-                availableTabs.forEach { tab ->
-                    val selected = addressType == tab
+                tabs.forEach { tab ->
+                    val selected = addressType == tab.key
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(9.dp))
                             .clickable {
-                                if (addressType != tab) {
-                                    addressType = tab
-                                    generateAddress(tab)
+                                if (addressType != tab.key) {
+                                    addressType = tab.key
+                                    generateAddress(tab.key)
                                 }
                             },
                         shape = RoundedCornerShape(9.dp),
@@ -222,21 +262,21 @@ fun ReceiveScreen(onBack: () -> Unit) {
 
             // Type description
             Text(
-                addressType.desc,
-                color = C.textSecondary,
+                currentTab.desc,
+                color = C.textMuted,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 18.sp,
             )
             Text(
-                addressType.fee,
+                currentTab.fee,
                 color = C.textSecondary,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
 
-            // Max Privacy warning
-            if (addressType == AddressType.MAX_PRIVACY) {
+            // Max Privacy lock time warning — dynamic from settings
+            if (addressType == "max_privacy") {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -246,8 +286,32 @@ fun ReceiveScreen(onBack: () -> Unit) {
                     border = BorderStroke(1.dp, Color(0x4DFF9800)),
                 ) {
                     Text(
-                        "Funds will be locked for a minimum of 72h. Longer lock time = stronger privacy. You can change this in Settings.",
+                        if (lockHours > 0)
+                            "Funds will be locked for a minimum of ${lockHours}h. Longer lock time = stronger privacy. You can change this in Settings."
+                        else
+                            "Funds will be locked indefinitely for maximum privacy. Set a time limit in Settings to control when funds become available.",
                         color = Color(0xFFFF9800),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+            }
+
+            // Remote node info banner — only when on remote node (matches RN)
+            if (!ownNode) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0x1AFFC107),
+                    border = BorderStroke(1.dp, Color(0x4DFFC107)),
+                ) {
+                    Text(
+                        "Connected to remote node \u2014 only online transactions are supported. Offline and Max Privacy addresses require your own node.",
+                        color = Color(0xFFFFC107),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                         lineHeight = 17.sp,
@@ -275,7 +339,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         ) {
                             CircularProgressIndicator(color = C.accent)
                             Spacer(Modifier.height(12.dp))
-                            Text("Generating address...", color = C.textSecondary, fontSize = 13.sp)
+                            Text("Generating address\u2026", color = C.textSecondary, fontSize = 13.sp)
                         }
                     }
                 } else if (currentAddress != null) {
@@ -306,7 +370,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxSize(),
                         ) {
-                            Text("No address", color = C.textSecondary, fontSize = 14.sp)
+                            Text("No address", color = C.textMuted, fontSize = 14.sp)
                         }
                     }
                 }

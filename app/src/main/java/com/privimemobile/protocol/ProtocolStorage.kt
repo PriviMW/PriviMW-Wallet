@@ -46,9 +46,17 @@ object ProtocolStorage {
                     put("timestamp", msg.timestamp)
                     put("sent", msg.sent)
                     put("displayName", msg.displayName)
-                    put("fileHash", msg.fileHash)
-                    put("fileName", msg.fileName)
-                    put("fileSize", msg.fileSize)
+                    if (msg.file != null) {
+                        put("file", JSONObject().apply {
+                            put("cid", msg.file.cid)
+                            put("name", msg.file.name)
+                            put("size", msg.file.size)
+                            put("key", msg.file.key)
+                            put("iv", msg.file.iv)
+                            put("mime", msg.file.mime)
+                            if (msg.file.data != null) put("data", msg.file.data)
+                        })
+                    }
                     put("type", msg.type)
                 })
             }
@@ -107,6 +115,26 @@ object ProtocolStorage {
                 val arr = obj.optJSONArray(k) ?: return@forEach
                 val msgs = (0 until arr.length()).mapNotNull { i ->
                     val m = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val fileObj = m.optJSONObject("file")
+                    // Also handle legacy fileHash/fileName/fileSize fields
+                    val legacyCid = m.optString("fileHash", "")
+                    val fileAttachment = if (fileObj != null) {
+                        FileAttachment(
+                            cid = fileObj.optString("cid"),
+                            key = fileObj.optString("key"),
+                            iv = fileObj.optString("iv"),
+                            name = fileObj.optString("name"),
+                            size = fileObj.optLong("size"),
+                            mime = fileObj.optString("mime"),
+                            data = if (fileObj.has("data")) fileObj.optString("data") else null,
+                        )
+                    } else if (legacyCid.isNotEmpty()) {
+                        FileAttachment(
+                            cid = legacyCid,
+                            name = m.optString("fileName"),
+                            size = m.optLong("fileSize"),
+                        )
+                    } else null
                     ChatMessage(
                         id = m.optString("id"),
                         from = m.optString("from"),
@@ -115,9 +143,7 @@ object ProtocolStorage {
                         timestamp = m.optLong("timestamp"),
                         sent = m.optBoolean("sent"),
                         displayName = m.optString("displayName"),
-                        fileHash = m.optString("fileHash"),
-                        fileName = m.optString("fileName"),
-                        fileSize = m.optLong("fileSize"),
+                        file = fileAttachment,
                         type = m.optString("type", "dm"),
                     )
                 }

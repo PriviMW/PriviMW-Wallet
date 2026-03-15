@@ -139,7 +139,7 @@ object NativeTxApprovalDialog {
             val amount = formatAmount(entry.optString("amount", "0"))
             val assetId = entry.optInt("assetID", 0)
             val spend = entry.optBoolean("spend", false)
-            val assetName = if (assetId == 0) "BEAM" else "Asset #$assetId"
+            val assetName = com.privimemobile.wallet.assetTicker(assetId)
             if (spend) spending.add(amount to assetName) else receiving.add(amount to assetName)
         }
 

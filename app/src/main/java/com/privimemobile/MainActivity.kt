@@ -5,18 +5,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.privimemobile.protocol.SecureStorage
+import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.auth.LockScreen
 import com.privimemobile.ui.auth.OnboardingScreen
-import com.privimemobile.ui.theme.C
+import com.privimemobile.ui.navigation.AppNavigation
 import com.privimemobile.ui.theme.PriviMWTheme
 import com.privimemobile.wallet.WalletManager
 
@@ -38,12 +33,18 @@ class MainActivity : ComponentActivity() {
                         onWalletReady = {
                             hasWallet = true
                             unlocked = true
+                            WalletApi.start(lifecycleScope)
+                            WalletApi.subscribeToEvents()
                         },
                     )
                     !unlocked -> LockScreen(
-                        onUnlocked = { unlocked = true },
+                        onUnlocked = {
+                            unlocked = true
+                            WalletApi.start(lifecycleScope)
+                            WalletApi.subscribeToEvents()
+                        },
                     )
-                    else -> MainApp()
+                    else -> AppNavigation()
                 }
             }
         }
@@ -60,22 +61,9 @@ class MainActivity : ComponentActivity() {
         }
         super.onPause()
     }
-}
 
-@Composable
-private fun MainApp() {
-    // Placeholder — will be replaced with bottom tab navigation
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(C.bg)
-            .systemBarsPadding(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("PriviMW", color = C.accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("Wallet unlocked", color = C.textSecondary)
-        }
+    override fun onDestroy() {
+        WalletApi.stop()
+        super.onDestroy()
     }
 }

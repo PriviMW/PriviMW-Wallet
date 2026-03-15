@@ -23,13 +23,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.protocol.Config
+import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val DEFAULT_NODE = "eu-nodes.mainnet.beam.mw:8100"
 
 enum class OnboardingStep {
     CHOOSE, CREATE_PASSWORD, SHOW_SEED, CREATING, RESTORE_SEED, RESTORE_PASSWORD
@@ -95,11 +95,13 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                 WalletManager.createWallet(
                                     seed = seedWords.joinToString(";"),
                                     password = password,
-                                    nodeAddr = DEFAULT_NODE,
+                                    nodeAddr = Config.DEFAULT_NODE,
                                 )
                             }
                             loading = false
                             if (ok) {
+                                SecureStorage.storeWalletPassword(password)
+                                SecureStorage.setHasWallet(true)
                                 onWalletReady()
                             } else {
                                 error = "Failed to create wallet"
@@ -152,11 +154,13 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                     WalletManager.restoreWallet(
                                         seed = restoreWords.joinToString(";"),
                                         password = password,
-                                        nodeAddr = DEFAULT_NODE,
+                                        nodeAddr = Config.DEFAULT_NODE,
                                     )
                                 }
                                 loading = false
                                 if (ok) {
+                                    SecureStorage.storeWalletPassword(password)
+                                    SecureStorage.setHasWallet(true)
                                     onWalletReady()
                                 } else {
                                     error = "Failed to restore wallet. Check your seed phrase."

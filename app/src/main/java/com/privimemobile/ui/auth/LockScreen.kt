@@ -16,13 +16,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.protocol.Config
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val DEFAULT_NODE = "eu-nodes.mainnet.beam.mw:8100"
 
 @Composable
 fun LockScreen(onUnlocked: () -> Unit) {
@@ -40,7 +39,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
         error = null
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
-                WalletManager.openWallet(password = password, nodeAddr = DEFAULT_NODE)
+                WalletManager.openWallet(password = password, nodeAddr = Config.DEFAULT_NODE)
             }
             loading = false
             if (ok) {

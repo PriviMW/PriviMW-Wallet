@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PriviMW" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#0a0e27</item>
+        <item name="android:statusBarColor">#042548</item>
+        <item name="android:navigationBarColor">#0a0e27</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

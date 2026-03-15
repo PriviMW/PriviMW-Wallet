@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
+import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.auth.LockScreen
@@ -33,15 +34,13 @@ class MainActivity : ComponentActivity() {
                         onWalletReady = {
                             hasWallet = true
                             unlocked = true
-                            WalletApi.start(lifecycleScope)
-                            WalletApi.subscribeToEvents()
+                            startProtocol()
                         },
                     )
                     !unlocked -> LockScreen(
                         onUnlocked = {
                             unlocked = true
-                            WalletApi.start(lifecycleScope)
-                            WalletApi.subscribeToEvents()
+                            startProtocol()
                         },
                     )
                     else -> AppNavigation()
@@ -62,7 +61,14 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    private fun startProtocol() {
+        WalletApi.start(lifecycleScope)
+        WalletApi.subscribeToEvents()
+        ProtocolStartup.init(this, lifecycleScope)
+    }
+
     override fun onDestroy() {
+        ProtocolStartup.shutdown()
         WalletApi.stop()
         super.onDestroy()
     }

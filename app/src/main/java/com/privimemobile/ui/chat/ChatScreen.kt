@@ -10,12 +10,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.ChatMessage
+import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.ui.theme.C
 import java.text.SimpleDateFormat
 import java.util.*
@@ -26,8 +28,20 @@ fun ChatScreen(
     displayName: String = "",
     onBack: () -> Unit,
 ) {
-    // TODO: collect messages from ProtocolViewModel
-    val messages = remember { mutableStateListOf<ChatMessage>() }
+    // Collect messages for this conversation from protocol state
+    val allConversations by ProtocolStartup.conversations.collectAsState()
+    val messages = remember(allConversations, handle) {
+        allConversations["@$handle"] ?: emptyList()
+    }
+
+    // Clear unread when opening chat
+    LaunchedEffect(handle) {
+        ProtocolStartup.activeChat = "@$handle"
+        ProtocolStartup.clearUnread("@$handle")
+    }
+    DisposableEffect(handle) {
+        onDispose { ProtocolStartup.activeChat = null }
+    }
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -104,7 +118,7 @@ fun ChatScreen(
                 IconButton(
                     onClick = {
                         if (inputText.isNotBlank()) {
-                            // TODO: send message via protocol
+                            ProtocolStartup.sendMessage(handle, inputText.trim())
                             inputText = ""
                         }
                     },

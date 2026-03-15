@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Conversation
+import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.ui.theme.C
 import java.text.SimpleDateFormat
 import java.util.*
@@ -28,8 +29,26 @@ fun ChatsScreen(
     onOpenChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
 ) {
-    // TODO: collect from ProtocolViewModel
-    val conversations = remember { mutableStateListOf<Conversation>() }
+    // Derive conversation list from protocol state
+    val rawConversations by ProtocolStartup.conversations.collectAsState()
+    val rawContacts by ProtocolStartup.contacts.collectAsState()
+    val rawUnread by ProtocolStartup.unreadCounts.collectAsState()
+
+    val conversations = remember(rawConversations, rawContacts, rawUnread) {
+        rawConversations.entries.mapNotNull { (key, msgs) ->
+            if (msgs.isEmpty()) return@mapNotNull null
+            val last = msgs.last()
+            val contact = rawContacts[key]
+            Conversation(
+                handle = key.removePrefix("@"),
+                displayName = contact?.displayName ?: key.removePrefix("@"),
+                lastMessage = last.text.ifEmpty { if (last.fileHash.isNotEmpty()) "[File]" else "" },
+                lastTimestamp = last.timestamp,
+                unreadCount = rawUnread[key] ?: 0,
+                walletId = contact?.walletId ?: "",
+            )
+        }.sortedByDescending { it.lastTimestamp }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(C.bg)) {
         Column(

@@ -34,13 +34,30 @@ object WalletManager {
         appContext = context.applicationContext
     }
 
+    /** Returns the directory path (NOT file path) — C++ core appends /wallet.db internally. */
     fun getDbPath(): String {
         val ctx = appContext ?: throw IllegalStateException("WalletManager not initialized")
-        return "${ctx.filesDir.absolutePath}/wallet.db"
+        return ctx.filesDir.absolutePath
     }
 
     fun isWalletCreated(): Boolean {
-        return Api.isWalletInitialized(getDbPath())
+        // Check if wallet.db exists in the files directory
+        val ctx = appContext ?: return false
+        return java.io.File(ctx.filesDir, "wallet.db").exists()
+    }
+
+    /** Clean up leftover wallet files — Api.createWallet crashes if wallet.db already exists. */
+    private fun cleanWalletFiles() {
+        val ctx = appContext ?: return
+        var deleted = 0
+        ctx.filesDir.listFiles()?.forEach { file ->
+            if (file.name.contains("wallet") || file.name.endsWith(".db") ||
+                file.name.endsWith(".db-journal") || file.name.endsWith(".db-wal") ||
+                file.name.endsWith(".db-shm")) {
+                if (file.delete()) deleted++
+            }
+        }
+        if (deleted > 0) Log.d(TAG, "Cleaned $deleted leftover wallet files")
     }
 
     fun createWallet(
@@ -49,9 +66,11 @@ object WalletManager {
         nodeAddr: String,
     ): Boolean {
         Log.d(TAG, "Creating wallet, node=$nodeAddr")
+        cleanWalletFiles()
         val result = Api.createWallet(APP_VERSION, nodeAddr, getDbPath(), password, seed)
         if (result != null) {
             walletInstance = result
+            try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
             Log.d(TAG, "Wallet created successfully")
             return true
         }
@@ -65,9 +84,11 @@ object WalletManager {
         nodeAddr: String,
     ): Boolean {
         Log.d(TAG, "Restoring wallet, node=$nodeAddr")
+        cleanWalletFiles()
         val result = Api.createWallet(APP_VERSION, nodeAddr, getDbPath(), password, seed, restore = true)
         if (result != null) {
             walletInstance = result
+            try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
             Log.d(TAG, "Wallet restored successfully")
             return true
         }
@@ -83,6 +104,7 @@ object WalletManager {
         val result = Api.openWallet(APP_VERSION, nodeAddr, getDbPath(), password, enableBodyRequests = false)
         if (result != null) {
             walletInstance = result
+            try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
             Log.d(TAG, "Wallet opened successfully")
             return true
         }

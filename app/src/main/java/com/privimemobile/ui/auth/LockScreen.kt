@@ -16,6 +16,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Config
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
@@ -38,7 +41,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
         loading = true
         error = null
         scope.launch {
-            val ok = withContext(Dispatchers.IO) {
+            val ok = withContext(Dispatchers.Main) {
                 WalletManager.openWallet(password = password, nodeAddr = Config.DEFAULT_NODE)
             }
             loading = false
@@ -60,7 +63,18 @@ fun LockScreen(onUnlocked: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("PriviMW", color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.privimw_logo),
+                contentDescription = "PriviMW Logo",
+                modifier = Modifier.size(48.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("PriviMW", color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             "Wallet on the Beam Privacy Blockchain",

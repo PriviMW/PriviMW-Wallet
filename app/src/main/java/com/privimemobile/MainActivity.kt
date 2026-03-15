@@ -34,13 +34,15 @@ class MainActivity : ComponentActivity() {
                         onWalletReady = {
                             hasWallet = true
                             unlocked = true
-                            startProtocol()
+                            // Delay protocol start — launchApp("PriviMe") is async,
+                            // the API context needs time to initialize before callWalletApi.
+                            android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
                         },
                     )
                     !unlocked -> LockScreen(
                         onUnlocked = {
                             unlocked = true
-                            startProtocol()
+                            android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
                         },
                     )
                     else -> AppNavigation()

@@ -1,15 +1,18 @@
 package com.privimemobile.ui.auth
 
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -17,12 +20,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
@@ -32,7 +43,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class OnboardingStep {
-    CHOOSE, CREATE_PASSWORD, SHOW_SEED, CREATING, RESTORE_SEED, RESTORE_PASSWORD
+    CHOOSE, CREATE_PASSWORD, SHOW_SEED, VERIFY_SEED, CREATING,
+    RESTORE_SEED, RESTORE_PASSWORD
+}
+
+/** Pick N unique random indices from 0..max-1 */
+private fun pickRandom(count: Int, max: Int): List<Int> {
+    val indices = mutableSetOf<Int>()
+    while (indices.size < count) {
+        indices.add((0 until max).random())
+    }
+    return indices.sorted()
 }
 
 @Composable
@@ -44,7 +65,59 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
     var restoreWords by remember { mutableStateOf(List(12) { "" }) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+
+    // Node selection
+    var nodeMode by remember { mutableStateOf("random") }
+    var customNode by remember { mutableStateOf("") }
+    val nodeAddr = if (nodeMode == "own" && customNode.isNotBlank()) customNode.trim() else Config.DEFAULT_NODE
+
+    // Seed verification
+    var verifyIndices by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var verifyAnswers by remember { mutableStateOf(List(3) { "" }) }
+    var verifyErrors by remember { mutableStateOf(List(3) { false }) }
+
+    // Dictionary for restore autocomplete
+    var dictionary by remember { mutableStateOf<List<String>>(emptyList()) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var activeWordIdx by remember { mutableIntStateOf(-1) }
+
     val scope = rememberCoroutineScope()
+
+    // FLAG_SECURE: block screenshots on seed phrase screen
+    val activity = (LocalContext.current as? android.app.Activity)
+    DisposableEffect(step) {
+        if (step == OnboardingStep.SHOW_SEED) {
+            activity?.window?.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        } else {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    // Load dictionary when entering restore flow
+    LaunchedEffect(step) {
+        if (step == OnboardingStep.RESTORE_SEED && dictionary.isEmpty()) {
+            try {
+                dictionary = WalletManager.getDictionary()
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Clear sensitive data on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            password = ""
+            confirmPassword = ""
+            seedWords = emptyList()
+            restoreWords = List(12) { "" }
+            verifyAnswers = List(3) { "" }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -52,129 +125,236 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
             .background(C.bg)
             .systemBarsPadding()
     ) {
+        if (loading) {
+            LoadingScreen(
+                when (step) {
+                    OnboardingStep.CREATING -> "Creating wallet..."
+                    OnboardingStep.RESTORE_PASSWORD -> "Restoring wallet..."
+                    else -> "Generating seed phrase..."
+                }
+            )
+            return@Column
+        }
+
         AnimatedContent(targetState = step, label = "onboarding") { currentStep ->
             when (currentStep) {
                 OnboardingStep.CHOOSE -> ChooseScreen(
-                    onCreateNew = {
-                        seedWords = WalletManager.generateSeed()
-                        step = OnboardingStep.CREATE_PASSWORD
-                    },
-                    onRestore = {
-                        step = OnboardingStep.RESTORE_SEED
-                    },
+                    onCreateNew = { step = OnboardingStep.CREATE_PASSWORD },
+                    onRestore = { step = OnboardingStep.RESTORE_SEED },
                 )
 
-                OnboardingStep.CREATE_PASSWORD -> PasswordScreen(
-                    title = "Create Password",
-                    subtitle = "This password encrypts your wallet on this device",
+                OnboardingStep.CREATE_PASSWORD -> CreatePasswordScreen(
                     password = password,
                     confirmPassword = confirmPassword,
-                    onPasswordChange = { password = it },
-                    onConfirmChange = { confirmPassword = it },
+                    nodeMode = nodeMode,
+                    customNode = customNode,
                     error = error,
+                    onPasswordChange = { password = it; error = null },
+                    onConfirmChange = { confirmPassword = it; error = null },
+                    onNodeModeChange = { nodeMode = it },
+                    onCustomNodeChange = { customNode = it },
                     onNext = {
-                        if (password.length < 6) {
-                            error = "Password must be at least 6 characters"
-                        } else if (password != confirmPassword) {
-                            error = "Passwords don't match"
-                        } else {
-                            error = null
-                            step = OnboardingStep.SHOW_SEED
+                        when {
+                            password.length < 6 -> error = "Password must be at least 6 characters"
+                            password != confirmPassword -> error = "Passwords don't match"
+                            else -> {
+                                error = null
+                                loading = true
+                                scope.launch {
+                                    try {
+                                        seedWords = withContext(Dispatchers.Main) {
+                                            WalletManager.generateSeed()
+                                        }
+                                        step = OnboardingStep.SHOW_SEED
+                                    } catch (e: Exception) {
+                                        error = e.message ?: "Failed to generate seed"
+                                    }
+                                    loading = false
+                                }
+                            }
                         }
                     },
-                    onBack = { step = OnboardingStep.CHOOSE },
+                    onBack = {
+                        step = OnboardingStep.CHOOSE
+                        password = ""; confirmPassword = ""
+                    },
                 )
 
                 OnboardingStep.SHOW_SEED -> SeedScreen(
                     words = seedWords,
                     onConfirm = {
+                        verifyIndices = pickRandom(3, seedWords.size)
+                        verifyAnswers = List(3) { "" }
+                        verifyErrors = List(3) { false }
+                        step = OnboardingStep.VERIFY_SEED
+                    },
+                    onBack = {
+                        seedWords = emptyList()
+                        step = OnboardingStep.CREATE_PASSWORD
+                    },
+                )
+
+                OnboardingStep.VERIFY_SEED -> VerifySeedScreen(
+                    verifyIndices = verifyIndices,
+                    verifyAnswers = verifyAnswers,
+                    verifyErrors = verifyErrors,
+                    onAnswerChange = { idx, text ->
+                        verifyAnswers = verifyAnswers.toMutableList().also { it[idx] = text }
+                        if (verifyErrors[idx]) {
+                            verifyErrors = verifyErrors.toMutableList().also { it[idx] = false }
+                        }
+                    },
+                    error = error,
+                    onConfirm = {
+                        val errors = verifyIndices.mapIndexed { i, wordIdx ->
+                            verifyAnswers[i].trim().lowercase() != seedWords[wordIdx].lowercase()
+                        }
+                        verifyErrors = errors
+                        if (errors.any { it }) {
+                            error = "One or more words are incorrect. Please check your seed phrase."
+                            return@VerifySeedScreen
+                        }
+                        error = null
                         loading = true
                         step = OnboardingStep.CREATING
                         scope.launch {
-                            val ok = withContext(Dispatchers.IO) {
+                            val ok = withContext(Dispatchers.Main) {
                                 WalletManager.createWallet(
                                     seed = seedWords.joinToString(";"),
                                     password = password,
-                                    nodeAddr = Config.DEFAULT_NODE,
+                                    nodeAddr = nodeAddr,
                                 )
                             }
                             loading = false
                             if (ok) {
                                 SecureStorage.storeWalletPassword(password)
+                                SecureStorage.storeNodeAddress(nodeAddr)
                                 SecureStorage.setHasWallet(true)
                                 onWalletReady()
                             } else {
                                 error = "Failed to create wallet"
-                                step = OnboardingStep.CREATE_PASSWORD
+                                step = OnboardingStep.SHOW_SEED
                             }
                         }
                     },
-                    onBack = { step = OnboardingStep.CREATE_PASSWORD },
+                    onShowSeedAgain = { step = OnboardingStep.SHOW_SEED },
                 )
 
                 OnboardingStep.CREATING -> LoadingScreen("Creating wallet...")
 
                 OnboardingStep.RESTORE_SEED -> RestoreSeedScreen(
                     words = restoreWords,
+                    dictionary = dictionary,
+                    suggestions = suggestions,
+                    activeWordIdx = activeWordIdx,
                     onWordChange = { idx, word ->
-                        restoreWords = restoreWords.toMutableList().also { it[idx] = word }
+                        restoreWords = restoreWords.toMutableList().also { it[idx] = word.lowercase().trim() }
+                        activeWordIdx = idx
+                        // Update suggestions
+                        val lower = word.lowercase().trim()
+                        suggestions = if (lower.isNotEmpty() && dictionary.isNotEmpty()) {
+                            dictionary.filter { it.startsWith(lower) }.take(4)
+                        } else emptyList()
+                    },
+                    onSelectSuggestion = { word ->
+                        if (activeWordIdx >= 0) {
+                            restoreWords = restoreWords.toMutableList().also { it[activeWordIdx] = word }
+                            suggestions = emptyList()
+                            // Move to next empty word
+                            val nextIdx = restoreWords.indexOfFirst { idx ->
+                                restoreWords.indexOf(idx) > activeWordIdx && idx.isEmpty()
+                            }
+                            activeWordIdx = if (nextIdx >= 0) nextIdx else -1
+                        }
+                    },
+                    onFocusWord = { idx ->
+                        activeWordIdx = idx
+                        val word = restoreWords[idx].lowercase().trim()
+                        suggestions = if (word.isNotEmpty() && dictionary.isNotEmpty()) {
+                            dictionary.filter { it.startsWith(word) }.take(4)
+                        } else emptyList()
                     },
                     error = error,
                     onNext = {
+                        // Validate all words
+                        if (dictionary.isNotEmpty()) {
+                            val invalid = restoreWords.mapIndexedNotNull { i, w ->
+                                if (w.isNotEmpty() && w !in dictionary) i else null
+                            }
+                            if (invalid.isNotEmpty()) {
+                                error = "Invalid seed word(s) at position ${invalid.map { "#${it + 1}" }.joinToString(", ")}"
+                                return@RestoreSeedScreen
+                            }
+                        }
                         val filled = restoreWords.count { it.isNotBlank() }
                         if (filled < 12) {
                             error = "Please enter all 12 seed words"
-                        } else {
-                            error = null
-                            step = OnboardingStep.RESTORE_PASSWORD
+                            return@RestoreSeedScreen
                         }
+                        error = null
+                        step = OnboardingStep.RESTORE_PASSWORD
                     },
-                    onBack = { step = OnboardingStep.CHOOSE },
+                    onBack = {
+                        step = OnboardingStep.CHOOSE
+                        restoreWords = List(12) { "" }
+                        suggestions = emptyList()
+                        activeWordIdx = -1
+                    },
                 )
 
-                OnboardingStep.RESTORE_PASSWORD -> PasswordScreen(
-                    title = "Set Password",
-                    subtitle = "Create a password for your restored wallet",
+                OnboardingStep.RESTORE_PASSWORD -> RestorePasswordScreen(
                     password = password,
                     confirmPassword = confirmPassword,
-                    onPasswordChange = { password = it },
-                    onConfirmChange = { confirmPassword = it },
+                    nodeMode = nodeMode,
+                    customNode = customNode,
                     error = error,
-                    onNext = {
-                        if (password.length < 6) {
-                            error = "Password must be at least 6 characters"
-                        } else if (password != confirmPassword) {
-                            error = "Passwords don't match"
-                        } else {
-                            error = null
-                            loading = true
-                            step = OnboardingStep.CREATING
-                            scope.launch {
-                                val ok = withContext(Dispatchers.IO) {
-                                    WalletManager.restoreWallet(
-                                        seed = restoreWords.joinToString(";"),
-                                        password = password,
-                                        nodeAddr = Config.DEFAULT_NODE,
-                                    )
-                                }
-                                loading = false
-                                if (ok) {
-                                    SecureStorage.storeWalletPassword(password)
-                                    SecureStorage.setHasWallet(true)
-                                    onWalletReady()
-                                } else {
-                                    error = "Failed to restore wallet. Check your seed phrase."
-                                    step = OnboardingStep.RESTORE_SEED
+                    onPasswordChange = { password = it; error = null },
+                    onConfirmChange = { confirmPassword = it; error = null },
+                    onNodeModeChange = { nodeMode = it },
+                    onCustomNodeChange = { customNode = it },
+                    onRestore = {
+                        when {
+                            password.length < 6 -> error = "Password must be at least 6 characters"
+                            password != confirmPassword -> error = "Passwords don't match"
+                            else -> {
+                                error = null
+                                loading = true
+                                step = OnboardingStep.CREATING
+                                scope.launch {
+                                    val ok = withContext(Dispatchers.Main) {
+                                        WalletManager.restoreWallet(
+                                            seed = restoreWords.joinToString(";"),
+                                            password = password,
+                                            nodeAddr = nodeAddr,
+                                        )
+                                    }
+                                    loading = false
+                                    if (ok) {
+                                        SecureStorage.storeWalletPassword(password)
+                                        SecureStorage.storeNodeAddress(nodeAddr)
+                                        SecureStorage.setHasWallet(true)
+                                        onWalletReady()
+                                    } else {
+                                        error = "Failed to restore wallet. Check your seed phrase."
+                                        step = OnboardingStep.RESTORE_SEED
+                                    }
                                 }
                             }
                         }
                     },
-                    onBack = { step = OnboardingStep.RESTORE_SEED },
+                    onBack = {
+                        step = OnboardingStep.RESTORE_SEED
+                        password = ""; confirmPassword = ""
+                    },
                 )
             }
         }
     }
 }
+
+// ================================================================
+// Sub-screens
+// ================================================================
 
 @Composable
 private fun ChooseScreen(onCreateNew: () -> Unit, onRestore: () -> Unit) {
@@ -185,118 +365,82 @@ private fun ChooseScreen(onCreateNew: () -> Unit, onRestore: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "PriviMW",
-            color = C.accent,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.privimw_logo),
+                contentDescription = "PriviMW Logo",
+                modifier = Modifier.size(48.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("PriviMW", color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        }
         Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Wallet on the Beam Privacy Blockchain",
-            color = C.textSecondary,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-        )
+        Text("Wallet on Beam Privacy Blockchain", color = C.textSecondary, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(64.dp))
 
         Button(
             onClick = onCreateNew,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
             Text("Create New Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
         }
-
-        Spacer(Modifier.height(16.dp))
-
+        Spacer(Modifier.height(12.dp))
         OutlinedButton(
             onClick = onRestore,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(8.dp),
             border = ButtonDefaults.outlinedButtonBorder(true).copy(
                 brush = androidx.compose.ui.graphics.SolidColor(C.accent)
             ),
         ) {
-            Text("Restore Wallet", color = C.accent, fontWeight = FontWeight.Bold)
+            Text("Restore from Seed", color = C.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun PasswordScreen(
-    title: String,
-    subtitle: String,
-    password: String,
-    confirmPassword: String,
-    onPasswordChange: (String) -> Unit,
-    onConfirmChange: (String) -> Unit,
-    error: String?,
-    onNext: () -> Unit,
-    onBack: () -> Unit,
+private fun CreatePasswordScreen(
+    password: String, confirmPassword: String,
+    nodeMode: String, customNode: String, error: String?,
+    onPasswordChange: (String) -> Unit, onConfirmChange: (String) -> Unit,
+    onNodeModeChange: (String) -> Unit, onCustomNodeChange: (String) -> Unit,
+    onNext: () -> Unit, onBack: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(title, color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
         Spacer(Modifier.height(8.dp))
-        Text(subtitle, color = C.textSecondary, fontSize = 14.sp)
-        Spacer(Modifier.height(32.dp))
+        Text("Create Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = password,
-            onValueChange = onPasswordChange,
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = C.accent,
-                unfocusedBorderColor = C.border,
-                focusedLabelColor = C.accent,
-                cursorColor = C.accent,
-            ),
-        )
+        Text("Password", color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(6.dp))
+        PasswordField(password, onPasswordChange, "Min 6 characters")
         Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = onConfirmChange,
-            label = { Text("Confirm Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = C.accent,
-                unfocusedBorderColor = C.border,
-                focusedLabelColor = C.accent,
-                cursorColor = C.accent,
-            ),
-        )
+        Text("Confirm Password", color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(6.dp))
+        PasswordField(confirmPassword, onConfirmChange, "Repeat password")
+        Spacer(Modifier.height(16.dp))
+
+        NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
 
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             Text(error, color = C.error, fontSize = 13.sp)
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = onNext,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("Continue", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text("Generate Seed Phrase", color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -304,56 +448,132 @@ private fun PasswordScreen(
 @Composable
 private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("Your Seed Phrase", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Save Your Seed Phrase", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Write these 12 words down and keep them safe. They are the only way to recover your wallet.",
+            "Write these 12 words down and store them safely. This is the ONLY way to recover your wallet. Never share them with anyone.",
+            color = C.error,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = C.card),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                words.chunked(2).forEach { row ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        row.forEachIndexed { colIdx, word ->
+                            val idx = words.indexOf(word)
+                            Row(modifier = Modifier.weight(1f).padding(vertical = 6.dp)) {
+                                Text("${idx + 1}.", color = C.textSecondary, fontSize = 14.sp, modifier = Modifier.width(24.dp))
+                                Text(word, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onConfirm,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+        ) {
+            Text("I've saved my seed phrase", color = C.textDark, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                brush = androidx.compose.ui.graphics.SolidColor(C.accent)
+            ),
+        ) {
+            Text("Back", color = C.accent, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun VerifySeedScreen(
+    verifyIndices: List<Int>,
+    verifyAnswers: List<String>,
+    verifyErrors: List<Boolean>,
+    onAnswerChange: (Int, String) -> Unit,
+    error: String?,
+    onConfirm: () -> Unit,
+    onShowSeedAgain: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+    ) {
+        Text("Verify Seed Phrase", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "To confirm you saved your seed phrase, enter the following words:",
             color = C.textSecondary,
             fontSize = 14.sp,
         )
         Spacer(Modifier.height(24.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            itemsIndexed(words) { idx, word ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(C.card)
-                        .border(1.dp, C.border, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${idx + 1}. $word",
-                        color = C.text,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
+        verifyIndices.forEachIndexed { i, wordIdx ->
+            Text("Word #${wordIdx + 1}", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = verifyAnswers[i],
+                onValueChange = { onAnswerChange(i, it) },
+                placeholder = { Text("Enter word #${wordIdx + 1}") },
+                singleLine = true,
+                isError = verifyErrors[i],
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.accent,
+                    unfocusedBorderColor = C.border,
+                    errorBorderColor = C.error,
+                    cursorColor = C.accent,
+                ),
+                keyboardOptions = KeyboardOptions(
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Text,
+                ),
+            )
+            if (verifyErrors[i]) {
+                Text("Incorrect word", color = C.error, fontSize = 12.sp)
             }
+            Spacer(Modifier.height(16.dp))
         }
 
-        Spacer(Modifier.height(16.dp))
+        if (error != null) {
+            Text(error, color = C.error, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+        }
+
         Button(
             onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("I've Written It Down", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text("Confirm & Create Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onShowSeedAgain,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                brush = androidx.compose.ui.graphics.SolidColor(C.accent)
+            ),
+        ) {
+            Text("Show seed phrase again", color = C.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -361,75 +581,265 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
 @Composable
 private fun RestoreSeedScreen(
     words: List<String>,
+    dictionary: List<String>,
+    suggestions: List<String>,
+    activeWordIdx: Int,
     onWordChange: (Int, String) -> Unit,
+    onSelectSuggestion: (String) -> Unit,
+    onFocusWord: (Int) -> Unit,
     error: String?,
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-    ) {
-        TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("Restore Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text("Enter your 12-word seed phrase", color = C.textSecondary, fontSize = 14.sp)
-        Spacer(Modifier.height(16.dp))
+    val filledCount = words.count { it.isNotBlank() }
+    val allValid = words.all { it.isNotBlank() } &&
+        (dictionary.isEmpty() || words.all { it in dictionary })
 
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+    ) {
+        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
+        Text("Restore Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text("Enter your 12-word seed phrase. Type each word — suggestions will appear.",
+            color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(12.dp))
+
+        // Autocomplete suggestions bar
+        if (suggestions.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(C.card)
+                    .padding(6.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                suggestions.forEach { word ->
+                    Text(
+                        text = word,
+                        color = C.textDark,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(C.accent)
+                            .clickable { onSelectSuggestion(word) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // 12 word inputs in scrollable grid
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(words) { idx, word ->
-                OutlinedTextField(
-                    value = word,
-                    onValueChange = { onWordChange(idx, it.lowercase().trim()) },
-                    label = { Text("${idx + 1}", fontSize = 11.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = C.accent,
-                        unfocusedBorderColor = C.border,
-                        cursorColor = C.accent,
-                    ),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                )
+            items(12) { idx ->
+                val word = words[idx]
+                val isValid = word.isNotBlank() && (dictionary.isEmpty() || word in dictionary)
+                val isInvalid = word.isNotBlank() && dictionary.isNotEmpty() && word !in dictionary
+                val borderColor = when {
+                    activeWordIdx == idx -> C.incoming
+                    isValid -> C.accent
+                    isInvalid -> C.error
+                    else -> C.border
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${idx + 1}.",
+                        color = C.textSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.width(22.dp),
+                        textAlign = TextAlign.End,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = word,
+                        onValueChange = { onWordChange(idx, it) },
+                        placeholder = { Text("word", fontSize = 14.sp) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { if (it.isFocused) onFocusWord(idx) },
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = borderColor,
+                            cursorColor = C.accent,
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            imeAction = if (idx < 11) ImeAction.Next else ImeAction.Done,
+                        ),
+                    )
+                }
             }
         }
 
+        Text("$filledCount/12 words entered", color = C.textSecondary, fontSize = 12.sp,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+
         if (error != null) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Text(error, color = C.error, fontSize = 13.sp)
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Button(
             onClick = onNext,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+            enabled = allValid,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = C.accent,
+                disabledContainerColor = C.accent.copy(alpha = 0.4f),
+            ),
         ) {
-            Text("Continue", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text("Next", color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun LoadingScreen(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+private fun RestorePasswordScreen(
+    password: String, confirmPassword: String,
+    nodeMode: String, customNode: String, error: String?,
+    onPasswordChange: (String) -> Unit, onConfirmChange: (String) -> Unit,
+    onNodeModeChange: (String) -> Unit, onCustomNodeChange: (String) -> Unit,
+    onRestore: () -> Unit, onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
+        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
+        Spacer(Modifier.height(8.dp))
+        Text("Set Password", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text("Choose a password to protect your wallet on this device.",
+            color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(24.dp))
+
+        Text("Password", color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(6.dp))
+        PasswordField(password, onPasswordChange, "Min 6 characters")
+        Spacer(Modifier.height(16.dp))
+
+        Text("Confirm Password", color = C.textSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(6.dp))
+        PasswordField(confirmPassword, onConfirmChange, "Repeat password")
+        Spacer(Modifier.height(16.dp))
+
+        NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
+
+        if (error != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(error, color = C.error, fontSize = 13.sp)
+        }
+
+        Spacer(Modifier.height(24.dp))
+        val enabled = password.length >= 6 && password == confirmPassword
+        Button(
+            onClick = onRestore,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = C.accent,
+                disabledContainerColor = C.accent.copy(alpha = 0.4f),
+            ),
+        ) {
+            Text("Restore Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// ================================================================
+// Shared components
+// ================================================================
+
+@Composable
+private fun PasswordField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder) },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = C.accent,
+            unfocusedBorderColor = C.border,
+            cursorColor = C.accent,
+        ),
+    )
+}
+
+@Composable
+private fun NodeSelector(
+    nodeMode: String, customNode: String,
+    onNodeModeChange: (String) -> Unit, onCustomNodeChange: (String) -> Unit,
+) {
+    Text("Node", color = C.textSecondary, fontSize = 14.sp)
+    Spacer(Modifier.height(6.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, C.border, RoundedCornerShape(8.dp)),
+    ) {
+        listOf("random" to "Remote Node", "own" to "Own Node").forEach { (mode, label) ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(if (nodeMode == mode) C.accent else C.card)
+                    .clickable { onNodeModeChange(mode) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    color = if (nodeMode == mode) C.textDark else C.textSecondary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+    if (nodeMode == "own") {
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = customNode,
+            onValueChange = onCustomNodeChange,
+            placeholder = { Text("ip:port (e.g. 192.168.1.10:8100)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = C.accent,
+                unfocusedBorderColor = C.border,
+                cursorColor = C.accent,
+            ),
+        )
+    } else {
+        Spacer(Modifier.height(6.dp))
+        Text(Config.DEFAULT_NODE, color = C.textSecondary, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun LoadingScreen(message: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = C.accent)
             Spacer(Modifier.height(16.dp))
-            Text(message, color = C.textSecondary, fontSize = 14.sp)
+            Text(message, color = C.textSecondary, fontSize = 16.sp)
         }
     }
 }

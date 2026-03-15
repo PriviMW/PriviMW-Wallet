@@ -59,23 +59,18 @@ private enum class UtxoFilter(val label: String) {
 fun UTXOScreen(onBack: () -> Unit = {}) {
     // Request UTXOs on mount
     LaunchedEffect(Unit) {
-        WalletApi.call("get_utxo") {}
+        try { com.privimemobile.wallet.WalletManager.walletInstance?.getAllUtxosStatus() } catch (_: Exception) {}
     }
 
-    // Listen for UTXO data via apiResult (get_utxo response)
-    val apiJson by WalletEventBus.apiResult.collectAsState(initial = "")
-    var utxos by remember { mutableStateOf<List<Utxo>>(emptyList()) }
+    // Listen for UTXO data from JNI onAllUtxoChanged callback
+    val utxoJson by WalletEventBus.utxos.collectAsState()
     var filter by remember { mutableStateOf(UtxoFilter.ALL) }
 
-    // Parse UTXOs from API responses
-    LaunchedEffect(apiJson) {
-        if (apiJson.isBlank()) return@LaunchedEffect
+    val utxos = remember(utxoJson) {
         try {
-            val json = org.json.JSONObject(apiJson)
-            val result = json.optJSONObject("result") ?: return@LaunchedEffect
-            val arr = result.optJSONArray("utxos") ?: return@LaunchedEffect
-            utxos = parseUtxos(arr)
-        } catch (_: Exception) {}
+            val arr = JSONArray(utxoJson)
+            parseUtxos(arr)
+        } catch (_: Exception) { emptyList() }
     }
 
     val filtered = remember(utxos, filter) {
@@ -197,7 +192,7 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(filtered, key = { "${it.stringId}-${it.id}" }) { utxo ->
+                items(filtered) { utxo ->
                     UtxoCard(utxo)
                 }
                 item { Spacer(Modifier.height(20.dp)) }
@@ -249,7 +244,7 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun UtxoCard(utxo: Utxo) {
     val statusColor = utxoStatusColor(utxo.status)
     val statusLabel = utxoStatusLabel(utxo.status)
-    val ticker = if (utxo.assetId == 0) "BEAM" else "#${utxo.assetId}"
+    val ticker = com.privimemobile.wallet.assetTicker(utxo.assetId)
 
     Card(
         shape = RoundedCornerShape(12.dp),

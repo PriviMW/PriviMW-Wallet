@@ -73,7 +73,6 @@ fun AppNavigation() {
                 route == "qr_scanner" ||
                 route.startsWith("tx_detail") ||
                 route.startsWith("asset_detail") ||
-                route == "dapp_store" ||
                 route == "new_chat" ||
                 route == "register"
     } ?: false

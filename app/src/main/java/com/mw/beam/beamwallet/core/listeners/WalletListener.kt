@@ -252,14 +252,28 @@ object WalletListener {
         }
     }
 
-    @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { }
-    @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { }
-    @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { }
-    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) {
-        // Refresh UTXO list for UTXOScreen
-        uiHandler.post {
-            try { WalletManager.walletInstance?.getAllUtxosStatus() } catch (_: Exception) {}
+    @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
+    @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
+    @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
+    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
+
+    private fun serializeAndEmitUtxos(utxos: Array<UtxoDTO>) {
+        val arr = JSONArray()
+        utxos.forEach { u ->
+            val obj = JSONObject()
+            obj.put("id", u.id)
+            obj.put("stringId", u.stringId)
+            obj.put("amount", u.amount)
+            obj.put("status", u.status)
+            obj.put("maturity", u.maturity)
+            obj.put("confirmHeight", u.confirmHeight)
+            obj.put("createTxId", u.createTxId ?: "")
+            obj.put("spentTxId", u.spentTxId ?: "")
+            obj.put("assetId", u.assetId)
+            obj.put("isShielded", u.isShielded)
+            arr.put(obj)
         }
+        uiHandler.post { WalletEventBus.emitUtxos(arr.toString()) }
     }
 
     @JvmStatic fun onChangeCalculated(amount: Long) {

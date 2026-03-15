@@ -28,6 +28,11 @@ import com.privimemobile.protocol.DAppManager
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
+import coil.ImageLoader
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
+import java.io.File
 
 /**
  * My DApps screen -- installed DApps list with launch, uninstall, and store navigation.
@@ -230,6 +235,8 @@ fun DAppsScreen(onBrowseStore: () -> Unit = {}) {
 
 @Composable
 private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,20 +248,45 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Icon
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(C.border),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    dapp.name.first().uppercase(),
-                    color = C.accent,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
+            // Icon — load SVG from installed DApp directory
+            val iconFile = remember(dapp.localPath) {
+                listOf("app/appicon.svg", "app/icon.svg", "app/logo.svg")
+                    .map { File(dapp.localPath, it) }
+                    .firstOrNull { it.exists() }
+            }
+
+            if (iconFile != null) {
+                val svgLoader = remember {
+                    ImageLoader.Builder(context)
+                        .components { add(SvgDecoder.Factory()) }
+                        .build()
+                }
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(iconFile)
+                        .build(),
+                    imageLoader = svgLoader,
+                    contentDescription = dapp.name,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp)),
                 )
+            } else {
+                // Fallback letter icon
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(C.border),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        dapp.name.first().uppercase(),
+                        color = C.accent,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
 

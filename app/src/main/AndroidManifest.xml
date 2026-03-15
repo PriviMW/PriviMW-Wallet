@@ -30,6 +30,13 @@
             </intent-filter>
         </activity>
 
+        <!-- QR Scanner — portrait-locked, same approach as Beam wallet -->
+        <activity
+            android:name=".ui.wallet.PortraitCaptureActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.PriviMW"
+            android:exported="false" />
+
         <!-- DApp Activity — full-screen native Activity for running DApps -->
         <activity
             android:name=".dapp.DAppActivity"

@@ -103,7 +103,7 @@ fun WalletScreen(
     // BEAM balance (assetId=0) for the balance card
     val beamStatus = assetBalanceMap[0] ?: WalletEventBus.beamStatus.value
 
-    // Collect asset info events to build asset name map — pre-populate from persistent cache
+    // Collect asset info — observable Compose state that triggers recomposition
     val assetInfoMap = remember { mutableStateMapOf<Int, AssetInfoEvent>().apply {
         putAll(WalletEventBus.assetInfoCache)
     }}
@@ -111,6 +111,13 @@ fun WalletScreen(
         WalletEventBus.assetInfo.collect { event ->
             assetInfoMap[event.id] = event
         }
+    }
+
+    // Local ticker resolver using Compose-observable assetInfoMap
+    fun localTicker(assetId: Int): String {
+        if (assetId == 0) return "BEAM"
+        val info = assetInfoMap[assetId] ?: return assetTicker(assetId)
+        return info.unitName.ifEmpty { null } ?: info.shortName.ifEmpty { null } ?: info.name.ifEmpty { null } ?: "Asset #$assetId"
     }
 
     val scope = rememberCoroutineScope()
@@ -410,7 +417,7 @@ fun WalletScreen(
                     )
                 }
                 items(otherAssets, key = { it.assetId }) { asset ->
-                    val assetLabel = assetTicker(asset.assetId)
+                    val assetLabel = localTicker(asset.assetId)
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -541,8 +548,11 @@ private fun TxCard(
         }
     }
 
-    // Asset label for non-BEAM assets
-    val assetLabel = if (tx.assetId != 0) assetTicker(tx.assetId) else ""
+    // Asset label for non-BEAM assets — derive from passed assetInfoMap (Compose-observable)
+    val assetLabel = if (tx.assetId != 0) {
+        val info = assetInfoMap[tx.assetId]
+        info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: info?.name?.ifEmpty { null } ?: "Asset #${tx.assetId}"
+    } else ""
 
     Card(
         modifier = Modifier

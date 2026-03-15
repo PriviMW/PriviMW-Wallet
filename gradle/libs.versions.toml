@@ -46,6 +46,7 @@ mlkit-barcode = { group = "com.google.android.gms", name = "play-services-mlkit-
 
 # Image loading (Coil)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+coil-svg = { group = "io.coil-kt", name = "coil-svg", version.ref = "coil" }
 
 # Core Android
 core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.16.0" }

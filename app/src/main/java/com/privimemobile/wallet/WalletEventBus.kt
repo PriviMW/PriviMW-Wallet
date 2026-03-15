@@ -26,6 +26,9 @@ object WalletEventBus {
 
     // Per-asset metadata cache — persistent singleton (like Beam wallet's AssetManager)
     val assetInfoCache = java.util.concurrent.ConcurrentHashMap<Int, AssetInfoEvent>()
+    // Observable version counter — collect this in Compose to recompose when asset info updates
+    private val _assetInfoVersion = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val assetInfoVersion: kotlinx.coroutines.flow.StateFlow<Int> = _assetInfoVersion
     // Track which asset IDs we've already requested info for (avoid duplicate JNI calls)
     private val requestedAssetIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
@@ -65,6 +68,10 @@ object WalletEventBus {
     private val _paymentProof = MutableSharedFlow<PaymentProofEvent>(extraBufferCapacity = 1)
     val paymentProof: SharedFlow<PaymentProofEvent> = _paymentProof.asSharedFlow()
 
+    // UTXO list — StateFlow so screen always has current data
+    private val _utxos = kotlinx.coroutines.flow.MutableStateFlow("[]")
+    val utxos: kotlinx.coroutines.flow.StateFlow<String> = _utxos
+
     // Export data results (wallet JSON backup, TX CSV)
     private val _exportData = MutableSharedFlow<ExportDataEvent>(extraBufferCapacity = 1)
     val exportData: SharedFlow<ExportDataEvent> = _exportData.asSharedFlow()
@@ -97,9 +104,11 @@ object WalletEventBus {
     fun emitContractConsent(event: ContractConsentEvent) { _contractConsent.tryEmit(event) }
     fun emitSendConsent(event: SendConsentEvent) { _sendConsent.tryEmit(event) }
     fun emitAddresses(event: AddressesEvent) { _addresses.tryEmit(event) }
+    fun emitUtxos(json: String) { _utxos.value = json }
     fun emitPaymentProof(event: PaymentProofEvent) { _paymentProof.tryEmit(event) }
     fun emitAssetInfo(event: AssetInfoEvent) {
         assetInfoCache[event.id] = event
+        _assetInfoVersion.value++
         _assetInfo.tryEmit(event)
     }
     fun emitExportData(json: String) { _exportData.tryEmit(ExportDataEvent("json", json)) }

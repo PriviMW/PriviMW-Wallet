@@ -32,6 +32,11 @@ import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
+import coil.ImageLoader
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
+import java.nio.ByteBuffer
 import kotlinx.coroutines.withContext
 
 /**
@@ -399,20 +404,41 @@ private fun DAppStoreCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Icon (letter fallback)
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(C.border),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    dapp.name.first().uppercase(),
-                    color = C.accent,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
+            // Icon — render SVG from on-chain registry or fallback to letter
+            val hasSvg = dapp.icon.isNotEmpty() &&
+                    (dapp.icon.startsWith("<svg") || dapp.icon.startsWith("<?xml"))
+            if (hasSvg) {
+                val context = LocalContext.current
+                val svgLoader = remember {
+                    ImageLoader.Builder(context)
+                        .components { add(SvgDecoder.Factory()) }
+                        .build()
+                }
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(ByteBuffer.wrap(dapp.icon.toByteArray()))
+                        .build(),
+                    imageLoader = svgLoader,
+                    contentDescription = dapp.name,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp)),
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(C.border),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        dapp.name.first().uppercase(),
+                        color = C.accent,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
 
             Spacer(Modifier.width(12.dp))

@@ -435,10 +435,11 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 if (isDone) {
                     OutlinedButton(
                         onClick = {
-                            WalletApi.call("tx_delete", mapOf("txId" to tx.txId)) {
-                                WalletApi.call("tx_list") {}
-                                onBack()
-                            }
+                            try {
+                                com.privimemobile.wallet.WalletManager.walletInstance?.deleteTx(tx.txId)
+                                com.privimemobile.wallet.WalletManager.walletInstance?.getTransactions()
+                            } catch (_: Exception) {}
+                            onBack()
                         },
                         modifier = Modifier
                             .fillMaxWidth()

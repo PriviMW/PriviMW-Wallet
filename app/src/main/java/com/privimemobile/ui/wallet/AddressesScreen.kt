@@ -175,9 +175,10 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                 editLabel = addr.label
                             },
                             onDelete = {
-                                WalletApi.call("delete_address", mapOf("address" to addr.walletID)) {
+                                try {
+                                    WalletManager.walletInstance?.deleteAddress(addr.walletID)
                                     WalletManager.walletInstance?.getAddresses(true)
-                                }
+                                } catch (_: Exception) {}
                             },
                         )
                     }
@@ -300,14 +301,14 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                         Button(
                             onClick = {
                                 val addr = editingAddress ?: return@Button
-                                WalletApi.call("edit_address", mapOf(
-                                    "address" to addr.walletID,
-                                    "label" to editLabel.trim(),
-                                )) {
+                                try {
+                                    WalletManager.walletInstance?.updateAddress(
+                                        addr.walletID, editLabel.trim(), 0
+                                    )
                                     WalletManager.walletInstance?.getAddresses(true)
-                                    editingAddress = null
-                                    snackMessage = "Label updated"
-                                }
+                                } catch (_: Exception) {}
+                                editingAddress = null
+                                snackMessage = "Label updated"
                             },
                             modifier = Modifier
                                 .weight(1f)

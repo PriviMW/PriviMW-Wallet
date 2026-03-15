@@ -68,6 +68,7 @@ data class WalletStatusEvent(
     val receiving: Long,
     val sending: Long,
     val maturing: Long,
+    val height: Long = 0,
 )
 
 data class SyncProgressEvent(val done: Int, val total: Int)

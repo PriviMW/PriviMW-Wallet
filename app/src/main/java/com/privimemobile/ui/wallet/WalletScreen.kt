@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
@@ -181,12 +182,17 @@ fun WalletScreen(
     else 0
     val isConnected = nodeConnection.connected
 
+    val nodeLabel = SecureStorage.getString("node_mode")?.let {
+        if (it == "own") "Own Node" else "Random Node"
+    } ?: "Random Node"
+
     val statusText = when {
         !isConnected -> "Connecting to node..."
         isSyncing && syncProgress.total > 0 ->
             "Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks)"
         isSyncing -> "Syncing..."
-        else -> "Connected \u00B7 Block #${walletStatus.available}" // Would use height if available
+        walletStatus.height > 0 -> "$nodeLabel \u00B7 Block #${walletStatus.height}"
+        else -> "$nodeLabel \u00B7 Connected"
     }
 
     val statusDotColor = when {

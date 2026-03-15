@@ -38,6 +38,7 @@ object WalletListener {
                         receiving = asset.receiving,
                         sending = asset.sending,
                         maturing = asset.maturing,
+                        height = asset.system.height,
                     )
                 )
             }

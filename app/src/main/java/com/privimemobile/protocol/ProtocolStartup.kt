@@ -66,11 +66,18 @@ object ProtocolStartup {
         if (savedUnread.isNotEmpty()) _unreadCounts.value = savedUnread
 
         // Wire wallet events to protocol actions
-        WalletApi.onSystemStateChanged = { checkIdentity() }
-        WalletApi.onTxsChanged = { loadMessages(fetchAll = false) }
+        WalletApi.onSystemStateChanged = {
+            checkIdentity()
+            refreshWalletData()
+        }
+        WalletApi.onTxsChanged = {
+            loadMessages(fetchAll = false)
+            refreshWalletData()
+        }
 
-        // Check identity
+        // Initial data load
         checkIdentity()
+        refreshWalletData()
 
         // Start message polling
         startPolling(scope)
@@ -90,6 +97,18 @@ object ProtocolStartup {
             deletedConvs,
             _unreadCounts.value,
         )
+    }
+
+    /** Refresh wallet balance, transactions, and addresses. */
+    private fun refreshWalletData() {
+        val wallet = com.privimemobile.wallet.WalletManager.walletInstance ?: return
+        try {
+            wallet.getWalletStatus()
+            wallet.getTransactions()
+            wallet.getAddresses(true)
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshWalletData failed: ${e.message}")
+        }
     }
 
     /** Check our own PriviMe identity on-chain. */

@@ -9,6 +9,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.protocol.ContactResolver
+import com.privimemobile.protocol.SbbsMessaging
+import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 
 @Composable
@@ -82,10 +85,27 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                     else -> {
                         registering = true
                         error = null
-                        // TODO: call PriviMe contract register_user via protocol
-                        // For now placeholder
-                        registering = false
-                        onRegistered()
+                        // Create SBBS address first, then register on-chain
+                        WalletApi.call("create_address", mapOf(
+                            "type" to "regular",
+                            "label" to "PriviMe",
+                            "expiration" to "never",
+                        )) { addrResult ->
+                            val walletId = addrResult["address"] as? String ?: ""
+                            if (walletId.isEmpty()) {
+                                error = "Failed to create SBBS address"
+                                registering = false
+                                return@call
+                            }
+                            ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
+                                registering = false
+                                if (success) {
+                                    onRegistered()
+                                } else {
+                                    error = errMsg ?: "Registration failed"
+                                }
+                            }
+                        }
                     }
                 }
             },

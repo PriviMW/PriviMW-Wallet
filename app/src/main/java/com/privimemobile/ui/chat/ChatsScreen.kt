@@ -29,6 +29,33 @@ fun ChatsScreen(
     onOpenChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
 ) {
+    val identity by ProtocolStartup.identity.collectAsState()
+
+    // If not registered, show register prompt
+    if (identity == null || identity?.registered != true) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("Encrypted Messaging", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Register a @handle to start sending and receiving encrypted messages on Beam.",
+                color = C.textSecondary, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(24.dp))
+            androidx.compose.material3.Button(
+                onClick = onNewChat, // Navigate to register screen
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+            ) {
+                Text("Register Handle", color = C.textDark, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
     // Derive conversation list from protocol state
     val rawConversations by ProtocolStartup.conversations.collectAsState()
     val rawContacts by ProtocolStartup.contacts.collectAsState()

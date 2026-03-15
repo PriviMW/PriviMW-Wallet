@@ -54,6 +54,16 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         WalletManager.currentActivity = this
+        // Foreground recovery: refresh wallet state and re-subscribe to events
+        val wallet = WalletManager.walletInstance
+        if (wallet != null) {
+            try {
+                wallet.getWalletStatus()
+                wallet.getTransactions()
+                wallet.getAddresses(true)
+            } catch (_: Exception) {}
+            WalletApi.resubscribeEvents()
+        }
     }
 
     override fun onPause() {

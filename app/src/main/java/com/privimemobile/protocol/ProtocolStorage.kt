@@ -208,6 +208,12 @@ object ProtocolStorage {
         prefs?.edit()?.putString(key("contractStartTs"), ts.toString())?.apply()
     }
 
+    /** Clear all protocol data — used on wallet deletion. commit() for sync write before process kill. */
+    fun clearAll() {
+        prefs?.edit()?.clear()?.commit()
+        userScope = "privime_default"
+    }
+
     /** Save all protocol state at once. */
     fun saveAll(
         conversations: Map<String, List<ChatMessage>>,

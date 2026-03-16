@@ -37,6 +37,7 @@ import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.ProtocolStartup
+import com.privimemobile.protocol.ProtocolStorage
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.ShaderInvoker
 import com.privimemobile.protocol.WalletApi
@@ -779,20 +780,69 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 if (deleteConfirmText.trim() == "DELETE") {
-                                    deleting = true
-                                    try {
-                                        context.stopService(Intent(context, BackgroundService::class.java))
-                                    } catch (_: Exception) {}
-                                    WalletManager.closeWallet()
-                                    val ctx = WalletManager.appContext
-                                    ctx?.filesDir?.listFiles()?.forEach { file ->
-                                        if (file.name.contains("wallet") || file.name.endsWith(".db")) {
-                                            file.delete()
+                                    // Authenticate first, then delete
+                                    fun performDelete() {
+                                        deleting = true
+                                        try {
+                                            context.stopService(Intent(context, BackgroundService::class.java))
+                                        } catch (_: Exception) {}
+                                        WalletManager.closeWallet()
+                                        // Delete wallet database files
+                                        val ctx = WalletManager.appContext
+                                        ctx?.filesDir?.listFiles()?.forEach { file ->
+                                            if (file.name.contains("wallet") ||
+                                                file.name.endsWith(".db") ||
+                                                file.name.endsWith(".db-journal") ||
+                                                file.name.endsWith(".db-wal") ||
+                                                file.name.endsWith(".db-shm")) {
+                                                file.delete()
+                                            }
+                                        }
+                                        // Nuclear reset — clears ALL app data (prefs, files, DB, cache)
+                                        // Same as Settings > App Info > Clear Data. Kills process automatically.
+                                        (context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager)
+                                            .clearApplicationUserData()
+                                    }
+
+                                    // Try biometric auth first, then password fallback
+                                    val biometricsEnabled = SecureStorage.getBoolean(SecureStorage.KEY_FINGERPRINT_ENABLED)
+                                    val activity = context as? androidx.fragment.app.FragmentActivity
+                                    if (biometricsEnabled && activity != null) {
+                                        val executor = androidx.core.content.ContextCompat.getMainExecutor(context)
+                                        val prompt = androidx.biometric.BiometricPrompt(activity, executor,
+                                            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                                override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                                    performDelete()
+                                                }
+                                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                                    // Fall back to password check
+                                                    val pw = SecureStorage.getWalletPassword()
+                                                    if (pw != null) {
+                                                        val valid = WalletManager.walletInstance?.checkWalletPassword(pw) ?: true
+                                                        if (valid) performDelete()
+                                                    } else {
+                                                        performDelete()
+                                                    }
+                                                }
+                                                override fun onAuthenticationFailed() {}
+                                            }
+                                        )
+                                        val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                            .setTitle("Confirm Wallet Removal")
+                                            .setSubtitle("Authenticate to delete wallet")
+                                            .setNegativeButtonText("Use Password")
+                                            .build()
+                                        prompt.authenticate(promptInfo)
+                                    } else {
+                                        // No biometrics — verify wallet password
+                                        val pw = SecureStorage.getWalletPassword()
+                                        if (pw != null && WalletManager.walletInstance != null) {
+                                            val valid = WalletManager.walletInstance!!.checkWalletPassword(pw)
+                                            if (valid) performDelete()
+                                        } else {
+                                            performDelete()
                                         }
                                     }
-                                    SecureStorage.remove(SecureStorage.KEY_HAS_WALLET)
-                                    SecureStorage.remove(SecureStorage.KEY_WALLET_PASSWORD)
-                                    android.os.Process.killProcess(android.os.Process.myPid())
                                 }
                             },
                             enabled = deleteConfirmText.trim() == "DELETE" && !deleting,

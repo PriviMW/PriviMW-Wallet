@@ -19,6 +19,9 @@ import org.json.JSONObject
 object ProtocolStartup {
     private const val TAG = "ProtocolStartup"
     private var pollingJob: Job? = null
+    private var nodeRecoveryJob: Job? = null
+    private var pollingScope: CoroutineScope? = null
+    private var wasDisconnected = false
 
     // Protocol state exposed as StateFlow for Compose UI
     private val _identity = MutableStateFlow<Identity?>(null)
@@ -78,6 +81,8 @@ object ProtocolStartup {
         if (savedContacts.isNotEmpty()) _contacts.value = savedContacts
         if (savedUnread.isNotEmpty()) _unreadCounts.value = savedUnread
 
+        pollingScope = scope
+
         // Wire wallet events to protocol actions
         WalletApi.onSystemStateChanged = {
             checkIdentity()
@@ -86,6 +91,24 @@ object ProtocolStartup {
         WalletApi.onTxsChanged = {
             loadMessages(fetchAll = false)
             refreshWalletData()
+        }
+
+        // Node reconnection recovery (matches RN useProtocol wasDisconnected pattern)
+        nodeRecoveryJob = scope.launch {
+            WalletEventBus.nodeConnection.collect { event ->
+                if (!event.connected) {
+                    wasDisconnected = true
+                } else if (wasDisconnected) {
+                    wasDisconnected = false
+                    Log.d(TAG, "Node reconnected — re-syncing protocol")
+                    WalletApi.resubscribeEvents()
+                    ensurePollingRunning()
+                    // Delay to let the node stabilize (matches RN 3s delay)
+                    delay(3000)
+                    refreshAll()
+                    loadMessages(fetchAll = true) // catch missed messages
+                }
+            }
         }
 
         // Start message polling immediately if we have a cached identity
@@ -103,12 +126,33 @@ object ProtocolStartup {
     fun shutdown() {
         pollingJob?.cancel()
         pollingJob = null
+        nodeRecoveryJob?.cancel()
+        nodeRecoveryJob = null
         NodeReconnect.stop()
         WalletApi.onSystemStateChanged = null
         WalletApi.onTxsChanged = null
 
         // Persist state
         persistState()
+    }
+
+    /**
+     * Foreground recovery — called when app returns from background.
+     * Matches RN useProtocol handleAppState('active') handler.
+     */
+    fun onForegroundRecovery() {
+        Log.d(TAG, "Foreground recovery — restarting polling + refreshing")
+        // Restart message poll timer (setInterval is suspended by Android in background)
+        ensurePollingRunning()
+        // Refresh state after C++ core wakes up
+        refreshAll()
+        loadMessages(fetchAll = false)
+    }
+
+    private fun ensurePollingRunning() {
+        if (pollingJob?.isActive == true) return
+        val scope = pollingScope ?: return
+        startPolling(scope)
     }
 
     /** Refresh wallet balance, transactions, and addresses. */
@@ -235,8 +279,8 @@ object ProtocolStartup {
      * Creates a fresh address and updates the on-chain contract.
      * Called from the UI when user taps "Update Address".
      */
-    fun reRegisterSbbsAddress() {
-        Log.d(TAG, "reRegisterSbbsAddress called")
+    fun reRegisterSbbsAddress(newDisplayName: String? = null) {
+        Log.d(TAG, "reRegisterSbbsAddress called, displayName=${newDisplayName}")
         val identity = _identity.value
         if (identity == null) {
             Log.w(TAG, "reRegisterSbbsAddress: no identity")
@@ -295,14 +339,21 @@ object ProtocolStartup {
                         }
                     Log.d(TAG, "Normalized wallet ID: ${normalizedAddr.take(20)}... (len=${normalizedAddr.length})")
 
-                    // Update contract with new address (triggers TX approval dialog)
-                    ShaderInvoker.tx("user", "update_profile", mapOf(
+                    // Update contract with new address + optional display name (triggers TX approval dialog)
+                    val txParams = mutableMapOf<String, Any>(
                         "wallet_id" to normalizedAddr,
-                    )) { txResult ->
+                    )
+                    // Include display name — use provided name, fall back to current
+                    val displayNameToSend = newDisplayName ?: identity.displayName
+                    if (displayNameToSend.isNotEmpty()) {
+                        txParams["display_name"] = displayNameToSend
+                    }
+                    ShaderInvoker.tx("user", "update_profile", txParams) { txResult ->
                         _sbbsUpdating.value = false
                         if (!txResult.containsKey("error")) {
                             Log.d(TAG, "SBBS address updated on-chain")
-                            _identity.value = identity.copy(walletId = newAddr)
+                            val updatedName = newDisplayName ?: identity.displayName
+                            _identity.value = identity.copy(walletId = newAddr, displayName = updatedName)
                             _sbbsNeedsUpdate.value = false
                         } else {
                             Log.w(TAG, "Failed to update SBBS: ${txResult["error"]}")

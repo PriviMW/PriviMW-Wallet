@@ -36,13 +36,25 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            isRunning = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val notification = buildNotification()
         startForeground(NOTIFICATION_ID, notification)
+        isRunning = true
         Log.d(TAG, "Foreground service started")
         return START_STICKY
     }
 
+    companion object {
+        const val ACTION_STOP = "com.privimemobile.STOP_SERVICE"
+        @Volatile var isRunning = false
+    }
+
     override fun onDestroy() {
+        isRunning = false
         releaseLocks()
         Log.d(TAG, "Foreground service stopped")
         super.onDestroy()
@@ -94,7 +106,7 @@ class BackgroundService : Service() {
         try {
             val pm = getSystemService(POWER_SERVICE) as? PowerManager
             wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PriviMW:wake")
-            wakeLock?.acquire(60 * 60 * 1000L) // 1 hour max
+            wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24h — renewed on service restart (matches RN)
             Log.d(TAG, "Wake lock acquired")
         } catch (e: Exception) {
             Log.w(TAG, "Wake lock failed: ${e.message}")

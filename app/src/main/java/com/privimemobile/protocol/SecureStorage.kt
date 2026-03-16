@@ -63,6 +63,11 @@ object SecureStorage {
         prefs?.edit()?.remove(key)?.apply()
     }
 
+    /** Clear all encrypted preferences — used on wallet deletion. commit() for sync write before process kill. */
+    fun clearAll() {
+        prefs?.edit()?.clear()?.commit()
+    }
+
     // Convenience methods
     fun storeWalletPassword(password: String) = putString(KEY_WALLET_PASSWORD, password)
     fun getWalletPassword(): String? = getString(KEY_WALLET_PASSWORD)

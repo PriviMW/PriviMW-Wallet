@@ -144,4 +144,88 @@ object WalletManager {
     fun getDefaultNodes(): List<String> {
         return Api.getDefaultPeers().toList()
     }
+
+    /**
+     * Download recovery.bin UTXO snapshot and import for fast wallet restore.
+     * Same as official Beam wallet's RESTORE_AUTOMATIC mode.
+     *
+     * Phase 1: Download recovery.bin (~200MB) — emits sync progress events
+     * Phase 2: Import via wallet.importRecovery() — C++ fires onImportRecoveryProgress
+     *
+     * Call on background thread.
+     */
+    fun downloadAndImportRecovery(onProgress: (phase: String, percent: Int) -> Unit = { _, _ -> }): Boolean {
+        val ctx = appContext ?: return false
+        val wallet = walletInstance ?: return false
+
+        try {
+            val recoveryUrl = "https://mobile-restore.beam.mw/mainnet/mainnet_recovery.bin"
+            val file = java.io.File(ctx.getExternalFilesDir(null), "recovery.bin")
+
+            if (file.exists()) file.delete()
+
+            Log.d(TAG, "Downloading recovery.bin from $recoveryUrl")
+            onProgress("download", 0)
+
+            val url = java.net.URL(recoveryUrl)
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 30000
+            conn.readTimeout = 60000
+            conn.connect()
+
+            if (conn.responseCode != 200) {
+                Log.e(TAG, "Recovery download failed: HTTP ${conn.responseCode}")
+                return false
+            }
+
+            val totalSize = conn.contentLengthLong
+            val input = conn.inputStream.buffered()
+            val output = file.outputStream().buffered()
+
+            val buffer = ByteArray(65536)
+            var downloaded = 0L
+            var lastPercent = -1
+
+            while (true) {
+                val count = input.read(buffer)
+                if (count == -1) break
+                output.write(buffer, 0, count)
+                downloaded += count
+
+                if (totalSize > 0) {
+                    val percent = ((downloaded.toFloat() / totalSize) * 100).toInt()
+                    if (percent != lastPercent) {
+                        lastPercent = percent
+                        onProgress("download", percent)
+                    }
+                }
+            }
+
+            output.flush()
+            output.close()
+            input.close()
+            conn.disconnect()
+
+            Log.d(TAG, "Recovery.bin downloaded: ${file.length()} bytes")
+            onProgress("import", 0)
+
+            // Phase 2: Import — async, C++ fires onImportRecoveryProgress callbacks
+            wallet.importRecovery(file.absolutePath)
+            Log.d(TAG, "Recovery import started")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadAndImportRecovery failed: ${e.message}", e)
+            return false
+        }
+    }
+
+    /** Delete recovery.bin after import completes. */
+    fun deleteRecoveryFile() {
+        val ctx = appContext ?: return
+        val file = java.io.File(ctx.getExternalFilesDir(null), "recovery.bin")
+        if (file.exists()) {
+            file.delete()
+            Log.d(TAG, "Deleted recovery.bin")
+        }
+    }
 }

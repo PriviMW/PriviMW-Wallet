@@ -36,6 +36,7 @@ import java.util.*
 fun ChatsScreen(
     onOpenChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
+    onRegister: () -> Unit = {},
 ) {
     val identity by ProtocolStartup.identity.collectAsState()
 
@@ -58,7 +59,7 @@ fun ChatsScreen(
             )
             Spacer(Modifier.height(24.dp))
             Button(
-                onClick = onNewChat, // Navigate to register screen
+                onClick = onRegister,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
             ) {
@@ -70,6 +71,10 @@ fun ChatsScreen(
 
     // Landing page 2: Registered but SBBS address belongs to old device — re-register
     if (sbbsNeedsUpdate) {
+        val currentDisplayName = identity?.displayName ?: ""
+        var displayName by remember { mutableStateOf(currentDisplayName) }
+        var useExistingName by remember { mutableStateOf(true) }
+
         Column(
             modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -91,6 +96,53 @@ fun ChatsScreen(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 lineHeight = 20.sp,
             )
+
+            // Display name option
+            if (currentDisplayName.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Display Name", color = C.textSecondary, fontSize = 12.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = useExistingName,
+                        onClick = { useExistingName = true; displayName = currentDisplayName },
+                        colors = RadioButtonDefaults.colors(selectedColor = C.accent, unselectedColor = C.textSecondary),
+                    )
+                    Text("Keep \"$currentDisplayName\"", color = C.text, fontSize = 14.sp,
+                        modifier = Modifier.clickable { useExistingName = true; displayName = currentDisplayName })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = !useExistingName,
+                        onClick = { useExistingName = false; displayName = "" },
+                        colors = RadioButtonDefaults.colors(selectedColor = C.accent, unselectedColor = C.textSecondary),
+                    )
+                    Text("Change display name", color = C.text, fontSize = 14.sp,
+                        modifier = Modifier.clickable { useExistingName = false; displayName = "" })
+                }
+                if (!useExistingName) {
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = displayName,
+                        onValueChange = { if (it.length <= 32) displayName = it },
+                        placeholder = { Text("New display name (optional)", color = C.textSecondary) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = C.text, unfocusedTextColor = C.text,
+                            cursorColor = C.accent,
+                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
             Spacer(Modifier.height(12.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -133,7 +185,8 @@ fun ChatsScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    ProtocolStartup.reRegisterSbbsAddress()
+                    val newDisplayName = if (useExistingName) currentDisplayName else displayName.trim()
+                    ProtocolStartup.reRegisterSbbsAddress(newDisplayName)
                 },
                 enabled = !sbbsUpdating && hasBalance,
                 modifier = Modifier.fillMaxWidth().height(52.dp),

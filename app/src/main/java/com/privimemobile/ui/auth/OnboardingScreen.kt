@@ -336,13 +336,19 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                             nodeAddr = nodeAddr,
                                         )
                                     }
-                                    loading = false
                                     if (ok) {
                                         SecureStorage.storeWalletPassword(password)
                                         SecureStorage.storeNodeAddress(nodeAddr)
                                         SecureStorage.setHasWallet(true)
+                                        // Auto-rescan for random node users to recover UTXOs
+                                        // Own node users don't need this — node already tracks UTXOs
+                                        if (nodeMode != "own") {
+                                            try { WalletManager.walletInstance?.rescan() } catch (_: Exception) {}
+                                        }
+                                        loading = false
                                         onWalletReady()
                                     } else {
+                                        loading = false
                                         error = "Failed to restore wallet. Check your seed phrase."
                                         step = OnboardingStep.RESTORE_SEED
                                     }

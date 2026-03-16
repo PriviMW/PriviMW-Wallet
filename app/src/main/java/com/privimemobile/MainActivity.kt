@@ -1,7 +1,10 @@
 package com.privimemobile
 
+import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +17,7 @@ import com.privimemobile.ui.auth.LockScreen
 import com.privimemobile.ui.auth.OnboardingScreen
 import com.privimemobile.ui.navigation.AppNavigation
 import com.privimemobile.ui.theme.PriviMWTheme
+import com.privimemobile.wallet.BackgroundService
 import com.privimemobile.wallet.WalletManager
 
 class MainActivity : FragmentActivity() {
@@ -54,15 +58,23 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         WalletManager.currentActivity = this
-        // Foreground recovery: refresh wallet state and re-subscribe to events
+        // Foreground recovery (matches RN useProtocol foreground handler)
         val wallet = WalletManager.walletInstance
         if (wallet != null) {
+            // Clear stale callbacks that will never get responses
+            WalletApi.cleanupStaleCallbacks()
+            // Re-subscribe to wallet events (C++ core may have dropped them)
+            WalletApi.resubscribeEvents()
+            // Refresh wallet state
             try {
                 wallet.getWalletStatus()
                 wallet.getTransactions()
                 wallet.getAddresses(true)
             } catch (_: Exception) {}
-            WalletApi.resubscribeEvents()
+            // Restart protocol polling & refresh after C++ core wakes up
+            android.os.Handler(mainLooper).postDelayed({
+                ProtocolStartup.onForegroundRecovery()
+            }, 1500)
         }
     }
 
@@ -77,6 +89,24 @@ class MainActivity : FragmentActivity() {
         WalletApi.start(lifecycleScope)
         WalletApi.subscribeToEvents()
         ProtocolStartup.init(this, lifecycleScope)
+        // Auto-start background service (matches RN useBackgroundService hook)
+        startBackgroundServiceIfEnabled()
+    }
+
+    private fun startBackgroundServiceIfEnabled() {
+        val enabled = SecureStorage.getBoolean("bg_service_enabled", true) // default ON like RN
+        if (!enabled) return
+        try {
+            val intent = Intent(this, BackgroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d("MainActivity", "Background service auto-started")
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Failed to start background service: ${e.message}")
+        }
     }
 
     override fun onDestroy() {

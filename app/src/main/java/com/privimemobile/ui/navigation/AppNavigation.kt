@@ -225,6 +225,7 @@ fun AppNavigation() {
                 ChatsScreen(
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },
                     onNewChat = { navController.navigate("new_chat") },
+                    onRegister = { navController.navigate("register") },
                 )
             }
             composable("chat/{handle}") { backStackEntry ->

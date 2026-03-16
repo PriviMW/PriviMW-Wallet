@@ -14,10 +14,12 @@ import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.protocol.SbbsMessaging
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 
 @Composable
 fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
+    val context = LocalContext.current
     var handle by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -163,29 +165,36 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 when {
                     handle.length < 3 -> error = "Handle must be at least 3 characters"
                     else -> {
-                        registering = true
-                        error = null
-                        // Create SBBS address first, then register on-chain
-                        WalletApi.call("create_address", mapOf(
-                            "type" to "regular",
-                            "label" to "PriviMe",
-                            "expiration" to "never",
-                        )) { addrResult ->
-                            val walletId = addrResult["address"] as? String ?: ""
-                            if (walletId.isEmpty()) {
-                                error = "Failed to create SBBS address"
-                                registering = false
-                                return@call
-                            }
-                            ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
-                                registering = false
-                                if (success) {
-                                    onRegistered()
-                                } else {
-                                    error = errMsg ?: "Registration failed"
+                        val activity = context as? android.app.Activity ?: return@Button
+                        com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
+                            activity = activity,
+                            actionLabel = "Register handle @$handle",
+                            onApproved = {
+                                registering = true
+                                error = null
+                                // Create SBBS address first, then register on-chain
+                                WalletApi.call("create_address", mapOf(
+                                    "type" to "regular",
+                                    "label" to "PriviMe",
+                                    "expiration" to "never",
+                                )) { addrResult ->
+                                    val walletId = addrResult["address"] as? String ?: ""
+                                    if (walletId.isEmpty()) {
+                                        error = "Failed to create SBBS address"
+                                        registering = false
+                                        return@call
+                                    }
+                                    ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
+                                        registering = false
+                                        if (success) {
+                                            onRegistered()
+                                        } else {
+                                            error = errMsg ?: "Registration failed"
+                                        }
+                                    }
                                 }
-                            }
-                        }
+                            },
+                        )
                     }
                 }
             },

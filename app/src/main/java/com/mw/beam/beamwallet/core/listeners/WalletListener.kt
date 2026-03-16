@@ -90,6 +90,21 @@ object WalletListener {
             obj.put("receiverAddress", t.receiverAddress ?: "")
             obj.put("senderIdentity", t.senderIdentity ?: "")
             obj.put("receiverIdentity", t.receiverIdentity ?: "")
+            obj.put("isDapps", t.isDapps)
+            obj.put("appName", t.appName ?: "")
+            obj.put("appID", t.appID ?: "")
+            obj.put("contractCids", t.contractCids ?: "")
+            // Serialize per-asset breakdown for contract TXs (like beam-ui's _contractSpend)
+            // t.assets is ArrayList<WalletStatusDTO> — each has sending/receiving per asset
+            // For DApp TXs, the C++ wallet_model.cpp (line 192) already computes:
+            //   sender = (mainAmount <= 0)  → true if net spend
+            //   amount = mainAmount         → net signed amount across all assets
+            // The per-asset breakdown is in t.assets but accessing it crashes
+            // (JNI type mismatch: WalletStatusDTO[] vs ArrayList). Needs C++ fix.
+            // For now, sender + amount are correct for direction display.
+            if (t.isDapps) {
+                Log.d(TAG, "DApp TX '${t.appName}': sender=${t.sender}, amount=${t.amount}, fee=${t.fee}")
+            }
             arr.put(obj)
         }
         uiHandler.post { WalletEventBus.emitTransactions(arr.toString()) }

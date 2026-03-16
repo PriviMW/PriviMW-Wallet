@@ -60,6 +60,18 @@ internal data class TxItem(
     val isMaxPrivacy: Boolean = false,
     val isOffline: Boolean = false,
     val isPublicOffline: Boolean = false,
+    val isDapps: Boolean = false,
+    val appName: String? = null,
+    val appID: String? = null,
+    val contractCids: String? = null,
+    val contractAssets: List<ContractAsset> = emptyList(),
+)
+
+/** Per-asset spend/receive entry for contract TXs (like beam-ui's _contractSpend). */
+internal data class ContractAsset(
+    val assetId: Int,
+    val sending: Long,   // amount spent (positive = you're paying)
+    val receiving: Long,  // amount received (positive = you're getting)
 )
 
 /** Asset balance model for non-BEAM assets. */
@@ -150,6 +162,20 @@ fun WalletScreen(
                     isMaxPrivacy = obj.optBoolean("isMaxPrivacy"),
                     isOffline = obj.optBoolean("isOffline"),
                     isPublicOffline = obj.optBoolean("isPublicOffline"),
+                    isDapps = obj.optBoolean("isDapps"),
+                    appName = obj.optString("appName", "").ifEmpty { null },
+                    appID = obj.optString("appID", "").ifEmpty { null },
+                    contractCids = obj.optString("contractCids", "").ifEmpty { null },
+                    contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
+                        (0 until ca.length()).mapNotNull { j ->
+                            val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                            ContractAsset(
+                                assetId = ao.optInt("assetId"),
+                                sending = ao.optLong("sending"),
+                                receiving = ao.optLong("receiving"),
+                            )
+                        }
+                    } ?: emptyList(),
                 )
             }.sortedByDescending { it.createTime }
         } catch (_: Exception) {
@@ -534,13 +560,15 @@ private fun TxCard(
         else -> C.textSecondary
     }
 
-    // Peer address display — matches RN txAddressTypeLabel fallback
-    val peerAddr = if (tx.peerId.isNotEmpty()) {
-        if (tx.peerId.length > 12)
-            "${tx.peerId.take(6)}...${tx.peerId.takeLast(6)}"
-        else tx.peerId
-    } else {
-        when {
+    // Peer address / DApp name display
+    val peerAddr = when {
+        tx.isDapps -> tx.appName ?: "DApp"
+        tx.peerId.isNotEmpty() -> {
+            if (tx.peerId.length > 12)
+                "${tx.peerId.take(6)}...${tx.peerId.takeLast(6)}"
+            else tx.peerId
+        }
+        else -> when {
             tx.isMaxPrivacy -> "Max Privacy"
             tx.isPublicOffline -> "Public Offline"
             tx.isOffline || tx.isShielded -> "Offline"
@@ -572,11 +600,21 @@ private fun TxCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(if (isSend) Color(0x26FF6B6B) else Color(0x2625D4D0)),
+                    .background(
+                        when {
+                            tx.isDapps -> Color(0x269B59B6) // purple tint for contract TXs
+                            isSend -> Color(0x26FF6B6B)
+                            else -> Color(0x2625D4D0)
+                        }
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    if (isSend) ">" else "<",
+                    when {
+                        tx.isDapps -> "\u2B22" // hexagon for contract
+                        isSend -> ">"
+                        else -> "<"
+                    },
                     color = C.text,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -588,7 +626,11 @@ private fun TxCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     buildString {
-                        append(if (isSend) "Sent" else "Received")
+                        when {
+                            tx.isDapps -> append(tx.appName ?: "DApp")
+                            isSend -> append("Sent")
+                            else -> append("Received")
+                        }
                         if (tx.message.isNotEmpty()) append(" - ${tx.message}")
                     },
                     color = C.text,
@@ -607,9 +649,14 @@ private fun TxCard(
 
             // Amount + status
             Column(horizontalAlignment = Alignment.End) {
+                // For DApp TXs, C++ sender flag is INVERTED (positive mainAmount = spending, but sender=false)
+                // Fix: for DApp TXs, flip the sender interpretation
+                val effectiveSend = if (tx.isDapps && tx.amount > 0) !isSend else isSend
+                val amountPrefix = if (effectiveSend) "-" else "+"
+                val amountColor = if (effectiveSend) C.outgoing else C.incoming
                 Text(
-                    text = "${if (isSend) "-" else "+"}${Helpers.formatBeam(tx.amount)}${if (assetLabel.isNotEmpty()) " $assetLabel" else ""}",
-                    color = if (isSend) C.outgoing else C.incoming,
+                    text = "$amountPrefix${Helpers.formatBeam(tx.amount)}${if (assetLabel.isNotEmpty()) " $assetLabel" else ""}",
+                    color = amountColor,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                 )

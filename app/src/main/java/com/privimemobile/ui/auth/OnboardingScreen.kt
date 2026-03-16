@@ -230,6 +230,8 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                             if (ok) {
                                 SecureStorage.storeWalletPassword(password)
                                 SecureStorage.storeNodeAddress(nodeAddr)
+                                SecureStorage.putString("node_mode", nodeMode)
+                                if (nodeMode == "own") SecureStorage.putString("custom_node", customNode.trim())
                                 SecureStorage.setHasWallet(true)
                                 onWalletReady()
                             } else {
@@ -339,6 +341,8 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                     if (ok) {
                                         SecureStorage.storeWalletPassword(password)
                                         SecureStorage.storeNodeAddress(nodeAddr)
+                                        SecureStorage.putString("node_mode", nodeMode)
+                                        if (nodeMode == "own") SecureStorage.putString("custom_node", customNode.trim())
                                         SecureStorage.setHasWallet(true)
                                         // Auto-rescan for random node users to recover UTXOs
                                         // Own node users don't need this — node already tracks UTXOs

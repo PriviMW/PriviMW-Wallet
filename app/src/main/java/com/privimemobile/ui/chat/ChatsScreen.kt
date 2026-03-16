@@ -26,6 +26,7 @@ import com.privimemobile.protocol.Conversation
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.ui.theme.C
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -71,6 +72,7 @@ fun ChatsScreen(
 
     // Landing page 2: Registered but SBBS address belongs to old device — re-register
     if (sbbsNeedsUpdate) {
+        val context = LocalContext.current
         val currentDisplayName = identity?.displayName ?: ""
         var displayName by remember { mutableStateOf(currentDisplayName) }
         var useExistingName by remember { mutableStateOf(true) }
@@ -185,8 +187,15 @@ fun ChatsScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    val newDisplayName = if (useExistingName) currentDisplayName else displayName.trim()
-                    ProtocolStartup.reRegisterSbbsAddress(newDisplayName)
+                    val activity = context as? android.app.Activity ?: return@Button
+                    com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
+                        activity = activity,
+                        actionLabel = "Update messaging address",
+                        onApproved = {
+                            val newDisplayName = if (useExistingName) currentDisplayName else displayName.trim()
+                            ProtocolStartup.reRegisterSbbsAddress(newDisplayName)
+                        },
+                    )
                 },
                 enabled = !sbbsUpdating && hasBalance,
                 modifier = Modifier.fillMaxWidth().height(52.dp),

@@ -35,6 +35,7 @@ import com.privimemobile.ui.wallet.UTXOScreen
 import com.privimemobile.ui.wallet.AddressesScreen
 import com.privimemobile.ui.wallet.AssetDetailScreen
 import com.privimemobile.ui.wallet.QRScannerScreen
+import com.privimemobile.ui.dapps.DAppScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
@@ -251,7 +252,32 @@ fun AppNavigation() {
                 )
             }
             composable(Tab.DAPPS.route) {
-                DAppsScreen(onBrowseStore = { navController.navigate("dapp_store") })
+                DAppsScreen(
+                    onBrowseStore = { navController.navigate("dapp_store") },
+                    onLaunchDApp = { name, path, guid ->
+                        navController.navigate(
+                            "dapp_view/${java.net.URLEncoder.encode(name, "UTF-8")}/${java.net.URLEncoder.encode(path, "UTF-8")}/$guid"
+                        )
+                    },
+                )
+            }
+            composable(
+                "dapp_view/{name}/{path}/{guid}",
+                arguments = listOf(
+                    navArgument("name") { type = NavType.StringType },
+                    navArgument("path") { type = NavType.StringType },
+                    navArgument("guid") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { backStackEntry ->
+                val name = try { java.net.URLDecoder.decode(backStackEntry.arguments?.getString("name") ?: "", "UTF-8") } catch (_: Exception) { "DApp" }
+                val path = try { java.net.URLDecoder.decode(backStackEntry.arguments?.getString("path") ?: "", "UTF-8") } catch (_: Exception) { "" }
+                val guid = backStackEntry.arguments?.getString("guid") ?: ""
+                DAppScreen(
+                    dappName = name,
+                    dappPath = path,
+                    dappGuid = guid,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable("dapp_store") {
                 DAppStoreBrowseScreen(onBack = { navController.popBackStack() })

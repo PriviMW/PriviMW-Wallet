@@ -242,16 +242,13 @@ object NativeTxApprovalDialog {
                 background = bg
                 setPadding(dp(16), dp(14), dp(16), dp(14))
                 setOnClickListener {
-                    if (!isAuthRequired(activity)) {
-                        dialog.dismiss()
-                        approve(request)
-                    } else if (isBiometricsEnabled(activity)) {
-                        // Try biometrics first, fall back to password on failure
-                        showBiometricPrompt(activity, request, dialog)
-                    } else {
-                        dialog.dismiss()
-                        showPasswordPrompt(activity, request)
-                    }
+                    dialog.dismiss()
+                    com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
+                        activity = activity,
+                        actionLabel = "Approve DApp transaction",
+                        onApproved = { approve(request) },
+                        onRejected = { reject(request) },
+                    )
                 }
             }
             btnRow.addView(approveBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -298,14 +295,14 @@ object NativeTxApprovalDialog {
     /** Check if any auth is required on send (password or biometrics) */
     private fun isAuthRequired(activity: android.app.Activity): Boolean {
         val prefs = getEncryptedPrefs(activity) ?: return false
-        val askPassword = prefs.getString("ask_password_on_send", "false") == "true"
-        val fingerprint = prefs.getString("fingerprint_enabled", "false") == "true"
+        val askPassword = prefs.getBoolean("ask_password_on_send", false)
+        val fingerprint = prefs.getBoolean("fingerprint_enabled", false)
         return askPassword || fingerprint
     }
 
     /** Check if biometrics is enabled */
     private fun isBiometricsEnabled(activity: android.app.Activity): Boolean {
-        return getEncryptedPrefs(activity)?.getString("fingerprint_enabled", "false") == "true"
+        return getEncryptedPrefs(activity)?.getBoolean("fingerprint_enabled", false) ?: false
     }
 
     /** Get stored wallet password for verification */

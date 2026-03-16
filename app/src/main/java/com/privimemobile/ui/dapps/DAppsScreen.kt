@@ -45,7 +45,10 @@ import java.io.File
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DAppsScreen(onBrowseStore: () -> Unit = {}) {
+fun DAppsScreen(
+    onBrowseStore: () -> Unit = {},
+    onLaunchDApp: (name: String, path: String, guid: String) -> Unit = { _, _, _ -> },
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -88,13 +91,7 @@ fun DAppsScreen(onBrowseStore: () -> Unit = {}) {
     }
 
     fun handleLaunch(dapp: DApp) {
-        context.startActivity(
-            Intent(context, DAppActivity::class.java).apply {
-                putExtra("dapp_name", dapp.name)
-                putExtra("dapp_path", DAppManager.getLaunchUrl(dapp))
-                putExtra("dapp_guid", dapp.guid)
-            }
-        )
+        onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
     }
 
     PullToRefreshBox(
@@ -248,22 +245,20 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Icon — load SVG from installed DApp directory
-            val iconFile = remember(dapp.localPath) {
-                listOf("app/appicon.svg", "app/icon.svg", "app/logo.svg")
-                    .map { File(dapp.localPath, it) }
-                    .firstOrNull { it.exists() }
+            // Icon — render stored SVG string (like RN build), fall back to file
+            val hasSvgString = remember(dapp.icon) {
+                dapp.icon.isNotBlank() && (dapp.icon.trimStart().startsWith("<svg") || dapp.icon.trimStart().startsWith("<?xml"))
+            }
+            val svgLoader = remember {
+                ImageLoader.Builder(context)
+                    .components { add(SvgDecoder.Factory()) }
+                    .build()
             }
 
-            if (iconFile != null) {
-                val svgLoader = remember {
-                    ImageLoader.Builder(context)
-                        .components { add(SvgDecoder.Factory()) }
-                        .build()
-                }
+            if (hasSvgString) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(iconFile)
+                        .data(java.nio.ByteBuffer.wrap(dapp.icon.toByteArray()))
                         .build(),
                     imageLoader = svgLoader,
                     contentDescription = dapp.name,
@@ -272,20 +267,39 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
                         .clip(RoundedCornerShape(12.dp)),
                 )
             } else {
-                // Fallback letter icon
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(C.border),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        dapp.name.first().uppercase(),
-                        color = C.accent,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
+                // Try loading from file as fallback
+                val iconFile = remember(dapp.localPath) {
+                    listOf("app/appicon.svg", "app/icon.svg", "app/logo.svg")
+                        .map { File(dapp.localPath, it) }
+                        .firstOrNull { it.exists() }
+                }
+                if (iconFile != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(iconFile)
+                            .build(),
+                        imageLoader = svgLoader,
+                        contentDescription = dapp.name,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp)),
                     )
+                } else {
+                    // Fallback letter icon
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(C.border),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            dapp.name.first().uppercase(),
+                            color = C.accent,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(12.dp))

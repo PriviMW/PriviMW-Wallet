@@ -76,6 +76,11 @@ private data class TxDetail(
     val isMaxPrivacy: Boolean,
     val isPublicOffline: Boolean,
     val minConfirmationsProgress: String,
+    val isDapps: Boolean = false,
+    val appName: String? = null,
+    val appID: String? = null,
+    val contractCids: String? = null,
+    val contractAssets: List<ContractAsset> = emptyList(),
 )
 
 private data class PaymentProof(
@@ -121,6 +126,20 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     isMaxPrivacy = obj.optBoolean("isMaxPrivacy"),
                     isPublicOffline = obj.optBoolean("isPublicOffline"),
                     minConfirmationsProgress = obj.optString("minConfirmationsProgress", ""),
+                    isDapps = obj.optBoolean("isDapps"),
+                    appName = obj.optString("appName", "").ifEmpty { null },
+                    appID = obj.optString("appID", "").ifEmpty { null },
+                    contractCids = obj.optString("contractCids", "").ifEmpty { null },
+                    contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
+                        (0 until ca.length()).mapNotNull { j ->
+                            val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                            ContractAsset(
+                                assetId = ao.optInt("assetId"),
+                                sending = ao.optLong("sending"),
+                                receiving = ao.optLong("receiving"),
+                            )
+                        }
+                    } ?: emptyList(),
                 )
             }
         } catch (_: Exception) {
@@ -169,7 +188,8 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
         return
     }
 
-    val isOutgoing = tx.sender
+    // For DApp TXs, C++ sender flag is inverted (positive amount = spending but sender=false)
+    val isOutgoing = if (tx.isDapps && tx.amount > 0) !tx.sender else tx.sender
     val isPending = tx.status == TxStatus.PENDING ||
             tx.status == TxStatus.IN_PROGRESS ||
             tx.status == TxStatus.REGISTERING
@@ -362,32 +382,51 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DetailRow("Date", fullTimestamp(tx.createTime))
-                    DetailRow("Address type", addressTypeLabel, valueColor = C.accent)
-                    if (tx.message.isNotEmpty()) {
-                        DetailRow("Comment", tx.message)
+                    if (!tx.isDapps) {
+                        DetailRow("Address type", addressTypeLabel, valueColor = C.accent)
                     }
-                    DetailRow(
-                        label = if (isOutgoing) "Sending address" else "Receiving address",
-                        value = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
-                            .ifEmpty { tx.myId }.ifEmpty { "--" },
-                        mono = true,
-                        onCopy = {
-                            val v = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
-                                .ifEmpty { tx.myId }
-                            if (v.isNotEmpty()) copyToClipboard("Address", v)
-                        },
-                    )
-                    DetailRow(
-                        label = if (isOutgoing) "Receiver address" else "Sender address",
-                        value = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
-                            .ifEmpty { tx.peerId }.ifEmpty { "--" },
-                        mono = true,
-                        onCopy = {
-                            val v = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
-                                .ifEmpty { tx.peerId }
-                            if (v.isNotEmpty()) copyToClipboard("Address", v)
-                        },
-                    )
+                    if (tx.message.isNotEmpty()) {
+                        DetailRow(
+                            if (tx.isDapps) "Description" else "Comment",
+                            tx.message,
+                        )
+                    }
+                    if (tx.isDapps) {
+                        // DApp TX — show DApp name and contract CIDs instead of addresses
+                        DetailRow("DApp Name", tx.appName ?: "Unknown DApp")
+                        if (!tx.contractCids.isNullOrEmpty()) {
+                            DetailRow(
+                                "Contract ID",
+                                tx.contractCids,
+                                mono = true,
+                                onCopy = { copyToClipboard("Contract ID", tx.contractCids) },
+                            )
+                        }
+                    } else {
+                        // Regular TX — show sender/receiver addresses
+                        DetailRow(
+                            label = if (isOutgoing) "Sending address" else "Receiving address",
+                            value = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
+                                .ifEmpty { tx.myId }.ifEmpty { "--" },
+                            mono = true,
+                            onCopy = {
+                                val v = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
+                                    .ifEmpty { tx.myId }
+                                if (v.isNotEmpty()) copyToClipboard("Address", v)
+                            },
+                        )
+                        DetailRow(
+                            label = if (isOutgoing) "Receiver address" else "Sender address",
+                            value = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
+                                .ifEmpty { tx.peerId }.ifEmpty { "--" },
+                            mono = true,
+                            onCopy = {
+                                val v = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
+                                    .ifEmpty { tx.peerId }
+                                if (v.isNotEmpty()) copyToClipboard("Address", v)
+                            },
+                        )
+                    }
                     DetailRow("Fee", "${Helpers.formatBeam(tx.fee)} BEAM")
                     DetailRow(
                         label = "Transaction ID",

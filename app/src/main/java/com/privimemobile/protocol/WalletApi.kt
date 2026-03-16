@@ -42,7 +42,10 @@ object WalletApi {
      * Call once at app startup after wallet is opened.
      */
     fun start(scope: CoroutineScope) {
-        if (listenerJob != null) return
+        // Skip if already running with active scope. Check isActive, not just non-null —
+        // old job may be cancelled (Activity destroyed) but reference still held.
+        if (listenerJob?.isActive == true) return
+        listenerJob?.cancel()
         listenerJob = scope.launch {
             WalletEventBus.apiResult.collectLatest { json ->
                 handleApiResult(json)
@@ -73,7 +76,7 @@ object WalletApi {
         callback: ((Map<String, Any?>) -> Unit)? = null,
     ) {
         val wallet = WalletManager.walletInstance
-        if (wallet == null) {
+        if (wallet == null || !com.mw.beam.beamwallet.core.Api.isWalletRunning()) {
             Log.w(TAG, "call($method): wallet not available")
             callback?.invoke(mapOf("error" to mapOf("message" to "Wallet not connected")))
             return
@@ -173,7 +176,7 @@ object WalletApi {
             Log.d(TAG, "← response for unknown id=$callId (stale callback?)")
             return
         }
-        Log.d(TAG, "← ${info.method} (id=$callId, remaining=${callbacks.size})")
+        Log.d(TAG, "← ${info.method} (id=$callId, remaining=${callbacks.size}), raw=${json.take(300)}")
 
         // Error response
         if (answer.has("error")) {
@@ -187,29 +190,40 @@ object WalletApi {
             return
         }
 
-        val result = answer.optJSONObject("result")
+        val rawResult = answer.opt("result")
 
-        // Parse shader output (invoke_contract responses)
-        if (result != null && result.has("output")) {
-            val output = result.optString("output", "")
-            try {
-                val shader = JSONObject(output)
-                if (shader.has("error")) {
-                    info.callback(mapOf("error" to shader.opt("error")))
-                    return
+        // Result can be: JSONObject, String, Array, or null
+        when (rawResult) {
+            is JSONObject -> {
+                // Parse shader output (invoke_contract responses)
+                if (rawResult.has("output")) {
+                    val output = rawResult.optString("output", "")
+                    try {
+                        val shader = JSONObject(output)
+                        if (shader.has("error")) {
+                            info.callback(mapOf("error" to shader.opt("error")))
+                            return
+                        }
+                        val shaderMap = jsonToMap(shader).toMutableMap()
+                        if (rawResult.has("raw_data")) {
+                            shaderMap["raw_data"] = rawResult.opt("raw_data")
+                        }
+                        info.callback(shaderMap)
+                    } catch (_: Exception) {
+                        info.callback(mapOf("error" to "Failed to parse shader response"))
+                    }
+                } else {
+                    info.callback(jsonToMap(rawResult))
                 }
-                val shaderMap = jsonToMap(shader).toMutableMap()
-                if (result.has("raw_data")) {
-                    shaderMap["raw_data"] = result.opt("raw_data")
-                }
-                info.callback(shaderMap)
-            } catch (_: Exception) {
-                info.callback(mapOf("error" to "Failed to parse shader response"))
             }
-            return
+            is String -> {
+                // Some methods return raw string (e.g., create_address returns address string)
+                info.callback(mapOf("address" to rawResult))
+            }
+            else -> {
+                info.callback(emptyMap())
+            }
         }
-
-        info.callback(if (result != null) jsonToMap(result) else emptyMap())
     }
 
     private fun onWalletEvent(eventId: String) {

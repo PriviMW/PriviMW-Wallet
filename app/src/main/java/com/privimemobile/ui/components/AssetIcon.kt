@@ -19,9 +19,10 @@ import com.privimemobile.R
  * Same approach as official Beam wallet's AssetManager.getImage().
  */
 
+// Matches official Beam wallet's AssetManager — assetbeamx for BEAMX (ID 7)
 private val ASSET_DRAWABLES = intArrayOf(
     R.drawable.asset0,  R.drawable.asset1,  R.drawable.asset2,  R.drawable.asset3,
-    R.drawable.asset4,  R.drawable.asset5,  R.drawable.asset6,  R.drawable.asset7,
+    R.drawable.asset4,  R.drawable.asset5,  R.drawable.asset6,  R.drawable.assetbeamx,
     R.drawable.asset8,  R.drawable.asset9,  R.drawable.asset10, R.drawable.asset11,
     R.drawable.asset12, R.drawable.asset13, R.drawable.asset14, R.drawable.asset15,
     R.drawable.asset16, R.drawable.asset17, R.drawable.asset18, R.drawable.asset19,

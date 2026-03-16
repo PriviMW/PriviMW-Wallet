@@ -4,26 +4,46 @@ import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.privimemobile.ui.theme.C
 import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.dapp.BeamDAppWebView
 import com.privimemobile.dapp.DAppResponseRouter
 import com.privimemobile.dapp.NativeTxApprovalDialog
+import com.privimemobile.protocol.Helpers
+import com.privimemobile.ui.theme.C
+import com.privimemobile.ui.wallet.*
+import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
+import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * Singleton that keeps the active DApp WebView alive across tab switches.
@@ -39,13 +59,10 @@ object DAppWebViewHolder {
         private set
 
     fun getOrCreate(ctx: android.content.Context, name: String, path: String, guid: String): BeamDAppWebView {
-        // If same DApp is already loaded, reuse it
         val existing = activeWebView
         if (existing != null && activeGuid == guid) {
-            Log.d("DAppWebViewHolder", "Reusing existing WebView for '$name'")
             return existing
         }
-        // Different DApp or none — destroy old, create new
         destroy()
         val wv = BeamDAppWebView(ctx).also {
             it.layoutParams = FrameLayout.LayoutParams(
@@ -57,7 +74,6 @@ object DAppWebViewHolder {
         activeWebView = wv
         activeGuid = guid
         activeName = name
-        Log.d("DAppWebViewHolder", "Created new WebView for '$name' (guid=$guid)")
         return wv
     }
 
@@ -66,20 +82,17 @@ object DAppWebViewHolder {
             wv.stopLoading()
             wv.removeJavascriptInterface("BEAM")
             DAppResponseRouter.setActiveWebView(null)
-            // Detach from parent if still attached
             (wv.parent as? ViewGroup)?.removeView(wv)
         }
         activeWebView = null
         activeGuid = ""
         activeName = ""
-        // Restore PriviMe context
         val wallet = WalletManager.walletInstance
         if (wallet != null && Api.isWalletRunning()) {
             try { wallet.launchApp("PriviMe", "") } catch (_: Exception) {}
         }
     }
 
-    /** Detach WebView from its current parent without destroying it. */
     fun detach() {
         activeWebView?.let { wv ->
             (wv.parent as? ViewGroup)?.removeView(wv)
@@ -91,7 +104,7 @@ object DAppWebViewHolder {
 
 /**
  * In-app DApp screen — hosts WebView within Compose navigation (tabs stay visible).
- * WebView survives tab switches via DAppWebViewHolder singleton.
+ * Includes collapsible bottom panel with wallet balance + DApp-specific transactions.
  */
 @Composable
 fun DAppScreen(
@@ -103,24 +116,83 @@ fun DAppScreen(
     val context = LocalContext.current
     val activity = context as? android.app.Activity
 
-    // Set DApp activity ref for TX approval dialogs
+    // Bottom panel state
+    var panelExpanded by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Balance, 1 = Transactions
+
+    // Wallet data
+    val beamStatus by WalletEventBus.beamStatus.collectAsState()
+    val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
+
+    // Collect asset balances
+    val assetBalanceMap = remember { mutableStateMapOf<Int, com.privimemobile.wallet.WalletStatusEvent>() }
+    LaunchedEffect(Unit) {
+        WalletEventBus.assetBalances.forEach { (k, v) -> assetBalanceMap[k] = v }
+        WalletEventBus.walletStatus.collect { event -> assetBalanceMap[event.assetId] = event }
+    }
+
+    // Asset info for tickers
+    val assetInfoMap = remember { mutableStateMapOf<Int, com.privimemobile.wallet.AssetInfoEvent>() }
+    LaunchedEffect(Unit) {
+        assetInfoMap.putAll(WalletEventBus.assetInfoCache)
+        WalletEventBus.assetInfo.collect { assetInfoMap[it.id] = it }
+    }
+
+    // Filter TXs for this DApp
+    val dappTxs = remember(txJson, dappName) {
+        try {
+            val arr = JSONArray(txJson)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                if (!obj.optBoolean("isDapps")) return@mapNotNull null
+                val appName = obj.optString("appName", "")
+                if (appName != dappName) return@mapNotNull null
+                TxItem(
+                    txId = obj.optString("txId"),
+                    amount = obj.optLong("amount"),
+                    fee = obj.optLong("fee"),
+                    sender = obj.optBoolean("sender"),
+                    status = obj.optInt("status"),
+                    message = obj.optString("message", ""),
+                    createTime = obj.optLong("createTime"),
+                    assetId = obj.optInt("assetId"),
+                    peerId = obj.optString("peerId", ""),
+                    isDapps = true,
+                    appName = appName.ifEmpty { null },
+                    contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
+                        (0 until ca.length()).mapNotNull { j ->
+                            val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                            ContractAsset(
+                                assetId = ao.optInt("assetId"),
+                                sending = ao.optLong("sending"),
+                                receiving = ao.optLong("receiving"),
+                            )
+                        }
+                    } ?: emptyList(),
+                )
+            }.sortedByDescending { it.createTime }
+        } catch (_: Exception) { emptyList() }
+    }
+
     DisposableEffect(Unit) {
         NativeTxApprovalDialog.dappActivity = activity
         onDispose {
             NativeTxApprovalDialog.dappActivity = null
-            // Detach but DON'T destroy — WebView stays alive for when user returns
             DAppWebViewHolder.detach()
         }
     }
 
-    // Handle back press — this DESTROYS the DApp (user explicitly closes it)
     BackHandler {
-        DAppWebViewHolder.destroy()
-        onBack()
+        if (panelExpanded) {
+            panelExpanded = false
+        } else {
+            DAppWebViewHolder.destroy()
+            onBack()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top bar with back button and DApp name
+        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -132,11 +204,7 @@ fun DAppScreen(
                 DAppWebViewHolder.destroy()
                 onBack()
             }) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Close DApp",
-                    tint = C.text,
-                )
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close DApp", tint = C.text)
             }
             Text(
                 dappName,
@@ -149,14 +217,237 @@ fun DAppScreen(
             )
         }
 
-        // WebView fills remaining space
-        AndroidView(
-            factory = { ctx ->
-                val wv = DAppWebViewHolder.getOrCreate(ctx, dappName, dappPath, dappGuid)
-                (wv.parent as? ViewGroup)?.removeView(wv)
-                wv
-            },
-            modifier = Modifier.fillMaxSize(),
+        // WebView fills remaining space (weight pushes bottom panel down)
+        Box(modifier = Modifier.weight(1f)) {
+            AndroidView(
+                factory = { ctx ->
+                    val wv = DAppWebViewHolder.getOrCreate(ctx, dappName, dappPath, dappGuid)
+                    (wv.parent as? ViewGroup)?.removeView(wv)
+                    wv
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // Collapsible bottom panel — swipe up to open, down to close
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(C.card)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { _, dragAmount ->
+                        if (dragAmount < -20) panelExpanded = true   // swipe up → open
+                        if (dragAmount > 20) panelExpanded = false   // swipe down → close
+                    }
+                },
+        ) {
+            // Toggle bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { panelExpanded = !panelExpanded }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Tab buttons
+                val tabs = listOf("WALLET BALANCE", "${ dappName.uppercase() } TRANSACTIONS")
+                tabs.forEachIndexed { idx, label ->
+                    Text(
+                        label,
+                        color = if (selectedTab == idx) C.accent else C.textSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        modifier = Modifier
+                            .clickable {
+                                selectedTab = idx
+                                if (!panelExpanded) panelExpanded = true
+                            }
+                            .padding(end = 16.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    if (panelExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Toggle",
+                    tint = C.textSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            // Expandable content
+            AnimatedVisibility(
+                visible = panelExpanded,
+                enter = expandVertically(),
+                exit = shrinkVertically(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp),
+                ) {
+                    when (selectedTab) {
+                        0 -> BalancePanel(beamStatus, assetBalanceMap, assetInfoMap)
+                        1 -> TransactionsPanel(dappTxs, assetInfoMap)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalancePanel(
+    beamStatus: com.privimemobile.wallet.WalletStatusEvent,
+    assetBalanceMap: Map<Int, com.privimemobile.wallet.WalletStatusEvent>,
+    assetInfoMap: Map<Int, com.privimemobile.wallet.AssetInfoEvent>,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 8.dp),
+    ) {
+        // BEAM balance
+        item {
+            BalanceRow(assetId = 0, name = "BEAM", available = beamStatus.available)
+        }
+        // Other assets
+        val otherAssets = assetBalanceMap.filter { it.key != 0 && it.value.available > 0 }
+        items(otherAssets.entries.toList(), key = { it.key }) { (assetId, bal) ->
+            val info = assetInfoMap[assetId]
+            val name = info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #$assetId"
+            BalanceRow(assetId = assetId, name = name, available = bal.available)
+        }
+        if (otherAssets.isEmpty()) {
+            item {
+                Text(
+                    "No other assets",
+                    color = C.textMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalanceRow(assetId: Int, name: String, available: Long) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        com.privimemobile.ui.components.AssetIcon(assetId = assetId, ticker = name, size = 28.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(name, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text(Helpers.formatBeam(available), color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun TransactionsPanel(
+    txs: List<TxItem>,
+    assetInfoMap: Map<Int, com.privimemobile.wallet.AssetInfoEvent>,
+) {
+    if (txs.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("No transactions yet", color = C.textMuted, fontSize = 13.sp)
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        contentPadding = PaddingValues(bottom = 8.dp),
+    ) {
+        items(txs, key = { it.txId }) { tx ->
+            DAppTxRow(tx, assetInfoMap)
+        }
+    }
+}
+
+private val panelDateFmt = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
+
+@Composable
+private fun DAppTxRow(tx: TxItem, assetInfoMap: Map<Int, com.privimemobile.wallet.AssetInfoEvent>) {
+    val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
+    val isPending = tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS || tx.status == TxStatus.REGISTERING
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Status dot
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(
+                    when {
+                        isFailed -> C.error
+                        isPending -> C.warning
+                        else -> C.online
+                    }
+                ),
         )
+        Spacer(Modifier.width(10.dp))
+
+        // Description + time
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                tx.message.ifEmpty { tx.appName ?: "Contract call" },
+                color = C.text,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                try { panelDateFmt.format(Date(tx.createTime * 1000)) } catch (_: Exception) { "" },
+                color = C.textMuted,
+                fontSize = 11.sp,
+            )
+        }
+
+        // Amount(s)
+        Column(horizontalAlignment = Alignment.End) {
+            if (tx.contractAssets.isNotEmpty()) {
+                tx.contractAssets.forEach { ca ->
+                    val isSpending = ca.sending != 0L
+                    val displayAmount = Math.abs(if (isSpending) ca.sending else ca.receiving)
+                    val caPrefix = if (isSpending) "-" else "+"
+                    val caColor = when {
+                        isFailed -> C.textSecondary
+                        isSpending -> C.outgoing
+                        else -> C.incoming
+                    }
+                    val caTicker = if (ca.assetId != 0) {
+                        val info = assetInfoMap[ca.assetId]
+                        info?.unitName?.ifEmpty { null } ?: "Asset #${ca.assetId}"
+                    } else "BEAM"
+                    if (displayAmount > 0) {
+                        Text(
+                            "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
+                            color = caColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            } else {
+                val effectiveOut = if (tx.amount > 0) !tx.sender else tx.sender
+                Text(
+                    "${if (effectiveOut) "-" else "+"}${Helpers.formatBeam(tx.amount)} BEAM",
+                    color = if (isFailed) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }

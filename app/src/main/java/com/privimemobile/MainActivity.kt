@@ -8,7 +8,11 @@ import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.protocol.SecureStorage
@@ -30,6 +34,7 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             PriviMWTheme {
+                Box(modifier = Modifier.fillMaxSize().imePadding()) {
                 var hasWallet by remember { mutableStateOf(WalletManager.isWalletCreated()) }
                 var unlocked by remember { mutableStateOf(false) }
 
@@ -46,11 +51,21 @@ class MainActivity : FragmentActivity() {
                     !unlocked -> LockScreen(
                         onUnlocked = {
                             unlocked = true
-                            android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
+                            if (WalletManager.isApiReady) {
+                                // Wallet already open (BackgroundService kept it alive).
+                                // Re-start WalletApi with new Activity's lifecycleScope
+                                // (old scope was destroyed with previous Activity).
+                                WalletApi.start(lifecycleScope)
+                                WalletApi.subscribeToEvents()
+                                ProtocolStartup.onForegroundRecovery()
+                            } else {
+                                android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
+                            }
                         },
                     )
                     else -> AppNavigation()
                 }
+                } // Box imePadding
             }
         }
     }
@@ -61,6 +76,9 @@ class MainActivity : FragmentActivity() {
         // Foreground recovery (matches RN useProtocol foreground handler)
         val wallet = WalletManager.walletInstance
         if (wallet != null) {
+            // Re-start WalletApi with current Activity's lifecycleScope
+            // (previous scope may have been destroyed if Activity was recreated)
+            WalletApi.start(lifecycleScope)
             // Clear stale callbacks that will never get responses
             WalletApi.cleanupStaleCallbacks()
             // Re-subscribe to wallet events (C++ core may have dropped them)
@@ -87,10 +105,21 @@ class MainActivity : FragmentActivity() {
 
     private fun startProtocol() {
         WalletApi.start(lifecycleScope)
-        WalletApi.subscribeToEvents()
-        ProtocolStartup.init(this, lifecycleScope)
-        // Auto-start background service (matches RN useBackgroundService hook)
-        startBackgroundServiceIfEnabled()
+        // Wait for API context to be ready before subscribing — callWalletApi crashes if
+        // AppsApiUI is null (launchApp is async). Retry every 500ms up to 15s.
+        val handler = android.os.Handler(mainLooper)
+        var attempts = 0
+        fun trySubscribe() {
+            if (WalletManager.isApiReady || attempts >= 30) {
+                WalletApi.subscribeToEvents()
+                ProtocolStartup.init(this@MainActivity, lifecycleScope)
+                startBackgroundServiceIfEnabled()
+            } else {
+                attempts++
+                handler.postDelayed(::trySubscribe, 500)
+            }
+        }
+        trySubscribe()
     }
 
     private fun startBackgroundServiceIfEnabled() {
@@ -110,8 +139,13 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
-        ProtocolStartup.shutdown()
-        WalletApi.stop()
+        if (!BackgroundService.isRunning) {
+            // No background service — full shutdown
+            ProtocolStartup.shutdown()
+            WalletApi.stop()
+            WalletManager.closeWallet()
+        }
+        // If BackgroundService is running, keep wallet alive for TXs/messages
         super.onDestroy()
     }
 }

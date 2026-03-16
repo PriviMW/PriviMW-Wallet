@@ -264,17 +264,36 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            val sign = when {
-                isSelf -> ""
-                isOutgoing -> "-"
-                else -> "+"
+            if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
+                // Per-asset breakdown from JNI
+                tx.contractAssets.forEach { ca ->
+                    val isSpending = ca.sending != 0L
+                    val displayAmount = Math.abs(if (isSpending) ca.sending else ca.receiving)
+                    val caPrefix = if (isSpending) "-" else "+"
+                    val caColor = if (isSpending) C.outgoing else C.incoming
+                    val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else "BEAM"
+                    if (displayAmount > 0) {
+                        Text(
+                            text = "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
+                            color = caColor,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            } else {
+                val sign = when {
+                    isSelf -> ""
+                    isOutgoing -> "-"
+                    else -> "+"
+                }
+                Text(
+                    text = "$sign${Helpers.formatBeam(tx.amount)} $ticker",
+                    color = amountColor,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
-            Text(
-                text = "$sign${Helpers.formatBeam(tx.amount)} $ticker",
-                color = amountColor,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-            )
 
             Spacer(Modifier.height(10.dp))
 

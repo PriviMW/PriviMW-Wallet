@@ -2,6 +2,7 @@ package com.privimemobile.protocol
 
 import android.content.Context
 import android.util.Log
+import java.util.zip.ZipInputStream
 
 /**
  * DApp Store — queries the on-chain DApp Store contract for published DApps.
@@ -12,6 +13,28 @@ import android.util.Log
 object DAppStore {
     private const val TAG = "DAppStore"
     private var storeShaderBytes: List<Int>? = null
+
+    /** Bundled DApps shipped with the APK — available for instant install without IPFS. */
+    private val BUNDLED_DAPPS = listOf(
+        AvailableDApp(
+            guid = "abcc470e12c6422291f360f83d79355e",
+            name = "BeamX DAO",
+            description = "Governance, staking and voting",
+            version = "1.0.0",
+            ipfsCid = "",
+            publisher = "",
+            bundledAsset = "dao-core-app.dapp",
+        ),
+        AvailableDApp(
+            guid = "c26538f5ce9e410b89c1fd0dff783f97",
+            name = "BeamX DAO Voting",
+            description = "Voting on Beam community proposals",
+            version = "1.0.0",
+            ipfsCid = "",
+            publisher = "",
+            bundledAsset = "dao-voting-app.dapp",
+        ),
+    )
 
     /** Load the DApp Store query shader from bundled assets. */
     fun loadShader(context: Context) {
@@ -37,8 +60,8 @@ object DAppStore {
         loadShader(context)
         val shader = storeShaderBytes
         if (shader == null) {
-            Log.w(TAG, "Store shader not loaded")
-            callback(emptyList())
+            Log.w(TAG, "Store shader not loaded — returning bundled DApps only")
+            callback(getBundledDApps(context))
             return
         }
 
@@ -52,8 +75,8 @@ object DAppStore {
         Log.d(TAG, "Querying on-chain DApp Store...")
         WalletApi.call("invoke_contract", params) { result ->
             if (result.containsKey("error")) {
-                Log.w(TAG, "view_dapps error: ${result["error"]}")
-                callback(emptyList())
+                Log.w(TAG, "view_dapps error: ${result["error"]} — returning bundled DApps only")
+                callback(BUNDLED_DAPPS)
                 return@call
             }
 
@@ -96,12 +119,50 @@ object DAppStore {
                     AvailableDApp(guid, name, description, version, ipfsCid, publisher, icon)
                 }
 
-                Log.d(TAG, "Found ${results.size} DApps on-chain")
-                callback(results)
+                // Merge bundled DApps (add first, skip if already in on-chain list)
+                val onChainGuids = results.map { it.guid }.toSet()
+                val bundled = getBundledDApps(context).filter { it.guid !in onChainGuids }
+                val merged = bundled + results
+                Log.d(TAG, "Found ${results.size} on-chain + ${bundled.size} bundled DApps")
+                callback(merged)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to parse DApp Store response: ${e.message}")
                 callback(emptyList())
             }
+        }
+    }
+
+    /** Extract icon SVG from a bundled .dapp ZIP asset. */
+    private fun extractIconFromDapp(context: Context, assetName: String): String {
+        return try {
+            context.assets.open(assetName).use { input ->
+                ZipInputStream(input).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (entry.name == "app/icon.svg" || entry.name == "app/appicon.svg") {
+                            val svg = zip.bufferedReader().readText()
+                            if (svg.trimStart().startsWith("<svg") || svg.trimStart().startsWith("<?xml")) {
+                                return svg
+                            }
+                        }
+                        entry = zip.nextEntry
+                    }
+                }
+            }
+            ""
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract icon from $assetName: ${e.message}")
+            ""
+        }
+    }
+
+    /** Get bundled DApps with icons extracted from .dapp assets. */
+    fun getBundledDApps(context: Context): List<AvailableDApp> {
+        return BUNDLED_DAPPS.map { dapp ->
+            if (dapp.icon.isEmpty() && dapp.bundledAsset.isNotEmpty()) {
+                val icon = extractIconFromDapp(context, dapp.bundledAsset)
+                dapp.copy(icon = icon)
+            } else dapp
         }
     }
 

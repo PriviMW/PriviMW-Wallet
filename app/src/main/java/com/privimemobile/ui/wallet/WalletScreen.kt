@@ -576,11 +576,11 @@ private fun TxCard(
         }
     }
 
-    // Asset label for non-BEAM assets — derive from passed assetInfoMap (Compose-observable)
+    // Asset ticker — always show (BEAM for assetId=0, resolved name for others)
     val assetLabel = if (tx.assetId != 0) {
         val info = assetInfoMap[tx.assetId]
         info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: info?.name?.ifEmpty { null } ?: "Asset #${tx.assetId}"
-    } else ""
+    } else "BEAM"
 
     Card(
         modifier = Modifier
@@ -649,17 +649,38 @@ private fun TxCard(
 
             // Amount + status
             Column(horizontalAlignment = Alignment.End) {
-                // For DApp TXs, C++ sender flag is INVERTED (positive mainAmount = spending, but sender=false)
-                // Fix: for DApp TXs, flip the sender interpretation
-                val effectiveSend = if (tx.isDapps && tx.amount > 0) !isSend else isSend
-                val amountPrefix = if (effectiveSend) "-" else "+"
-                val amountColor = if (effectiveSend) C.outgoing else C.incoming
-                Text(
-                    text = "$amountPrefix${Helpers.formatBeam(tx.amount)}${if (assetLabel.isNotEmpty()) " $assetLabel" else ""}",
-                    color = amountColor,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
+                    // Per-asset breakdown from JNI (like beam-ui)
+                    tx.contractAssets.forEach { ca ->
+                        val isSpending = ca.sending != 0L
+                        val displayAmount = Math.abs(if (isSpending) ca.sending else ca.receiving)
+                        val caPrefix = if (isSpending) "-" else "+"
+                        val caColor = if (isSpending) C.outgoing else C.incoming
+                        val caTicker = if (ca.assetId != 0) {
+                            val info = assetInfoMap[ca.assetId]
+                            info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${ca.assetId}"
+                        } else "BEAM"
+                        if (displayAmount > 0) {
+                            Text(
+                                text = "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
+                                color = caColor,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                } else {
+                    // Fallback: use sender flag (inverted for DApp TXs)
+                    val effectiveSend = if (tx.isDapps && tx.amount > 0) !isSend else isSend
+                    val amountPrefix = if (effectiveSend) "-" else "+"
+                    val amountColor = if (effectiveSend) C.outgoing else C.incoming
+                    Text(
+                        text = "$amountPrefix${Helpers.formatBeam(tx.amount)} $assetLabel",
+                        color = amountColor,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text(
                     "$statusText ${formatDate(tx.createTime)}",
                     color = statusColor,

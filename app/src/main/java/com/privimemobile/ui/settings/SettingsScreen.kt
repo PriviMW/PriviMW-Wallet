@@ -251,38 +251,144 @@ fun SettingsScreen(
         Text("Settings", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
 
-        // ========== GENERAL ==========
-        SectionTitle("GENERAL")
+        // ========== PRIVIME PROFILE ==========
+        SectionTitle("PRIVIME")
         SettingsCard {
             if (identity?.registered == true) {
                 SettingsRow("Handle", "@${identity!!.handle}")
                 SettingsRow("Display Name", identity!!.displayName.ifEmpty { "(none)" })
                 SettingsRow("Wallet ID", Helpers.truncateKey(identity!!.walletId))
                 SettingsRow("Registered", "Block #${identity!!.registeredHeight}")
+
+                HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
+
+                // Edit Display Name
+                var showEditName by remember { mutableStateOf(false) }
+                var newDisplayName by remember { mutableStateOf(identity!!.displayName) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showEditName = !showEditName }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Edit Display Name", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+                if (showEditName) {
+                    var updating by remember { mutableStateOf(false) }
+                    OutlinedTextField(
+                        value = newDisplayName,
+                        onValueChange = { newDisplayName = it },
+                        label = { Text("Display Name") },
+                        singleLine = true,
+                        enabled = !updating,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                            focusedLabelColor = C.accent, cursorColor = C.accent,
+                        ),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            updating = true
+                            ProtocolStartup.updateDisplayName(newDisplayName.trim()) { success ->
+                                updating = false
+                                if (success) {
+                                    toast("Display name updated")
+                                    showEditName = false
+                                } else toast("Failed to update display name")
+                            }
+                        },
+                        enabled = !updating && newDisplayName.trim() != identity!!.displayName,
+                        colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (updating) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.textDark, strokeWidth = 2.dp)
+                        else Text("Update", color = C.textDark, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Update Messaging Address
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            scope.launch {
+                                ProtocolStartup.reRegisterSbbsAddress()
+                                toast("Updating messaging address...")
+                            }
+                        }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Update Messaging Address", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Create a new SBBS address and update it on-chain",
+                            color = C.textMuted, fontSize = 12.sp)
+                    }
+                }
+
+                // Remove Handle
+                var showRemoveConfirm by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showRemoveConfirm = true }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Remove Handle", color = C.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Unregister @${identity!!.handle} and free it for others",
+                            color = C.textMuted, fontSize = 12.sp)
+                    }
+                }
+                if (showRemoveConfirm) {
+                    var removing by remember { mutableStateOf(false) }
+                    AlertDialog(
+                        onDismissRequest = { if (!removing) showRemoveConfirm = false },
+                        title = { Text("Remove Handle?", color = C.text) },
+                        text = {
+                            Text("This will unregister @${identity!!.handle} from the blockchain. " +
+                                "Your conversations will be lost and the handle will be available for others to claim.",
+                                color = C.textSecondary)
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    removing = true
+                                    ProtocolStartup.releaseHandle { success ->
+                                        removing = false
+                                        showRemoveConfirm = false
+                                        if (success) toast("Handle removed")
+                                        else toast("Failed to remove handle")
+                                    }
+                                },
+                                enabled = !removing,
+                                colors = ButtonDefaults.buttonColors(containerColor = C.error),
+                            ) {
+                                if (removing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.text, strokeWidth = 2.dp)
+                                else Text("Remove", color = C.text, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showRemoveConfirm = false }, enabled = !removing) {
+                                Text("Cancel", color = C.textSecondary)
+                            }
+                        },
+                        containerColor = C.card,
+                    )
+                }
             } else {
-                Text("Not registered. Register a @handle to use messaging.\nRegistration fee: ${if (registrationFee > 0) "$registrationFee BEAM" else "loading..."}",
+                Text("Not registered. Register a @handle in the Chats tab to use messaging.\nRegistration fee: ${if (registrationFee > 0) "$registrationFee BEAM" else "loading..."}",
                     color = C.textSecondary, fontSize = 13.sp, lineHeight = 20.sp,
                     modifier = Modifier.padding(vertical = 8.dp))
             }
-            HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
-            Text("Minimum confirmations", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text("Extra blocks to wait before considering coins confirmed.",
-                color = C.textMuted, fontSize = 12.sp)
-            Spacer(Modifier.height(8.dp))
-            OptionRow(
-                options = listOf("Default (0)" to 0, "10" to 10, "20" to 20, "60" to 60),
-                selected = confirmationsOffset,
-                onSelect = { value ->
-                    try {
-                        WalletManager.walletInstance?.setCoinConfirmationsOffset(value.toLong())
-                        confirmationsOffset = value
-                        SecureStorage.putInt("confirmations_offset", value)
-                        toast("Confirmations set to $value")
-                    } catch (e: Exception) {
-                        toast("Error: ${e.message}")
-                    }
-                },
-            )
         }
 
         // ========== NOTIFICATIONS ==========

@@ -175,13 +175,18 @@ object ContactResolver {
         walletId: String,
         callback: (success: Boolean, error: String?) -> Unit,
     ) {
-        Log.d(TAG, "Registering handle: @$handle ($displayName)")
+        val normalizedAddr = Helpers.normalizeWalletId(walletId)
+        if (normalizedAddr == null) {
+            callback(false, "Invalid wallet address")
+            return
+        }
+        Log.d(TAG, "Registering handle: @$handle ($displayName), addr=${normalizedAddr.take(12)}... (len=${normalizedAddr.length})")
         ShaderInvoker.tx(
-            "user", "register_user",
+            "user", "register_handle",
             mapOf(
                 "handle" to handle,
                 "display_name" to displayName,
-                "wallet_id" to walletId,
+                "wallet_id" to normalizedAddr,
             ),
         ) { result ->
             if (result.containsKey("error")) {

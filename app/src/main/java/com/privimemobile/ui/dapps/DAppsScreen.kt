@@ -241,6 +241,7 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = C.card),
     ) {
+        Box {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -323,36 +324,24 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
                         dapp.description,
                         color = C.textSecondary,
                         fontSize = 12.sp,
-                        maxLines = 1,
+                        maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
             }
 
-            // Actions
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Button(
-                    onClick = onOpen,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    Text("Open", color = C.textDark, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-                IconButton(
-                    onClick = onUninstall,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(C.border),
-                ) {
-                    Text("X", color = C.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-            }
         }
+        // Small X button at top-right corner
+        IconButton(
+            onClick = onUninstall,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(22.dp),
+        ) {
+            Text("X", color = C.textSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        }
+        } // Box
     }
 }

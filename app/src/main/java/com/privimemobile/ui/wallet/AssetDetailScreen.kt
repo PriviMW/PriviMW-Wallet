@@ -85,6 +85,19 @@ fun AssetDetailScreen(
                     isMaxPrivacy = obj.optBoolean("isMaxPrivacy"),
                     isOffline = obj.optBoolean("isOffline"),
                     isPublicOffline = obj.optBoolean("isPublicOffline"),
+                    isDapps = obj.optBoolean("isDapps"),
+                    appName = obj.optString("appName", "").ifEmpty { null },
+                    contractCids = obj.optString("contractCids", "").ifEmpty { null },
+                    contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
+                        (0 until ca.length()).mapNotNull { j ->
+                            val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                            ContractAsset(
+                                assetId = ao.optInt("assetId"),
+                                sending = ao.optLong("sending"),
+                                receiving = ao.optLong("receiving"),
+                            )
+                        }
+                    } ?: emptyList(),
                 )
             }.sortedByDescending { it.createTime }
         } catch (_: Exception) { emptyList() }
@@ -217,14 +230,17 @@ fun AssetDetailScreen(
             }
         } else {
             assetTxs.forEach { tx ->
-                val isOut = tx.sender
+                val effectiveOut = if (tx.isDapps && tx.amount > 0) !tx.sender else tx.sender
                 val isPending = tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS || tx.status == TxStatus.REGISTERING
                 val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
-                val amountColor = if (isFailed) C.textSecondary else if (isOut) C.outgoing else C.incoming
-                val peerAddr = if (tx.peerId.isNotEmpty()) {
-                    if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
-                } else "—"
+                val amountColor = if (isFailed) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
+                val peerAddr = when {
+                    tx.isDapps -> tx.appName ?: "DApp"
+                    tx.peerId.isNotEmpty() -> if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
+                    else -> "—"
+                }
                 val addrType = when {
+                    tx.isDapps -> ""
                     tx.isMaxPrivacy -> "Max Privacy"
                     tx.isPublicOffline -> "Public Offline"
                     tx.isOffline || tx.isShielded -> "Offline"
@@ -248,7 +264,7 @@ fun AssetDetailScreen(
                             modifier = Modifier
                                 .size(10.dp)
                                 .clip(CircleShape)
-                                .background(if (isOut) C.outgoing else C.incoming),
+                                .background(if (tx.isDapps) Color(0xFF9B59B6) else if (effectiveOut) C.outgoing else C.incoming),
                         )
                         Spacer(Modifier.width(12.dp))
 
@@ -256,7 +272,11 @@ fun AssetDetailScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 buildString {
-                                    append(if (tx.sender) "Sent" else "Received")
+                                    if (tx.isDapps) {
+                                        append(tx.appName ?: "DApp")
+                                    } else {
+                                        append(if (tx.sender) "Sent" else "Received")
+                                    }
                                     if (tx.message.isNotEmpty()) append(" · ${tx.message}")
                                 },
                                 color = C.text,
@@ -266,7 +286,7 @@ fun AssetDetailScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                "$peerAddr · $addrType",
+                                if (addrType.isEmpty()) peerAddr else "$peerAddr · $addrType",
                                 color = C.textSecondary,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(top = 2.dp),
@@ -277,12 +297,30 @@ fun AssetDetailScreen(
 
                         // Amount + time
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "${if (isOut) "−" else "+"}${Helpers.formatBeam(tx.amount)}",
-                                color = amountColor,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                            if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
+                                tx.contractAssets.forEach { ca ->
+                                    val isSpending = ca.sending != 0L
+                                    val displayAmt = Math.abs(if (isSpending) ca.sending else ca.receiving)
+                                    val caPrefix = if (isSpending) "-" else "+"
+                                    val caColor = if (isFailed) C.textSecondary else if (isSpending) C.outgoing else C.incoming
+                                    val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else assetName
+                                    if (displayAmt > 0) {
+                                        Text(
+                                            "$caPrefix${Helpers.formatBeam(displayAmt)} $caTicker",
+                                            color = caColor,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    "${if (effectiveOut) "−" else "+"}${Helpers.formatBeam(tx.amount)} $assetName",
+                                    color = amountColor,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
                             Text(
                                 if (isFailed) {
                                     when (tx.status) {

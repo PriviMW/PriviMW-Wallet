@@ -36,5 +36,5 @@ data class TxDescriptionDTO(
     var contractCids: String?,
     var minConfirmations: Int?,
     var minConfirmationsProgress: String?,
-    var assets: ArrayList<WalletStatusDTO>?  // JNI sends WalletStatusDTO[] — crashes on access, skip in Kotlin
+    var assets: ArrayList<WalletStatusDTO>?  // JNI now sends proper ArrayList (fixed in wallet_model.cpp)
 ) : Parcelable

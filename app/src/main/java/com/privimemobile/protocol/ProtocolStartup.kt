@@ -142,6 +142,8 @@ object ProtocolStartup {
      */
     fun onForegroundRecovery() {
         Log.d(TAG, "Foreground recovery — restarting polling + refreshing")
+        // Force reconnect if disconnected (resets backoff, retries immediately)
+        NodeReconnect.onForegroundRecovery()
         // Restart message poll timer (setInterval is suspended by Android in background)
         ensurePollingRunning()
         // Refresh state after C++ core wakes up
@@ -368,6 +370,51 @@ object ProtocolStartup {
         // Send the create_address request
         Log.d(TAG, "Sending create_address request (id=$sbbsReqId)")
         com.privimemobile.wallet.WalletManager.callWalletApi(payload)
+    }
+
+    /** Update display name only (no address change) via update_profile. */
+    fun updateDisplayName(newName: String, callback: (Boolean) -> Unit) {
+        val identity = _identity.value
+        if (identity == null || !identity.registered) {
+            callback(false)
+            return
+        }
+        Log.d(TAG, "Updating display name to: $newName")
+        val params = mutableMapOf<String, Any>(
+            "wallet_id" to (Helpers.normalizeWalletId(identity.walletId) ?: identity.walletId),
+            "display_name" to newName,
+        )
+        ShaderInvoker.tx("user", "update_profile", params) { result ->
+            if (!result.containsKey("error")) {
+                Log.d(TAG, "Display name updated on-chain")
+                _identity.value = identity.copy(displayName = newName)
+                callback(true)
+            } else {
+                Log.w(TAG, "Failed to update display name: ${result["error"]}")
+                callback(false)
+            }
+        }
+    }
+
+    /** Release/unregister handle via release_handle. Frees the handle for others. */
+    fun releaseHandle(callback: (Boolean) -> Unit) {
+        val identity = _identity.value
+        if (identity == null || !identity.registered) {
+            callback(false)
+            return
+        }
+        Log.d(TAG, "Releasing handle: @${identity.handle}")
+        ShaderInvoker.tx("user", "release_handle", emptyMap()) { result ->
+            if (!result.containsKey("error")) {
+                Log.d(TAG, "Handle released successfully")
+                _identity.value = null
+                _sbbsNeedsUpdate.value = false
+                callback(true)
+            } else {
+                Log.w(TAG, "Failed to release handle: ${result["error"]}")
+                callback(false)
+            }
+        }
     }
 
     /**

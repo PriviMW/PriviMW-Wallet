@@ -105,16 +105,41 @@ object WalletManager {
         password: String,
         nodeAddr: String,
     ): Boolean {
-        Log.d(TAG, "Opening wallet, node=$nodeAddr")
-        val result = Api.openWallet(APP_VERSION, nodeAddr, getDbPath(), password, enableBodyRequests = false)
-        if (result != null) {
-            walletInstance = result
-            try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
-            Log.d(TAG, "Wallet opened successfully")
+        // If already open (BackgroundService kept it alive), skip re-open
+        if (walletInstance != null) {
+            Log.d(TAG, "Wallet already open — reusing existing instance")
             return true
         }
-        Log.e(TAG, "Wallet open failed")
-        return false
+        Log.d(TAG, "Opening wallet, node=$nodeAddr")
+        // Clean stale WAL/SHM lock files from previous crashes to prevent "database is locked"
+        cleanStaleLocks()
+        return try {
+            val result = Api.openWallet(APP_VERSION, nodeAddr, getDbPath(), password, enableBodyRequests = false)
+            if (result != null) {
+                walletInstance = result
+                try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
+                Log.d(TAG, "Wallet opened successfully")
+                true
+            } else {
+                Log.e(TAG, "Wallet open failed — wrong password or corrupt DB")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Wallet open crashed: ${e.message}")
+            false
+        }
+    }
+
+    /** Remove stale SQLite WAL/SHM files that can cause "database is locked" after a crash. */
+    private fun cleanStaleLocks() {
+        val dbPath = getDbPath()
+        listOf("$dbPath-wal", "$dbPath-shm").forEach { path ->
+            val f = java.io.File(path)
+            if (f.exists()) {
+                Log.d(TAG, "Removing stale lock file: ${f.name}")
+                f.delete()
+            }
+        }
     }
 
     fun closeWallet() {

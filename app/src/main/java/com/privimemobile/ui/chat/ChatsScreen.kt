@@ -75,7 +75,31 @@ fun ChatsScreen(
         val context = LocalContext.current
         val currentDisplayName = identity?.displayName ?: ""
         var displayName by remember { mutableStateOf(currentDisplayName) }
-        var useExistingName by remember { mutableStateOf(true) }
+        var useExistingName by remember { mutableStateOf(currentDisplayName.isNotEmpty()) }
+
+        // Show in-tab progress while TX is processing (tabs still visible)
+        if (sbbsUpdating) {
+            Column(
+                modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                Spacer(Modifier.height(24.dp))
+                Text("Updating Address", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("@${identity!!.handle}", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.",
+                    color = C.textSecondary,
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 20.sp,
+                )
+            }
+            return
+        }
 
         Column(
             modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
@@ -99,11 +123,11 @@ fun ChatsScreen(
                 lineHeight = 20.sp,
             )
 
-            // Display name option
+            // Display name option — always show (set new or keep existing)
+            Spacer(Modifier.height(16.dp))
+            Text("Display Name", color = C.textSecondary, fontSize = 12.sp)
+            Spacer(Modifier.height(6.dp))
             if (currentDisplayName.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text("Display Name", color = C.textSecondary, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -128,21 +152,21 @@ fun ChatsScreen(
                     Text("Change display name", color = C.text, fontSize = 14.sp,
                         modifier = Modifier.clickable { useExistingName = false; displayName = "" })
                 }
-                if (!useExistingName) {
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = { if (it.length <= 32) displayName = it },
-                        placeholder = { Text("New display name (optional)", color = C.textSecondary) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = C.text, unfocusedTextColor = C.text,
-                            cursorColor = C.accent,
-                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            }
+            if (!useExistingName || currentDisplayName.isEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { if (it.length <= 32) displayName = it },
+                    placeholder = { Text(if (currentDisplayName.isEmpty()) "Set a display name (optional)" else "New display name (optional)", color = C.textSecondary) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = C.text, unfocusedTextColor = C.text,
+                        cursorColor = C.accent,
+                        focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -187,15 +211,8 @@ fun ChatsScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    val activity = context as? android.app.Activity ?: return@Button
-                    com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
-                        activity = activity,
-                        actionLabel = "Update messaging address",
-                        onApproved = {
-                            val newDisplayName = if (useExistingName) currentDisplayName else displayName.trim()
-                            ProtocolStartup.reRegisterSbbsAddress(newDisplayName)
-                        },
-                    )
+                    val newDisplayName = if (useExistingName) currentDisplayName else displayName.trim()
+                    ProtocolStartup.reRegisterSbbsAddress(newDisplayName)
                 },
                 enabled = !sbbsUpdating && hasBalance,
                 modifier = Modifier.fillMaxWidth().height(52.dp),

@@ -29,6 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import com.privimemobile.R
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.SecureStorage
+import android.util.Log
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,22 @@ fun LockScreen(onUnlocked: () -> Unit) {
     val canUseBiometric = biometricEnabled && biometricAvailable
 
     fun openWallet(pass: String) {
+        // Validate password BEFORE calling native Api.openWallet — wrong password crashes the C++ core
+        val storedPass = SecureStorage.getWalletPassword()
+        if (storedPass != null && pass != storedPass) {
+            error = "Wrong password"
+            password = ""
+            return
+        }
+
+        // If wallet is already open (BackgroundService kept it alive after swipe-away),
+        // skip Api.openWallet() — calling it again causes "database is locked" native crash.
+        if (WalletManager.walletInstance != null) {
+            Log.d("LockScreen", "Wallet already open — reusing existing instance")
+            onUnlocked()
+            return
+        }
+
         loading = true
         error = null
         scope.launch {
@@ -63,7 +80,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
             if (ok) {
                 onUnlocked()
             } else {
-                error = "Wrong password"
+                error = "Failed to open wallet"
                 password = ""
             }
         }

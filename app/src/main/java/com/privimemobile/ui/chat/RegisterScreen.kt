@@ -27,6 +27,35 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
     var handleStatus by remember { mutableStateOf("idle") } // idle, checking, available, taken, error
     val registrationFee by ProtocolStartup.registrationFee.collectAsState()
 
+    // TX tracking
+    var txSubmitted by remember { mutableStateOf(false) }
+    var txStatus by remember { mutableStateOf("pending") } // pending, confirmed, failed
+    var submittedHandle by remember { mutableStateOf("") }
+
+    // Monitor TX completion — poll identity state
+    if (txSubmitted && txStatus == "pending") {
+        LaunchedEffect(Unit) {
+            // Poll every 5s to check if registration confirmed on-chain
+            while (true) {
+                delay(5000)
+                ContactResolver.resolveHandleToContact(submittedHandle) { err, result ->
+                    if (result != null && !result.walletId.isNullOrEmpty()) {
+                        txStatus = "confirmed"
+                    }
+                }
+                if (txStatus == "confirmed") break
+            }
+        }
+    }
+
+    // Auto-navigate on confirmation
+    LaunchedEffect(txStatus) {
+        if (txStatus == "confirmed") {
+            delay(1500) // Show success briefly
+            onRegistered()
+        }
+    }
+
     // Debounced handle availability check
     LaunchedEffect(handle) {
         handleStatus = "idle"
@@ -41,6 +70,49 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 else -> "available"
             }
         }
+    }
+
+    // TX submitted — show progress screen
+    if (txSubmitted) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        ) {
+            if (txStatus == "confirmed") {
+                Text("\u2705", fontSize = 48.sp)
+                Spacer(Modifier.height(16.dp))
+                Text("Registration Complete!", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("@$submittedHandle is now yours", color = C.accent, fontSize = 16.sp)
+            } else if (txStatus == "failed") {
+                Text("\u274C", fontSize = 48.sp)
+                Spacer(Modifier.height(16.dp))
+                Text("Registration Failed", color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text(error ?: "Transaction failed", color = C.textSecondary, fontSize = 14.sp)
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = { txSubmitted = false; registering = false; txStatus = "pending" },
+                    colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                ) { Text("Try Again", color = C.textDark, fontWeight = FontWeight.Bold) }
+            } else {
+                CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                Spacer(Modifier.height(24.dp))
+                Text("Registering Handle", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("@$submittedHandle", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.",
+                    color = C.textSecondary,
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 20.sp,
+                )
+            }
+        }
+        return
     }
 
     Column(
@@ -165,36 +237,30 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 when {
                     handle.length < 3 -> error = "Handle must be at least 3 characters"
                     else -> {
-                        val activity = context as? android.app.Activity ?: return@Button
-                        com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
-                            activity = activity,
-                            actionLabel = "Register handle @$handle",
-                            onApproved = {
-                                registering = true
-                                error = null
-                                // Create SBBS address first, then register on-chain
-                                WalletApi.call("create_address", mapOf(
-                                    "type" to "regular",
-                                    "label" to "PriviMe",
-                                    "expiration" to "never",
-                                )) { addrResult ->
-                                    val walletId = addrResult["address"] as? String ?: ""
-                                    if (walletId.isEmpty()) {
-                                        error = "Failed to create SBBS address"
-                                        registering = false
-                                        return@call
-                                    }
-                                    ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
-                                        registering = false
-                                        if (success) {
-                                            onRegistered()
-                                        } else {
-                                            error = errMsg ?: "Registration failed"
-                                        }
-                                    }
+                        registering = true
+                        error = null
+                        submittedHandle = handle
+                        WalletApi.call("create_address", mapOf(
+                            "type" to "regular",
+                            "label" to "PriviMe",
+                            "expiration" to "never",
+                        )) { addrResult ->
+                            val walletId = addrResult["address"] as? String ?: ""
+                            if (walletId.isEmpty()) {
+                                error = "Failed to create SBBS address"
+                                registering = false
+                                return@call
+                            }
+                            ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
+                                if (success) {
+                                    txSubmitted = true
+                                } else {
+                                    error = errMsg ?: "Registration failed"
+                                    txSubmitted = true
+                                    txStatus = "failed"
                                 }
-                            },
-                        )
+                            }
+                        }
                     }
                 }
             },

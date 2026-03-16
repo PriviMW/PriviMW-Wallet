@@ -74,8 +74,7 @@ fun AppNavigation() {
                 route == "qr_scanner" ||
                 route.startsWith("tx_detail") ||
                 route.startsWith("asset_detail") ||
-                route == "new_chat" ||
-                route == "register"
+                route == "new_chat"
     } ?: false
 
     Scaffold(

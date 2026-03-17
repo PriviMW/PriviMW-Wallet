@@ -124,13 +124,9 @@ object IpfsTransport {
             return null
         }
 
-        // Validate
+        // Validate size only — allow all file types
         if (fileSize > Config.MAX_FILE_SIZE) {
             Log.w(TAG, "File too large: $fileSize > ${Config.MAX_FILE_SIZE}")
-            return null
-        }
-        if (mimeType !in Config.ALLOWED_MIME_TYPES) {
-            Log.w(TAG, "MIME type not allowed: $mimeType")
             return null
         }
 
@@ -168,6 +164,11 @@ object IpfsTransport {
             } else {
                 // IPFS upload
                 val cid = ipfsAdd(ciphertext) ?: return null
+
+                // Warm the Beam IPFS gateway cache — forces Beam infra to fetch from us,
+                // making the content available to other mobile nodes via gateway fallback.
+                warmGatewayCache(cid)
+
                 return mapOf(
                     "cid" to cid,
                     "key" to keyHex,
@@ -255,13 +256,13 @@ object IpfsTransport {
     private suspend fun ipfsAdd(data: ByteArray): String? {
         return withTimeoutOrNull(Config.IPFS_ADD_TIMEOUT.toLong()) {
             suspendCancellableCoroutine { cont ->
-                // Beam API expects data as integer array [0, 123, 255, ...], NOT base64
-                val dataArr = data.map { it.toInt() and 0xFF }
-                WalletApi.call("ipfs_add", mapOf(
-                    "data" to dataArr,
-                    "pin" to true,
-                    "timeout" to Config.IPFS_ADD_TIMEOUT,
-                )) { result ->
+                // Use base64 string — much more memory-efficient than integer arrays for large files
+                val b64 = Base64.encodeToString(data, Base64.NO_WRAP)
+                Log.d(TAG, "IPFS add: ${data.size} bytes → ${b64.length} chars base64")
+
+                WalletApi.callRaw("ipfs_add",
+                    """{"data":"$b64","pin":true,"timeout":${Config.IPFS_ADD_TIMEOUT}}"""
+                ) { result ->
                     val cid = result["hash"] as? String
                     if (cid != null && cont.isActive) {
                         Log.d(TAG, "IPFS add success: $cid")
@@ -275,43 +276,104 @@ object IpfsTransport {
         }
     }
 
-    /** Download bytes from IPFS by CID with retry. Returns raw bytes or null. */
+    /** Download bytes from IPFS — tries P2P first, then Beam gateway fallback. */
     private suspend fun ipfsGet(cid: String): ByteArray? {
-        // Retry up to 3 times (0s, 10s, 30s) — IPFS DHT needs time to propagate CIDs
-        val delays = listOf(0L, 10_000L, 30_000L)
-        for ((attempt, delayMs) in delays.withIndex()) {
-            if (delayMs > 0) {
-                Log.d(TAG, "IPFS get retry #${attempt + 1} for $cid in ${delayMs / 1000}s")
-                delay(delayMs)
-            }
-            val result = ipfsGetOnce(cid)
-            if (result != null) return result
-        }
-        return null
+        // Try 1: peer-to-peer via IPFS node
+        Log.d(TAG, "IPFS get P2P attempt: $cid")
+        val p2pResult = ipfsGetOnce(cid)
+        if (p2pResult != null) return p2pResult
+
+        // Try 2: Beam IPFS gateway (HTTP fallback)
+        Log.d(TAG, "IPFS P2P failed, trying Beam gateway: $cid")
+        val gwResult = ipfsGetViaGateway(cid)
+        if (gwResult != null) return gwResult
+
+        // Try 3: P2P retry after 15s (DHT may have propagated)
+        Log.d(TAG, "Gateway failed, P2P retry in 15s: $cid")
+        delay(15000)
+        return ipfsGetOnce(cid)
     }
 
-    /** Single IPFS get attempt with timeout. */
+    /** Single IPFS get attempt with timeout — requests base64 response to avoid OOM. */
     private suspend fun ipfsGetOnce(cid: String): ByteArray? {
         return withTimeoutOrNull(Config.IPFS_GET_TIMEOUT.toLong() + 5000) {
             suspendCancellableCoroutine { cont ->
                 WalletApi.call("ipfs_get", mapOf(
                     "hash" to cid,
                     "timeout" to Config.IPFS_GET_TIMEOUT,
+                    "base64" to true,
                 )) { result ->
                     val data = result["data"]
-                    if (data is List<*> && cont.isActive) {
+                    if (data is String && data.isNotEmpty() && cont.isActive) {
+                        val bytes = Base64.decode(data, Base64.DEFAULT)
+                        Log.d(TAG, "IPFS get success (base64): $cid (${bytes.size} bytes)")
+                        cont.resume(bytes) {}
+                    } else if (data is List<*> && cont.isActive) {
+                        // Fallback: integer array (old API without base64 support)
                         val bytes = ByteArray(data.size)
                         data.forEachIndexed { i, v -> bytes[i] = ((v as? Number)?.toInt() ?: 0).toByte() }
-                        Log.d(TAG, "IPFS get success: $cid (${bytes.size} bytes)")
+                        Log.d(TAG, "IPFS get success (array): $cid (${bytes.size} bytes)")
                         cont.resume(bytes) {}
-                    } else if (data is String && cont.isActive) {
-                        Log.d(TAG, "IPFS get success (base64): $cid")
-                        cont.resume(Base64.decode(data, Base64.DEFAULT)) {}
                     } else if (cont.isActive) {
                         Log.w(TAG, "IPFS get attempt failed for $cid: ${result["error"]}")
                         cont.resume(null) {}
                     }
                 }
+            }
+        }
+    }
+
+    // === Beam IPFS Gateway ===
+
+    private const val BEAM_IPFS_GATEWAY = "https://ipfs.beam.mw/ipfs/"
+
+    /**
+     * After ipfs_add, request the CID from the Beam gateway.
+     * This forces the Beam infra node to fetch from us (we're connected via bootstrap),
+     * caching it so other mobile nodes can download via gateway fallback.
+     * Fire-and-forget — don't block on this.
+     */
+    private fun warmGatewayCache(cid: String) {
+        Thread {
+            try {
+                val url = java.net.URL("$BEAM_IPFS_GATEWAY$cid")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "HEAD"  // Just trigger the fetch, don't download
+                conn.connectTimeout = 10000
+                conn.readTimeout = 30000
+                val code = conn.responseCode
+                conn.disconnect()
+                Log.d(TAG, "Gateway cache warm for $cid: HTTP $code")
+            } catch (e: Exception) {
+                Log.w(TAG, "Gateway cache warm failed for $cid: ${e.message}")
+            }
+        }.start()
+    }
+
+    /**
+     * Download from Beam IPFS HTTP gateway as fallback when peer-to-peer fails.
+     * Returns raw bytes or null.
+     */
+    private suspend fun ipfsGetViaGateway(cid: String): ByteArray? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = java.net.URL("$BEAM_IPFS_GATEWAY$cid")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 60000
+                if (conn.responseCode == 200) {
+                    val data = conn.inputStream.use { it.readBytes() }
+                    conn.disconnect()
+                    Log.d(TAG, "Gateway download success: $cid (${data.size} bytes)")
+                    data
+                } else {
+                    conn.disconnect()
+                    Log.w(TAG, "Gateway download failed: $cid HTTP ${conn.responseCode}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Gateway download error: $cid: ${e.message}")
+                null
             }
         }
     }

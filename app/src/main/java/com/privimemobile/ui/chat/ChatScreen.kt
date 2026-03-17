@@ -177,8 +177,9 @@ fun ChatScreen(
         val info = getFileInfo(context, uri)
         if (info != null) {
             Log.d("ChatScreen", "File picked: ${info.name}, ${info.size} bytes, ${info.mimeType}")
-            if (info.size > 5 * 1024 * 1024) {
-                Log.w("ChatScreen", "File too large: ${info.size}")
+            if (info.size > Config.MAX_FILE_SIZE) {
+                Log.w("ChatScreen", "File too large: ${info.size} > ${Config.MAX_FILE_SIZE}")
+                android.widget.Toast.makeText(context, "File too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)", android.widget.Toast.LENGTH_SHORT).show()
                 return@rememberLauncherForActivityResult
             }
             pendingFile = PendingFile(

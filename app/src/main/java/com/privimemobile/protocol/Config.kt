@@ -32,8 +32,8 @@ object Config {
 
     // === File sharing ===
 
-    /** Max file size for upload (50 MB — IPFS handles large files) */
-    const val MAX_FILE_SIZE = 50 * 1024 * 1024
+    /** Max file size for upload (15 MB — limited by mobile memory for IPFS JSON encoding) */
+    const val MAX_FILE_SIZE = 15 * 1024 * 1024
 
     /** Max inline file size before using IPFS — embed in SBBS message.
      *  BBS max body = 1MB. After base64 encoding (~33% overhead), ~750KB raw fits.

@@ -108,6 +108,39 @@ object WalletApi {
     }
 
     /**
+     * Call with pre-built JSON params string — avoids JSONObject serialization for large data.
+     * Use for IPFS operations with large byte arrays to prevent OOM.
+     */
+    fun callRaw(
+        method: String,
+        paramsJson: String,
+        callback: ((Map<String, Any?>) -> Unit)? = null,
+    ): Int {
+        val wallet = WalletManager.walletInstance
+        if (wallet == null || !com.mw.beam.beamwallet.core.Api.isWalletRunning()) {
+            Log.w(TAG, "callRaw($method): wallet not available")
+            callback?.invoke(mapOf("error" to mapOf("message" to "Wallet not connected")))
+            return -1
+        }
+
+        val id = ++callIdCounter
+        if (callback != null) {
+            callbacks[id] = CallbackInfo(method, callback)
+        }
+
+        try {
+            val payload = """{"jsonrpc":"2.0","id":$id,"method":"$method","params":$paramsJson}"""
+            Log.d(TAG, "→ $method (id=$id, pending=${callbacks.size}, rawLen=${payload.length})")
+            wallet.callWalletApi(payload)
+        } catch (e: Exception) {
+            callbacks.remove(id)
+            Log.e(TAG, "callRaw($method) failed: ${e.message}")
+            callback?.invoke(mapOf("error" to mapOf("message" to (e.message ?: "Unknown error"))))
+        }
+        return id
+    }
+
+    /**
      * Suspending version of [call] for use in coroutines.
      *
      * Usage:

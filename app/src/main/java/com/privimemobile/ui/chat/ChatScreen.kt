@@ -261,6 +261,7 @@ fun ChatScreen(
                     }
                 } catch (e: Exception) {
                     Log.e("ChatScreen", "File send error: ${e.message}")
+                    android.widget.Toast.makeText(context, e.message ?: "File send failed", android.widget.Toast.LENGTH_LONG).show()
                 } finally {
                     uploading = false
                     pendingFile = null

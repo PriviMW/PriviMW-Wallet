@@ -35,10 +35,9 @@ object Config {
     /** Max file size for upload (15 MB — limited by mobile memory for IPFS JSON encoding) */
     const val MAX_FILE_SIZE = 15 * 1024 * 1024
 
-    /** Max inline file size before using IPFS — embed in SBBS message.
-     *  BBS max body = 1MB. After base64 encoding (~33% overhead), ~750KB raw fits.
-     *  TEMP: Set to 50KB for IPFS testing. Revert to 750KB after testing. */
-    const val MAX_INLINE_SIZE = 50 * 1024
+    /** Max inline file size — embed in SBBS message.
+     *  BBS max body = 1MB (proto::Bbs::s_MaxMsgSize). After base64 (~33% overhead), ~750KB raw fits. */
+    const val MAX_INLINE_SIZE = 750 * 1024
 
     /** IPFS upload timeout (ms) */
     const val IPFS_ADD_TIMEOUT = 60_000

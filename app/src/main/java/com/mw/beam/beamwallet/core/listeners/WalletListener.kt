@@ -156,17 +156,24 @@ object WalletListener {
 
     @JvmStatic
     fun onNodeConnectionFailed(error: Int) {
-        // On Beam 7.x, error 4 fires for secondary connections even when primary is fine.
-        // Suppress UI update if we received real data within 10 seconds (matches RN useBeamEvents.ts L213-214)
         val timeSinceData = System.currentTimeMillis() - com.privimemobile.protocol.NodeReconnect.lastDataTs
-        if (timeSinceData < 10_000) {
-            // Got data recently — not a real failure, don't update UI
+
+        if (error == 4) {
+            // Error 4 = secondary connection timeout (Beam 7.x).
+            // These fire frequently even when primary connection is fine and TXs work.
+            // Never let error 4 alone flip the UI to disconnected — use 30s grace period,
+            // and beyond that just poke the wallet. Real disconnects are caught by
+            // onNodeConnectedStatusChanged(false) or the periodic health check.
+            if (timeSinceData < 30_000) return
+            Log.d(TAG, "onNodeConnectionFailed: error 4, stale data (${timeSinceData}ms) — poking wallet")
+            com.privimemobile.protocol.NodeReconnect.pokeWallet()
             return
         }
+
+        // Non-error-4 failures: 10s grace, then full disconnect + reconnect
+        if (timeSinceData < 10_000) return
         Log.d(TAG, "onNodeConnectionFailed: $error (timeSinceData=${timeSinceData}ms)")
-        // Notify NodeReconnect directly (so it can count failures and switch nodes)
         com.privimemobile.protocol.NodeReconnect.onConnectionFailed(error)
-        // Update UI — show disconnected
         uiHandler.post {
             WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = false, error = error))
         }

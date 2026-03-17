@@ -4,17 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Base64
 import android.util.Log
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.ChatDatabase
-import com.privimemobile.chat.db.entities.AttachmentEntity
-import com.privimemobile.chat.db.entities.MessageEntity
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
-import com.privimemobile.protocol.WalletApi
-import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.SecureRandom
@@ -23,16 +18,15 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * IpfsTransport — handles file encryption, IPFS upload/download, image compression.
+ * FileTransport — handles file encryption, image compression, inline SBBS delivery.
  *
  * Encryption: AES-256-GCM
  * - Key: 32 random bytes (256-bit) → 64 hex chars
  * - IV: 12 random bytes (96-bit) → 24 hex chars
  * - Auth tag: 128-bit (16 bytes), appended automatically by GCM
  *
- * Delivery:
- * - Inline (< 200KB ciphertext): base64 in SBBS message
- * - IPFS (>= 200KB): upload encrypted data, send CID in SBBS message
+ * Delivery: Inline only — base64 in SBBS message (max 750KB after encryption).
+ * Beam's IPFS node is used for DApp store only, not chat file sharing.
  */
 object IpfsTransport {
     private const val TAG = "IpfsTransport"
@@ -108,9 +102,10 @@ object IpfsTransport {
     // === Send File ===
 
     /**
-     * Send a file: compress → encrypt → inline or IPFS → return file metadata for SBBS payload.
+     * Prepare a file for sending: compress → encrypt → base64 for inline SBBS delivery.
      *
-     * @return Map with file metadata (cid, key, iv, name, size, mime, data?) or null on error.
+     * @return Map with file metadata (cid, key, iv, name, size, mime, data).
+     * @throws Exception if file too large after compression (>750KB).
      */
     suspend fun prepareFile(
         context: Context,
@@ -118,23 +113,21 @@ object IpfsTransport {
         fileName: String,
         fileSize: Long,
         mimeType: String,
-    ): Map<String, Any?>? {
+    ): Map<String, Any?> {
         if (uploadInProgress) {
-            Log.w(TAG, "Upload already in progress")
-            return null
+            throw Exception("Upload already in progress")
         }
 
-        // Validate size only — allow all file types
         if (fileSize > Config.MAX_FILE_SIZE) {
-            Log.w(TAG, "File too large: $fileSize > ${Config.MAX_FILE_SIZE}")
-            return null
+            val sizeMB = String.format("%.1f", fileSize / (1024.0 * 1024.0))
+            throw Exception("File too large (${sizeMB}MB). Max is ${Config.MAX_FILE_SIZE / (1024 * 1024)}MB.")
         }
 
         uploadInProgress = true
         try {
             // Read file bytes
             var data = context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
-                ?: return null
+                ?: throw Exception("Could not read file")
 
             // Compress images
             if (Helpers.isImageMime(mimeType)) {
@@ -147,49 +140,34 @@ object IpfsTransport {
 
             val sanitizedName = sanitizeFilename(fileName)
 
-            // Decide inline vs IPFS
-            if (ciphertext.size <= Config.MAX_INLINE_SIZE) {
-                // Inline delivery — embed base64 in SBBS message
-                val inlineData = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
-                val cid = "inline-${System.currentTimeMillis().toString(36)}${(0..999).random().toString(36)}"
-                return mapOf(
-                    "cid" to cid,
-                    "key" to keyHex,
-                    "iv" to ivHex,
-                    "name" to sanitizedName,
-                    "size" to data.size,
-                    "mime" to mimeType,
-                    "data" to inlineData,
-                )
-            } else {
-                // IPFS upload
-                val cid = ipfsAdd(ciphertext) ?: return null
-
-                // Warm the Beam IPFS gateway cache — forces Beam infra to fetch from us,
-                // making the content available to other mobile nodes via gateway fallback.
-                warmGatewayCache(cid)
-
-                return mapOf(
-                    "cid" to cid,
-                    "key" to keyHex,
-                    "iv" to ivHex,
-                    "name" to sanitizedName,
-                    "size" to data.size,
-                    "mime" to mimeType,
-                )
+            // Check inline size limit (BBS max = 1MB, base64 overhead ~33%)
+            if (ciphertext.size > Config.MAX_INLINE_SIZE) {
+                val sizeMB = String.format("%.1f", data.size / (1024.0 * 1024.0))
+                val limitKB = Config.MAX_INLINE_SIZE / 1024
+                Log.w(TAG, "File too large for inline: ${data.size} bytes ($sizeMB MB), limit=${limitKB}KB")
+                throw Exception("File too large (${sizeMB}MB). Max size is ${limitKB}KB after compression.")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "prepareFile failed: ${e.message}")
-            return null
+
+            val inlineData = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+            val cid = "inline-${System.currentTimeMillis().toString(36)}${(0..999).random().toString(36)}"
+            return mapOf(
+                "cid" to cid,
+                "key" to keyHex,
+                "iv" to ivHex,
+                "name" to sanitizedName,
+                "size" to data.size,
+                "mime" to mimeType,
+                "data" to inlineData,
+            )
         } finally {
             uploadInProgress = false
         }
     }
 
-    // === Download File ===
+    // === Download / Decrypt File ===
 
     /**
-     * Download and decrypt a file. Returns local file path.
+     * Decrypt an inline file attachment. Returns local file path.
      */
     suspend fun downloadFile(
         attachmentId: Long,
@@ -201,17 +179,14 @@ object IpfsTransport {
         val db = ChatService.db ?: throw IllegalStateException("DB not ready")
 
         db.attachmentDao().updateStatus(attachmentId, "downloading")
-        Log.d(TAG, "downloadFile: id=$attachmentId, cid=$ipfsCid, keyLen=${keyHex.length}, ivLen=${ivHex.length}, hasInline=${inlineData != null}")
+        Log.d(TAG, "downloadFile: id=$attachmentId, cid=$ipfsCid, keyLen=${keyHex.length}, hasInline=${inlineData != null}")
 
         try {
             val ciphertext: ByteArray = if (inlineData != null) {
                 Log.d(TAG, "Decoding inline data: ${inlineData.length} chars")
                 Base64.decode(inlineData, Base64.DEFAULT)
-            } else if (ipfsCid != null) {
-                Log.d(TAG, "Downloading from IPFS: $ipfsCid")
-                ipfsGet(ipfsCid) ?: throw Exception("IPFS download failed after retries")
             } else {
-                throw Exception("No data source (inline or IPFS CID)")
+                throw Exception("No inline data — IPFS P2P not supported for chat files")
             }
 
             Log.d(TAG, "Got ${ciphertext.size} bytes ciphertext, decrypting...")
@@ -235,157 +210,10 @@ object IpfsTransport {
         }
     }
 
-    /** Auto-download small inline files + images < 2MB. */
-    suspend fun autoDownloadImages(db: ChatDatabase, convId: Long) {
-        val attachments = db.attachmentDao().run {
-            // Get undone attachments for this conversation — would need a custom query
-            // For now, skip — will implement with proper DAO query
-        }
-        // TODO: implement with proper DAO query for un-downloaded attachments in conversation
-    }
-
     /** Get local file path from cache (if already downloaded). */
     fun getLocalFilePath(cid: String): String? {
         val file = getCacheFile(cid)
         return if (file.exists()) file.absolutePath else null
-    }
-
-    // === IPFS Operations ===
-
-    /** Upload encrypted bytes to IPFS. Returns CID or null. */
-    private suspend fun ipfsAdd(data: ByteArray): String? {
-        return withTimeoutOrNull(Config.IPFS_ADD_TIMEOUT.toLong()) {
-            suspendCancellableCoroutine { cont ->
-                // Use base64 string — much more memory-efficient than integer arrays for large files
-                val b64 = Base64.encodeToString(data, Base64.NO_WRAP)
-                Log.d(TAG, "IPFS add: ${data.size} bytes → ${b64.length} chars base64")
-
-                WalletApi.callRaw("ipfs_add",
-                    """{"data":"$b64","pin":true,"timeout":${Config.IPFS_ADD_TIMEOUT}}"""
-                ) { result ->
-                    val cid = result["hash"] as? String
-                    if (cid != null && cont.isActive) {
-                        Log.d(TAG, "IPFS add success: $cid")
-                        cont.resume(cid) {}
-                    } else if (cont.isActive) {
-                        Log.e(TAG, "IPFS add failed: ${result["error"]}")
-                        cont.resume(null) {}
-                    }
-                }
-            }
-        }
-    }
-
-    /** Download bytes from IPFS — tries P2P first, then Beam gateway fallback. */
-    private suspend fun ipfsGet(cid: String): ByteArray? {
-        // Try 1: peer-to-peer via IPFS node
-        Log.d(TAG, "IPFS get P2P attempt: $cid")
-        val p2pResult = ipfsGetOnce(cid)
-        if (p2pResult != null) return p2pResult
-
-        // Try 2: Beam IPFS gateway (HTTP fallback)
-        Log.d(TAG, "IPFS P2P failed, trying Beam gateway: $cid")
-        val gwResult = ipfsGetViaGateway(cid)
-        if (gwResult != null) return gwResult
-
-        // Try 3: P2P retry after 15s (DHT may have propagated)
-        Log.d(TAG, "Gateway failed, P2P retry in 15s: $cid")
-        delay(15000)
-        return ipfsGetOnce(cid)
-    }
-
-    /** Single IPFS get attempt with timeout — requests base64 response to avoid OOM. */
-    private suspend fun ipfsGetOnce(cid: String): ByteArray? {
-        // Log peer count for debugging
-        try {
-            val peerCount = com.mw.beam.beamwallet.core.Api.getIPFSPeerCount()
-            Log.d(TAG, "IPFS peers: $peerCount, attempting get: $cid")
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not get IPFS peer count: ${e.message}")
-        }
-        return withTimeoutOrNull(Config.IPFS_GET_TIMEOUT.toLong() + 5000) {
-            suspendCancellableCoroutine { cont ->
-                WalletApi.call("ipfs_get", mapOf(
-                    "hash" to cid,
-                    "timeout" to Config.IPFS_GET_TIMEOUT,
-                    "base64" to true,
-                )) { result ->
-                    val data = result["data"]
-                    if (data is String && data.isNotEmpty() && cont.isActive) {
-                        val bytes = Base64.decode(data, Base64.DEFAULT)
-                        Log.d(TAG, "IPFS get success (base64): $cid (${bytes.size} bytes)")
-                        cont.resume(bytes) {}
-                    } else if (data is List<*> && cont.isActive) {
-                        // Fallback: integer array (old API without base64 support)
-                        val bytes = ByteArray(data.size)
-                        data.forEachIndexed { i, v -> bytes[i] = ((v as? Number)?.toInt() ?: 0).toByte() }
-                        Log.d(TAG, "IPFS get success (array): $cid (${bytes.size} bytes)")
-                        cont.resume(bytes) {}
-                    } else if (cont.isActive) {
-                        Log.w(TAG, "IPFS get attempt failed for $cid: ${result["error"]}")
-                        cont.resume(null) {}
-                    }
-                }
-            }
-        }
-    }
-
-    // === Beam IPFS Gateway ===
-
-    private const val BEAM_IPFS_GATEWAY = "https://ipfs.beam.mw/ipfs/"
-
-    /**
-     * After ipfs_add, request the CID from the Beam gateway.
-     * This forces the Beam infra node to fetch from us (we're connected via bootstrap),
-     * caching it so other mobile nodes can download via gateway fallback.
-     * Fire-and-forget — don't block on this.
-     */
-    private fun warmGatewayCache(cid: String) {
-        Thread {
-            try {
-                // Use GET with Range header to trigger Beam node to fetch content from us.
-                // HEAD alone may not trigger the actual IPFS fetch on some gateways.
-                val url = java.net.URL("$BEAM_IPFS_GATEWAY$cid")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("Range", "bytes=0-0")  // Only fetch 1 byte
-                conn.connectTimeout = 15000
-                conn.readTimeout = 60000  // Give gateway time to fetch from our node
-                val code = conn.responseCode
-                conn.disconnect()
-                Log.d(TAG, "Gateway cache warm for $cid: HTTP $code")
-            } catch (e: Exception) {
-                Log.w(TAG, "Gateway cache warm failed for $cid: ${e.message}")
-            }
-        }.start()
-    }
-
-    /**
-     * Download from Beam IPFS HTTP gateway as fallback when peer-to-peer fails.
-     * Returns raw bytes or null.
-     */
-    private suspend fun ipfsGetViaGateway(cid: String): ByteArray? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val url = java.net.URL("$BEAM_IPFS_GATEWAY$cid")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 15000
-                conn.readTimeout = 60000
-                if (conn.responseCode == 200) {
-                    val data = conn.inputStream.use { it.readBytes() }
-                    conn.disconnect()
-                    Log.d(TAG, "Gateway download success: $cid (${data.size} bytes)")
-                    data
-                } else {
-                    conn.disconnect()
-                    Log.w(TAG, "Gateway download failed: $cid HTTP ${conn.responseCode}")
-                    null
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Gateway download error: $cid: ${e.message}")
-                null
-            }
-        }
     }
 
     // === File Cache ===
@@ -398,7 +226,6 @@ object IpfsTransport {
     private suspend fun evictOldFiles(db: ChatDatabase) {
         val count = db.attachmentDao().countCached()
         if (count <= MAX_CACHED_FILES) return
-        // Delete oldest
         val oldest = db.attachmentDao().getOldestCached() ?: return
         oldest.localPath?.let { File(it).delete() }
         db.attachmentDao().updateStatus(oldest.id, "idle")

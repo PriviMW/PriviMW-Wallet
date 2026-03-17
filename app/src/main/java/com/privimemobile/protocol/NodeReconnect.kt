@@ -19,7 +19,7 @@ object NodeReconnect {
     private const val HEALTH_CHECK_INTERVAL = 30_000L // 30s
     private const val RECONNECT_BASE_DELAY = 3_000L   // 3s initial
     private const val RECONNECT_MAX_DELAY = 60_000L   // 60s max
-    private const val DATA_STALE_THRESHOLD = 90_000L  // 90s without data = stale
+    private const val DATA_STALE_THRESHOLD = 60_000L  // 60s without data = stale
 
     private var nodePool = Config.MAINNET_NODES.toMutableList()
     private var currentNodeIdx = 0
@@ -44,6 +44,16 @@ object NodeReconnect {
 
     fun onDataReceived() {
         lastDataTs = System.currentTimeMillis()
+    }
+
+    /**
+     * Gentle poke — ask wallet for status to trigger data callbacks.
+     * Used by error 4 handler: doesn't flip UI or trigger reconnect.
+     * If wallet is alive, onStatus/onSyncProgress will fire → onDataReceived() resets timer.
+     * If wallet is dead, health check (every 30s) will catch it.
+     */
+    fun pokeWallet() {
+        try { WalletManager.walletInstance?.getWalletStatus() } catch (_: Exception) {}
     }
 
     fun start(coroutineScope: CoroutineScope) {
@@ -135,15 +145,19 @@ object NodeReconnect {
 
         if (sinceLastData > DATA_STALE_THRESHOLD && lastDataTs > 0) {
             Log.w(TAG, "Stale connection detected (${sinceLastData / 1000}s since last data)")
-            connected = false
-            // Poke the wallet to trigger a status update — if connection is dead, this will trigger onConnectionFailed
+            // Poke the wallet — if alive, data callbacks will fire and reset lastDataTs
             try { wallet.getWalletStatus() } catch (_: Exception) {}
-            // If still no data after a short wait, force reconnect
+            val probeTs = System.currentTimeMillis()
             scope?.launch {
                 delay(5000)
-                if (!connected) {
-                    Log.w(TAG, "Still disconnected after health check poke — forcing reconnect")
+                if (lastDataTs < probeTs) {
+                    // No data came back from poke — genuinely disconnected
+                    Log.w(TAG, "Health check probe failed — marking disconnected")
+                    connected = false
+                    WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = false))
                     scheduleReconnect()
+                } else {
+                    Log.d(TAG, "Health check probe OK — data received after poke")
                 }
             }
         }

@@ -310,7 +310,7 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
     }
 }
 
-/** Download a DApp ZIP from IPFS via the wallet API. */
+/** Download a DApp ZIP from IPFS via the wallet API (Beam private IPFS network). */
 private suspend fun downloadFromIpfs(cid: String): ByteArray = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
     com.privimemobile.protocol.WalletApi.call("ipfs_get", mapOf(
         "hash" to cid,

@@ -154,11 +154,15 @@ object NodeReconnect {
         // and would keep cancelling+restarting the job, preventing reconnect from ever executing.
         if (reconnectJob?.isActive == true) return
         val s = scope ?: return
+
+        // After many failures, try switching node more aggressively
+        val delay = if (failCount > 5) 3000L else reconnectDelay
+
         reconnectJob = s.launch {
-            delay(reconnectDelay)
+            delay(delay)
             tryReconnect()
-            // Exponential backoff: 3s → 6s → 12s → 24s → 48s → 60s max
-            reconnectDelay = (reconnectDelay * 2).coerceAtMost(RECONNECT_MAX_DELAY)
+            // Exponential backoff: 3s → 6s → 12s → max 15s (was 60s — too long for mobile)
+            reconnectDelay = (reconnectDelay * 2).coerceAtMost(15_000L)
         }
     }
 

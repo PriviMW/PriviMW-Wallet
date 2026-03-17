@@ -96,6 +96,9 @@ object WalletApi {
             }.toString()
 
             Log.d(TAG, "→ $method (id=$id, pending=${callbacks.size})")
+            if (method.startsWith("ipfs_")) {
+                Log.d(TAG, "  IPFS payload: ${payload.take(300)}")
+            }
             wallet.callWalletApi(payload)
         } catch (e: Exception) {
             callbacks.remove(id)
@@ -149,10 +152,12 @@ object WalletApi {
     // --- Internal ---
 
     private fun handleApiResult(json: String) {
+        Log.d(TAG, "handleApiResult: ${json.length} chars, prefix=${json.take(80)}")
         val answer: JSONObject
         try {
             answer = JSONObject(json)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse API result (${json.length} chars): ${e.message}")
             return
         }
 

@@ -200,22 +200,24 @@ object IpfsTransport {
         val db = ChatService.db ?: throw IllegalStateException("DB not ready")
 
         db.attachmentDao().updateStatus(attachmentId, "downloading")
+        Log.d(TAG, "downloadFile: id=$attachmentId, cid=$ipfsCid, keyLen=${keyHex.length}, ivLen=${ivHex.length}, hasInline=${inlineData != null}")
 
         try {
             val ciphertext: ByteArray = if (inlineData != null) {
-                // Inline file — decode base64
+                Log.d(TAG, "Decoding inline data: ${inlineData.length} chars")
                 Base64.decode(inlineData, Base64.DEFAULT)
             } else if (ipfsCid != null) {
-                // IPFS download
-                ipfsGet(ipfsCid) ?: throw Exception("IPFS download failed")
+                Log.d(TAG, "Downloading from IPFS: $ipfsCid")
+                ipfsGet(ipfsCid) ?: throw Exception("IPFS download failed after retries")
             } else {
                 throw Exception("No data source (inline or IPFS CID)")
             }
 
+            Log.d(TAG, "Got ${ciphertext.size} bytes ciphertext, decrypting...")
             db.attachmentDao().updateStatus(attachmentId, "decrypting")
 
-            // Decrypt
             val plaintext = decrypt(ciphertext, keyHex, ivHex)
+            Log.d(TAG, "Decrypted to ${plaintext.size} bytes")
 
             // Save to cache
             val cacheFile = getCacheFile(ipfsCid ?: "inline-${attachmentId}")
@@ -273,24 +275,40 @@ object IpfsTransport {
         }
     }
 
-    /** Download bytes from IPFS by CID. Returns raw bytes or null. */
+    /** Download bytes from IPFS by CID with retry. Returns raw bytes or null. */
     private suspend fun ipfsGet(cid: String): ByteArray? {
-        return withTimeoutOrNull(Config.IPFS_GET_TIMEOUT.toLong()) {
+        // Retry up to 3 times (0s, 10s, 30s) — IPFS DHT needs time to propagate CIDs
+        val delays = listOf(0L, 10_000L, 30_000L)
+        for ((attempt, delayMs) in delays.withIndex()) {
+            if (delayMs > 0) {
+                Log.d(TAG, "IPFS get retry #${attempt + 1} for $cid in ${delayMs / 1000}s")
+                delay(delayMs)
+            }
+            val result = ipfsGetOnce(cid)
+            if (result != null) return result
+        }
+        return null
+    }
+
+    /** Single IPFS get attempt with timeout. */
+    private suspend fun ipfsGetOnce(cid: String): ByteArray? {
+        return withTimeoutOrNull(Config.IPFS_GET_TIMEOUT.toLong() + 5000) {
             suspendCancellableCoroutine { cont ->
                 WalletApi.call("ipfs_get", mapOf(
                     "hash" to cid,
                     "timeout" to Config.IPFS_GET_TIMEOUT,
                 )) { result ->
-                    // Response data can be: List<Int> (byte array) or String (base64)
                     val data = result["data"]
                     if (data is List<*> && cont.isActive) {
                         val bytes = ByteArray(data.size)
                         data.forEachIndexed { i, v -> bytes[i] = ((v as? Number)?.toInt() ?: 0).toByte() }
+                        Log.d(TAG, "IPFS get success: $cid (${bytes.size} bytes)")
                         cont.resume(bytes) {}
                     } else if (data is String && cont.isActive) {
+                        Log.d(TAG, "IPFS get success (base64): $cid")
                         cont.resume(Base64.decode(data, Base64.DEFAULT)) {}
                     } else if (cont.isActive) {
-                        Log.e(TAG, "IPFS get failed for $cid: ${result["error"]}")
+                        Log.w(TAG, "IPFS get attempt failed for $cid: ${result["error"]}")
                         cont.resume(null) {}
                     }
                 }

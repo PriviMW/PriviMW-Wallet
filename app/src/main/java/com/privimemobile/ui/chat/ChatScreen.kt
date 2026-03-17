@@ -1,5 +1,6 @@
 package com.privimemobile.ui.chat
 
+import android.util.Log
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -79,7 +80,19 @@ fun ChatScreen(
         }
     }.collectAsState(initial = emptyList())
 
-    val messages = roomMessages.map { entity ->
+    // Load attachments for file messages
+    var attachmentMap by remember { mutableStateOf<Map<Long, com.privimemobile.chat.db.entities.AttachmentEntity>>(emptyMap()) }
+    LaunchedEffect(roomMessages) {
+        val map = mutableMapOf<Long, com.privimemobile.chat.db.entities.AttachmentEntity>()
+        roomMessages.filter { it.type == "file" }.forEach { msg ->
+            val att = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByMessageId(msg.id)
+            if (att != null) map[msg.id] = att
+        }
+        attachmentMap = map
+    }
+
+    val messages = remember(roomMessages, attachmentMap) { roomMessages.map { entity ->
+        val att = attachmentMap[entity.id]
         ChatMessage(
             id = "${entity.timestamp}_${entity.sent}",
             from = entity.senderHandle ?: "",
@@ -92,9 +105,17 @@ fun ChatScreen(
             isTip = entity.type == "tip",
             tipAmount = entity.tipAmount,
             reply = entity.replyText,
-            file = null, // TODO: load from attachments table in Phase B
+            file = if (att != null) FileAttachment(
+                cid = att.ipfsCid ?: "",
+                name = att.fileName,
+                size = att.fileSize,
+                mime = att.mimeType,
+                key = att.encryptionKey,
+                iv = att.encryptionIv,
+                data = att.inlineData,
+            ) else null,
         )
-    }
+    } }
 
     // Contact from Room DB
     val roomContact by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
@@ -142,17 +163,9 @@ fun ChatScreen(
         messages.forEach { msg ->
             val fileCid = msg.file?.cid ?: ""
             if (fileCid.isNotEmpty() && !filePaths.containsKey(fileCid)) {
-                val path = FileSharing.getLocalFilePath(fileCid)
+                val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(fileCid)
                 if (path != null) filePaths[fileCid] = path
             }
-        }
-    }
-
-    // Auto-download small images (matches RN autoDownloadImages)
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            val results = FileSharing.autoDownloadImages(context, messages)
-            results.forEach { (cid, path) -> filePaths[cid] = path }
         }
     }
 
@@ -163,8 +176,9 @@ fun ChatScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         val info = getFileInfo(context, uri)
         if (info != null) {
+            Log.d("ChatScreen", "File picked: ${info.name}, ${info.size} bytes, ${info.mimeType}")
             if (info.size > 5 * 1024 * 1024) {
-                // Too large — would show alert in production
+                Log.w("ChatScreen", "File too large: ${info.size}")
                 return@rememberLauncherForActivityResult
             }
             pendingFile = PendingFile(
@@ -173,6 +187,8 @@ fun ChatScreen(
                 size = info.size,
                 mimeType = info.mimeType,
             )
+        } else {
+            Log.w("ChatScreen", "File info is null for uri: $uri")
         }
     }
 
@@ -183,21 +199,67 @@ fun ChatScreen(
         // Send file if pending
         if (pendingFile != null) {
             val file = pendingFile!!
-            if (resolvedWalletId.isNullOrEmpty()) return
+            Log.d("ChatScreen", "Sending file: ${file.name}, ${file.size} bytes, walletId=${resolvedWalletId?.take(16)}")
+            if (resolvedWalletId.isNullOrEmpty()) {
+                Log.w("ChatScreen", "Cannot send file — no resolved wallet ID")
+                return
+            }
             uploading = true
             scope.launch {
                 try {
-                    FileSharing.sendFile(
-                        context = context,
-                        fileUri = file.uri,
-                        fileName = file.name,
-                        fileSize = file.size,
-                        mimeType = file.mimeType,
-                        convKey = convKey,
-                        caption = trimmed,
+                    // Prepare file: compress → encrypt → inline or IPFS
+                    Log.d("ChatScreen", "Calling IpfsTransport.prepareFile...")
+                    val fileMeta = com.privimemobile.chat.transport.IpfsTransport.prepareFile(
+                        context, file.uri, file.name, file.size, file.mimeType,
                     )
+                    if (fileMeta != null) {
+                        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                        if (state?.myHandle != null) {
+                            val ts = System.currentTimeMillis() / 1000
+                            val payload = mutableMapOf<String, Any?>(
+                                "v" to 1, "t" to "file", "ts" to ts,
+                                "from" to state.myHandle!!, "to" to handle,
+                                "dn" to (state.myDisplayName ?: ""),
+                                "file" to fileMeta,
+                            )
+                            if (trimmed.isNotEmpty()) payload["msg"] = trimmed
+
+                            // Optimistic DB insert
+                            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                            val dedupKey = "$ts:file:${fileMeta["cid"]}:true"
+                            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                                conversationId = conv.id, text = trimmed.ifEmpty { null },
+                                timestamp = ts, sent = true, type = "file",
+                                senderHandle = state.myHandle, sbbsDedupKey = dedupKey,
+                            )
+                            val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+
+                            // Insert attachment
+                            if (msgId > 0) {
+                                com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                                    com.privimemobile.chat.db.entities.AttachmentEntity(
+                                        messageId = msgId, conversationId = conv.id,
+                                        ipfsCid = fileMeta["cid"] as? String,
+                                        encryptionKey = fileMeta["key"] as? String ?: "",
+                                        encryptionIv = fileMeta["iv"] as? String ?: "",
+                                        fileName = fileMeta["name"] as? String ?: "file",
+                                        fileSize = (fileMeta["size"] as? Number)?.toLong() ?: 0,
+                                        mimeType = fileMeta["mime"] as? String ?: "",
+                                        inlineData = fileMeta["data"] as? String,
+                                        downloadStatus = "done", // we already have the file locally
+                                    )
+                                )
+                            }
+
+                            val preview = "\uD83D\uDCCE ${fileMeta["name"]}"
+                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, preview)
+
+                            // Send via SBBS
+                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                        }
+                    }
                 } catch (e: Exception) {
-                    // Would show error dialog in production
+                    Log.e("ChatScreen", "File send error: ${e.message}")
                 } finally {
                     uploading = false
                     pendingFile = null
@@ -248,21 +310,26 @@ fun ChatScreen(
         inputText = ""
     }
 
-    // Download a file
+    // Download a file via IpfsTransport
     fun handleDownload(cid: String, keyHex: String, ivHex: String, mime: String, inlineData: String? = null) {
         downloadStatuses[cid] = "downloading"
         scope.launch {
             try {
-                val path = FileSharing.downloadFile(
-                    context = context,
-                    cid = cid,
-                    keyHex = keyHex,
-                    ivHex = ivHex,
-                    mime = mime,
-                    inlineData = inlineData,
-                )
-                filePaths[cid] = path
-                downloadStatuses[cid] = "done"
+                // Find attachment by CID
+                val attachment = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByCid(cid)
+                if (attachment != null) {
+                    val path = com.privimemobile.chat.transport.IpfsTransport.downloadFile(
+                        attachmentId = attachment.id,
+                        ipfsCid = cid,
+                        keyHex = keyHex,
+                        ivHex = ivHex,
+                        inlineData = attachment.inlineData ?: inlineData,
+                    )
+                    filePaths[cid] = path
+                    downloadStatuses[cid] = "done"
+                } else {
+                    downloadStatuses[cid] = "error"
+                }
             } catch (e: Exception) {
                 downloadStatuses[cid] = "error"
             }
@@ -389,7 +456,7 @@ fun ChatScreen(
                 // Attach button
                 IconButton(
                     onClick = { filePickerLauncher.launch("*/*") },
-                    enabled = !uploading && !FileSharing.uploadInProgress,
+                    enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
                 ) {
                     Icon(
                         Icons.Default.AttachFile,
@@ -465,15 +532,8 @@ private fun MessageBubble(
     val context = LocalContext.current
     val isMine = msg.sent
     val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
-    val isImage = msg.type == "file" && Helpers.isImageMime((msg.file?.name ?: "").substringAfterLast('.', "").let { ext ->
-        when (ext.lowercase()) {
-            "jpg", "jpeg" -> "image/jpeg"
-            "png" -> "image/png"
-            "gif" -> "image/gif"
-            "webp" -> "image/webp"
-            else -> ""
-        }
-    })
+    val fileMime = msg.file?.mime ?: ""
+    val isImage = msg.type == "file" && Helpers.isImageMime(fileMime)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -536,18 +596,7 @@ private fun MessageBubble(
                 // File content
                 if (isFileMsg) {
                     val fName = msg.file?.name ?: ""
-                    val fMime = fName.substringAfterLast('.', "").lowercase().let { ext ->
-                        when (ext) {
-                            "jpg", "jpeg" -> "image/jpeg"
-                            "png" -> "image/png"
-                            "gif" -> "image/gif"
-                            "webp" -> "image/webp"
-                            "pdf" -> "application/pdf"
-                            "txt" -> "text/plain"
-                            "zip" -> "application/zip"
-                            else -> "application/octet-stream"
-                        }
-                    }
+                    val fMime = msg.file?.mime ?: "application/octet-stream"
                     FileContent(
                         cid = msg.file?.cid ?: "",
                         fileName = fName,
@@ -555,7 +604,15 @@ private fun MessageBubble(
                         filePath = filePath,
                         downloadStatus = downloadStatus,
                         isImage = isImage,
-                        onDownload = { onDownload(msg.file?.cid ?: "", "", "", "", null) },
+                        onDownload = {
+                            onDownload(
+                                msg.file?.cid ?: "",
+                                msg.file?.key ?: "",
+                                msg.file?.iv ?: "",
+                                fMime,
+                                msg.file?.data,
+                            )
+                        },
                         onSave = {
                             if (filePath != null) {
                                 saveFileToDownloads(context, filePath, fName, fMime)

@@ -141,7 +141,9 @@ class MessageProcessor(
 
         // Handle file attachment
         if (type == "file") {
-            val fileData = payload["file"] as? Map<*, *>
+            val rawFile = payload["file"]
+            Log.d(TAG, "File attachment: type=${rawFile?.javaClass?.simpleName}, value=${rawFile.toString().take(100)}")
+            val fileData = rawFile as? Map<*, *>
             if (fileData != null) {
                 insertAttachment(messageId, conv.id, fileData)
             }
@@ -173,9 +175,14 @@ class MessageProcessor(
 
     /** Insert file attachment for a message. */
     private suspend fun insertAttachment(messageId: Long, convId: Long, fileData: Map<*, *>) {
-        val key = fileData["key"] as? String ?: return
-        val iv = fileData["iv"] as? String ?: return
-        if (key.length != 64 || iv.length != 24) return  // Invalid key/iv length
+        Log.d(TAG, "insertAttachment: msgId=$messageId, keys=${fileData.keys}")
+        val key = fileData["key"] as? String
+        val iv = fileData["iv"] as? String
+        Log.d(TAG, "  key=${key?.take(16)}... (${key?.length}), iv=${iv?.take(12)}... (${iv?.length})")
+        if (key == null || iv == null || key.length != 64 || iv.length != 24) {
+            Log.w(TAG, "  Invalid key/iv — skipping attachment")
+            return
+        }
 
         val cid = fileData["cid"] as? String
         val inlineData = fileData["data"] as? String

@@ -9,6 +9,7 @@ import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.ChatStateEntity
 import com.privimemobile.chat.identity.IdentityManager
 import com.privimemobile.chat.processor.MessageProcessor
+import com.privimemobile.chat.transport.IpfsTransport
 import com.privimemobile.chat.transport.SbbsTransport
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -68,6 +69,7 @@ object ChatService {
         db = ChatDatabase.getInstance(context, passphrase)
 
         // Initialize components
+        IpfsTransport.init(context)
         identity = IdentityManager(db!!, scope)
         contacts = ContactManager(db!!, scope)
         processor = MessageProcessor(db!!, contacts, scope)

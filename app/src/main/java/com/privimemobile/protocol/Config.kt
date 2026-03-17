@@ -32,8 +32,8 @@ object Config {
 
     // === File sharing ===
 
-    /** Max file size for upload (5 MB) */
-    const val MAX_FILE_SIZE = 5 * 1024 * 1024
+    /** Max file size for upload (50 MB — IPFS handles large files) */
+    const val MAX_FILE_SIZE = 50 * 1024 * 1024
 
     /** Max inline file size before using IPFS (200 KB) — embed in SBBS message */
     const val MAX_INLINE_SIZE = 200 * 1024
@@ -53,6 +53,8 @@ object Config {
     /** Allowed MIME types for file sharing */
     val ALLOWED_MIME_TYPES = listOf(
         "image/jpeg", "image/png", "image/gif", "image/webp",
+        "video/mp4", "video/webm", "video/3gpp",
+        "audio/mpeg", "audio/ogg", "audio/wav",
         "application/pdf", "text/plain",
     )
 

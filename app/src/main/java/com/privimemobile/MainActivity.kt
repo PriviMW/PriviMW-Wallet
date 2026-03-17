@@ -57,7 +57,7 @@ class MainActivity : FragmentActivity() {
                                 // (old scope was destroyed with previous Activity).
                                 WalletApi.start(lifecycleScope)
                                 WalletApi.subscribeToEvents()
-                                ProtocolStartup.onForegroundRecovery()
+                                ProtocolStartup.onForegroundRecovery(lifecycleScope)
                             } else {
                                 android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
                             }
@@ -91,7 +91,8 @@ class MainActivity : FragmentActivity() {
             } catch (_: Exception) {}
             // Restart protocol polling & refresh after C++ core wakes up
             android.os.Handler(mainLooper).postDelayed({
-                ProtocolStartup.onForegroundRecovery()
+                ProtocolStartup.onForegroundRecovery(lifecycleScope)
+                com.privimemobile.chat.ChatService.onForegroundRecovery()
             }, 1500)
         }
     }
@@ -113,6 +114,8 @@ class MainActivity : FragmentActivity() {
             if (WalletManager.isApiReady || attempts >= 30) {
                 WalletApi.subscribeToEvents()
                 ProtocolStartup.init(this@MainActivity, lifecycleScope)
+                // Initialize the new Room-based chat system
+                com.privimemobile.chat.ChatService.init(this@MainActivity)
                 startBackgroundServiceIfEnabled()
             } else {
                 attempts++

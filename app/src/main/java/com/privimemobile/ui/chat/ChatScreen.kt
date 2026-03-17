@@ -64,16 +64,47 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val convKey = "@$handle"
 
-    // Protocol state
-    val allConversations by ProtocolStartup.conversations.collectAsState()
-    val allContacts by ProtocolStartup.contacts.collectAsState()
-    val messages = remember(allConversations, handle) {
-        allConversations[convKey] ?: emptyList()
+    // Conversation ID from Room
+    var convId by remember { mutableStateOf(0L) }
+    LaunchedEffect(convKey) {
+        convId = com.privimemobile.chat.ChatService.db?.conversationDao()?.findByKey(convKey)?.id ?: 0L
     }
-    val contact = allContacts[convKey]
+
+    // Messages from Room DB
+    val roomMessages by remember(convId) {
+        if (convId > 0L) {
+            com.privimemobile.chat.ChatService.db!!.messageDao().observeAll(convId)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsState(initial = emptyList())
+
+    val messages = roomMessages.map { entity ->
+        ChatMessage(
+            id = "${entity.timestamp}_${entity.sent}",
+            from = entity.senderHandle ?: "",
+            to = handle,
+            text = entity.text ?: "",
+            timestamp = entity.timestamp,
+            sent = entity.sent,
+            read = entity.read,
+            type = entity.type,
+            isTip = entity.type == "tip",
+            tipAmount = entity.tipAmount,
+            reply = entity.replyText,
+            file = null, // TODO: load from attachments table in Phase B
+        )
+    }
+
+    // Contact from Room DB
+    val roomContact by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val contact = roomContact.firstOrNull { it.handle == handle }
+
     val resolvedName = displayName.ifEmpty {
-        contact?.displayName?.ifEmpty { null } ?: contact?.handle?.ifEmpty { null } ?: "@$handle"
+        contact?.displayName?.ifEmpty { null } ?: "@$handle"
     }
+    val resolvedWalletId = contact?.walletId
 
     // Input state
     var inputText by remember { mutableStateOf("") }
@@ -90,26 +121,13 @@ fun ChatScreen(
 
     // Mark chat as active, clear unread, send read receipts
     LaunchedEffect(handle) {
-        ProtocolStartup.activeChat = convKey
-        ProtocolStartup.clearUnread(convKey)
-
-        // Send read receipts (matches RN ChatScreen mount)
-        val convs = ProtocolStartup.conversations.value.toMutableMap().mapValues { it.value.toMutableList() }.toMutableMap()
-        val contacts = ProtocolStartup.contacts.value
-        val identity = ProtocolStartup.identity.value
-        SbbsMessaging.sendReadReceipts(convKey, convs, contacts, identity, identity?.walletId) {
-            // Persist after marking acked
-        }
-
-        // Re-resolve contact wallet_id
-        ContactResolver.resolveHandle(handle) { resolved ->
-            if (resolved != null && resolved.walletId.isNotEmpty()) {
-                // Contact updated in ProtocolStartup via ContactResolver
-            }
-        }
+        com.privimemobile.chat.ChatService.setActiveChat(convKey)
+        com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
     }
     DisposableEffect(handle) {
-        onDispose { ProtocolStartup.activeChat = null }
+        onDispose {
+            com.privimemobile.chat.ChatService.setActiveChat(null)
+        }
     }
 
     // Scroll to bottom when messages change
@@ -165,7 +183,7 @@ fun ChatScreen(
         // Send file if pending
         if (pendingFile != null) {
             val file = pendingFile!!
-            if (contact?.walletId.isNullOrEmpty()) return
+            if (resolvedWalletId.isNullOrEmpty()) return
             uploading = true
             scope.launch {
                 try {
@@ -190,8 +208,43 @@ fun ChatScreen(
         }
 
         // Regular text message
-        if (trimmed.isEmpty() || contact?.walletId.isNullOrEmpty()) return
-        ProtocolStartup.sendMessage(handle, trimmed)
+        val walletId = resolvedWalletId
+        if (trimmed.isEmpty() || walletId.isNullOrEmpty()) return
+
+        // Send via new chat system
+        scope.launch {
+            val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+            if (state?.myHandle != null) {
+                val ts = System.currentTimeMillis() / 1000
+                val payload = mapOf(
+                    "v" to 1,
+                    "t" to "dm",
+                    "ts" to ts,
+                    "from" to state.myHandle!!,
+                    "to" to handle,
+                    "dn" to (state.myDisplayName ?: ""),
+                    "msg" to trimmed,
+                )
+                // Optimistic insert into DB
+                val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                val dedupKey = "$ts:${trimmed.hashCode().toString(16)}:true"
+                val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                    conversationId = conv.id,
+                    text = trimmed,
+                    timestamp = ts,
+                    sent = true,
+                    type = "dm",
+                    senderHandle = state.myHandle,
+                    sbbsDedupKey = dedupKey,
+                )
+                com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, trimmed.take(100))
+
+                // Send via SBBS
+                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+            }
+        }
+
         inputText = ""
     }
 
@@ -216,7 +269,7 @@ fun ChatScreen(
         }
     }
 
-    val canSend = (inputText.isNotBlank() || pendingFile != null) && !contact?.walletId.isNullOrEmpty()
+    val canSend = (inputText.isNotBlank() || pendingFile != null) && !resolvedWalletId.isNullOrEmpty()
 
     Column(
         modifier = Modifier
@@ -352,7 +405,7 @@ fun ChatScreen(
                         Text(
                             when {
                                 pendingFile != null -> "Add a caption..."
-                                contact?.walletId.isNullOrEmpty() -> "Resolving address..."
+                                resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
                                 else -> "Type a message..."
                             },
                             color = C.textSecondary,
@@ -366,7 +419,7 @@ fun ChatScreen(
                         cursorColor = C.accent,
                     ),
                     maxLines = 4,
-                    enabled = !contact?.walletId.isNullOrEmpty() && !uploading,
+                    enabled = !resolvedWalletId.isNullOrEmpty() && !uploading,
                 )
 
                 Spacer(Modifier.width(8.dp))

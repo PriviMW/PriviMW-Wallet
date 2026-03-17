@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
-import com.privimemobile.protocol.ProtocolStartup
+// Old ProtocolStartup removed — using ChatService for identity
 import com.privimemobile.protocol.ProtocolStorage
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.ShaderInvoker
@@ -66,7 +66,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val identity by ProtocolStartup.identity.collectAsState()
+    val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
     val nodeConn by WalletEventBus.nodeConnection.collectAsState(initial = NodeConnectionEvent(false))
     val syncProgress by WalletEventBus.syncProgress.collectAsState(initial = SyncProgressEvent(0, 0))
     val walletStatus by WalletEventBus.beamStatus.collectAsState()
@@ -125,7 +125,7 @@ fun SettingsScreen(
     var ipfsTestTitle by remember { mutableStateOf("") }
 
     // Registration fee
-    val registrationFee by ProtocolStartup.registrationFee.collectAsState()
+    val registrationFee by com.privimemobile.chat.ChatService.identity.registrationFee.collectAsState()
 
     fun toast(msg: String) { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
 
@@ -254,17 +254,17 @@ fun SettingsScreen(
         // ========== PRIVIME PROFILE ==========
         SectionTitle("PRIVIME")
         SettingsCard {
-            if (identity?.registered == true) {
-                SettingsRow("Handle", "@${identity!!.handle}")
-                SettingsRow("Display Name", identity!!.displayName.ifEmpty { "(none)" })
-                SettingsRow("Wallet ID", Helpers.truncateKey(identity!!.walletId))
-                SettingsRow("Registered", "Block #${identity!!.registeredHeight}")
+            if (chatState?.myHandle != null) {
+                SettingsRow("Handle", "@${chatState!!.myHandle}")
+                SettingsRow("Display Name", chatState!!.myDisplayName?.ifEmpty { "(none)" } ?: "(none)")
+                SettingsRow("Wallet ID", Helpers.truncateKey(chatState!!.myWalletId ?: ""))
+                SettingsRow("Registered", "Block #${chatState!!.myRegisteredHeight}")
 
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
                 // Edit Display Name
                 var showEditName by remember { mutableStateOf(false) }
-                var newDisplayName by remember { mutableStateOf(identity!!.displayName) }
+                var newDisplayName by remember { mutableStateOf(chatState?.myDisplayName ?: "") }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -293,15 +293,15 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             updating = true
-                            ProtocolStartup.updateDisplayName(newDisplayName.trim()) { success ->
+                            com.privimemobile.chat.ChatService.identity.updateDisplayName(newDisplayName.trim()) { success, err ->
                                 updating = false
                                 if (success) {
                                     toast("Display name updated")
                                     showEditName = false
-                                } else toast("Failed to update display name")
+                                } else toast(err ?: "Failed to update display name")
                             }
                         },
-                        enabled = !updating && newDisplayName.trim() != identity!!.displayName,
+                        enabled = !updating && newDisplayName.trim() != (chatState?.myDisplayName ?: ""),
                         colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
@@ -318,7 +318,15 @@ fun SettingsScreen(
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             scope.launch {
-                                ProtocolStartup.reRegisterSbbsAddress()
+                                WalletApi.call("create_address", mapOf("type" to "regular", "expiration" to "never", "comment" to "PriviMe")) { result ->
+                                    val addr = result["address"] as? String
+                                    if (addr != null) {
+                                        val normalized = Helpers.normalizeWalletId(addr) ?: addr
+                                        com.privimemobile.chat.ChatService.identity.updateMessagingAddress(normalized) { success, err ->
+                                            if (success) toast("Messaging address updated") else toast(err ?: "Failed")
+                                        }
+                                    }
+                                }
                                 toast("Updating messaging address...")
                             }
                         }
@@ -344,7 +352,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text("Remove Handle", color = C.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Unregister @${identity!!.handle} and free it for others",
+                        Text("Unregister @${chatState!!.myHandle} and free it for others",
                             color = C.textMuted, fontSize = 12.sp)
                     }
                 }
@@ -354,7 +362,7 @@ fun SettingsScreen(
                         onDismissRequest = { if (!removing) showRemoveConfirm = false },
                         title = { Text("Remove Handle?", color = C.text) },
                         text = {
-                            Text("This will unregister @${identity!!.handle} from the blockchain. " +
+                            Text("This will unregister @${chatState!!.myHandle} from the blockchain. " +
                                 "Your conversations will be lost and the handle will be available for others to claim.",
                                 color = C.textSecondary)
                         },
@@ -362,11 +370,11 @@ fun SettingsScreen(
                             Button(
                                 onClick = {
                                     removing = true
-                                    ProtocolStartup.releaseHandle { success ->
+                                    com.privimemobile.chat.ChatService.identity.releaseHandle { success, err ->
                                         removing = false
                                         showRemoveConfirm = false
                                         if (success) toast("Handle removed")
-                                        else toast("Failed to remove handle")
+                                        else toast(err ?: "Failed to remove handle")
                                     }
                                 },
                                 enabled = !removing,

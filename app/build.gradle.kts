@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-parcelize")
+    id("kotlin-kapt")
 }
 
 android {
@@ -83,6 +84,18 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
+
+    // Room + SQLCipher
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    implementation(libs.room.paging)
+    kapt(libs.room.compiler)
+    implementation(libs.sqlcipher)
+    implementation(libs.sqlite.ktx)
+
+    // Paging
+    implementation(libs.paging.runtime)
+    implementation(libs.paging.compose)
 
     // Core Android
     implementation(libs.core.ktx)

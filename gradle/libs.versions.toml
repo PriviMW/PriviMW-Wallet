@@ -11,6 +11,10 @@ camerax = "1.4.2"
 zxing = "3.5.3"
 zxing-embedded = "4.3.0"
 coil = "2.7.0"
+room = "2.7.1"
+paging = "3.3.6"
+sqlcipher = "4.5.4"
+sqlite = "2.5.1"
 
 [libraries]
 # Compose BOM
@@ -53,6 +57,16 @@ core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.16.0" }
 activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.10.1" }
 biometric = { group = "androidx.biometric", name = "biometric", version = "1.2.0-alpha05" }
 appcompat = { group = "androidx.appcompat", name = "appcompat", version = "1.7.0" }
+
+# Room + SQLCipher
+room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+paging-runtime = { group = "androidx.paging", name = "paging-runtime-ktx", version.ref = "paging" }
+paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
+sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
+sqlite-ktx = { group = "androidx.sqlite", name = "sqlite-ktx", version.ref = "sqlite" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

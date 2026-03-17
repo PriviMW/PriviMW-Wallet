@@ -58,6 +58,18 @@ object Helpers {
         return "${key.take(prefixLen)}...${key.takeLast(suffixLen)}"
     }
 
+    // === Amount formatting ===
+
+    /** Convert groths to BEAM string (e.g. 100000000 → "1"). */
+    fun grothToBeam(groth: Long): String {
+        val beam = groth.toDouble() / Config.GROTH_PER_BEAM
+        return if (beam == beam.toLong().toDouble()) {
+            beam.toLong().toString()
+        } else {
+            "%.8f".format(beam).trimEnd('0').trimEnd('.')
+        }
+    }
+
     // === Date/time formatting (ports formatTs, formatTime, formatDateSep) ===
 
     /** Relative time: "now", "5m", "2h", "3d" */

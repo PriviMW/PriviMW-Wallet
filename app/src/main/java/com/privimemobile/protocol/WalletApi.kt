@@ -220,6 +220,10 @@ object WalletApi {
                 // Some methods return raw string (e.g., create_address returns address string)
                 info.callback(mapOf("address" to rawResult))
             }
+            is org.json.JSONArray -> {
+                // Array results (e.g., read_messages returns [{...}, {...}])
+                info.callback(mapOf("messages" to jsonArrayToList(rawResult)))
+            }
             else -> {
                 info.callback(emptyMap())
             }
@@ -227,6 +231,7 @@ object WalletApi {
     }
 
     private fun onWalletEvent(eventId: String) {
+        Log.d(TAG, "Wallet event: $eventId")
         when (eventId) {
             "ev_system_state" -> onSystemStateChanged?.invoke()
             "ev_txs_changed" -> onTxsChanged?.invoke()

@@ -386,4 +386,18 @@ object WalletListener {
         uiHandler.post { WalletEventBus.emitExportCsv(value) }
     }
     @JvmStatic fun onExportContractTxHistoryToCsv(value: String) { }
+
+    // === SBBS Instant Message (fired by C++ core when SBBS message arrives) ===
+
+    @JvmStatic fun onInstantMessage(timestamp: Long, sender: String, message: String, isIncome: Boolean) {
+        Log.d(TAG, "onInstantMessage: income=$isIncome sender=${sender.take(16)}... ts=$timestamp")
+        if (isIncome) {
+            // Immediately trigger SBBS poll to process the message through our Room pipeline
+            uiHandler.post {
+                if (com.privimemobile.chat.ChatService.initialized.value) {
+                    com.privimemobile.chat.ChatService.sbbs.pollNow()
+                }
+            }
+        }
+    }
 }

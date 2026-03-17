@@ -5,79 +5,79 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.privimemobile.protocol.ContactResolver
-import com.privimemobile.protocol.ProtocolStartup
-import com.privimemobile.protocol.SbbsMessaging
+import com.privimemobile.chat.ChatService
+import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
-    val context = LocalContext.current
     var handle by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var registering by remember { mutableStateOf(false) }
-    var handleStatus by remember { mutableStateOf("idle") } // idle, checking, available, taken, error
-    val registrationFee by ProtocolStartup.registrationFee.collectAsState()
+    var handleStatus by remember { mutableStateOf("idle") }
+    val scope = rememberCoroutineScope()
+
+    // Registration fee from ChatService
+    val registrationFee by ChatService.identity.registrationFee.collectAsState()
 
     // TX tracking
     var txSubmitted by remember { mutableStateOf(false) }
-    var txStatus by remember { mutableStateOf("pending") } // pending, confirmed, failed
+    var txStatus by remember { mutableStateOf("pending") }
     var submittedHandle by remember { mutableStateOf("") }
 
-    // Monitor TX completion — poll identity state
+    // Monitor TX completion — poll identity via ChatService
     if (txSubmitted && txStatus == "pending") {
         LaunchedEffect(Unit) {
-            // Poll every 5s to check if registration confirmed on-chain
             while (true) {
                 delay(5000)
-                ContactResolver.resolveHandleToContact(submittedHandle) { err, result ->
-                    if (result != null && !result.walletId.isNullOrEmpty()) {
-                        txStatus = "confirmed"
-                    }
+                val result = ChatService.contacts.resolveHandle(submittedHandle)
+                if (result != null && !result.walletId.isNullOrEmpty()) {
+                    txStatus = "confirmed"
+                    ChatService.identity.refreshIdentity()
+                    break
                 }
-                if (txStatus == "confirmed") break
             }
         }
     }
 
-    // Auto-navigate on confirmation
     LaunchedEffect(txStatus) {
         if (txStatus == "confirmed") {
-            delay(1500) // Show success briefly
+            delay(1500)
             onRegistered()
         }
     }
 
-    // Debounced handle availability check
+    // Debounced handle availability check via ChatService
     LaunchedEffect(handle) {
         handleStatus = "idle"
         if (handle.length < 3 || !handle.matches(Regex("[a-z0-9_]+"))) return@LaunchedEffect
         handleStatus = "checking"
         delay(600)
-        ContactResolver.resolveHandleToContact(handle) { err, result ->
+        ChatService.identity.checkAvailability(handle) { available, err ->
             handleStatus = when {
-                result != null && !result.walletId.isNullOrEmpty() -> "taken"
-                err != null && err.contains("not found", ignoreCase = true) -> "available"
-                err != null -> "error"
-                else -> "available"
+                available == true -> "available"
+                available == false -> "taken"
+                else -> "error"
             }
         }
     }
 
-    // TX submitted — show progress screen
+    // TX submitted — show progress
     if (txSubmitted) {
         Column(
             modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
-            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             if (txStatus == "confirmed") {
                 Text("\u2705", fontSize = 48.sp)
@@ -105,41 +105,24 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.",
-                    color = C.textSecondary,
-                    fontSize = 14.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    lineHeight = 20.sp,
+                    color = C.textSecondary, fontSize = 14.sp, textAlign = TextAlign.Center, lineHeight = 20.sp,
                 )
             }
         }
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(C.bg)
-            .padding(24.dp),
-    ) {
-        TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
-        }
+    Column(modifier = Modifier.fillMaxSize().background(C.bg).padding(24.dp)) {
+        TextButton(onClick = onBack) { Text("< Back", color = C.textSecondary) }
         Spacer(Modifier.height(16.dp))
         Text("Register Handle", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text(
-            "Choose a unique handle for encrypted messaging on Beam",
-            color = C.textSecondary,
-            fontSize = 14.sp,
-        )
+        Text("Choose a unique handle for encrypted messaging on Beam", color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(32.dp))
 
         val handleBorderColor = when (handleStatus) {
-            "available" -> C.accent
-            "taken" -> C.error
-            else -> C.border
+            "available" -> C.accent; "taken" -> C.error; else -> C.border
         }
-
         OutlinedTextField(
             value = handle,
             onValueChange = { handle = it.lowercase().filter { c -> c.isLetterOrDigit() || c == '_' }; error = null },
@@ -148,51 +131,21 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = handleBorderColor,
-                unfocusedBorderColor = handleBorderColor,
-                focusedLabelColor = C.accent,
-                cursorColor = C.accent,
+                focusedBorderColor = handleBorderColor, unfocusedBorderColor = handleBorderColor,
+                focusedLabelColor = C.accent, cursorColor = C.accent,
             ),
         )
+        Text("3-32 characters, letters, numbers, underscores", color = C.textMuted, fontSize = 11.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp))
 
-        // Handle length hint
-        Text(
-            "3-32 characters, letters, numbers, underscores",
-            color = C.textMuted,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-        )
-
-        // Handle availability status
         when (handleStatus) {
-            "checking" -> Text(
-                "Checking availability...",
-                color = C.textSecondary,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-            )
-            "available" -> Text(
-                "\u2713 @$handle is available",
-                color = C.accent,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-            )
-            "taken" -> Text(
-                "\u2717 @$handle is already taken",
-                color = C.error,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-            )
-            "error" -> Text(
-                "Could not check availability",
-                color = C.warning,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-            )
+            "checking" -> Text("Checking availability...", color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "available" -> Text("\u2713 @$handle is available", color = C.accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "taken" -> Text("\u2717 @$handle is already taken", color = C.error, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "error" -> Text("Could not check availability", color = C.warning, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
         }
 
         Spacer(Modifier.height(16.dp))
-
         OutlinedTextField(
             value = displayName,
             onValueChange = { displayName = it; error = null },
@@ -200,26 +153,17 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = C.accent,
-                unfocusedBorderColor = C.border,
-                focusedLabelColor = C.accent,
-                cursorColor = C.accent,
+                focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                focusedLabelColor = C.accent, cursorColor = C.accent,
             ),
         )
 
         Spacer(Modifier.height(16.dp))
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = C.card),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = C.card), modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Registration Fee", color = C.textSecondary, fontSize = 14.sp)
                 Text(
-                    if (registrationFee > 0) "$registrationFee BEAM" else "Loading...",
+                    if (registrationFee > 0) "${Helpers.grothToBeam(registrationFee)} BEAM" else "Loading...",
                     color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -231,7 +175,6 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(32.dp))
-
         Button(
             onClick = {
                 when {
@@ -240,26 +183,27 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                         registering = true
                         error = null
                         submittedHandle = handle
+                        // Create SBBS address → register via ChatService.identity
                         WalletApi.call("create_address", mapOf(
-                            "type" to "regular",
-                            "label" to "PriviMe",
-                            "expiration" to "never",
+                            "type" to "regular", "label" to "PriviMe", "expiration" to "never",
                         )) { addrResult ->
-                            val walletId = addrResult["address"] as? String ?: ""
-                            if (walletId.isEmpty()) {
+                            val walletId = Helpers.normalizeWalletId(addrResult["address"] as? String ?: "")
+                            if (walletId == null) {
                                 error = "Failed to create SBBS address"
                                 registering = false
                                 return@call
                             }
-                            ContactResolver.registerHandle(handle, displayName, walletId) { success, errMsg ->
-                                if (success) {
-                                    txSubmitted = true
-                                } else {
-                                    error = errMsg ?: "Registration failed"
-                                    txSubmitted = true
-                                    txStatus = "failed"
+                            ChatService.identity.registerHandle(handle, displayName.ifEmpty { null }, walletId,
+                                onResult = { success, errMsg ->
+                                    if (success) {
+                                        txSubmitted = true
+                                    } else {
+                                        error = errMsg ?: "Registration failed"
+                                        txSubmitted = true
+                                        txStatus = "failed"
+                                    }
                                 }
-                            }
+                            )
                         }
                     }
                 }

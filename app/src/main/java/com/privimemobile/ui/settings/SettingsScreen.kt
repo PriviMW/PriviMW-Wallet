@@ -124,8 +124,10 @@ fun SettingsScreen(
     var ipfsTestResult by remember { mutableStateOf("") }
     var ipfsTestTitle by remember { mutableStateOf("") }
 
-    // Registration fee
-    val registrationFee by com.privimemobile.chat.ChatService.identity.registrationFee.collectAsState()
+    // Registration fee — guard against ChatService not yet initialized
+    val registrationFee by if (com.privimemobile.chat.ChatService.initialized.value)
+        com.privimemobile.chat.ChatService.identity.registrationFee.collectAsState()
+    else remember { mutableStateOf(0L) }
 
     fun toast(msg: String) { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
 

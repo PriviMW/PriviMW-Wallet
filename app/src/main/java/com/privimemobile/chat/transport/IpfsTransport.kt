@@ -296,6 +296,13 @@ object IpfsTransport {
 
     /** Single IPFS get attempt with timeout — requests base64 response to avoid OOM. */
     private suspend fun ipfsGetOnce(cid: String): ByteArray? {
+        // Log peer count for debugging
+        try {
+            val peerCount = com.mw.beam.beamwallet.core.Api.getIPFSPeerCount()
+            Log.d(TAG, "IPFS peers: $peerCount, attempting get: $cid")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not get IPFS peer count: ${e.message}")
+        }
         return withTimeoutOrNull(Config.IPFS_GET_TIMEOUT.toLong() + 5000) {
             suspendCancellableCoroutine { cont ->
                 WalletApi.call("ipfs_get", mapOf(

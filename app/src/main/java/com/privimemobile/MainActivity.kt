@@ -58,6 +58,9 @@ class MainActivity : FragmentActivity() {
                                 WalletApi.start(lifecycleScope)
                                 WalletApi.subscribeToEvents()
                                 ProtocolStartup.onForegroundRecovery(lifecycleScope)
+                                // Ensure ChatService is running (may not have been init'd on reuse path)
+                                com.privimemobile.chat.ChatService.init(this@MainActivity)
+                                com.privimemobile.chat.ChatService.onForegroundRecovery()
                             } else {
                                 android.os.Handler(mainLooper).postDelayed({ startProtocol() }, 2000)
                             }

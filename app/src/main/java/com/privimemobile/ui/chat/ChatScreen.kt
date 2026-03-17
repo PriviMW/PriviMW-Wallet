@@ -65,13 +65,13 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val convKey = "@$handle"
 
-    // Conversation ID from Room
-    var convId by remember { mutableStateOf(0L) }
-    LaunchedEffect(convKey) {
-        convId = com.privimemobile.chat.ChatService.db?.conversationDao()?.findByKey(convKey)?.id ?: 0L
-    }
+    // Observe conversation reactively — updates when MessageProcessor creates it
+    val conversations by com.privimemobile.chat.ChatService.db?.conversationDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val conv = conversations.firstOrNull { it.convKey == convKey }
+    val convId = conv?.id ?: 0L
 
-    // Messages from Room DB
+    // Messages from Room DB — automatically updates when convId changes
     val roomMessages by remember(convId) {
         if (convId > 0L) {
             com.privimemobile.chat.ChatService.db!!.messageDao().observeAll(convId)

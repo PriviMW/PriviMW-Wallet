@@ -336,11 +336,14 @@ object IpfsTransport {
     private fun warmGatewayCache(cid: String) {
         Thread {
             try {
+                // Use GET with Range header to trigger Beam node to fetch content from us.
+                // HEAD alone may not trigger the actual IPFS fetch on some gateways.
                 val url = java.net.URL("$BEAM_IPFS_GATEWAY$cid")
                 val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "HEAD"  // Just trigger the fetch, don't download
-                conn.connectTimeout = 10000
-                conn.readTimeout = 30000
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("Range", "bytes=0-0")  // Only fetch 1 byte
+                conn.connectTimeout = 15000
+                conn.readTimeout = 60000  // Give gateway time to fetch from our node
                 val code = conn.responseCode
                 conn.disconnect()
                 Log.d(TAG, "Gateway cache warm for $cid: HTTP $code")

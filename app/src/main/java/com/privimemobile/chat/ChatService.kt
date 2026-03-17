@@ -56,7 +56,9 @@ object ChatService {
      */
     fun init(context: Context) {
         if (_initialized.value && db != null) {
-            Log.d(TAG, "Already initialized — skipping")
+            Log.d(TAG, "Already initialized — restarting polling")
+            com.privimemobile.protocol.WalletApi.subscribeToEvents()
+            sbbs.restartPolling()  // Kill stale job, start fresh
             return
         }
 
@@ -133,7 +135,9 @@ object ChatService {
         if (!_initialized.value) return
         Log.d(TAG, "Foreground recovery — refreshing")
         // Re-subscribe to wallet events (may have been dropped)
-        com.privimemobile.protocol.WalletApi.resubscribeEvents()
+        com.privimemobile.protocol.WalletApi.subscribeToEvents()
+        // Force restart polling (old job may be stuck)
+        sbbs.restartPolling()
         scope.launch {
             identity.refreshIdentity()
             sbbs.pollNow()

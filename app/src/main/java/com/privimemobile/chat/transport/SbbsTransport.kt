@@ -31,7 +31,10 @@ class SbbsTransport(
 
     /** Start adaptive polling — fast when chat open, slow otherwise. */
     fun startPolling() {
-        if (pollingJob?.isActive == true) return
+        if (pollingJob?.isActive == true) {
+            Log.d(TAG, "Polling already active — skipping")
+            return
+        }
         Log.d(TAG, "Starting SBBS adaptive polling")
 
         pollingJob = scope.launch {
@@ -48,6 +51,15 @@ class SbbsTransport(
         pollingJob = null
     }
 
+    /** Force restart polling — kills old job, starts fresh. Use on foreground recovery. */
+    fun restartPolling() {
+        Log.d(TAG, "Force restarting SBBS polling")
+        pollingJob?.cancel()
+        pollingJob = null
+        isPolling = false
+        startPolling()
+    }
+
     /** Called by ProtocolStartup's onTxsChanged hook — event-driven, INSTANT poll. */
     fun onTxsChanged() {
         Log.d(TAG, "ev_txs_changed — immediate poll")
@@ -61,15 +73,13 @@ class SbbsTransport(
         // Identity check delegated to IdentityManager
     }
 
-    /** Poll from timer or manual refresh — skips if already polling. */
+    /** Poll from timer or manual refresh. */
     fun pollNow() {
-        if (isPolling) return
-        isPolling = true
         scope.launch {
             try {
                 readMessages()
-            } finally {
-                isPolling = false
+            } catch (e: Exception) {
+                Log.w(TAG, "pollNow error: ${e.message}")
             }
         }
     }

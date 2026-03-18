@@ -404,7 +404,7 @@ fun SettingsScreen(
         // ========== NOTIFICATIONS ==========
         SectionTitle("NOTIFICATIONS")
         SettingsCard {
-            SettingsToggle("Wallet updates", "Receive notifications about wallet updates", walletUpdatesNotif) {
+            SettingsToggle("Wallet updates", "Notify when a new app version is available (coming soon)", walletUpdatesNotif) {
                 walletUpdatesNotif = it
                 SecureStorage.putBoolean("wallet_updates_notif", it)
             }

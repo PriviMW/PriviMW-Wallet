@@ -1,10 +1,14 @@
 package com.privimemobile
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -23,14 +27,35 @@ import com.privimemobile.ui.navigation.AppNavigation
 import com.privimemobile.ui.theme.PriviMWTheme
 import com.privimemobile.wallet.BackgroundService
 import com.privimemobile.wallet.WalletManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : FragmentActivity() {
+
+    /** Deep-link target: convKey to open (set by notification tap). */
+    private val _pendingDeepLink = MutableStateFlow<String?>(null)
+    val pendingDeepLink: StateFlow<String?> = _pendingDeepLink.asStateFlow()
+
+    fun consumeDeepLink() { _pendingDeepLink.value = null }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        // Check if launched from notification
+        handleDeepLink(intent)
+
         WalletManager.init(this)
         window.navigationBarColor = Color.parseColor("#0a0e27")
+
+        // Request notification permission (Android 13+) — needed for badge count
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+            }
+        }
 
         setContent {
             PriviMWTheme {
@@ -70,6 +95,21 @@ class MainActivity : FragmentActivity() {
                 }
                 } // Box imePadding
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val convKey = intent?.getStringExtra("open_chat")
+        if (convKey != null) {
+            Log.d("MainActivity", "Deep-link to chat: $convKey")
+            _pendingDeepLink.value = convKey
+            // Clear the extra so it doesn't re-trigger
+            intent.removeExtra("open_chat")
         }
     }
 

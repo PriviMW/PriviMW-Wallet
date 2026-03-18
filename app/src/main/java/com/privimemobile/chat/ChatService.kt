@@ -9,6 +9,7 @@ import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.ChatStateEntity
 import com.privimemobile.chat.identity.IdentityManager
 import com.privimemobile.chat.processor.MessageProcessor
+import com.privimemobile.chat.notification.ChatNotificationManager
 import com.privimemobile.chat.transport.IpfsTransport
 import com.privimemobile.chat.transport.SbbsTransport
 import kotlinx.coroutines.*
@@ -105,14 +106,18 @@ object ChatService {
 
         // Initialize components
         IpfsTransport.init(context)
+        ChatNotificationManager.init(context)
+        com.privimemobile.wallet.TxNotificationManager.init(context)
+        com.privimemobile.wallet.TxNotificationManager.startObserving(scope)
         identity = IdentityManager(db!!, scope)
         contacts = ContactManager(db!!, scope)
         processor = MessageProcessor(db!!, contacts, scope)
         sbbs = SbbsTransport(db!!, processor, scope)
 
-        // Initialize chat_state row
+        // Initialize chat_state row + migrate legacy SharedPreferences data
         scope.launch {
             db!!.chatStateDao().ensureInitialized()
+            LegacyMigration.migrateIfNeeded(context.applicationContext, db!!)
         }
 
         // Ensure wallet events are subscribed (may have been skipped on wallet reuse path)
@@ -124,6 +129,13 @@ object ChatService {
             sbbs.startPolling()
         }
 
+        // Observe total unread → update launcher badge via notification summary
+        scope.launch {
+            db!!.conversationDao().observeTotalUnread().collect { count ->
+                ChatNotificationManager.updateBadge(count)
+            }
+        }
+
         _initialized.value = true
         Log.d(TAG, "Chat system initialized")
     }
@@ -132,6 +144,8 @@ object ChatService {
     fun setActiveChat(convKey: String?) {
         _activeChat.value = convKey
         if (convKey != null) {
+            // Cancel notification for this conversation
+            ChatNotificationManager.cancelForConversation(convKey)
             scope.launch {
                 val conv = db?.conversationDao()?.findByKey(convKey) ?: return@launch
                 // Clear unread badge

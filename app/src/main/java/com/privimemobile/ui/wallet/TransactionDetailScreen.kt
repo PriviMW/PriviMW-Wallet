@@ -188,8 +188,9 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
         return
     }
 
-    // For DApp TXs, C++ sender flag is inverted (positive amount = spending but sender=false)
-    val isOutgoing = if (tx.isDapps && tx.amount > 0) !tx.sender else tx.sender
+    // For contract DApp TXs, C++ sender flag is inverted (positive amount = spending but sender=false)
+    // But tx_send tips (isDapps but no contractCids) use normal sender flag
+    val isOutgoing = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
     val isPending = tx.status == TxStatus.PENDING ||
             tx.status == TxStatus.IN_PROGRESS ||
             tx.status == TxStatus.REGISTERING

@@ -45,7 +45,26 @@ class BackgroundService : Service() {
         startForeground(NOTIFICATION_ID, notification)
         isRunning = true
         Log.d(TAG, "Foreground service started")
+
+        // Ensure ChatService is running (may need re-init after process restart from swipe-away)
+        ensureChatService()
+
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "Task removed (app swiped away) — service continues")
+        // Re-ensure ChatService stays alive for background message delivery
+        ensureChatService()
+    }
+
+    /** Initialize ChatService if wallet is ready but chat isn't running. */
+    private fun ensureChatService() {
+        if (WalletManager.isApiReady && !com.privimemobile.chat.ChatService.initialized.value) {
+            Log.d(TAG, "Re-initializing ChatService from BackgroundService")
+            com.privimemobile.chat.ChatService.init(applicationContext)
+        }
     }
 
     companion object {
@@ -86,7 +105,7 @@ class BackgroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("PriviMW")
             .setContentText("Connected to Beam network")
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: custom icon
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pending)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

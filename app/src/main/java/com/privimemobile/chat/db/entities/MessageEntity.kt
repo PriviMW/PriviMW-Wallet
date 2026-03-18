@@ -28,6 +28,7 @@ data class MessageEntity(
     val acked: Boolean = false,        // we sent ack for this (for received messages)
     @ColumnInfo(name = "reply_text") val replyText: String? = null,
     @ColumnInfo(name = "tip_amount") val tipAmount: Long = 0,  // groths
+    @ColumnInfo(name = "tip_asset_id", defaultValue = "0") val tipAssetId: Int = 0,
     @ColumnInfo(name = "fwd_from") val fwdFrom: String? = null,
     @ColumnInfo(name = "fwd_ts") val fwdTs: Long = 0,
     val failed: Boolean = false,       // send failed after retries

@@ -81,6 +81,14 @@ interface ConversationDao {
     @Query("UPDATE conversations SET muted = :muted WHERE id = :convId")
     suspend fun setMuted(convId: Long, muted: Boolean)
 
+    /** Set unread count directly (for migration). */
+    @Query("UPDATE conversations SET unread_count = :count WHERE id = :convId")
+    suspend fun setUnread(convId: Long, count: Int)
+
+    /** Set deleted-at tombstone timestamp (for migration). */
+    @Query("UPDATE conversations SET deleted_at_ts = :ts WHERE id = :convId")
+    suspend fun setDeletedTs(convId: Long, ts: Long)
+
     /** Update contact info on conversation. */
     @Query("""
         UPDATE conversations
@@ -92,6 +100,14 @@ interface ConversationDao {
     /** Check if conversation is blocked. */
     @Query("SELECT is_blocked FROM conversations WHERE conv_key = :convKey LIMIT 1")
     suspend fun isBlocked(convKey: String): Boolean?
+
+    /** Check if conversation is muted (by ID). */
+    @Query("SELECT muted FROM conversations WHERE id = :convId LIMIT 1")
+    suspend fun isMuted(convId: Long): Boolean?
+
+    /** Get total unread count (non-Flow, for one-shot reads). */
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE deleted_at_ts = 0 AND is_blocked = 0")
+    suspend fun getTotalUnread(): Int
 
     /** Check if conversation is tombstoned and get the timestamp. */
     @Query("SELECT deleted_at_ts FROM conversations WHERE conv_key = :convKey LIMIT 1")

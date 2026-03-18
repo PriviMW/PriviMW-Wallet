@@ -670,8 +670,8 @@ private fun TxCard(
                         }
                     }
                 } else {
-                    // Fallback: use sender flag (inverted for DApp TXs)
-                    val effectiveSend = if (tx.isDapps && tx.amount > 0) !isSend else isSend
+                    // Fallback: use sender flag (inverted for contract DApp TXs only, not tx_send tips)
+                    val effectiveSend = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !isSend else isSend
                     val amountPrefix = if (effectiveSend) "-" else "+"
                     val amountColor = if (effectiveSend) C.outgoing else C.incoming
                     Text(

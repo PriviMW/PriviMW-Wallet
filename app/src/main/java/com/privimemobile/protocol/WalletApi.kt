@@ -25,6 +25,11 @@ object WalletApi {
     private var callIdCounter = BASE_CALL_ID
     private val callbacks = ConcurrentHashMap<Int, CallbackInfo>()
 
+    // Own persistent scope — survives Activity death (like ChatService).
+    // Only cancelled on explicit stop() (wallet deletion / full shutdown).
+    private var ownJob = SupervisorJob()
+    private var ownScope = CoroutineScope(Dispatchers.Main + ownJob)
+
     private var listenerJob: Job? = null
     private var isSubscribed = false
 
@@ -40,13 +45,18 @@ object WalletApi {
     /**
      * Start listening for API results from the C++ core.
      * Call once at app startup after wallet is opened.
+     *
+     * The scope parameter is accepted for backward compatibility but the listener
+     * runs on WalletApi's own persistent scope so it survives Activity death.
+     * This is critical for background message delivery when the app is swiped away.
      */
     fun start(scope: CoroutineScope) {
-        // Skip if already running with active scope. Check isActive, not just non-null —
-        // old job may be cancelled (Activity destroyed) but reference still held.
+        // Skip if already running with active scope.
         if (listenerJob?.isActive == true) return
         listenerJob?.cancel()
-        listenerJob = scope.launch {
+        // Use our own scope — not tied to any Activity lifecycle.
+        // Survives swipe-away as long as BackgroundService keeps the process alive.
+        listenerJob = ownScope.launch {
             WalletEventBus.apiResult.collectLatest { json ->
                 handleApiResult(json)
             }
@@ -58,6 +68,10 @@ object WalletApi {
         listenerJob = null
         callbacks.clear()
         isSubscribed = false
+        // Cancel and recreate scope for clean restart
+        ownJob.cancel()
+        ownJob = SupervisorJob()
+        ownScope = CoroutineScope(Dispatchers.Main + ownJob)
     }
 
     /**

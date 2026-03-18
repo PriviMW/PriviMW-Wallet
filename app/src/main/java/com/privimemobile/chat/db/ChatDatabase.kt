@@ -2,6 +2,8 @@ package com.privimemobile.chat.db
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.privimemobile.chat.db.dao.*
 import com.privimemobile.chat.db.entities.*
 import net.sqlcipher.database.SupportFactory
@@ -18,7 +20,7 @@ import net.sqlcipher.database.SupportFactory
         GroupMemberEntity::class,
         ChatStateEntity::class,
     ],
-    version = 2,
+    version = 4,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -41,6 +43,22 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        // --- Migrations (preserve chat history across version bumps) ---
+
+        /** V2→V3: Add tip_asset_id column to messages. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN tip_asset_id INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** V3→V4: Add removed column to reactions (soft-delete for SBBS dedup). */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reactions ADD COLUMN removed INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -49,6 +67,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
         }

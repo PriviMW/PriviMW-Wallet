@@ -14,4 +14,5 @@ data class ReactionEntity(
     @ColumnInfo(name = "sender_handle") val senderHandle: String,
     val emoji: String,
     val timestamp: Long,
+    @ColumnInfo(name = "removed", defaultValue = "0") val removed: Boolean = false,
 )

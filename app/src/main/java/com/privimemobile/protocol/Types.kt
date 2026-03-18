@@ -40,7 +40,9 @@ data class ChatMessage(
     val acked: Boolean = false,      // we sent ack for this (for received messages)
     val isTip: Boolean = false,      // is a tip message
     val tipAmount: Long = 0,         // tip amount in groth
+    val tipAssetId: Int = 0,         // tip asset ID (0 = BEAM)
     val reply: String? = null,       // quoted message text (for replies)
+    val fwdFrom: String? = null,     // forwarded from handle
     val file: FileAttachment? = null, // file attachment
     val type: String = "dm",         // "dm", "file", "tip", "system"
 )

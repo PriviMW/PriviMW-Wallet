@@ -105,6 +105,7 @@ class MessageProcessor(
             "delivered" -> handleDelivered(payload, convKey)
             "typing" -> handleTyping(from)
             "react" -> handleReaction(payload, convKey, from)
+            "unreact" -> handleUnreact(payload, from)
             "delete" -> handleDelete(payload, convKey, from)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
@@ -151,6 +152,7 @@ class MessageProcessor(
             type = type,
             replyText = payload["reply"] as? String,
             tipAmount = (payload["amount"] as? Number)?.toLong() ?: 0,
+            tipAssetId = (payload["asset_id"] as? Number)?.toInt() ?: 0,
             fwdFrom = payload["fwd_from"] as? String,
             fwdTs = (payload["fwd_ts"] as? Number)?.toLong() ?: 0,
             senderHandle = from.ifEmpty { null },
@@ -173,7 +175,7 @@ class MessageProcessor(
 
         // Update conversation
         val preview = when (type) {
-            "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} BEAM"
+            "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
             "file" -> {
                 val fileName = (payload["file"] as? Map<*, *>)?.get("name") as? String
                 "\uD83D\uDCCE ${fileName ?: "File"}"  // 📎
@@ -182,9 +184,27 @@ class MessageProcessor(
         }
         db.conversationDao().updateLastMessage(conv.id, ts, preview)
 
-        // Increment unread (only for received, not in active chat)
+        // Increment unread + show notification (only for received, not in active chat)
         if (!sent && ChatService.activeChat.value != convKey) {
             db.conversationDao().incrementUnread(conv.id)
+            // Show notification
+            val isMuted = db.conversationDao().isMuted(conv.id) ?: false
+            val totalUnread = db.conversationDao().getTotalUnread()
+            val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { "Unknown" }
+            val notifText = when (type) {
+                "tip" -> preview ?: "Sent a tip"
+                "file" -> preview ?: "Sent a file"
+                else -> text?.take(200) ?: ""
+            }
+            com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
+                convKey = convKey,
+                convId = conv.id,
+                senderName = senderLabel,
+                text = notifText,
+                type = type,
+                isMuted = isMuted,
+                totalUnread = totalUnread,
+            )
         }
 
         // Send ack for received messages
@@ -274,13 +294,28 @@ class MessageProcessor(
         val emoji = payload["emoji"] as? String ?: return
         val ts = (payload["ts"] as? Number)?.toLong() ?: System.currentTimeMillis() / 1000
 
-        db.reactionDao().insert(ReactionEntity(
+        val insertId = db.reactionDao().insert(ReactionEntity(
             messageTs = msgTs,
             senderHandle = from,
             emoji = emoji,
             timestamp = ts,
         ))
+        if (insertId == -1L) {
+            // Row exists — try reactivate ONLY if incoming ts is newer than removal time.
+            // Old SBBS re-deliveries have ts <= removal time → ignored.
+            // Genuine re-reacts have ts > removal time → reactivated.
+            db.reactionDao().reactivate(msgTs, from, emoji, ts)
+        }
         Log.d(TAG, "Reaction $emoji from @$from on message $msgTs")
+    }
+
+    /** Handle unreact (remove reaction for everyone). */
+    private suspend fun handleUnreact(payload: Map<String, Any?>, from: String) {
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val emoji = payload["emoji"] as? String ?: return
+        val unreactTs = (payload["ts"] as? Number)?.toLong() ?: System.currentTimeMillis() / 1000
+        db.reactionDao().remove(msgTs, from, emoji, unreactTs)
+        Log.d(TAG, "Unreact $emoji from @$from on message $msgTs")
     }
 
     /** Handle delete-for-everyone. */

@@ -38,6 +38,7 @@ fun ChatsScreen(
     onOpenChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
     onRegister: () -> Unit = {},
+    onSearch: () -> Unit = {},
 ) {
     // Wait for ChatService to initialize
     val isInitialized by ChatService.initialized.collectAsState()
@@ -69,7 +70,7 @@ fun ChatsScreen(
     val conversations by ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
-    var deleteTarget by remember { mutableStateOf<ConversationEntity?>(null) }
+    var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -109,12 +110,17 @@ fun ChatsScreen(
                         }
                     }
                 } else {
+                    // Observe typing state for all conversations
+                    val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
+
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(conversations, key = { it.id }) { conv ->
+                            val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(conv.convKey)
                             ConversationCard(
                                 conv = conv,
                                 onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
-                                onLongPress = { deleteTarget = conv },
+                                onLongPress = { menuTarget = conv },
+                                isTyping = peerTyping,
                             )
                         }
                     }
@@ -133,31 +139,87 @@ fun ChatsScreen(
         }
     }
 
-    // Delete dialog
-    if (deleteTarget != null) {
+    // Conversation context menu
+    if (menuTarget != null) {
+        val target = menuTarget!!
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete Conversation", color = C.text) },
-            text = { Text("Delete conversation with ${deleteTarget!!.convKey}? This cannot be undone.", color = C.textSecondary) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            ChatService.db?.conversationDao()?.softDelete(deleteTarget!!.id)
-                        }
-                        deleteTarget = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = C.error),
-                    shape = RoundedCornerShape(8.dp),
-                ) { Text("Delete", color = C.text, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { deleteTarget = null }, shape = RoundedCornerShape(8.dp)) {
-                    Text("Cancel", color = C.textSecondary)
-                }
-            },
+            onDismissRequest = { menuTarget = null },
             containerColor = C.card,
             shape = RoundedCornerShape(12.dp),
+            title = {
+                Text(
+                    target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey,
+                    color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                )
+            },
+            text = {
+                Column {
+                    // Pin / Unpin
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                ChatService.db?.conversationDao()?.setPinned(target.id, !target.pinned)
+                            }
+                            menuTarget = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (target.pinned) "Unpin" else "Pin",
+                            color = C.text, modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    // Mute / Unmute
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted)
+                            }
+                            menuTarget = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (target.muted) "Unmute" else "Mute",
+                            color = C.text, modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    // Block / Unblock
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                ChatService.db?.conversationDao()?.setBlocked(target.id, !target.isBlocked)
+                            }
+                            menuTarget = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (target.isBlocked) "Unblock" else "Block",
+                            color = if (target.isBlocked) C.text else C.error,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    HorizontalDivider(color = C.border)
+
+                    // Delete
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                ChatService.db?.conversationDao()?.softDelete(target.id)
+                            }
+                            menuTarget = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Delete", color = C.error, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {},
         )
     }
 }
@@ -404,7 +466,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConversationCard(conv: ConversationEntity, onClick: () -> Unit, onLongPress: () -> Unit = {}) {
+private fun ConversationCard(conv: ConversationEntity, onClick: () -> Unit, onLongPress: () -> Unit = {}, isTyping: Boolean = false) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -430,16 +492,28 @@ private fun ConversationCard(conv: ConversationEntity, onClick: () -> Unit, onLo
                         conv.displayName?.ifEmpty { null } ?: conv.handle?.let { "@$it" } ?: conv.convKey,
                         color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                     )
-                    Text(
-                        formatTime(conv.lastMessageTs),
-                        color = C.textSecondary, fontSize = 11.sp,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (conv.isBlocked) {
+                            Text("\uD83D\uDEAB", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 🚫
+                        }
+                        if (conv.pinned) {
+                            Text("\uD83D\uDCCC", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 📌
+                        }
+                        if (conv.muted) {
+                            Text("\uD83D\uDD07", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 🔇
+                        }
+                        Text(
+                            formatTime(conv.lastMessageTs),
+                            color = C.textSecondary, fontSize = 11.sp,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        conv.lastMessagePreview ?: "",
-                        color = C.textSecondary, fontSize = 13.sp, maxLines = 1,
+                        if (isTyping) "typing..." else (conv.lastMessagePreview ?: ""),
+                        color = if (isTyping) C.accent else C.textSecondary,
+                        fontSize = 13.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                     )
                     if (conv.unreadCount > 0) {

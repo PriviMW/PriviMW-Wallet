@@ -62,4 +62,12 @@ interface MessageDao {
     /** Delete all messages in a conversation (local delete). */
     @Query("DELETE FROM messages WHERE conversation_id = :convId")
     suspend fun deleteByConversation(convId: Long)
+
+    /** Delete a single message locally (delete for me). */
+    @Query("DELETE FROM messages WHERE id = :messageId")
+    suspend fun deleteById(messageId: Long)
+
+    /** Search messages within a specific conversation (LIKE query). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 AND text LIKE :query ORDER BY timestamp DESC LIMIT 50")
+    suspend fun searchInConversation(convId: Long, query: String): List<MessageEntity>
 }

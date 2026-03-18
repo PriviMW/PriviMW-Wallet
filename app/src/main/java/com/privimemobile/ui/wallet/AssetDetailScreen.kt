@@ -230,7 +230,7 @@ fun AssetDetailScreen(
             }
         } else {
             assetTxs.forEach { tx ->
-                val effectiveOut = if (tx.isDapps && tx.amount > 0) !tx.sender else tx.sender
+                val effectiveOut = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
                 val isPending = tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS || tx.status == TxStatus.REGISTERING
                 val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
                 val amountColor = if (isFailed) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming

@@ -12,10 +12,14 @@ import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.privimemobile.MainActivity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -39,8 +43,10 @@ import com.privimemobile.ui.dapps.DAppScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
+import com.privimemobile.ui.chat.MediaGalleryScreen
 import com.privimemobile.ui.chat.NewChatScreen
 import com.privimemobile.ui.chat.RegisterScreen
+import com.privimemobile.ui.chat.SearchScreen
 import com.privimemobile.ui.dapps.DAppsScreen
 import com.privimemobile.ui.settings.SettingsScreen
 
@@ -65,6 +71,23 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    // Deep-link: navigate to chat when notification is tapped
+    val activity = LocalContext.current as? MainActivity
+    val pendingDeepLink by activity?.pendingDeepLink?.collectAsState() ?: remember { mutableStateOf(null) }
+    LaunchedEffect(pendingDeepLink) {
+        val convKey = pendingDeepLink ?: return@LaunchedEffect
+        // convKey is "@handle" — strip the @ prefix for navigation route
+        val handle = convKey.removePrefix("@")
+        if (handle.isNotEmpty()) {
+            navController.navigate("chat/$handle") {
+                // Ensure we land on chats tab first so back works properly
+                popUpTo(Tab.CHATS.route) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+        activity?.consumeDeepLink()
+    }
+
     // Hide bottom bar on certain screens
     val hideBottomBar = currentDestination?.route?.let { route ->
         route.startsWith("chat/") ||
@@ -74,7 +97,9 @@ fun AppNavigation() {
                 route == "qr_scanner" ||
                 route.startsWith("tx_detail") ||
                 route.startsWith("asset_detail") ||
-                route == "new_chat"
+                route == "new_chat" ||
+                route == "search_messages" ||
+                route.startsWith("media_gallery/")
     } ?: false
 
     Scaffold(
@@ -226,6 +251,7 @@ fun AppNavigation() {
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },
                     onNewChat = { navController.navigate("new_chat") },
                     onRegister = { navController.navigate("register") },
+                    onSearch = { navController.navigate("search_messages") },
                 )
             }
             composable("chat/{handle}") { backStackEntry ->
@@ -233,6 +259,7 @@ fun AppNavigation() {
                 ChatScreen(
                     handle = handle,
                     onBack = { navController.popBackStack() },
+                    onMediaGallery = { navController.navigate("media_gallery/$handle") },
                 )
             }
             composable("new_chat") {
@@ -247,6 +274,22 @@ fun AppNavigation() {
             composable("register") {
                 RegisterScreen(
                     onRegistered = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("search_messages") {
+                SearchScreen(
+                    onOpenChat = { handle ->
+                        navController.popBackStack()
+                        navController.navigate("chat/$handle")
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("media_gallery/{handle}") { backStackEntry ->
+                val handle = backStackEntry.arguments?.getString("handle") ?: ""
+                MediaGalleryScreen(
+                    handle = handle,
                     onBack = { navController.popBackStack() },
                 )
             }

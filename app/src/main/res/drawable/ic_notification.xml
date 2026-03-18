@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Shield outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5L12,1zM12,21.47C7.72,20.23 5,15.81 5,11V6.3l7,-3.11 7,3.11V11c0,4.81 -2.72,9.23 -7,10.47z"/>
+    <!-- Wave 1 (top) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7.5,9.5c0,0 1.5,-1.5 4.5,-1.5s4.5,1.5 4.5,1.5"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:fillAlpha="0"/>
+    <!-- Wave 2 (middle) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7.5,12.5c0,0 1.5,-1.5 4.5,-1.5s4.5,1.5 4.5,1.5"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:fillAlpha="0"/>
+    <!-- Wave 3 (bottom) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7.5,15.5c0,0 1.5,-1.5 4.5,-1.5s4.5,1.5 4.5,1.5"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:fillAlpha="0"/>
+</vector>

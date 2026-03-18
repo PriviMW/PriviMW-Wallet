@@ -12,17 +12,26 @@ import androidx.compose.ui.unit.dp
 import com.privimemobile.R
 
 /**
- * Asset icon — matches RN AssetIcon component and official Beam wallet.
- *
- * Uses pre-bundled PNG icons (asset0.png through asset19.png).
- * Asset IDs 0-19 map directly. IDs > 19 hash into the pool (assetId % 20).
- * Same approach as official Beam wallet's AssetManager.getImage().
+ * Asset icon — known assets get their real logo, unknown assets
+ * fall back to the generic colored icon pool (assetId % 20).
  */
 
-// Matches official Beam wallet's AssetManager — assetbeamx for BEAMX (ID 7)
-private val ASSET_DRAWABLES = intArrayOf(
+// Known asset IDs → their specific icon drawable
+private val KNOWN_ASSET_ICONS = mapOf(
+    0 to R.drawable.icon_asset0,
+    7 to R.drawable.icon_asset7,
+    36 to R.drawable.icon_asset36,
+    37 to R.drawable.icon_asset37,
+    38 to R.drawable.icon_asset38,
+    39 to R.drawable.icon_asset39,
+    47 to R.drawable.icon_asset47,
+    174 to R.drawable.icon_asset174,
+)
+
+// Generic fallback pool (asset0.png through asset19.png)
+private val FALLBACK_DRAWABLES = intArrayOf(
     R.drawable.asset0,  R.drawable.asset1,  R.drawable.asset2,  R.drawable.asset3,
-    R.drawable.asset4,  R.drawable.asset5,  R.drawable.asset6,  R.drawable.assetbeamx,
+    R.drawable.asset4,  R.drawable.asset5,  R.drawable.asset6,  R.drawable.asset7,
     R.drawable.asset8,  R.drawable.asset9,  R.drawable.asset10, R.drawable.asset11,
     R.drawable.asset12, R.drawable.asset13, R.drawable.asset14, R.drawable.asset15,
     R.drawable.asset16, R.drawable.asset17, R.drawable.asset18, R.drawable.asset19,
@@ -35,8 +44,11 @@ fun AssetIcon(
     size: Dp = 36.dp,
     modifier: Modifier = Modifier,
 ) {
+    val drawableId = KNOWN_ASSET_ICONS[assetId]
+        ?: FALLBACK_DRAWABLES[assetId % FALLBACK_DRAWABLES.size]
+
     Image(
-        painter = painterResource(id = ASSET_DRAWABLES[assetId % ASSET_DRAWABLES.size]),
+        painter = painterResource(id = drawableId),
         contentDescription = ticker,
         modifier = modifier
             .size(size)

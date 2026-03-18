@@ -7,11 +7,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -23,6 +27,13 @@ import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+private val contactAvatarColors = listOf(
+    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+    Color(0xFFFFA726), Color(0xFF78909C),
+)
 
 @Composable
 fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
@@ -83,47 +94,65 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(C.bg).padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
-        TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
+        // Top bar — Telegram-style with back arrow
+        Surface(color = C.card, shadowElevation = 2.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = C.text, modifier = Modifier.size(22.dp))
+                }
+                Text("New Chat", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
-        Spacer(Modifier.height(8.dp))
-        Text("New Chat", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
 
+        // Search field
         OutlinedTextField(
             value = input,
             onValueChange = { onInputChange(it) },
-            placeholder = { Text("Search handle...", color = C.textMuted) },
-            prefix = { Text("@", color = C.accent, fontWeight = FontWeight.Bold) },
+            placeholder = { Text("Search handle or wallet ID...", color = C.textMuted, fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(20.dp))
+            },
+            prefix = { Text("@", color = C.accent, fontWeight = FontWeight.Bold, fontSize = 15.sp) },
             trailingIcon = {
                 if (searching) {
-                    CircularProgressIndicator(Modifier.size(20.dp), color = C.accent, strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.size(18.dp), color = C.accent, strokeWidth = 2.dp)
                 }
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                focusedContainerColor = C.card, unfocusedContainerColor = C.card,
-                cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = C.card,
+                unfocusedContainerColor = C.card,
+                cursorColor = C.accent,
+                focusedTextColor = C.text,
+                unfocusedTextColor = C.text,
             ),
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
         )
-
-        Spacer(Modifier.height(12.dp))
 
         LazyColumn(modifier = Modifier.weight(1f)) {
             // On-chain search results (new contacts not in local DB)
             if (onChainNew.isNotEmpty()) {
                 item {
-                    Text("On-chain", color = C.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                    Text(
+                        "ON-CHAIN RESULTS",
+                        color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
+                    )
                 }
                 items(onChainNew, key = { "onchain_${it.handle}" }) { contact ->
                     ContactRow(contact, tag = "New") { openChat(contact.handle, contact.walletId, contact.displayName) }
-                    HorizontalDivider(color = C.border, thickness = 0.5.dp)
                 }
             }
 
@@ -131,14 +160,14 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
             if (localMatches.isNotEmpty()) {
                 item {
                     Text(
-                        if (query.isNotEmpty()) "Contacts" else "Your Contacts",
-                        color = C.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 4.dp, top = if (onChainNew.isNotEmpty()) 16.dp else 0.dp, bottom = 8.dp),
+                        if (query.isNotEmpty()) "CONTACTS" else "YOUR CONTACTS",
+                        color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(start = 16.dp, top = if (onChainNew.isNotEmpty()) 16.dp else 4.dp, bottom = 8.dp),
                     )
                 }
                 items(localMatches, key = { "local_${it.handle}" }) { contact ->
                     ContactRow(contact) { openChat(contact.handle, contact.walletId, contact.displayName) }
-                    HorizontalDivider(color = C.border, thickness = 0.5.dp)
                 }
             }
 
@@ -149,7 +178,7 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
                         if (query.isNotEmpty()) "No handles found for \"$query\""
                         else "Search for a @handle to start chatting",
                         color = C.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
                     )
                 }
             }
@@ -159,29 +188,52 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
 
 @Composable
 private fun ContactRow(contact: ContactEntity, tag: String? = null, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
-            Text(
-                (contact.displayName?.ifEmpty { null } ?: contact.handle).first().uppercase(),
-                color = C.textDark, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("@${contact.handle}", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            if (!contact.displayName.isNullOrEmpty()) {
-                Text(contact.displayName!!, color = C.textSecondary, fontSize = 13.sp)
+    val avatarBg = contactAvatarColors[abs(contact.handle.hashCode()) % contactAvatarColors.size]
+    val initial = (contact.displayName?.ifEmpty { null } ?: contact.handle).first().uppercase()
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(avatarBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        contact.displayName?.ifEmpty { null } ?: "@${contact.handle}",
+                        color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    if (tag != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = C.accent.copy(alpha = 0.15f),
+                        ) {
+                            Text(
+                                tag, color = C.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                if (!contact.displayName.isNullOrEmpty()) {
+                    Text("@${contact.handle}", color = C.textSecondary, fontSize = 13.sp)
+                }
             }
         }
-        if (tag != null) {
-            Text(tag, color = C.incoming, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(C.incoming.copy(alpha = 0.15f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp))
-        }
+        HorizontalDivider(
+            color = C.border.copy(alpha = 0.5f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 74.dp),
+        )
     }
 }

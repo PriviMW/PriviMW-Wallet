@@ -82,6 +82,7 @@ private data class AssetBalance(
     val sending: Long,
     val receiving: Long,
     val maxPrivacy: Long,
+    val shielded: Long,
     val unitName: String,
     val shortName: String,
     val name: String,
@@ -134,9 +135,10 @@ fun WalletScreen(
 
     val scope = rememberCoroutineScope()
 
-    // Fetch transactions and addresses on mount (like RN useEffect)
+    // Fetch transactions, addresses, and wallet status on mount (like RN useEffect)
     LaunchedEffect(Unit) {
         try {
+            WalletManager.walletInstance?.getWalletStatus()
             WalletManager.walletInstance?.getTransactions()
             WalletManager.walletInstance?.getAddresses(true)
         } catch (_: Exception) {}
@@ -184,26 +186,26 @@ fun WalletScreen(
     }
 
     // Build other-asset balances from per-asset status events + asset info
-    val otherAssets = remember(assetBalanceMap.size, assetInfoMap.size) {
-        assetBalanceMap
-            .filterKeys { it != 0 }
-            .filter { (_, s) -> s.available > 0 || s.maturing > 0 || s.sending > 0 || s.receiving > 0 || s.maxPrivacy > 0 }
-            .map { (assetId, status) ->
-                val info = assetInfoMap[assetId]
-                AssetBalance(
-                    assetId = assetId,
-                    available = status.available,
-                    maturing = status.maturing,
-                    sending = status.sending,
-                    receiving = status.receiving,
-                    maxPrivacy = status.maxPrivacy,
-                    unitName = info?.unitName ?: "",
-                    shortName = info?.shortName ?: "",
-                    name = info?.name ?: "",
-                )
-            }
-            .sortedBy { it.assetId }
-    }
+    // Derive directly (no remember) — mutableStateMapOf reads trigger recomposition automatically
+    val otherAssets = assetBalanceMap
+        .filterKeys { it != 0 }
+        .filter { (_, s) -> s.available > 0 || s.maturing > 0 || s.sending > 0 || s.receiving > 0 || s.maxPrivacy > 0 || s.shielded > 0 }
+        .map { (assetId, status) ->
+            val info = assetInfoMap[assetId]
+            AssetBalance(
+                assetId = assetId,
+                available = status.available,
+                maturing = status.maturing,
+                sending = status.sending,
+                receiving = status.receiving,
+                maxPrivacy = status.maxPrivacy,
+                shielded = status.shielded,
+                unitName = info?.unitName ?: "",
+                shortName = info?.shortName ?: "",
+                name = info?.name ?: "",
+            )
+        }
+        .sortedBy { it.assetId }
 
     // Pull to refresh
     var refreshing by remember { mutableStateOf(false) }
@@ -249,9 +251,9 @@ fun WalletScreen(
         else -> C.accent
     }
 
-    // In-flight amounts — matches RN exactly (includes maxPrivacy)
+    // In-flight amounts — matches RN exactly (includes maxPrivacy + shielded)
     val hasPending = beamStatus.sending > 0 || beamStatus.receiving > 0 ||
-            beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0
+            beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -406,12 +408,13 @@ fun WalletScreen(
                             Text("BEAM", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             // Show sub-text for in-flight amounts (matches RN exactly)
                             if (beamStatus.sending > 0 || beamStatus.receiving > 0 ||
-                                beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0) {
+                                beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0) {
                                 val subParts = mutableListOf<String>()
                                 if (beamStatus.sending > 0) subParts.add("Sending: ${Helpers.formatBeam(beamStatus.sending)}")
                                 if (beamStatus.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(beamStatus.receiving)}")
                                 if (beamStatus.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(beamStatus.maturing)}")
                                 if (beamStatus.maxPrivacy > 0) subParts.add("Max Privacy: ${Helpers.formatBeam(beamStatus.maxPrivacy)}")
+                                if (beamStatus.shielded > 0) subParts.add("Shielded: ${Helpers.formatBeam(beamStatus.shielded)}")
                                 Text(
                                     subParts.joinToString("  "),
                                     color = C.textSecondary,
@@ -466,6 +469,7 @@ fun WalletScreen(
                                 if (asset.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(asset.receiving)}")
                                 if (asset.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(asset.maturing)}")
                                 if (asset.maxPrivacy > 0) subParts.add("Max Privacy: ${Helpers.formatBeam(asset.maxPrivacy)}")
+                                if (asset.shielded > 0) subParts.add("Shielded: ${Helpers.formatBeam(asset.shielded)}")
                                 if (subParts.isNotEmpty()) {
                                     Text(
                                         subParts.joinToString("  "),
@@ -476,7 +480,7 @@ fun WalletScreen(
                                 }
                             }
                             Text(
-                                Helpers.formatBeam(asset.available),
+                                Helpers.formatBeam(asset.available + asset.shielded),
                                 color = C.text,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,

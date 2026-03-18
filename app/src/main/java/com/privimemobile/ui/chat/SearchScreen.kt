@@ -25,7 +25,7 @@ import java.util.*
 
 @Composable
 fun SearchScreen(
-    onOpenChat: (String) -> Unit,
+    onOpenChat: (handle: String, scrollToTs: Long) -> Unit,
     onBack: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -110,7 +110,7 @@ fun SearchScreen(
                 SearchResultCard(
                     msg = msg,
                     handle = handle,
-                    onClick = { if (handle.isNotEmpty()) onOpenChat(handle) },
+                    onClick = { if (handle.isNotEmpty()) onOpenChat(handle, msg.timestamp) },
                 )
             }
         }

@@ -1,5 +1,7 @@
 package com.privimemobile.ui.navigation
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -147,8 +149,19 @@ fun AppNavigation() {
             navController = navController,
             startDestination = Tab.WALLET.route,
             modifier = Modifier.padding(innerPadding),
+            enterTransition = { slideInHorizontally(tween(450)) { it } + fadeIn(tween(400)) },
+            exitTransition = { slideOutHorizontally(tween(450)) { -it / 3 } + fadeOut(tween(400)) },
+            popEnterTransition = { slideInHorizontally(tween(450)) { -it / 3 } + fadeIn(tween(400)) },
+            popExitTransition = { slideOutHorizontally(tween(450)) { it } + fadeOut(tween(400)) },
         ) {
-            composable(Tab.WALLET.route) {
+            // Tab screens: instant fade (no slide — lateral navigation)
+            composable(
+                Tab.WALLET.route,
+                enterTransition = { fadeIn(tween(400)) },
+                exitTransition = { fadeOut(tween(400)) },
+                popEnterTransition = { fadeIn(tween(400)) },
+                popExitTransition = { fadeOut(tween(400)) },
+            ) {
                 WalletScreen(
                     onSend = { navController.navigate("send") },
                     onReceive = { navController.navigate("receive") },
@@ -246,7 +259,13 @@ fun AppNavigation() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(Tab.CHATS.route) {
+            composable(
+                Tab.CHATS.route,
+                enterTransition = { fadeIn(tween(400)) },
+                exitTransition = { fadeOut(tween(400)) },
+                popEnterTransition = { fadeIn(tween(400)) },
+                popExitTransition = { fadeOut(tween(400)) },
+            ) {
                 ChatsScreen(
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },
                     onNewChat = { navController.navigate("new_chat") },
@@ -254,12 +273,20 @@ fun AppNavigation() {
                     onSearch = { navController.navigate("search_messages") },
                 )
             }
-            composable("chat/{handle}") { backStackEntry ->
+            composable(
+                "chat/{handle}?scrollToTs={scrollToTs}",
+                arguments = listOf(
+                    navArgument("handle") { type = NavType.StringType },
+                    navArgument("scrollToTs") { type = NavType.LongType; defaultValue = 0L },
+                ),
+            ) { backStackEntry ->
                 val handle = backStackEntry.arguments?.getString("handle") ?: ""
+                val scrollToTs = backStackEntry.arguments?.getLong("scrollToTs") ?: 0L
                 ChatScreen(
                     handle = handle,
                     onBack = { navController.popBackStack() },
                     onMediaGallery = { navController.navigate("media_gallery/$handle") },
+                    scrollToTimestamp = scrollToTs,
                 )
             }
             composable("new_chat") {
@@ -279,9 +306,9 @@ fun AppNavigation() {
             }
             composable("search_messages") {
                 SearchScreen(
-                    onOpenChat = { handle ->
+                    onOpenChat = { handle, scrollToTs ->
                         navController.popBackStack()
-                        navController.navigate("chat/$handle")
+                        navController.navigate("chat/$handle?scrollToTs=$scrollToTs")
                     },
                     onBack = { navController.popBackStack() },
                 )
@@ -293,7 +320,13 @@ fun AppNavigation() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(Tab.DAPPS.route) {
+            composable(
+                Tab.DAPPS.route,
+                enterTransition = { fadeIn(tween(400)) },
+                exitTransition = { fadeOut(tween(400)) },
+                popEnterTransition = { fadeIn(tween(400)) },
+                popExitTransition = { fadeOut(tween(400)) },
+            ) {
                 DAppsScreen(
                     onBrowseStore = { navController.navigate("dapp_store") },
                     onLaunchDApp = { name, path, guid ->
@@ -324,7 +357,13 @@ fun AppNavigation() {
             composable("dapp_store") {
                 DAppStoreBrowseScreen(onBack = { navController.popBackStack() })
             }
-            composable(Tab.SETTINGS.route) {
+            composable(
+                Tab.SETTINGS.route,
+                enterTransition = { fadeIn(tween(400)) },
+                exitTransition = { fadeOut(tween(400)) },
+                popEnterTransition = { fadeIn(tween(400)) },
+                popExitTransition = { fadeOut(tween(400)) },
+            ) {
                 SettingsScreen(
                     onNavigateAddresses = { navController.navigate("addresses") },
                     onNavigateUtxo = { navController.navigate("utxos") },

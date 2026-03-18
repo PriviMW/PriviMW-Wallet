@@ -1,8 +1,11 @@
 package com.privimemobile.ui.chat
 
 import android.util.Log
+import android.Manifest
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -17,20 +20,35 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.privimemobile.protocol.*
 import com.privimemobile.ui.theme.C
@@ -47,6 +66,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.activity.compose.BackHandler
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -68,6 +88,7 @@ fun ChatScreen(
     displayName: String = "",
     onBack: () -> Unit,
     onMediaGallery: () -> Unit = {},
+    scrollToTimestamp: Long = 0L,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -88,13 +109,25 @@ fun ChatScreen(
         }
     }.collectAsState(initial = emptyList())
 
-    // Load attachments for file messages
+    // File download tracking (declared early so attachment loading can pre-populate)
+    val filePaths = remember { mutableStateMapOf<String, String>() }
+    val downloadStatuses = remember { mutableStateMapOf<String, String>() } // idle, downloading, decrypting, done, error
+
+    // Load attachments for file messages + pre-populate cached file paths
     var attachmentMap by remember { mutableStateOf<Map<Long, com.privimemobile.chat.db.entities.AttachmentEntity>>(emptyMap()) }
     LaunchedEffect(roomMessages) {
         val map = mutableMapOf<Long, com.privimemobile.chat.db.entities.AttachmentEntity>()
         roomMessages.filter { it.type == "file" }.forEach { msg ->
             val att = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByMessageId(msg.id)
-            if (att != null) map[msg.id] = att
+            if (att != null) {
+                map[msg.id] = att
+                // Pre-load cached path so images show instantly (no placeholder flash)
+                val cid = att.ipfsCid ?: ""
+                if (cid.isNotEmpty() && !filePaths.containsKey(cid)) {
+                    val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(cid)
+                    if (path != null) filePaths[cid] = path
+                }
+            }
         }
         attachmentMap = map
     }
@@ -138,8 +171,14 @@ fun ChatScreen(
     }
     val resolvedWalletId = contact?.walletId
 
-    // Input state
-    var inputText by remember { mutableStateOf("") }
+    // Input state — use TextFieldValue for cursor control
+    var inputText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    fun setInputText(text: String) {
+        inputText = androidx.compose.ui.text.input.TextFieldValue(
+            text = text,
+            selection = androidx.compose.ui.text.TextRange(text.length), // cursor at end
+        )
+    }
     var uploading by remember { mutableStateOf(false) }
 
     // Pending file to send
@@ -196,9 +235,12 @@ fun ChatScreen(
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var searchHighlightTs by remember { mutableStateOf<Long?>(null) }
 
-    // File download tracking
-    val filePaths = remember { mutableStateMapOf<String, String>() }
-    val downloadStatuses = remember { mutableStateMapOf<String, String>() } // idle, downloading, decrypting, done, error
+    // Attachment picker
+    var showAttachPicker by remember { mutableStateOf(false) }
+    var attachPickerTab by remember { mutableStateOf(0) } // 0 = Gallery, 1 = Files
+
+    // Fullscreen image viewer
+    var fullscreenImage by remember { mutableStateOf<Pair<String, String>?>(null) } // (filePath, fileName)
 
     val listState = rememberLazyListState()
 
@@ -215,44 +257,104 @@ fun ChatScreen(
 
     // Scroll to bottom when messages change
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && scrollToTimestamp == 0L) {
             listState.animateScrollToItem(0) // reversed layout, 0 = bottom
         }
     }
 
-    // Load cached file paths for file messages
+    // Scroll to specific message (from search results)
+    var searchHighlightFromNav by remember { mutableStateOf(scrollToTimestamp) }
+    LaunchedEffect(scrollToTimestamp, messages.size) {
+        if (scrollToTimestamp > 0L && messages.isNotEmpty()) {
+            val reversedMessages = messages.reversed()
+            val idx = reversedMessages.indexOfFirst { it.timestamp == scrollToTimestamp }
+            if (idx >= 0) {
+                searchHighlightFromNav = scrollToTimestamp
+                listState.animateScrollToItem(idx)
+                // Auto-clear highlight after 3s
+                delay(3000)
+                searchHighlightFromNav = 0L
+            }
+        }
+    }
+
+    // Load cached file paths + auto-download images/GIFs
     LaunchedEffect(messages) {
         messages.forEach { msg ->
             val fileCid = msg.file?.cid ?: ""
             if (fileCid.isNotEmpty() && !filePaths.containsKey(fileCid)) {
                 val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(fileCid)
-                if (path != null) filePaths[fileCid] = path
+                if (path != null) {
+                    filePaths[fileCid] = path
+                } else if (Helpers.isImageMime(msg.file?.mime ?: "")
+                    && (msg.file?.size ?: 0) <= Config.AUTO_DL_MAX_SIZE
+                    && downloadStatuses[fileCid] == null
+                ) {
+                    // Auto-download images and GIFs — inline to avoid forward reference
+                    downloadStatuses[fileCid] = "downloading"
+                    scope.launch {
+                        try {
+                            val attachment = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByCid(fileCid)
+                            if (attachment != null) {
+                                val dlPath = com.privimemobile.chat.transport.IpfsTransport.downloadFile(
+                                    attachmentId = attachment.id,
+                                    ipfsCid = fileCid,
+                                    keyHex = msg.file?.key ?: "",
+                                    ivHex = msg.file?.iv ?: "",
+                                    inlineData = attachment.inlineData ?: msg.file?.data,
+                                )
+                                filePaths[fileCid] = dlPath
+                                downloadStatuses[fileCid] = "done"
+                            } else {
+                                downloadStatuses[fileCid] = "error"
+                            }
+                        } catch (_: Exception) {
+                            downloadStatuses[fileCid] = "error"
+                        }
+                    }
+                }
             }
         }
     }
 
-    // File picker launcher
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    // Common handler for picked files (from any source)
+    fun handlePickedUri(uri: Uri) {
         val info = getFileInfo(context, uri)
         if (info != null) {
             Log.d("ChatScreen", "File picked: ${info.name}, ${info.size} bytes, ${info.mimeType}")
-            if (info.size > Config.MAX_FILE_SIZE) {
-                Log.w("ChatScreen", "File too large: ${info.size} > ${Config.MAX_FILE_SIZE}")
-                android.widget.Toast.makeText(context, "File too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)", android.widget.Toast.LENGTH_SHORT).show()
-                return@rememberLauncherForActivityResult
+            val isImage = Helpers.isImageMime(info.mimeType)
+            // Images: allow up to MAX_FILE_SIZE (compression will shrink them)
+            // Non-images: cap at MAX_INLINE_SIZE (no compression, must fit inline)
+            val limit = if (isImage) Config.MAX_FILE_SIZE else Config.MAX_INLINE_SIZE
+            if (info.size > limit) {
+                Log.w("ChatScreen", "File too large: ${info.size} > $limit (isImage=$isImage)")
+                val msg = if (isImage) {
+                    "Image too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)"
+                } else {
+                    "File too large (max ${Config.MAX_INLINE_SIZE / 1024}KB). Only images are compressed."
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                return
             }
-            pendingFile = PendingFile(
-                uri = uri,
-                name = info.name,
-                size = info.size,
-                mimeType = info.mimeType,
-            )
+            pendingFile = PendingFile(uri = uri, name = info.name, size = info.size, mimeType = info.mimeType)
+            showAttachPicker = false
         } else {
             Log.w("ChatScreen", "File info is null for uri: $uri")
         }
+    }
+
+    // File picker launcher (for Files tab)
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) handlePickedUri(uri)
+    }
+
+    // Gallery image picker launcher (for Gallery tab — picks from system gallery)
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) handlePickedUri(uri)
     }
 
     // Send cooldown — 1s between sends to prevent spam
@@ -267,7 +369,7 @@ fun ChatScreen(
         }
         lastSendTime = now
 
-        val trimmed = inputText.trim()
+        val trimmed = inputText.text.trim()
 
         // /tip command — send BEAM or any asset
         // Usage: /tip <amount> [asset_id] [message]
@@ -358,7 +460,7 @@ fun ChatScreen(
                     }
                 }
             }
-            inputText = ""
+            setInputText("")
             return
         }
 
@@ -433,7 +535,7 @@ fun ChatScreen(
                 } finally {
                     uploading = false
                     pendingFile = null
-                    inputText = ""
+                    setInputText("")
                     replyingTo = null
                 }
             }
@@ -483,7 +585,7 @@ fun ChatScreen(
             }
         }
 
-        inputText = ""
+        setInputText("")
         replyingTo = null
     }
 
@@ -513,32 +615,55 @@ fun ChatScreen(
         }
     }
 
-    val canSend = (inputText.isNotBlank() || pendingFile != null) && !resolvedWalletId.isNullOrEmpty()
+    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && !resolvedWalletId.isNullOrEmpty()
 
+    // BackHandler: intercept system back when overlays are visible
+    BackHandler(enabled = fullscreenImage != null) { fullscreenImage = null }
+    BackHandler(enabled = showAttachPicker) { showAttachPicker = false }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(C.bg),
     ) {
-        // Header
+        // Header — Telegram-style with avatar + back arrow
         Surface(
             color = C.card,
-            shadowElevation = 4.dp,
+            shadowElevation = 2.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onBack) {
-                    Text("<", color = C.textSecondary, fontSize = 18.sp)
+                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = C.text, modifier = Modifier.size(22.dp))
                 }
-                Column(modifier = Modifier.weight(1f)) {
+                // Avatar
+                val avatarKey = handle
+                val avatarColors = listOf(
+                    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+                    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+                )
+                val avatarBg = avatarColors[kotlin.math.abs(avatarKey.hashCode()) % avatarColors.size]
+                val initial = (resolvedName.removePrefix("@")).firstOrNull()?.uppercase() ?: "?"
+                Box(
+                    modifier = Modifier.size(38.dp).clip(CircleShape).background(avatarBg)
+                        .clickable { showProfileDialog = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier.weight(1f).clickable { showProfileDialog = true },
+                ) {
                     Text(
                         resolvedName,
                         color = C.text,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -553,8 +678,8 @@ fun ChatScreen(
                 }
                 // 3-dot overflow menu
                 Box {
-                    TextButton(onClick = { showOverflowMenu = true }) {
-                        Text("\u22EE", color = C.textSecondary, fontSize = 22.sp, fontWeight = FontWeight.Bold)  // ⋮
+                    IconButton(onClick = { showOverflowMenu = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = C.textSecondary, modifier = Modifier.size(22.dp))
                     }
                     DropdownMenu(
                         expanded = showOverflowMenu,
@@ -769,15 +894,24 @@ fun ChatScreen(
 
                 Column {
                     if (showDateSep) {
-                        Text(
-                            formatDateSeparator(msg.timestamp),
-                            color = C.textSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+                        // Centered pill date separator (Telegram-style)
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = C.card.copy(alpha = 0.8f),
+                            ) {
+                                Text(
+                                    formatDateSeparator(msg.timestamp),
+                                    color = C.textSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
                     }
                     MessageBubble(
                         msg = msg,
@@ -788,6 +922,10 @@ fun ChatScreen(
                         },
                         onReply = { replyingTo = msg },
                         onLongPress = { contextMenuMsg = msg },
+                        onFullscreenImage = {
+                            val fp = filePaths[msg.file?.cid ?: ""]
+                            if (fp != null) fullscreenImage = Pair(fp, msg.file?.name ?: "Image")
+                        },
                         reactions = reactionMap[msg.timestamp] ?: emptyList(),
                         onRemoveReaction = { emoji, msgTs ->
                             scope.launch {
@@ -812,7 +950,7 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        isHighlighted = searchHighlightTs == msg.timestamp,
+                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp,
                     )
                 }
             }
@@ -915,7 +1053,7 @@ fun ChatScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
-                                    inputText = "$cmd "
+                                    setInputText("$cmd ")
                                     showCommandMenu = false
                                 }
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -931,45 +1069,41 @@ fun ChatScreen(
             }
         }
 
-        // Input bar
-        Surface(color = C.card) {
+        // Input bar — Telegram-style
+        Surface(color = C.inputBar) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.Bottom,
             ) {
-                // Attach button
+                // Attach button — opens bottom sheet picker
                 IconButton(
-                    onClick = { filePickerLauncher.launch("*/*") },
+                    onClick = { showAttachPicker = true },
                     enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
                         Icons.Default.AttachFile,
                         contentDescription = "Attach file",
-                        tint = C.accent,
+                        tint = C.textSecondary,
+                        modifier = Modifier.size(22.dp),
                     )
-                }
-                // Slash command button
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .clickable { showCommandMenu = !showCommandMenu }
-                        .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("/", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedTextField(
                     value = inputText,
-                    onValueChange = {
-                        inputText = it
-                        if (showCommandMenu && !it.startsWith("/")) showCommandMenu = false
-                        if (it.isNotEmpty()) {
+                    onValueChange = { newValue ->
+                        inputText = newValue
+                        val text = newValue.text
+                        // Show command menu when user types "/" at the start
+                        if (text == "/") {
+                            showCommandMenu = true
+                        } else if (showCommandMenu && !text.startsWith("/")) {
+                            showCommandMenu = false
+                        }
+                        if (text.isNotEmpty()) {
                             com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
                         }
                     },
@@ -978,29 +1112,48 @@ fun ChatScreen(
                             when {
                                 pendingFile != null -> "Add a caption..."
                                 resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
-                                else -> "Type a message..."
+                                else -> "Message"
                             },
-                            color = C.textSecondary,
+                            color = C.textMuted,
+                            fontSize = 15.sp,
                         )
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = C.accent,
-                        unfocusedBorderColor = C.border,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = C.card,
+                        unfocusedContainerColor = C.card,
                         cursorColor = C.accent,
+                        focusedTextColor = C.text,
+                        unfocusedTextColor = C.text,
                     ),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                     maxLines = 4,
                     enabled = !resolvedWalletId.isNullOrEmpty() && !uploading,
+                    trailingIcon = {
+                        // Slash command button inside text field
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .clickable { showCommandMenu = !showCommandMenu }
+                                .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("/", color = C.textSecondary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
                 )
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
 
                 if (uploading) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(20.dp))
+                            .size(42.dp)
+                            .clip(CircleShape)
                             .background(C.accent),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1010,15 +1163,21 @@ fun ChatScreen(
                             strokeWidth = 2.dp,
                         )
                     }
-                } else {
-                    IconButton(
-                        onClick = { handleSend() },
-                        enabled = canSend,
+                } else if (canSend) {
+                    // Filled circle send button (Telegram-style)
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(C.accent)
+                            .clickable { handleSend() },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
-                            tint = if (canSend) C.accent else C.textSecondary,
+                            tint = C.textDark,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -1195,6 +1354,22 @@ fun ChatScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text("Copy", color = C.text, modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+
+                        // Save to Downloads (for file messages with cached file)
+                        if (targetMsg.file != null) {
+                            val targetPath = filePaths[targetMsg.file.cid]
+                            if (targetPath != null) {
+                                TextButton(
+                                    onClick = {
+                                        saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
+                                        contextMenuMsg = null
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Save to Downloads", color = C.text, modifier = Modifier.fillMaxWidth())
+                                }
                             }
                         }
 
@@ -1427,7 +1602,44 @@ fun ChatScreen(
                 confirmButton = {},
             )
         }
+    } // end Column
+
+    // ── Overlays rendered OUTSIDE Column, filling entire screen ──
+
+    // Attachment picker bottom sheet (Telegram-style)
+    if (showAttachPicker) {
+        AttachmentPickerSheet(
+            onDismiss = { showAttachPicker = false },
+            onPickGallery = {
+                showAttachPicker = false
+                galleryPickerLauncher.launch("image/*")
+            },
+            onPickFile = {
+                showAttachPicker = false
+                filePickerLauncher.launch("*/*")
+            },
+            onImageSelected = { uri -> handlePickedUri(uri) },
+        )
     }
+
+    // Fullscreen image viewer
+    if (fullscreenImage != null) {
+        FullscreenImageViewer(
+            filePath = fullscreenImage!!.first,
+            fileName = fullscreenImage!!.second,
+            onDismiss = { fullscreenImage = null },
+            onSave = {
+                val mime = when {
+                    fullscreenImage!!.second.endsWith(".png", true) -> "image/png"
+                    fullscreenImage!!.second.endsWith(".gif", true) -> "image/gif"
+                    fullscreenImage!!.second.endsWith(".webp", true) -> "image/webp"
+                    else -> "image/jpeg"
+                }
+                saveFileToDownloads(context, fullscreenImage!!.first, fullscreenImage!!.second, mime)
+            },
+        )
+    }
+    } // end Box
 }
 
 @Composable
@@ -1438,6 +1650,7 @@ private fun MessageBubble(
     onDownload: (cid: String, key: String, iv: String, mime: String, inlineData: String?) -> Unit,
     onReply: () -> Unit = {},
     onLongPress: () -> Unit = {},
+    onFullscreenImage: () -> Unit = {},
     reactions: List<Triple<String, Int, Boolean>> = emptyList(),
     onRemoveReaction: (emoji: String, msgTs: Long) -> Unit = { _, _ -> },
     isHighlighted: Boolean = false,
@@ -1511,9 +1724,9 @@ private fun MessageBubble(
                 ),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isHighlighted) C.accent.copy(alpha = 0.3f)
-                        else if (isMine) Color(0x33DA68F5) else C.card,
+                        else if (isMine) Color(0xFF1B3A4B) else C.card,
                 ),
-                modifier = Modifier.widthIn(max = 280.dp),
+                modifier = Modifier.widthIn(max = if (isImage) 300.dp else 280.dp),
             ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Forwarded label
@@ -1594,6 +1807,7 @@ private fun MessageBubble(
                                 saveFileToDownloads(context, filePath, fName, fMime)
                             }
                         },
+                        onFullscreen = onFullscreenImage,
                     )
                 }
 
@@ -1670,42 +1884,28 @@ private fun FileContent(
     isImage: Boolean,
     onDownload: () -> Unit,
     onSave: () -> Unit,
+    onFullscreen: () -> Unit = {},
 ) {
     Column(modifier = Modifier.padding(bottom = 2.dp)) {
         if (isImage && filePath != null) {
-            // Show cached image
+            // Show cached image — tap to fullscreen
             AsyncImage(
                 model = "file://$filePath",
                 contentDescription = fileName,
                 modifier = Modifier
-                    .width(220.dp)
-                    .heightIn(max = 180.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp, max = 260.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(C.border)
+                    .clickable { onFullscreen() },
                 contentScale = ContentScale.Crop,
             )
-            // Save button for downloaded images
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                Text(
-                    "Save",
-                    color = C.accent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clickable { onSave() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
         } else if (isImage && (downloadStatus == "downloading" || downloadStatus == "decrypting")) {
             // Loading placeholder
             Surface(
                 modifier = Modifier
-                    .width(220.dp)
-                    .height(120.dp),
+                    .fillMaxWidth()
+                    .height(160.dp),
                 shape = RoundedCornerShape(8.dp),
                 color = C.border,
             ) {
@@ -1727,8 +1927,8 @@ private fun FileContent(
             // Error — tap to retry
             Surface(
                 modifier = Modifier
-                    .width(220.dp)
-                    .height(120.dp)
+                    .fillMaxWidth()
+                    .height(160.dp)
                     .clickable { onDownload() },
                 shape = RoundedCornerShape(8.dp),
                 color = C.border,
@@ -1873,6 +2073,397 @@ private fun saveFileToDownloads(context: Context, srcPath: String, fileName: Str
     } catch (e: Exception) {
         Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
     }
+}
+
+// ── Fullscreen image viewer (Telegram-style: black bg, tap to dismiss) ──
+
+@Composable
+private fun FullscreenImageViewer(
+    filePath: String,
+    fileName: String,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+) {
+    var showBars by remember { mutableStateOf(true) }
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 5f)
+        if (scale > 1f) {
+            offsetX += panChange.x
+            offsetY += panChange.y
+        } else {
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = "file://$filePath",
+            contentDescription = fileName,
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offsetX,
+                    translationY = offsetY,
+                )
+                .transformable(state = transformState)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { showBars = !showBars },
+                        onDoubleTap = {
+                            if (scale > 1.1f) {
+                                scale = 1f; offsetX = 0f; offsetY = 0f
+                            } else {
+                                scale = 2.5f
+                            }
+                        },
+                    )
+                },
+            contentScale = ContentScale.Fit,
+        )
+
+        // Top bar with close + save — toggled by tap
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showBars,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close", tint = Color.White)
+            }
+            Text(
+                fileName,
+                color = Color.White,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onSave) {
+                Icon(Icons.Default.Download, contentDescription = "Save", tint = Color.White)
+            }
+        }
+        } // end AnimatedVisibility
+    }
+}
+
+// ── Attachment picker bottom sheet (Telegram-style Gallery/Files tabs) ──
+
+@Composable
+private fun AttachmentPickerSheet(
+    onDismiss: () -> Unit,
+    onPickGallery: () -> Unit,
+    onPickFile: () -> Unit,
+    onImageSelected: (Uri) -> Unit,
+) {
+    val context = LocalContext.current
+    var selectedTab by remember { mutableStateOf(0) } // 0=Gallery, 1=Files
+
+    // Check gallery permission
+    val hasPermission = remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            } else {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasPermission.value = granted }
+
+    // Load gallery images from MediaStore
+    val galleryImages = remember { mutableStateOf<List<Uri>>(emptyList()) }
+    LaunchedEffect(hasPermission.value) {
+        if (hasPermission.value) {
+            withContext(Dispatchers.IO) {
+                galleryImages.value = loadGalleryImages(context, limit = 60)
+            }
+        }
+    }
+
+    // Swipe-to-dismiss state
+    var sheetOffsetY by remember { mutableStateOf(0f) }
+
+    // Full-screen overlay that acts as a bottom sheet
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = (0.4f * (1f - (sheetOffsetY / 600f).coerceIn(0f, 1f)))))
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.45f)
+                .align(Alignment.BottomCenter)
+                .offset(y = sheetOffsetY.coerceAtLeast(0f).dp)
+                .clickable(enabled = false) {}, // block click-through
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            color = C.card,
+            shadowElevation = 8.dp,
+        ) {
+            Column {
+                // Drag handle — swipe down to dismiss
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragEnd = {
+                                    if (sheetOffsetY > 100f) {
+                                        onDismiss()
+                                    }
+                                    sheetOffsetY = 0f
+                                },
+                                onDragCancel = { sheetOffsetY = 0f },
+                                onVerticalDrag = { _, dragAmount ->
+                                    sheetOffsetY = (sheetOffsetY + dragAmount).coerceAtLeast(0f)
+                                },
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(C.textMuted),
+                    )
+                }
+
+                // Tab row — Gallery | Files
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                ) {
+                    listOf(
+                        Triple(0, "Gallery", Icons.Default.PhotoLibrary),
+                        Triple(1, "Files", Icons.Default.Description),
+                    ).forEach { (index, label, icon) ->
+                        val isSelected = selectedTab == index
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { selectedTab = index },
+                            color = if (isSelected) C.accent.copy(alpha = 0.15f) else Color.Transparent,
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = label,
+                                    tint = if (isSelected) C.accent else C.textSecondary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    label,
+                                    color = if (isSelected) C.accent else C.textSecondary,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                when (selectedTab) {
+                    0 -> {
+                        // Gallery tab
+                        if (!hasPermission.value) {
+                            // Request permission
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text("Gallery access needed", color = C.textSecondary, fontSize = 14.sp)
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            Manifest.permission.READ_MEDIA_IMAGES
+                                        } else {
+                                            Manifest.permission.READ_EXTERNAL_STORAGE
+                                        }
+                                        permissionLauncher.launch(perm)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                                ) {
+                                    Text("Grant Access", color = C.textDark)
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                TextButton(onClick = onPickGallery) {
+                                    Text("Or pick from system gallery", color = C.accent, fontSize = 13.sp)
+                                }
+                            }
+                        } else if (galleryImages.value.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("No images found", color = C.textMuted, fontSize = 14.sp)
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                items(galleryImages.value) { uri ->
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { onImageSelected(uri) },
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        // Files tab — action buttons
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            // Document picker
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onPickFile() },
+                                color = C.bg,
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Description,
+                                        contentDescription = null,
+                                        tint = C.accent,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(Modifier.width(14.dp))
+                                    Column {
+                                        Text("Browse Files", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                        Text("Documents, PDFs, and more", color = C.textSecondary, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+
+                            // Image from gallery via system picker
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onPickGallery() },
+                                color = C.bg,
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Default.PhotoLibrary,
+                                        contentDescription = null,
+                                        tint = C.accent,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(Modifier.width(14.dp))
+                                    Column {
+                                        Text("Photo / Video", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                        Text("Pick from gallery", color = C.textSecondary, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.weight(1f))
+
+                            Text(
+                                "Max file size: ${Config.MAX_FILE_SIZE / 1024 / 1024}MB",
+                                color = C.textMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Query MediaStore for recent images, sorted newest first. */
+private fun loadGalleryImages(context: Context, limit: Int = 60): List<Uri> {
+    val images = mutableListOf<Uri>()
+    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    } else {
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    }
+    val projection = arrayOf(MediaStore.Images.Media._ID)
+    val sortOrder = "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+
+    try {
+        context.contentResolver.query(collection, projection, null, null, sortOrder)?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            var count = 0
+            while (cursor.moveToNext() && count < limit) {
+                val id = cursor.getLong(idCol)
+                val uri = android.content.ContentUris.withAppendedId(collection, id)
+                images.add(uri)
+                count++
+            }
+        }
+    } catch (e: Exception) {
+        Log.w("AttachmentPicker", "Failed to load gallery: ${e.message}")
+    }
+    return images
 }
 
 // Date formatting

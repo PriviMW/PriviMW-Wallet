@@ -11,7 +11,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -31,6 +36,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
+
+/** Deterministic avatar colors from handle/name hash. */
+private val avatarColors = listOf(
+    Color(0xFF5C6BC0), // indigo
+    Color(0xFF26A69A), // teal
+    Color(0xFFEF5350), // red
+    Color(0xFFAB47BC), // purple
+    Color(0xFF42A5F5), // blue
+    Color(0xFFFF7043), // deep orange
+    Color(0xFF66BB6A), // green
+    Color(0xFFEC407A), // pink
+    Color(0xFFFFA726), // orange
+    Color(0xFF78909C), // blue grey
+)
+
+private fun avatarColor(key: String): Color {
+    val hash = abs(key.lowercase().hashCode())
+    return avatarColors[hash % avatarColors.size]
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +97,20 @@ fun ChatsScreen(
 
     var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+
+    // Filter conversations by search query
+    val filteredConversations = remember(conversations, searchQuery) {
+        if (searchQuery.isBlank()) conversations
+        else {
+            val q = searchQuery.trim().lowercase()
+            conversations.filter { conv ->
+                (conv.displayName ?: "").lowercase().contains(q) ||
+                        (conv.handle ?: "").lowercase().contains(q)
+            }
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -87,36 +125,76 @@ fun ChatsScreen(
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-            ) {
-                Text("Chats", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "End-to-end encrypted messaging on Beam",
-                    color = C.textSecondary, fontSize = 14.sp,
-                )
-                Spacer(Modifier.height(16.dp))
+            Column(modifier = Modifier.fillMaxSize()) {
+                // ── Top bar ──
+                Surface(color = C.bg) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Chats", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search messages",
+                                    tint = C.textSecondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
 
-                if (conversations.isEmpty()) {
+                        // Search/filter bar
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search conversations...", color = C.textMuted, fontSize = 14.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(18.dp))
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedContainerColor = C.card,
+                                unfocusedContainerColor = C.card,
+                                cursorColor = C.accent,
+                                focusedTextColor = C.text,
+                                unfocusedTextColor = C.text,
+                            ),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                        )
+                    }
+                }
+
+                // ── Conversation list ──
+                if (filteredConversations.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No conversations yet", color = C.textSecondary, fontSize = 16.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Text("Start a new chat by tapping +", color = C.textSecondary, fontSize = 13.sp)
+                            if (searchQuery.isNotBlank()) {
+                                Text("No results for \"$searchQuery\"", color = C.textSecondary, fontSize = 15.sp)
+                            } else {
+                                Text("No conversations yet", color = C.textSecondary, fontSize = 16.sp)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Tap the pencil to start a chat", color = C.textMuted, fontSize = 13.sp)
+                            }
                         }
                     }
                 } else {
                     // Observe typing state for all conversations
-                    val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
+                    val typingVer by ChatService.typingVersion.collectAsState()
 
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        items(conversations, key = { it.id }) { conv ->
-                            val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(conv.convKey)
-                            ConversationCard(
+                    LazyColumn {
+                        items(filteredConversations, key = { it.id }) { conv ->
+                            val peerTyping = typingVer >= 0 && ChatService.isTyping(conv.convKey)
+                            ConversationRow(
                                 conv = conv,
                                 onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
                                 onLongPress = { menuTarget = conv },
@@ -127,14 +205,15 @@ fun ChatsScreen(
                 }
             }
 
-            // FAB - New Chat
+            // FAB - New Chat (pencil icon like Telegram)
             FloatingActionButton(
                 onClick = onNewChat,
                 containerColor = C.accent,
                 contentColor = C.textDark,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                shape = CircleShape,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "New Chat")
+                Icon(Icons.Filled.Edit, contentDescription = "New Chat")
             }
         }
     }
@@ -145,12 +224,29 @@ fun ChatsScreen(
         AlertDialog(
             onDismissRequest = { menuTarget = null },
             containerColor = C.card,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             title = {
-                Text(
-                    target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey,
-                    color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val avatarKey = target.handle ?: target.convKey
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(avatarColor(avatarKey)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val initial = (target.displayName ?: target.handle ?: target.convKey)
+                            .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
+                        Text(initial, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey,
+                            color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                        )
+                        if (target.handle != null && target.displayName?.isNotEmpty() == true) {
+                            Text("@${target.handle}", color = C.textSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
             },
             text = {
                 Column {
@@ -164,10 +260,14 @@ fun ChatsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            if (target.pinned) "Unpin" else "Pin",
-                            color = C.text, modifier = Modifier.fillMaxWidth(),
-                        )
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.PushPin, contentDescription = null,
+                                tint = C.textSecondary, modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (target.pinned) "Unpin" else "Pin", color = C.text)
+                        }
                     }
 
                     // Mute / Unmute
@@ -180,10 +280,14 @@ fun ChatsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            if (target.muted) "Unmute" else "Mute",
-                            color = C.text, modifier = Modifier.fillMaxWidth(),
-                        )
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.NotificationsOff, contentDescription = null,
+                                tint = C.textSecondary, modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (target.muted) "Unmute" else "Mute", color = C.text)
+                        }
                     }
 
                     // Block / Unblock
@@ -196,14 +300,21 @@ fun ChatsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            if (target.isBlocked) "Unblock" else "Block",
-                            color = if (target.isBlocked) C.text else C.error,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Block, contentDescription = null,
+                                tint = if (target.isBlocked) C.textSecondary else C.error,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                if (target.isBlocked) "Unblock" else "Block",
+                                color = if (target.isBlocked) C.text else C.error,
+                            )
+                        }
                     }
 
-                    HorizontalDivider(color = C.border)
+                    HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
 
                     // Delete
                     TextButton(
@@ -215,7 +326,14 @@ fun ChatsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Delete", color = C.error, modifier = Modifier.fillMaxWidth())
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Delete, contentDescription = null,
+                                tint = C.error, modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("Delete", color = C.error)
+                        }
                     }
                 }
             },
@@ -291,7 +409,6 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
     LaunchedEffect(txStatus) {
         if (txStatus == "confirmed") {
             delay(1500)
-            // sbbsNeedsUpdate = false triggers recomposition in parent → shows chat list
         }
     }
 
@@ -429,7 +546,6 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                 updating = true
                 txStatus = "pending"
                 val newDn = if (useExistingName) currentDisplayName else displayName.trim()
-                // Create new SBBS address → update on-chain
                 com.privimemobile.protocol.WalletApi.call("create_address", mapOf(
                     "type" to "regular",
                     "expiration" to "never",
@@ -464,67 +580,105 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
     }
 }
 
+/**
+ * Telegram-style conversation row — flat with divider, colored avatar, proper icons.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConversationCard(conv: ConversationEntity, onClick: () -> Unit, onLongPress: () -> Unit = {}, isTyping: Boolean = false) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = C.card),
-    ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Avatar
+private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLongPress: () -> Unit = {}, isTyping: Boolean = false) {
+    val avatarKey = conv.handle ?: conv.convKey
+    val displayLabel = conv.displayName?.ifEmpty { null } ?: conv.handle?.let { "@$it" } ?: conv.convKey
+    val initial = (conv.displayName ?: conv.handle ?: conv.convKey)
+        .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Circular avatar with deterministic color
             Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(C.border),
+                modifier = Modifier.size(52.dp).clip(CircleShape).background(avatarColor(avatarKey)),
                 contentAlignment = Alignment.Center,
             ) {
-                val initial = (conv.displayName ?: conv.handle ?: conv.convKey)
-                    .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
-                Text(initial, color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(initial, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                // Top line: name + indicators + time
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        conv.displayName?.ifEmpty { null } ?: conv.handle?.let { "@$it" } ?: conv.convKey,
-                        color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        displayLabel,
+                        color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (conv.isBlocked) {
-                            Text("\uD83D\uDEAB", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 🚫
-                        }
-                        if (conv.pinned) {
-                            Text("\uD83D\uDCCC", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 📌
-                        }
-                        if (conv.muted) {
-                            Text("\uD83D\uDD07", fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp)) // 🔇
-                        }
-                        Text(
-                            formatTime(conv.lastMessageTs),
-                            color = C.textSecondary, fontSize = 11.sp,
+                    if (conv.muted) {
+                        Icon(
+                            Icons.Default.NotificationsOff,
+                            contentDescription = "Muted",
+                            tint = C.textSecondary,
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )
                     }
+                    if (conv.pinned) {
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = "Pinned",
+                            tint = C.textSecondary,
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        formatTime(conv.lastMessageTs),
+                        color = if (conv.unreadCount > 0) C.accent else C.textSecondary,
+                        fontSize = 12.sp,
+                    )
                 }
-                Spacer(Modifier.height(2.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+
+                Spacer(Modifier.height(3.dp))
+
+                // Bottom line: preview + unread badge
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (isTyping) "typing..." else (conv.lastMessagePreview ?: ""),
                         color = if (isTyping) C.accent else C.textSecondary,
-                        fontSize = 13.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                        fontSize = 14.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
                     if (conv.unreadCount > 0) {
                         Spacer(Modifier.width(8.dp))
-                        Badge(containerColor = C.accent, contentColor = C.textDark) {
-                            Text(if (conv.unreadCount > 99) "99+" else "${conv.unreadCount}")
+                        Box(
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 22.dp)
+                                .clip(CircleShape)
+                                .background(C.accent)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (conv.unreadCount > 99) "99+" else "${conv.unreadCount}",
+                                color = C.textDark,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
                 }
             }
         }
+        // Divider — inset past avatar
+        HorizontalDivider(
+            color = C.border.copy(alpha = 0.5f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 82.dp),
+        )
     }
 }
 

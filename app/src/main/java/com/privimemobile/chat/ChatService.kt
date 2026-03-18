@@ -46,6 +46,39 @@ object ChatService {
     private val _activeChat = MutableStateFlow<String?>(null)
     val activeChat: StateFlow<String?> = _activeChat.asStateFlow()
 
+    // Typing indicators — convKey → version counter (increment = typing, even = idle)
+    private val _typingVersion = MutableStateFlow(0)
+    val typingVersion: StateFlow<Int> = _typingVersion.asStateFlow()
+    private val typingExpiry = mutableMapOf<String, Long>()
+
+    /** Called by MessageProcessor when a typing indicator arrives. */
+    fun onTypingReceived(convKey: String) {
+        Log.d(TAG, "onTypingReceived: $convKey")
+        val now = System.currentTimeMillis()
+        typingExpiry[convKey] = now + 5_000
+        _typingVersion.value++ // force recomposition
+        // Auto-clear after 5s
+        scope.launch {
+            delay(5_100)
+            if ((typingExpiry[convKey] ?: 0) <= System.currentTimeMillis()) {
+                typingExpiry.remove(convKey)
+                _typingVersion.value++ // force recomposition
+            }
+        }
+    }
+
+    /** Check if someone is typing in a conversation (call from Compose). */
+    fun isTyping(convKey: String): Boolean {
+        return (typingExpiry[convKey] ?: 0) > System.currentTimeMillis()
+    }
+
+    /** Clear typing indicator (called when a real message arrives from this person). */
+    fun clearTyping(convKey: String) {
+        if (typingExpiry.remove(convKey) != null) {
+            _typingVersion.value++
+        }
+    }
+
     // Initialization state
     private val _initialized = MutableStateFlow(false)
     val initialized: StateFlow<Boolean> = _initialized.asStateFlow()

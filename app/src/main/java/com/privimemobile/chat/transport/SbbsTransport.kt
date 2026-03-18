@@ -147,6 +147,34 @@ class SbbsTransport(
         }
     }
 
+    // Typing throttle — max one typing indicator per conversation per 3s
+    private val lastTypingSent = mutableMapOf<String, Long>()
+
+    /** Send typing indicator (fire-and-forget, throttled, no retry). */
+    fun sendTyping(convKey: String) {
+        val now = System.currentTimeMillis()
+        val last = lastTypingSent[convKey] ?: 0
+        if (now - last < 3_000) return // throttle: max once per 3s
+
+        lastTypingSent[convKey] = now
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            if (state.myHandle == null) return@launch
+
+            val handle = convKey.removePrefix("@")
+            val conv = db.conversationDao().findByKey(convKey) ?: return@launch
+            val toWalletId = conv.walletId ?: return@launch
+
+            val payload = mapOf(
+                "v" to 1,
+                "t" to "typing",
+                "from" to state.myHandle,
+                "to" to handle,
+            )
+            sendSbbsMessage(toWalletId, payload)
+        }
+    }
+
     /** Low-level SBBS send — message must be a Map (serialized as JSON object by WalletApi). */
     private fun sendSbbsMessage(toWalletId: String, message: Map<String, Any?>) {
         Log.d(TAG, "Sending SBBS to ${toWalletId.take(16)}...: ${message["msg"] ?: message["t"]}")

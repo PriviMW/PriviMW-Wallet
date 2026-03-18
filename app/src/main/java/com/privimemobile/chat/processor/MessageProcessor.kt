@@ -88,7 +88,11 @@ class MessageProcessor(
             "typing" -> handleTyping(from)
             "react" -> handleReaction(payload, convKey, from)
             "delete" -> handleDelete(payload, convKey, from)
-            else -> handleMessage(payload, raw, type, ts, from, to, sent, convKey, senderWalletId)
+            else -> {
+                // Clear typing indicator when a real message arrives from this person
+                if (!sent) ChatService.clearTyping(convKey)
+                handleMessage(payload, raw, type, ts, from, to, sent, convKey, senderWalletId)
+            }
         }
     }
 
@@ -218,8 +222,9 @@ class MessageProcessor(
 
     /** Handle typing indicator (ephemeral, no DB storage). */
     private fun handleTyping(from: String) {
-        // TODO: emit to a SharedFlow for UI to observe
-        Log.d(TAG, "Typing indicator from @$from")
+        val convKey = "@$from"
+        Log.d(TAG, "Typing indicator from $convKey")
+        ChatService.onTypingReceived(convKey)
     }
 
     /** Handle reaction. */

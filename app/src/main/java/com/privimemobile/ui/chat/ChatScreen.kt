@@ -369,7 +369,14 @@ fun ChatScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
+                    val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
+                    // typingVer read forces recomposition when typing state changes
+                    val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(convKey)
+                    if (peerTyping) {
+                        Text("typing...", color = C.accent, fontSize = 12.sp)
+                    } else {
+                        Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -469,7 +476,12 @@ fun ChatScreen(
 
                 OutlinedTextField(
                     value = inputText,
-                    onValueChange = { inputText = it },
+                    onValueChange = {
+                        inputText = it
+                        if (it.isNotEmpty()) {
+                            com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
+                        }
+                    },
                     placeholder = {
                         Text(
                             when {

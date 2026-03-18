@@ -24,6 +24,7 @@ data class MessageEntity(
     val sent: Boolean,                 // true = I sent, false = I received
     val type: String = "dm",           // dm, tip, file, react, delete, typing
     val read: Boolean = false,         // recipient read this (for sent messages)
+    val delivered: Boolean = false,    // recipient confirmed delivery (for sent messages)
     val acked: Boolean = false,        // we sent ack for this (for received messages)
     @ColumnInfo(name = "reply_text") val replyText: String? = null,
     @ColumnInfo(name = "tip_amount") val tipAmount: Long = 0,  // groths

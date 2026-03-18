@@ -395,7 +395,7 @@ fun SettingsScreen(
                     )
                 }
             } else {
-                Text("Not registered. Register a @handle in the Chats tab to use messaging.\nRegistration fee: ${if (registrationFee > 0) "$registrationFee BEAM" else "loading..."}",
+                Text("Not registered. Register a @handle in the Chats tab to use messaging.\nRegistration fee: ${if (registrationFee > 0) "${com.privimemobile.protocol.Helpers.grothToBeam(registrationFee)} BEAM" else "loading..."}",
                     color = C.textSecondary, fontSize = 13.sp, lineHeight = 20.sp,
                     modifier = Modifier.padding(vertical = 8.dp))
             }

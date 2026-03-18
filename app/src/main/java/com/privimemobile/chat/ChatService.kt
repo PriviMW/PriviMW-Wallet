@@ -132,17 +132,38 @@ object ChatService {
     fun setActiveChat(convKey: String?) {
         _activeChat.value = convKey
         if (convKey != null) {
-            // Clear unread for this conversation
             scope.launch {
-                val conv = db?.conversationDao()?.findByKey(convKey)
-                if (conv != null && conv.unreadCount > 0) {
+                val conv = db?.conversationDao()?.findByKey(convKey) ?: return@launch
+                // Clear unread badge
+                if (conv.unreadCount > 0) {
                     db?.conversationDao()?.clearUnread(conv.id)
-                    // Send read receipts
-                    val unacked = db?.messageDao()?.getUnackedTimestamps(conv.id) ?: emptyList()
-                    if (unacked.isNotEmpty()) {
-                        sbbs.sendReadReceipts(convKey, unacked)
-                    }
                 }
+                // Send read receipts for ALL received messages (catch-all — covers any
+                // previously lost acks). This ensures sender gets blue ticks even if
+                // individual per-message acks were lost by SBBS.
+                sendAllAcksForConv(convKey, conv.id)
+            }
+        }
+    }
+
+    /** Send read receipts for ALL received messages in a conversation (catch-all on chat open). */
+    private fun sendAllAcksForConv(convKey: String, convId: Long) {
+        scope.launch {
+            val allTimestamps = db?.messageDao()?.getAllReceivedTimestamps(convId) ?: return@launch
+            Log.d(TAG, "sendAllAcksForConv($convKey, convId=$convId): ${allTimestamps.size} total received")
+            if (allTimestamps.isNotEmpty()) {
+                sbbs.sendReadReceipts(convKey, allTimestamps)
+            }
+        }
+    }
+
+    /** Send read receipts for unacked received messages (called per-message on arrival). */
+    fun sendAcksForConv(convKey: String, convId: Long) {
+        scope.launch {
+            val unacked = db?.messageDao()?.getUnackedTimestamps(convId) ?: return@launch
+            Log.d(TAG, "sendAcksForConv($convKey, convId=$convId): ${unacked.size} unacked")
+            if (unacked.isNotEmpty()) {
+                sbbs.sendReadReceipts(convKey, unacked)
             }
         }
     }

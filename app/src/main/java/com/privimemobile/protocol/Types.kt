@@ -35,8 +35,9 @@ data class ChatMessage(
     val timestamp: Long,       // unix seconds
     val sent: Boolean,         // true if we sent it
     val displayName: String = "",
-    val read: Boolean = false,       // read receipt received
-    val acked: Boolean = false,      // delivery ack received
+    val read: Boolean = false,       // read receipt received (blue ✓✓)
+    val delivered: Boolean = false,  // delivery ack received (grey ✓✓)
+    val acked: Boolean = false,      // we sent ack for this (for received messages)
     val isTip: Boolean = false,      // is a tip message
     val tipAmount: Long = 0,         // tip amount in groth
     val reply: String? = null,       // quoted message text (for replies)

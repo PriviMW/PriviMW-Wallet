@@ -23,8 +23,12 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(messages: List<MessageEntity>): List<Long>
 
-    /** Mark sent messages as read by their timestamps (ack received). */
-    @Query("UPDATE messages SET read = 1 WHERE conversation_id = :convId AND sent = 1 AND timestamp IN (:timestamps)")
+    /** Mark sent messages as delivered by their timestamps (delivery ack received). */
+    @Query("UPDATE messages SET delivered = 1 WHERE conversation_id = :convId AND sent = 1 AND timestamp IN (:timestamps)")
+    suspend fun markDelivered(convId: Long, timestamps: List<Long>)
+
+    /** Mark sent messages as read by their timestamps (read ack received). Also marks delivered. */
+    @Query("UPDATE messages SET read = 1, delivered = 1 WHERE conversation_id = :convId AND sent = 1 AND timestamp IN (:timestamps)")
     suspend fun markRead(convId: Long, timestamps: List<Long>)
 
     /** Mark received messages as acked (we sent ack). */
@@ -34,6 +38,10 @@ interface MessageDao {
     /** Get unacked received message timestamps for sending read receipts. */
     @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0 AND acked = 0")
     suspend fun getUnackedTimestamps(convId: Long): List<Long>
+
+    /** Get ALL received message timestamps — for catch-all read receipt on chat open. */
+    @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0")
+    suspend fun getAllReceivedTimestamps(convId: Long): List<Long>
 
     /** Mark as deleted (delete for everyone). */
     @Query("UPDATE messages SET deleted = 1 WHERE conversation_id = :convId AND timestamp = :ts AND sender_handle = :senderHandle")

@@ -18,7 +18,7 @@ import net.sqlcipher.database.SupportFactory
         GroupMemberEntity::class,
         ChatStateEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -49,6 +49,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
+                .fallbackToDestructiveMigration()
                 .build()
         }
 

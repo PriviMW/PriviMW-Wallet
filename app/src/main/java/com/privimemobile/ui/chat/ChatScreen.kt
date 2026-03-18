@@ -94,13 +94,14 @@ fun ChatScreen(
     val messages = remember(roomMessages, attachmentMap) { roomMessages.map { entity ->
         val att = attachmentMap[entity.id]
         ChatMessage(
-            id = "${entity.timestamp}_${entity.sent}",
+            id = entity.id.toString(),
             from = entity.senderHandle ?: "",
             to = handle,
             text = entity.text ?: "",
             timestamp = entity.timestamp,
             sent = entity.sent,
             read = entity.read,
+            delivered = entity.delivered,
             type = entity.type,
             isTip = entity.type == "tip",
             tipAmount = entity.tipAmount,
@@ -193,8 +194,18 @@ fun ChatScreen(
         }
     }
 
+    // Send cooldown — 1s between sends to prevent spam
+    var lastSendTime by remember { mutableStateOf(0L) }
+
     // Send message
     fun handleSend() {
+        val now = System.currentTimeMillis()
+        if (now - lastSendTime < 3000) {
+            android.widget.Toast.makeText(context, "Slow down! Wait 3s between messages", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        lastSendTime = now
+
         val trimmed = inputText.trim()
 
         // Send file if pending
@@ -652,21 +663,13 @@ private fun MessageBubble(
                         color = C.textSecondary,
                         fontSize = 10.sp,
                     )
-                    // Read receipt indicator for sent messages
+                    // Status ticks for sent messages: ✓ sent, ✓✓ delivered, ✓✓ read (blue)
                     if (isMine) {
                         Spacer(Modifier.width(6.dp))
-                        if (msg.read) {
-                            Text(
-                                "\u2713\u2713",
-                                color = C.accent,
-                                fontSize = 10.sp,
-                            )
-                        } else {
-                            Text(
-                                "\u2713",
-                                color = C.textSecondary,
-                                fontSize = 10.sp,
-                            )
+                        when {
+                            msg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
+                            msg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
+                            else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
                         }
                     }
                 }

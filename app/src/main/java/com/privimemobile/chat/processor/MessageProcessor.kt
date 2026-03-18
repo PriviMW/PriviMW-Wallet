@@ -31,8 +31,22 @@ class MessageProcessor(
      * Called by SbbsTransport after read_messages.
      */
     suspend fun processRawMessages(rawMessages: List<*>) {
-        val state = db.chatStateDao().get() ?: return
-        val myHandle = state.myHandle ?: return
+        // Wait up to 10s for identity to be resolved (myHandle set)
+        // Prevents losing messages consumed from SBBS before identity is ready
+        var state = db.chatStateDao().get()
+        var retries = 0
+        while (state?.myHandle == null && retries < 20) {
+            Log.d(TAG, "Waiting for identity (attempt ${retries + 1}/20)...")
+            kotlinx.coroutines.delay(500)
+            state = db.chatStateDao().get()
+            retries++
+        }
+
+        val myHandle = state?.myHandle
+        if (myHandle == null) {
+            Log.w(TAG, "DROP BATCH: myHandle still null after 10s — ${rawMessages.size} messages lost")
+            return
+        }
         val contractStartTs = state.contractStartTs
 
         for (raw in rawMessages) {
@@ -51,17 +65,20 @@ class MessageProcessor(
         contractStartTs: Long,
     ) {
         // Extract payload — try .message, then .payload, then the object itself
-        val payload = extractPayload(raw) ?: return
+        val payload = extractPayload(raw) ?: run { Log.w(TAG, "DROP: no payload in $raw"); return }
 
         // Version check
-        val version = (payload["v"] as? Number)?.toInt() ?: return
-        if (version != 1) return
+        val version = (payload["v"] as? Number)?.toInt() ?: run { Log.w(TAG, "DROP: no version in ${payload.keys}"); return }
+        if (version != 1) { Log.w(TAG, "DROP: version=$version"); return }
 
         val type = payload["t"] as? String ?: "dm"
-        val ts = (payload["ts"] as? Number)?.toLong() ?: (raw["timestamp"] as? Number)?.toLong() ?: return
+        val ts = (payload["ts"] as? Number)?.toLong() ?: (raw["timestamp"] as? Number)?.toLong() ?: run { Log.w(TAG, "DROP: no timestamp"); return }
+
+        val msgPreview = (payload["msg"] as? String)?.take(20) ?: type
+        Log.d(TAG, "Processing: type=$type from=${payload["from"]} msg=$msgPreview ts=$ts")
 
         // Filter: skip messages before contract start
-        if (contractStartTs > 0 && ts < contractStartTs) return
+        if (contractStartTs > 0 && ts < contractStartTs) { Log.d(TAG, "DROP: ts=$ts < contractStartTs=$contractStartTs"); return }
 
         // Sanitize sender handle
         val fromRaw = payload["from"] as? String ?: ""
@@ -85,6 +102,7 @@ class MessageProcessor(
         // Route by message type
         when (type) {
             "ack" -> handleAck(payload, convKey)
+            "delivered" -> handleDelivered(payload, convKey)
             "typing" -> handleTyping(from)
             "react" -> handleReaction(payload, convKey, from)
             "delete" -> handleDelete(payload, convKey, from)
@@ -141,7 +159,7 @@ class MessageProcessor(
 
         // Insert — IGNORE on duplicate
         val messageId = db.messageDao().insert(message)
-        if (messageId == -1L) return  // Duplicate, skip
+        if (messageId == -1L) { Log.d(TAG, "DEDUP: $dedupKey (${text?.take(20)})"); return }
 
         // Handle file attachment
         if (type == "file") {
@@ -167,6 +185,17 @@ class MessageProcessor(
         // Increment unread (only for received, not in active chat)
         if (!sent && ChatService.activeChat.value != convKey) {
             db.conversationDao().incrementUnread(conv.id)
+        }
+
+        // Send ack for received messages
+        if (!sent) {
+            if (ChatService.activeChat.value == convKey) {
+                // Chat is open — send read receipt directly (also marks delivered)
+                ChatService.sendAcksForConv(convKey, conv.id)
+            } else {
+                // Chat is closed — send delivery ack only
+                ChatService.sbbs.sendDeliveryAck(convKey, listOf(ts))
+            }
         }
 
         // Queue contact resolution for unknown senders
@@ -211,13 +240,25 @@ class MessageProcessor(
 
     /** Handle ack (read receipt) message. */
     private suspend fun handleAck(payload: Map<String, Any?>, convKey: String) {
+        Log.d(TAG, "handleAck: payload=$payload convKey=$convKey")
         val readTimestamps = (payload["read"] as? List<*>)?.mapNotNull {
             (it as? Number)?.toLong()
-        } ?: return
+        } ?: run { Log.w(TAG, "handleAck: no 'read' timestamps in payload"); return }
 
-        val conv = db.conversationDao().findByKey(convKey) ?: return
+        val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "handleAck: conv not found for $convKey"); return }
         db.messageDao().markRead(conv.id, readTimestamps)
-        Log.d(TAG, "Marked ${readTimestamps.size} messages as read in $convKey")
+        Log.d(TAG, "Marked ${readTimestamps.size} messages as read in $convKey (convId=${conv.id})")
+    }
+
+    /** Handle delivery ack — recipient confirmed they received our message. */
+    private suspend fun handleDelivered(payload: Map<String, Any?>, convKey: String) {
+        val deliveredTimestamps = (payload["delivered"] as? List<*>)?.mapNotNull {
+            (it as? Number)?.toLong()
+        } ?: run { Log.w(TAG, "handleDelivered: no 'delivered' timestamps in payload"); return }
+
+        val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "handleDelivered: conv not found for $convKey"); return }
+        db.messageDao().markDelivered(conv.id, deliveredTimestamps)
+        Log.d(TAG, "Marked ${deliveredTimestamps.size} messages as delivered in $convKey")
     }
 
     /** Handle typing indicator (ephemeral, no DB storage). */

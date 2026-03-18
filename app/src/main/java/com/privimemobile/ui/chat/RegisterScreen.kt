@@ -125,7 +125,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         }
         OutlinedTextField(
             value = handle,
-            onValueChange = { handle = it.lowercase().filter { c -> c.isLetterOrDigit() || c == '_' }; error = null },
+            onValueChange = { val filtered = it.lowercase().filter { c -> c.isLetterOrDigit() || c == '_' }.take(32); handle = filtered; error = null },
             label = { Text("Handle") },
             prefix = { Text("@", color = C.accent) },
             singleLine = true,
@@ -148,8 +148,9 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = displayName,
-            onValueChange = { displayName = it; error = null },
+            onValueChange = { if (it.length <= 40) { displayName = it; error = null } },
             label = { Text("Display Name") },
+            supportingText = { Text("${displayName.length}/40", color = C.textMuted, fontSize = 11.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -208,7 +209,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                     }
                 }
             },
-            enabled = !registering && handleStatus != "taken",
+            enabled = !registering && handleStatus == "available",
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),

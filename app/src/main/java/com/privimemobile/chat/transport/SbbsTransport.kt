@@ -8,6 +8,7 @@ import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * SbbsTransport — handles SBBS send/receive, polling, event-driven refresh.
@@ -22,7 +23,8 @@ class SbbsTransport(
 ) {
     private val TAG = "SbbsTransport"
     private var pollingJob: Job? = null
-    private var isPolling = false
+    private val reading = AtomicBoolean(false)
+    private var readStartTime = 0L  // auto-reset if stuck >30s
 
     companion object {
         const val POLL_ACTIVE_MS = 2_000L   // 2s when chat is open — near-instant feel
@@ -56,16 +58,14 @@ class SbbsTransport(
         Log.d(TAG, "Force restarting SBBS polling")
         pollingJob?.cancel()
         pollingJob = null
-        isPolling = false
+        reading.set(false)
         startPolling()
     }
 
     /** Called by ProtocolStartup's onTxsChanged hook — event-driven, INSTANT poll. */
     fun onTxsChanged() {
         Log.d(TAG, "ev_txs_changed — immediate poll")
-        scope.launch {
-            readMessages()
-        }
+        scope.launch { safeReadMessages() }
     }
 
     /** Called by ProtocolStartup's onSystemStateChanged hook. */
@@ -75,12 +75,33 @@ class SbbsTransport(
 
     /** Poll from timer or manual refresh. */
     fun pollNow() {
-        scope.launch {
-            try {
-                readMessages()
-            } catch (e: Exception) {
-                Log.w(TAG, "pollNow error: ${e.message}")
-            }
+        scope.launch { safeReadMessages() }
+    }
+
+    /**
+     * Atomic guard — skip if a read is already in progress.
+     * Auto-resets after 30s in case callAsync hangs (prevents permanent deadlock).
+     */
+    private suspend fun safeReadMessages() {
+        val now = System.currentTimeMillis()
+        // Auto-reset if stuck for >30s
+        if (reading.get() && now - readStartTime > 30_000) {
+            Log.w(TAG, "Read stuck for >30s — force resetting")
+            reading.set(false)
+        }
+
+        if (!reading.compareAndSet(false, true)) {
+            Log.d(TAG, "Read already in progress — skipping")
+            return
+        }
+
+        readStartTime = now
+        try {
+            readMessages()
+        } catch (e: Exception) {
+            Log.w(TAG, "safeReadMessages error: ${e.message}")
+        } finally {
+            reading.set(false)
         }
     }
 
@@ -91,7 +112,6 @@ class SbbsTransport(
             Log.d(TAG, "read_messages result keys: ${result.keys}, size=${result.size}")
             val messages = result["messages"] as? List<*>
             if (messages == null) {
-                // The result might be the array directly for read_messages
                 Log.d(TAG, "No 'messages' key — checking result directly: ${result.keys}")
                 return
             }
@@ -124,15 +144,35 @@ class SbbsTransport(
         }
     }
 
-    /** Send read receipts (fire-and-forget, no retry). */
-    fun sendReadReceipts(convKey: String, timestamps: List<Long>) {
+    /** Send delivery ack — confirms message arrived (3x retry like regular messages). */
+    fun sendDeliveryAck(convKey: String, timestamps: List<Long>) {
+        Log.d(TAG, "sendDeliveryAck($convKey): ${timestamps.size} timestamps")
         scope.launch {
             val state = db.chatStateDao().get() ?: return@launch
             if (state.myHandle == null) return@launch
 
-            // Resolve recipient wallet_id
             val conv = db.conversationDao().findByKey(convKey) ?: return@launch
             val toWalletId = conv.walletId ?: return@launch
+
+            val payload = mapOf(
+                "v" to 1,
+                "t" to "delivered",
+                "from" to state.myHandle,
+                "delivered" to timestamps,
+            )
+            sendWithRetry(toWalletId, payload)
+        }
+    }
+
+    /** Send read receipts (3x retry — SBBS can drop fire-and-forget messages). */
+    fun sendReadReceipts(convKey: String, timestamps: List<Long>) {
+        Log.d(TAG, "sendReadReceipts($convKey): ${timestamps.size} timestamps")
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            if (state.myHandle == null) { Log.w(TAG, "sendReadReceipts: no myHandle"); return@launch }
+
+            val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "sendReadReceipts: conv not found for $convKey"); return@launch }
+            val toWalletId = conv.walletId ?: run { Log.w(TAG, "sendReadReceipts: no walletId for $convKey"); return@launch }
 
             val payload = mapOf(
                 "v" to 1,
@@ -140,7 +180,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "read" to timestamps,
             )
-            sendSbbsMessage(toWalletId, payload)
+            sendWithRetry(toWalletId, payload)
 
             // Mark local messages as acked
             db.messageDao().markAcked(conv.id, timestamps)

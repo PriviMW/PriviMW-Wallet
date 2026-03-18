@@ -43,10 +43,13 @@ class IdentityManager(
         if (refreshing) return
         refreshing = true
         try {
-            // Check current state — skip if already confirmed
+            // Check current state
             val state = db.chatStateDao().get() ?: db.chatStateDao().ensureInitialized()
             if (state.myHandle != null && state.myRegisteredHeight > 0) {
-                // Already registered and confirmed — just refresh fee
+                // Already registered — verify SBBS address still belongs to us (detects restored wallet)
+                if (state.myWalletId?.isNotEmpty() == true) {
+                    verifySbbsAddress(state.myWalletId)
+                }
                 refreshRegistrationFee()
                 return
             }
@@ -181,10 +184,17 @@ class IdentityManager(
      */
     fun checkAvailability(handle: String, callback: (available: Boolean?, error: String?) -> Unit) {
         ShaderInvoker.invoke("user", "resolve_handle", mapOf("handle" to handle)) { result ->
-            if (result.containsKey("error")) {
-                callback(null, result["error"]?.toString())
+            val error = result["error"]?.toString() ?: ""
+            if (error.contains("handle not found", ignoreCase = true)) {
+                // "handle not found" means it's available
+                callback(true, null)
                 return@invoke
             }
+            if (error.isNotEmpty()) {
+                callback(null, error)
+                return@invoke
+            }
+            // Handle exists — check if it's registered
             val registered = (result["registered"] as? Number)?.toInt() ?: 0
             callback(registered == 0, null)
         }

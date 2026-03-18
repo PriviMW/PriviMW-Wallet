@@ -193,7 +193,45 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
     var displayName by remember { mutableStateOf(currentDisplayName) }
     var useExistingName by remember { mutableStateOf(currentDisplayName.isNotEmpty()) }
     var updating by remember { mutableStateOf(false) }
+    var txStatus by remember { mutableStateOf("pending") } // pending, confirmed, failed
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var newAddress by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+
+    // Poll to detect TX confirmation — check if SBBS address is now ours
+    if (updating && txStatus == "pending" && newAddress.isNotEmpty()) {
+        LaunchedEffect(newAddress) {
+            while (true) {
+                delay(5000)
+                try {
+                    val result = com.privimemobile.protocol.WalletApi.callAsync(
+                        "validate_address", mapOf("address" to newAddress)
+                    )
+                    // Check contract for updated wallet_id
+                    val contractResult = com.privimemobile.protocol.ShaderInvoker.invokeAsync(
+                        "user", "my_handle"
+                    )
+                    val onChainWalletId = Helpers.normalizeWalletId(
+                        contractResult["wallet_id"] as? String ?: ""
+                    )
+                    if (onChainWalletId == newAddress) {
+                        txStatus = "confirmed"
+                        ChatService.identity.clearSbbsNeedsUpdate()
+                        ChatService.identity.refreshIdentity()
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Auto-dismiss after confirmation
+    LaunchedEffect(txStatus) {
+        if (txStatus == "confirmed") {
+            delay(1500)
+            // sbbsNeedsUpdate = false triggers recomposition in parent → shows chat list
+        }
+    }
 
     if (updating) {
         Column(
@@ -201,17 +239,36 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
-            Spacer(Modifier.height(24.dp))
-            Text("Updating Address", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("@${chatState.myHandle}", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.",
-                color = C.textSecondary, fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
-            )
+            if (txStatus == "confirmed") {
+                Text("\u2705", fontSize = 48.sp)
+                Spacer(Modifier.height(16.dp))
+                Text("Address Updated!", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("@${chatState.myHandle} is ready", color = C.accent, fontSize = 16.sp)
+            } else if (txStatus == "failed") {
+                Text("\u274C", fontSize = 48.sp)
+                Spacer(Modifier.height(16.dp))
+                Text("Update Failed", color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text(errorMsg ?: "Transaction failed", color = C.textSecondary, fontSize = 14.sp)
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = { updating = false; txStatus = "pending"; errorMsg = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                ) { Text("Try Again", color = C.textDark, fontWeight = FontWeight.Bold) }
+            } else {
+                CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                Spacer(Modifier.height(24.dp))
+                Text("Updating Address", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("@${chatState.myHandle}", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.",
+                    color = C.textSecondary, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
+                )
+            }
         }
         return
     }
@@ -308,6 +365,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
         Button(
             onClick = {
                 updating = true
+                txStatus = "pending"
                 val newDn = if (useExistingName) currentDisplayName else displayName.trim()
                 // Create new SBBS address → update on-chain
                 com.privimemobile.protocol.WalletApi.call("create_address", mapOf(
@@ -318,11 +376,16 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                     val addr = result["address"] as? String
                     if (addr != null) {
                         val normalized = Helpers.normalizeWalletId(addr) ?: addr
+                        newAddress = normalized
                         ChatService.identity.updateMessagingAddress(normalized, newDn) { success, error ->
-                            if (!success) updating = false
+                            if (!success) {
+                                errorMsg = error
+                                txStatus = "failed"
+                            }
                         }
                     } else {
-                        updating = false
+                        errorMsg = "Failed to create SBBS address"
+                        txStatus = "failed"
                     }
                 }
             },

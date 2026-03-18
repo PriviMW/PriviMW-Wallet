@@ -141,6 +141,39 @@ class ContactManager(
     }
 
     /**
+     * Search handles on-chain by prefix (1+ chars).
+     * Returns up to 20 results from the contract's search_handles method.
+     */
+    suspend fun searchOnChain(prefix: String): List<ContactEntity> {
+        try {
+            val result = ShaderInvoker.invokeAsync("user", "search_handles", mapOf("prefix" to prefix))
+            val results = result["results"] as? List<*> ?: return emptyList()
+            val contacts = mutableListOf<ContactEntity>()
+            for (item in results) {
+                val map = item as? Map<*, *> ?: continue
+                val handle = map["handle"] as? String ?: continue
+                val walletId = Helpers.normalizeWalletId(map["wallet_id"] as? String ?: "") ?: continue
+                val displayName = Helpers.fixBvmUtf8(map["display_name"] as? String)
+                val height = (map["registered_height"] as? Number)?.toLong() ?: 0
+
+                // Upsert into local DB
+                db.contactDao().updateResolved(handle, walletId, displayName, null, height)
+                contacts.add(ContactEntity(
+                    handle = handle,
+                    walletId = walletId,
+                    displayName = displayName,
+                    registeredHeight = height,
+                ))
+            }
+            Log.d(TAG, "searchOnChain('$prefix') → ${contacts.size} results")
+            return contacts
+        } catch (e: Exception) {
+            Log.e(TAG, "searchOnChain($prefix) failed: ${e.message}")
+            return emptyList()
+        }
+    }
+
+    /**
      * Batch-resolve all contacts with missing wallet_ids.
      */
     fun resolveUnresolved() {

@@ -23,8 +23,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.chat.ChatService
@@ -645,13 +648,38 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
 
                 // Bottom line: preview + unread badge
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (isTyping) "typing..." else (conv.lastMessagePreview ?: ""),
-                        color = if (isTyping) C.accent else C.textSecondary,
-                        fontSize = 14.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    val hasDraft = !conv.draftText.isNullOrEmpty()
+                    if (isTyping) {
+                        Text(
+                            "typing...",
+                            color = C.accent,
+                            fontSize = 14.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else if (hasDraft) {
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = C.error, fontWeight = FontWeight.Medium)) {
+                                    append("Draft: ")
+                                }
+                                withStyle(SpanStyle(color = C.textSecondary)) {
+                                    append(conv.draftText!!)
+                                }
+                            },
+                            fontSize = 14.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Text(
+                            conv.lastMessagePreview ?: "",
+                            color = C.textSecondary,
+                            fontSize = 14.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     if (conv.unreadCount > 0) {
                         Spacer(Modifier.width(8.dp))
                         Box(

@@ -24,4 +24,6 @@ data class ConversationEntity(
     val pinned: Boolean = false,
     val muted: Boolean = false,
     @ColumnInfo(name = "is_group") val isGroup: Boolean = false,
+    @ColumnInfo(name = "draft_text") val draftText: String? = null,
+    @ColumnInfo(name = "disappear_timer") val disappearTimer: Int = 0,  // 0=off, seconds (30, 300, 3600, 86400)
 )

@@ -110,10 +110,12 @@ fun SendScreen(
     val assetList = remember(assetBalanceMap.size, assetInfoMap.size) {
         val list = mutableListOf<AssetOption>()
         val beam = assetBalanceMap[0]
-        list.add(AssetOption(0, beam?.available ?: 0, "BEAM"))
+        val beamTotal = (beam?.available ?: 0) + (beam?.shielded ?: 0)
+        list.add(AssetOption(0, beamTotal, "BEAM"))
         assetBalanceMap.filterKeys { it != 0 }.forEach { (id, status) ->
-            if (status.available > 0 || status.sending > 0 || status.receiving > 0) {
-                list.add(AssetOption(id, status.available, assetTicker(id)))
+            val total = status.available + status.shielded
+            if (total > 0 || status.sending > 0 || status.receiving > 0) {
+                list.add(AssetOption(id, total, assetTicker(id)))
             }
         }
         list.sortedBy { it.assetId }
@@ -124,7 +126,7 @@ fun SendScreen(
     val selectedAsset = assetList.find { it.assetId == selectedAssetId } ?: assetList[0]
     val ticker = selectedAsset.ticker
     val assetAvailable = selectedAsset.available
-    val beamAvailable = assetBalanceMap[0]?.available ?: beamStatus.available
+    val beamAvailable = (assetBalanceMap[0]?.let { it.available + it.shielded }) ?: (beamStatus.available + beamStatus.shielded)
 
     // Listen for scanned address from QR scanner
     LaunchedEffect(scannedAddress) {

@@ -45,6 +45,7 @@ import com.privimemobile.ui.dapps.DAppScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
+import com.privimemobile.ui.chat.ContactInfoScreen
 import com.privimemobile.ui.chat.MediaGalleryScreen
 import com.privimemobile.ui.chat.NewChatScreen
 import com.privimemobile.ui.chat.RegisterScreen
@@ -101,7 +102,8 @@ fun AppNavigation() {
                 route.startsWith("asset_detail") ||
                 route == "new_chat" ||
                 route == "search_messages" ||
-                route.startsWith("media_gallery/")
+                route.startsWith("media_gallery/") ||
+                route.startsWith("contact_info/")
     } ?: false
 
     Scaffold(
@@ -286,6 +288,7 @@ fun AppNavigation() {
                     handle = handle,
                     onBack = { navController.popBackStack() },
                     onMediaGallery = { navController.navigate("media_gallery/$handle") },
+                    onContactInfo = { navController.navigate("contact_info/$handle") },
                     scrollToTimestamp = scrollToTs,
                 )
             }
@@ -318,6 +321,21 @@ fun AppNavigation() {
                 MediaGalleryScreen(
                     handle = handle,
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable("contact_info/{handle}") { backStackEntry ->
+                val handle = backStackEntry.arguments?.getString("handle") ?: ""
+                ContactInfoScreen(
+                    handle = handle,
+                    onBack = { navController.popBackStack() },
+                    onMediaGallery = {
+                        navController.popBackStack()
+                        navController.navigate("media_gallery/$handle")
+                    },
+                    onDeleteChat = {
+                        // Pop back to chats list
+                        navController.popBackStack("chats", inclusive = false)
+                    },
                 )
             }
             composable(

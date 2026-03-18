@@ -112,4 +112,12 @@ interface ConversationDao {
     /** Check if conversation is tombstoned and get the timestamp. */
     @Query("SELECT deleted_at_ts FROM conversations WHERE conv_key = :convKey LIMIT 1")
     suspend fun getDeletedTs(convKey: String): Long?
+
+    /** Save draft text for a conversation (null to clear). */
+    @Query("UPDATE conversations SET draft_text = :text WHERE id = :convId")
+    suspend fun setDraft(convId: Long, text: String?)
+
+    /** Set disappearing message timer (0 = off). */
+    @Query("UPDATE conversations SET disappear_timer = :timer WHERE id = :convId")
+    suspend fun setDisappearTimer(convId: Long, timer: Int)
 }

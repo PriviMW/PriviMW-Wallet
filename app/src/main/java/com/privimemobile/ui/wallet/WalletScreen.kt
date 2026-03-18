@@ -313,7 +313,7 @@ fun WalletScreen(
                         Text("Available", color = C.textSecondary, fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "${Helpers.formatBeam(beamStatus.available)} BEAM",
+                            text = "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM",
                             color = C.text,
                             fontSize = 36.sp,
                             fontWeight = FontWeight.Bold,
@@ -424,7 +424,7 @@ fun WalletScreen(
                             }
                         }
                         Text(
-                            Helpers.formatBeam(beamStatus.available),
+                            Helpers.formatBeam(beamStatus.available + beamStatus.shielded),
                             color = C.text,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,

@@ -48,4 +48,12 @@ interface AttachmentDao {
     /** Get oldest cached attachment (for eviction). */
     @Query("SELECT * FROM attachments WHERE local_path IS NOT NULL ORDER BY rowid ASC LIMIT 1")
     suspend fun getOldestCached(): AttachmentEntity?
+
+    /** Count all attachments in a conversation (for contact info). */
+    @Query("SELECT COUNT(*) FROM attachments WHERE conversation_id = :convId")
+    suspend fun countByConversation(convId: Long): Int
+
+    /** Count image attachments in a conversation (for contact info). */
+    @Query("SELECT COUNT(*) FROM attachments WHERE conversation_id = :convId AND mime_type LIKE 'image/%'")
+    suspend fun countImagesByConversation(convId: Long): Int
 }

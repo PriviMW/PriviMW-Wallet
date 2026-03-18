@@ -45,6 +45,7 @@ data class ChatMessage(
     val fwdFrom: String? = null,     // forwarded from handle
     val file: FileAttachment? = null, // file attachment
     val type: String = "dm",         // "dm", "file", "tip", "system"
+    val edited: Boolean = false,     // message was edited
 )
 
 /** A conversation (aggregated from messages). */

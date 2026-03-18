@@ -36,4 +36,7 @@ data class MessageEntity(
     @ColumnInfo(name = "sender_handle") val senderHandle: String? = null,
     @ColumnInfo(name = "sbbs_dedup_key") val sbbsDedupKey: String,  // "ts:hash:sent" — unique
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis() / 1000,
+    val edited: Boolean = false,           // message was edited
+    @ColumnInfo(name = "original_text") val originalText: String? = null,  // text before edit
+    @ColumnInfo(name = "expires_at") val expiresAt: Long = 0,  // 0=never, unix seconds for disappearing msgs
 )

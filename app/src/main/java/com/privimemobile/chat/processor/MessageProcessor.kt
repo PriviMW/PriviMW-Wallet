@@ -107,6 +107,8 @@ class MessageProcessor(
             "react" -> handleReaction(payload, convKey, from)
             "unreact" -> handleUnreact(payload, from)
             "delete" -> handleDelete(payload, convKey, from)
+            "edit" -> handleEdit(payload, convKey, from)
+            "disappear_config" -> handleDisappearConfig(payload, convKey)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
                 if (!sent) ChatService.clearTyping(convKey)
@@ -143,6 +145,10 @@ class MessageProcessor(
             walletId = if (sent) null else senderWalletId,
         )
 
+        // Compute expiresAt from TTL if present
+        val ttl = (payload["ttl"] as? Number)?.toLong() ?: 0
+        val expiresAt = if (ttl > 0) (System.currentTimeMillis() / 1000) + ttl else 0L
+
         // Build message entity
         val message = MessageEntity(
             conversationId = conv.id,
@@ -157,6 +163,7 @@ class MessageProcessor(
             fwdTs = (payload["fwd_ts"] as? Number)?.toLong() ?: 0,
             senderHandle = from.ifEmpty { null },
             sbbsDedupKey = dedupKey,
+            expiresAt = expiresAt,
         )
 
         // Insert — IGNORE on duplicate
@@ -316,6 +323,23 @@ class MessageProcessor(
         val unreactTs = (payload["ts"] as? Number)?.toLong() ?: System.currentTimeMillis() / 1000
         db.reactionDao().remove(msgTs, from, emoji, unreactTs)
         Log.d(TAG, "Unreact $emoji from @$from on message $msgTs")
+    }
+
+    /** Handle disappear_config — other party changed the disappearing message timer. */
+    private suspend fun handleDisappearConfig(payload: Map<String, Any?>, convKey: String) {
+        val timer = (payload["timer"] as? Number)?.toInt() ?: 0
+        val conv = db.conversationDao().findByKey(convKey) ?: return
+        db.conversationDao().setDisappearTimer(conv.id, timer)
+        Log.d(TAG, "Disappear timer set to ${timer}s for $convKey")
+    }
+
+    /** Handle message edit. */
+    private suspend fun handleEdit(payload: Map<String, Any?>, convKey: String, from: String) {
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val newText = payload["msg"] as? String ?: return
+        val conv = db.conversationDao().findByKey(convKey) ?: return
+        db.messageDao().editMessage(conv.id, msgTs, from, newText)
+        Log.d(TAG, "Edit from @$from, ts=$msgTs, newText=${newText.take(30)}")
     }
 
     /** Handle delete-for-everyone. */

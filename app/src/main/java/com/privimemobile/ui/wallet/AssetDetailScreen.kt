@@ -160,15 +160,13 @@ fun AssetDetailScreen(
                 // Divider
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 12.dp))
 
-                // Balance breakdown
-                BalanceRow("Available", "${Helpers.formatBeam(assetStatus.available)} $assetName", primary = true)
+                // Balance breakdown — available + shielded are separate fields from C++ core
+                val totalAvailable = assetStatus.available + assetStatus.shielded
+                BalanceRow("Available", "${Helpers.formatBeam(totalAvailable)} $assetName", primary = true)
 
-                if (assetStatus.shielded > 0 || (assetStatus.available > 0 && assetStatus.shielded != assetStatus.available)) {
-                    val regularBal = assetStatus.available - assetStatus.shielded
-                    if (regularBal > 0 || assetStatus.shielded > 0) {
-                        BalanceRow("  Regular", "${Helpers.formatBeam(regularBal.coerceAtLeast(0))} $assetName")
-                        BalanceRow("  Shielded", "${Helpers.formatBeam(assetStatus.shielded)} $assetName")
-                    }
+                if (assetStatus.available > 0 && assetStatus.shielded > 0) {
+                    BalanceRow("  Regular", "${Helpers.formatBeam(assetStatus.available)} $assetName")
+                    BalanceRow("  Shielded", "${Helpers.formatBeam(assetStatus.shielded)} $assetName")
                 }
                 if (assetStatus.maturing > 0) {
                     val lockLabel = if (lockHours > 0) "Locked (min ${lockHours}h)" else "Locked"

@@ -70,4 +70,20 @@ interface MessageDao {
     /** Search messages within a specific conversation (LIKE query). */
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 AND text LIKE :query ORDER BY timestamp DESC LIMIT 50")
     suspend fun searchInConversation(convId: Long, query: String): List<MessageEntity>
+
+    /** Edit a message — preserves original text on first edit. */
+    @Query("""
+        UPDATE messages SET text = :newText, edited = 1,
+        original_text = CASE WHEN original_text IS NULL THEN text ELSE original_text END
+        WHERE conversation_id = :convId AND timestamp = :ts AND sender_handle = :senderHandle
+    """)
+    suspend fun editMessage(convId: Long, ts: Long, senderHandle: String, newText: String)
+
+    /** Find a sent message by timestamp (for editing). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND sent = 1 LIMIT 1")
+    suspend fun findSentByTimestamp(convId: Long, ts: Long): MessageEntity?
+
+    /** Delete expired disappearing messages. Returns count deleted. */
+    @Query("DELETE FROM messages WHERE expires_at > 0 AND expires_at < :now")
+    suspend fun deleteExpired(now: Long): Int
 }

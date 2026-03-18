@@ -136,6 +136,20 @@ object ChatService {
             }
         }
 
+        // Periodic cleanup of expired disappearing messages (every 15s)
+        scope.launch {
+            while (true) {
+                delay(15_000)
+                try {
+                    val now = System.currentTimeMillis() / 1000
+                    val deleted = db?.messageDao()?.deleteExpired(now) ?: 0
+                    if (deleted > 0) Log.d(TAG, "Cleaned up $deleted expired disappearing messages")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Disappearing cleanup error: ${e.message}")
+                }
+            }
+        }
+
         _initialized.value = true
         Log.d(TAG, "Chat system initialized")
     }

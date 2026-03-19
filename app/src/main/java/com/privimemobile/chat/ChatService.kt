@@ -136,15 +136,13 @@ object ChatService {
             }
         }
 
-        // Periodic cleanup of expired disappearing messages (every 15s)
+        // Periodic cleanup of expired disappearing messages (immediate + every 15s)
         scope.launch {
+            // Run immediately on startup to clear any expired msgs from previous session
+            try { cleanupExpiredMessages() } catch (_: Exception) {}
             while (true) {
                 delay(15_000)
-                try {
-                    val now = System.currentTimeMillis() / 1000
-                    val deleted = db?.messageDao()?.deleteExpired(now) ?: 0
-                    if (deleted > 0) Log.d(TAG, "Cleaned up $deleted expired disappearing messages")
-                } catch (e: Exception) {
+                try { cleanupExpiredMessages() } catch (e: Exception) {
                     Log.w(TAG, "Disappearing cleanup error: ${e.message}")
                 }
             }
@@ -152,6 +150,32 @@ object ChatService {
 
         _initialized.value = true
         Log.d(TAG, "Chat system initialized")
+    }
+
+    /** Clean up expired disappearing messages and update affected conversation previews. */
+    private suspend fun cleanupExpiredMessages() {
+        val now = System.currentTimeMillis() / 1000
+        // Find which conversations are affected BEFORE deleting
+        val affectedConvIds = db?.messageDao()?.getConversationsWithExpired(now) ?: emptyList()
+        val deleted = db?.messageDao()?.deleteExpired(now) ?: 0
+        if (deleted > 0) {
+            Log.d(TAG, "Cleaned up $deleted expired disappearing messages")
+            // Update conversation previews for affected conversations
+            for (convId in affectedConvIds) {
+                val latest = db?.messageDao()?.getLatestMessage(convId)
+                if (latest != null) {
+                    val preview = when (latest.type) {
+                        "tip" -> "Tip"
+                        "file" -> "\uD83D\uDCCE File"
+                        else -> latest.text?.take(100)
+                    }
+                    db?.conversationDao()?.updateLastMessage(convId, latest.timestamp, preview)
+                } else {
+                    // No messages left — clear preview
+                    db?.conversationDao()?.updateLastMessage(convId, 0, null)
+                }
+            }
+        }
     }
 
     /** Set the currently active chat (suppress unread/notifications). */

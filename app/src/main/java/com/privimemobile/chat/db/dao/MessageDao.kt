@@ -43,9 +43,13 @@ interface MessageDao {
     @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0")
     suspend fun getAllReceivedTimestamps(convId: Long): List<Long>
 
-    /** Mark as deleted (delete for everyone). */
+    /** Mark as deleted (delete for everyone) — by timestamp+sender (for SBBS protocol). */
     @Query("UPDATE messages SET deleted = 1 WHERE conversation_id = :convId AND timestamp = :ts AND sender_handle = :senderHandle")
     suspend fun markDeleted(convId: Long, ts: Long, senderHandle: String)
+
+    /** Mark as deleted by entity ID (for local multi-select delete). */
+    @Query("UPDATE messages SET deleted = 1 WHERE id = :messageId")
+    suspend fun markDeletedById(messageId: Long)
 
     /** Mark send failed. */
     @Query("UPDATE messages SET failed = 1 WHERE id = :messageId")
@@ -59,7 +63,11 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND sent = 0 AND acked = 0")
     suspend fun countUnread(convId: Long): Int
 
-    /** Delete all messages in a conversation (local delete). */
+    /** Soft-delete all messages in a conversation (preserves dedup keys to block SBBS re-delivery). */
+    @Query("UPDATE messages SET deleted = 1 WHERE conversation_id = :convId AND deleted = 0")
+    suspend fun softDeleteByConversation(convId: Long)
+
+    /** Hard-delete all messages in a conversation (only for DB cleanup, loses dedup keys). */
     @Query("DELETE FROM messages WHERE conversation_id = :convId")
     suspend fun deleteByConversation(convId: Long)
 
@@ -82,6 +90,14 @@ interface MessageDao {
     /** Find a sent message by timestamp (for editing). */
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND sent = 1 LIMIT 1")
     suspend fun findSentByTimestamp(convId: Long, ts: Long): MessageEntity?
+
+    /** Get conversation IDs that have expiring messages (for preview update after cleanup). */
+    @Query("SELECT DISTINCT conversation_id FROM messages WHERE expires_at > 0 AND expires_at < :now")
+    suspend fun getConversationsWithExpired(now: Long): List<Long>
+
+    /** Get the latest non-deleted message for a conversation (for preview update). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestMessage(convId: Long): MessageEntity?
 
     /** Delete expired disappearing messages. Returns count deleted. */
     @Query("DELETE FROM messages WHERE expires_at > 0 AND expires_at < :now")

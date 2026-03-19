@@ -323,6 +323,7 @@ fun ChatsScreen(
                     TextButton(
                         onClick = {
                             scope.launch {
+                                ChatService.db?.messageDao()?.softDeleteByConversation(target.id)
                                 ChatService.db?.conversationDao()?.softDelete(target.id)
                             }
                             menuTarget = null

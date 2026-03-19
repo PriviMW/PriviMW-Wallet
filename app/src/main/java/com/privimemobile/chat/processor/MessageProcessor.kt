@@ -339,6 +339,10 @@ class MessageProcessor(
         val newText = payload["msg"] as? String ?: return
         val conv = db.conversationDao().findByKey(convKey) ?: return
         db.messageDao().editMessage(conv.id, msgTs, from, newText)
+        // Update chat list preview if this was the latest message
+        if (conv.lastMessageTs == msgTs) {
+            db.conversationDao().updateLastMessage(conv.id, msgTs, newText.take(100))
+        }
         Log.d(TAG, "Edit from @$from, ts=$msgTs, newText=${newText.take(30)}")
     }
 
@@ -347,7 +351,26 @@ class MessageProcessor(
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val conv = db.conversationDao().findByKey(convKey) ?: return
         db.messageDao().markDeleted(conv.id, msgTs, from)
+        // Update chat list preview if the deleted message was the latest
+        if (conv.lastMessageTs == msgTs) {
+            updateConversationPreview(conv.id)
+        }
         Log.d(TAG, "Delete for everyone from @$from, ts=$msgTs")
+    }
+
+    /** Update conversation preview to reflect the latest non-deleted message. */
+    private suspend fun updateConversationPreview(convId: Long) {
+        val latest = db.messageDao().getLatestMessage(convId)
+        if (latest != null) {
+            val preview = when (latest.type) {
+                "tip" -> "Tip"
+                "file" -> "\uD83D\uDCCE File"
+                else -> latest.text?.take(100)
+            }
+            db.conversationDao().updateLastMessage(convId, latest.timestamp, preview)
+        } else {
+            db.conversationDao().updateLastMessage(convId, 0, null)
+        }
     }
 
     /** Extract payload from raw SBBS message. */

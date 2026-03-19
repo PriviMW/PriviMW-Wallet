@@ -43,9 +43,11 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +92,7 @@ fun ChatScreen(
     onBack: () -> Unit,
     onMediaGallery: () -> Unit = {},
     onContactInfo: () -> Unit = {},
+    onNavigateToChat: (String) -> Unit = {},
     scrollToTimestamp: Long = 0L,
 ) {
     val context = LocalContext.current
@@ -134,7 +137,11 @@ fun ChatScreen(
         attachmentMap = map
     }
 
-    val messages = remember(roomMessages, attachmentMap) { roomMessages.map { entity ->
+    val nowSecs = System.currentTimeMillis() / 1000
+    val messages = remember(roomMessages, attachmentMap) { roomMessages.filter { entity ->
+        // Skip expired disappearing messages (cleanup coroutine handles DB deletion)
+        entity.expiresAt == 0L || entity.expiresAt > nowSecs
+    }.map { entity ->
         val att = attachmentMap[entity.id]
         ChatMessage(
             id = entity.id.toString(),
@@ -152,6 +159,7 @@ fun ChatScreen(
             reply = entity.replyText,
             fwdFrom = entity.fwdFrom,
             edited = entity.edited,
+            expiresAt = entity.expiresAt,
             file = if (att != null) FileAttachment(
                 cid = att.ipfsCid ?: "",
                 name = att.fileName,
@@ -193,9 +201,15 @@ fun ChatScreen(
     // Edit target — set from context menu on own messages
     var editingMsg by remember { mutableStateOf<ChatMessage?>(null) }
 
+    // Per-message self-destruct timer (one-shot, independent of conversation-level timer)
+    var oneShotTimer by remember { mutableStateOf(0) }  // 0=off, seconds
+    var showOneShotTimerPicker by remember { mutableStateOf(false) }
+
     // Multi-select mode
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<String>() }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var pendingDeleteIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Long-press context menu target
     var contextMenuMsg by remember { mutableStateOf<ChatMessage?>(null) }
@@ -226,6 +240,7 @@ fun ChatScreen(
 
     // Forward message — contact picker dialog
     var forwardingMsg by remember { mutableStateOf<ChatMessage?>(null) }
+    var forwardingMsgs by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
 
     // All contacts for forward picker
     val allContacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
@@ -236,7 +251,7 @@ fun ChatScreen(
     var showCommandMenu by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showDisappearPicker by remember { mutableStateOf(false) }
+    // showDisappearPicker removed — per-message self-destruct replaces conversation-level timer
 
     // In-chat search
     var showSearch by remember { mutableStateOf(false) }
@@ -255,22 +270,26 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     // Capture unread count before setActiveChat clears it (for "X new messages" divider)
+    // Read directly from DB to avoid race with reactive Flow clearing
     var initialUnreadCount by remember { mutableStateOf(0) }
     LaunchedEffect(convId) {
         if (convId > 0L && initialUnreadCount == 0) {
-            initialUnreadCount = conv?.unreadCount ?: 0
+            initialUnreadCount = com.privimemobile.chat.ChatService.db?.messageDao()?.countUnread(convId) ?: 0
         }
     }
 
-    // Load draft on mount
+    // Load draft on mount — read directly from DB to avoid reactive state race
     LaunchedEffect(convId) {
         if (convId > 0L) {
-            val draft = conv?.draftText
+            val draft = com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.draftText
             if (!draft.isNullOrEmpty()) {
                 setInputText(draft)
             }
         }
     }
+
+    // Keep latest convId available for DisposableEffect (plain val isn't captured correctly)
+    val currentConvId by rememberUpdatedState(convId)
 
     // Mark chat as active, clear unread, send read receipts
     LaunchedEffect(handle) {
@@ -282,9 +301,9 @@ fun ChatScreen(
             com.privimemobile.chat.ChatService.setActiveChat(null)
             // Save draft on dispose
             val draftText = inputText.text.trim().ifEmpty { null }
-            if (convId > 0L) {
+            if (currentConvId > 0L) {
                 kotlinx.coroutines.GlobalScope.launch {
-                    com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(convId, draftText)
+                    com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(currentConvId, draftText)
                 }
             }
         }
@@ -423,6 +442,11 @@ fun ChatScreen(
                         com.privimemobile.chat.ChatService.db?.messageDao()?.editMessage(
                             convId, editTarget.timestamp, state.myHandle!!, trimmed
                         )
+                        // Update chat list preview if this was the latest message
+                        val convEntity = com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)
+                        if (convEntity != null && convEntity.lastMessageTs == editTarget.timestamp) {
+                            com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, editTarget.timestamp, trimmed.take(100))
+                        }
                         // Send SBBS edit to recipient
                         val walletId = resolvedWalletId
                         if (!walletId.isNullOrEmpty()) {
@@ -620,8 +644,9 @@ fun ChatScreen(
         val walletId = resolvedWalletId
         if (trimmed.isEmpty() || walletId.isNullOrEmpty()) return
 
-        // Capture reply text BEFORE coroutine (state may be cleared by then)
+        // Capture state BEFORE coroutine (state may be cleared by main thread before coroutine runs)
         val replyText = replyingTo?.text?.take(200)?.ifEmpty { null }
+        val capturedTimer = oneShotTimer
 
         // Send via new chat system
         scope.launch {
@@ -638,10 +663,9 @@ fun ChatScreen(
                     "msg" to trimmed,
                 )
                 if (replyText != null) payload["reply"] = replyText
-                // Disappearing message TTL
-                val disappearTimer = conv?.disappearTimer ?: 0
-                if (disappearTimer > 0) payload["ttl"] = disappearTimer
-                val expiresAt = if (disappearTimer > 0) ts + disappearTimer else 0L
+                // Disappearing message TTL — per-message one-shot takes priority over conversation-level
+                if (capturedTimer > 0) payload["ttl"] = capturedTimer
+                val expiresAt = if (capturedTimer > 0) ts + capturedTimer else 0L
                 // Optimistic insert into DB
                 val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                 val dedupKey = "$ts:${trimmed.hashCode().toString(16)}:true"
@@ -666,6 +690,22 @@ fun ChatScreen(
 
         setInputText("")
         replyingTo = null
+        oneShotTimer = 0  // clear per-message timer after send
+    }
+
+    // Update conversation preview after message deletion
+    suspend fun refreshConversationPreview(cid: Long) {
+        val latest = com.privimemobile.chat.ChatService.db?.messageDao()?.getLatestMessage(cid)
+        if (latest != null) {
+            val preview = when (latest.type) {
+                "tip" -> "Tip"
+                "file" -> "\uD83D\uDCCE File"
+                else -> latest.text?.take(100)
+            }
+            com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(cid, latest.timestamp, preview)
+        } else {
+            com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(cid, 0, null)
+        }
     }
 
     // Download a file via IpfsTransport
@@ -722,24 +762,20 @@ fun ChatScreen(
                         color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
-                    // Delete selected
+                    // Delete selected — show confirmation dialog
                     IconButton(onClick = {
-                        scope.launch {
-                            selectedIds.forEach { id ->
-                                com.privimemobile.chat.ChatService.db?.messageDao()?.deleteById(id.toLong())
-                            }
-                        }
-                        selectionMode = false
-                        selectedIds.clear()
+                        pendingDeleteIds = selectedIds.toList()
+                        showDeleteConfirmDialog = true
                     }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Default.Delete, "Delete", tint = C.error, modifier = Modifier.size(22.dp))
                     }
-                    // Forward selected
+                    // Forward selected — forward ALL selected messages (not just first)
                     IconButton(onClick = {
-                        // Forward the first selected message that has text
-                        val firstMsg = messages.firstOrNull { it.id in selectedIds && it.text.isNotEmpty() }
-                        if (firstMsg != null) {
-                            forwardingMsg = firstMsg
+                        val msgsToForward = messages.filter { it.id in selectedIds && (it.text.isNotEmpty() || it.file != null) }
+                        if (msgsToForward.isNotEmpty()) {
+                            // Use first message to trigger forward dialog; store all in forwardingMsgs
+                            forwardingMsgs = msgsToForward
+                            forwardingMsg = msgsToForward.first()
                         }
                         selectionMode = false
                         selectedIds.clear()
@@ -795,14 +831,7 @@ fun ChatScreen(
                     if (peerTyping) {
                         Text("typing...", color = C.accent, fontSize = 12.sp)
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
-                            val timer = conv?.disappearTimer ?: 0
-                            if (timer > 0) {
-                                Spacer(Modifier.width(6.dp))
-                                Text("\u23F3 ${formatTimerLabel(timer)}", color = C.textMuted, fontSize = 10.sp)
-                            }
-                        }
+                        Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
                     }
                 }
                 // 3-dot overflow menu
@@ -892,15 +921,6 @@ fun ChatScreen(
                                 showOverflowMenu = false
                             },
                             leadingIcon = { Text(if (isBlocked) "\u2705" else "\uD83D\uDEAB", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                val timer = conv?.disappearTimer ?: 0
-                                val label = if (timer > 0) "Disappearing: ${formatTimerLabel(timer)}" else "Disappearing messages"
-                                Text(label, color = C.text)
-                            },
-                            onClick = { showOverflowMenu = false; showDisappearPicker = true },
-                            leadingIcon = { Text("\u23F3", fontSize = 16.sp) },
                         )
                         HorizontalDivider(color = C.border)
                         DropdownMenuItem(
@@ -1173,6 +1193,32 @@ fun ChatScreen(
             }
         }
 
+        // Self-destruct timer indicator bar
+        if (oneShotTimer > 0) {
+            Surface(
+                color = C.card,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("\u23F3", fontSize = 14.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Self-destruct: ${formatTimerLabel(oneShotTimer)}",
+                        color = C.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { oneShotTimer = 0 }) {
+                        Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // Edit preview bar
         if (editingMsg != null) {
             Surface(
@@ -1323,6 +1369,32 @@ fun ChatScreen(
                     )
                 }
 
+                // Per-message self-destruct timer button
+                Box(modifier = Modifier.size(32.dp)) {
+                    IconButton(
+                        onClick = { showOneShotTimerPicker = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = "Self-destruct timer",
+                            tint = if (oneShotTimer > 0) C.accent else C.textMuted,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    if (oneShotTimer > 0) {
+                        // Small badge showing active timer
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(C.accent),
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { newValue ->
@@ -1426,7 +1498,7 @@ fun ChatScreen(
                     TextButton(onClick = {
                         if (convId > 0L) {
                             scope.launch {
-                                com.privimemobile.chat.ChatService.db?.messageDao()?.deleteByConversation(convId)
+                                com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
                                 com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, 0, null)
                             }
                         }
@@ -1454,6 +1526,7 @@ fun ChatScreen(
                     TextButton(onClick = {
                         if (convId > 0L) {
                             scope.launch {
+                                com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
                                 com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(convId)
                             }
                         }
@@ -1471,9 +1544,98 @@ fun ChatScreen(
             )
         }
 
-        // ── Disappearing messages timer picker ──
-        if (showDisappearPicker) {
-            val currentTimer = conv?.disappearTimer ?: 0
+        // ── Multi-select delete confirmation ──
+        if (showDeleteConfirmDialog && pendingDeleteIds.isNotEmpty()) {
+            val count = pendingDeleteIds.size
+            // Check if any selected message is ours (for "delete for everyone" option)
+            val hasOwnMessages = messages.any { it.id in pendingDeleteIds && it.sent }
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteConfirmDialog = false
+                    pendingDeleteIds = emptyList()
+                },
+                containerColor = C.card,
+                title = { Text("Delete $count message${if (count > 1) "s" else ""}?", color = C.text, fontWeight = FontWeight.SemiBold) },
+                text = {
+                    Column {
+                        // Delete for me
+                        TextButton(
+                            onClick = {
+                                val ids = pendingDeleteIds.toList()
+                                val cid = convId
+                                scope.launch {
+                                    ids.forEach { id ->
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(id.toLong())
+                                    }
+                                    // Update chat list preview
+                                    refreshConversationPreview(cid)
+                                }
+                                showDeleteConfirmDialog = false
+                                pendingDeleteIds = emptyList()
+                                selectionMode = false
+                                selectedIds.clear()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Delete for me", color = C.text, fontSize = 15.sp, modifier = Modifier.fillMaxWidth())
+                        }
+                        // Delete for everyone (only if we have own messages selected)
+                        if (hasOwnMessages) {
+                            TextButton(
+                                onClick = {
+                                    // Capture message data BEFORE coroutine — messages state changes after each delete
+                                    val msgsToDelete = messages.filter { it.id in pendingDeleteIds }
+                                    val capturedConvId = convId
+                                    showDeleteConfirmDialog = false
+                                    pendingDeleteIds = emptyList()
+                                    selectionMode = false
+                                    selectedIds.clear()
+                                    scope.launch {
+                                        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                        if (state?.myHandle != null) {
+                                            val walletId = resolvedWalletId
+                                            for ((i, msg) in msgsToDelete.withIndex()) {
+                                                // Soft-delete locally (by entity ID — reliable)
+                                                com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(msg.id.toLong())
+                                                // Send SBBS delete to recipient for own messages
+                                                if (msg.sent && !walletId.isNullOrEmpty()) {
+                                                    val payload = mapOf(
+                                                        "v" to 1, "t" to "delete",
+                                                        "ts" to System.currentTimeMillis() / 1000,
+                                                        "from" to state.myHandle!!,
+                                                        "to" to handle,
+                                                        "msg_ts" to msg.timestamp,
+                                                    )
+                                                    com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                                    if (i < msgsToDelete.size - 1) delay(1000)
+                                                }
+                                            }
+                                        }
+                                        // Update chat list preview
+                                        refreshConversationPreview(capturedConvId)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Delete for everyone", color = C.error, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirmDialog = false
+                        pendingDeleteIds = emptyList()
+                    }) {
+                        Text("Cancel", color = C.textSecondary)
+                    }
+                },
+            )
+        }
+
+        // ── Per-message self-destruct timer picker ──
+        if (showOneShotTimerPicker) {
             val timerOptions = listOf(
                 0 to "Off",
                 30 to "30 seconds",
@@ -1482,14 +1644,14 @@ fun ChatScreen(
                 86400 to "1 day",
             )
             AlertDialog(
-                onDismissRequest = { showDisappearPicker = false },
+                onDismissRequest = { showOneShotTimerPicker = false },
                 containerColor = C.card,
                 shape = RoundedCornerShape(16.dp),
-                title = { Text("Disappearing messages", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text("Self-destruct timer", color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
                         Text(
-                            "Messages will be deleted after the timer expires.",
+                            "Next message will auto-delete after this time. Does not change the other person's settings.",
                             color = C.textSecondary, fontSize = 13.sp,
                             modifier = Modifier.padding(bottom = 12.dp),
                         )
@@ -1499,34 +1661,14 @@ fun ChatScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
-                                        scope.launch {
-                                            if (convId > 0L) {
-                                                // Update local
-                                                com.privimemobile.chat.ChatService.db?.conversationDao()
-                                                    ?.setDisappearTimer(convId, seconds)
-                                                // Send config to recipient
-                                                val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                                val walletId = resolvedWalletId
-                                                if (state?.myHandle != null && !walletId.isNullOrEmpty()) {
-                                                    val payload = mapOf(
-                                                        "v" to 1,
-                                                        "t" to "disappear_config",
-                                                        "ts" to System.currentTimeMillis() / 1000,
-                                                        "from" to state.myHandle!!,
-                                                        "to" to handle,
-                                                        "timer" to seconds,
-                                                    )
-                                                    com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
-                                                }
-                                            }
-                                        }
-                                        showDisappearPicker = false
+                                        oneShotTimer = seconds
+                                        showOneShotTimerPicker = false
                                     }
                                     .padding(vertical = 12.dp, horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(
-                                    selected = currentTimer == seconds,
+                                    selected = oneShotTimer == seconds,
                                     onClick = null,
                                     colors = RadioButtonDefaults.colors(
                                         selectedColor = C.accent,
@@ -1670,6 +1812,7 @@ fun ChatScreen(
                         if (targetMsg.text.isNotEmpty() || targetMsg.file != null) {
                             TextButton(
                                 onClick = {
+                                    forwardingMsgs = emptyList()  // single-message forward
                                     forwardingMsg = targetMsg
                                     contextMenuMsg = null
                                 },
@@ -1695,8 +1838,10 @@ fun ChatScreen(
                         // Delete for me
                         TextButton(
                             onClick = {
+                                val cid = convId
                                 scope.launch {
-                                    com.privimemobile.chat.ChatService.db?.messageDao()?.deleteById(targetMsg.id.toLong())
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
+                                    refreshConversationPreview(cid)
                                 }
                                 contextMenuMsg = null
                             },
@@ -1713,9 +1858,7 @@ fun ChatScreen(
                                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                         if (state?.myHandle != null) {
                                             // Mark local as deleted
-                                            com.privimemobile.chat.ChatService.db?.messageDao()?.markDeleted(
-                                                convId, targetMsg.timestamp, state.myHandle!!
-                                            )
+                                            com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
                                             // Send SBBS delete
                                             val walletId = resolvedWalletId
                                             if (!walletId.isNullOrEmpty()) {
@@ -1729,6 +1872,8 @@ fun ChatScreen(
                                                 )
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
                                             }
+                                            // Update chat list preview
+                                            refreshConversationPreview(convId)
                                         }
                                     }
                                     contextMenuMsg = null
@@ -1747,6 +1892,7 @@ fun ChatScreen(
         // ── Forward contact picker dialog ──
         if (forwardingMsg != null) {
             val fwdMsg = forwardingMsg!!
+            val allFwdMsgs = forwardingMsgs.ifEmpty { listOf(fwdMsg) }
             val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
             val myHandle = chatState?.myHandle
             val forwardContacts = remember(allContacts, myHandle) {
@@ -1754,33 +1900,41 @@ fun ChatScreen(
             }
 
             AlertDialog(
-                onDismissRequest = { forwardingMsg = null },
+                onDismissRequest = { forwardingMsg = null; forwardingMsgs = emptyList() },
                 containerColor = C.card,
-                title = { Text("Forward to", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text("Forward ${if (allFwdMsgs.size > 1) "${allFwdMsgs.size} messages" else ""} to", color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column(modifier = Modifier.heightIn(max = 400.dp)) {
-                        // Preview of message being forwarded
+                        // Preview of message(s) being forwarded
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = C.bg.copy(alpha = 0.5f),
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
-                                if (fwdMsg.file != null) {
+                                if (allFwdMsgs.size > 1) {
                                     Text(
-                                        "\uD83D\uDCCE ${fwdMsg.file.name.ifEmpty { "File" }}",
-                                        color = C.accent,
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                if (fwdMsg.text.isNotEmpty()) {
-                                    Text(
-                                        fwdMsg.text.take(100),
+                                        "${allFwdMsgs.size} messages selected",
                                         color = C.textSecondary,
                                         fontSize = 12.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
                                     )
+                                } else {
+                                    if (fwdMsg.file != null) {
+                                        Text(
+                                            "\uD83D\uDCCE ${fwdMsg.file.name.ifEmpty { "File" }}",
+                                            color = C.accent,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                    if (fwdMsg.text.isNotEmpty()) {
+                                        Text(
+                                            fwdMsg.text.take(100),
+                                            color = C.textSecondary,
+                                            fontSize = 12.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1794,77 +1948,84 @@ fun ChatScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                // Send forwarded message
-                                                scope.launch {
+                                                // Send forwarded message(s) — use ChatService scope so it survives navigation
+                                                com.privimemobile.chat.ChatService.scope.launch {
                                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                                     if (state?.myHandle != null && !contact.walletId.isNullOrEmpty()) {
-                                                        val ts = System.currentTimeMillis() / 1000
                                                         val toHandle = contact.handle
                                                         val toConvKey = "@$toHandle"
-                                                        val isFile = fwdMsg.file != null
-                                                        val msgType = if (isFile) "file" else "dm"
-                                                        val fwdFrom = if (fwdMsg.sent) state.myHandle!! else fwdMsg.from
-                                                        val payload = mutableMapOf<String, Any?>(
-                                                            "v" to 1, "t" to msgType, "ts" to ts,
-                                                            "from" to state.myHandle!!, "to" to toHandle,
-                                                            "dn" to (state.myDisplayName ?: ""),
-                                                            "fwd_from" to fwdFrom,
-                                                            "fwd_ts" to fwdMsg.timestamp,
-                                                        )
-                                                        if (fwdMsg.text.isNotEmpty()) payload["msg"] = fwdMsg.text
-                                                        // Include file attachment in payload
-                                                        if (isFile) {
-                                                            val f = fwdMsg.file!!
-                                                            val fileMap = mutableMapOf<String, Any?>(
-                                                                "name" to f.name,
-                                                                "size" to f.size,
-                                                                "mime" to f.mime,
-                                                                "key" to f.key,
-                                                                "iv" to f.iv,
-                                                            )
-                                                            if (f.cid.isNotEmpty() && !f.cid.startsWith("inline-")) fileMap["cid"] = f.cid
-                                                            if (f.data != null) fileMap["data"] = f.data
-                                                            payload["file"] = fileMap
-                                                        }
-                                                        // Optimistic insert
                                                         val fwdConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(toConvKey, toHandle)
-                                                        val dedupKey = "$ts:fwd:${fwdMsg.timestamp}:true"
-                                                        val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                                                            conversationId = fwdConv.id,
-                                                            text = fwdMsg.text.ifEmpty { null },
-                                                            timestamp = ts,
-                                                            sent = true,
-                                                            type = msgType,
-                                                            senderHandle = state.myHandle,
-                                                            sbbsDedupKey = dedupKey,
-                                                            fwdFrom = fwdFrom,
-                                                            fwdTs = fwdMsg.timestamp,
-                                                        )
-                                                        val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
-                                                        // Insert attachment row for file forwards
-                                                        if (isFile && msgId != -1L) {
-                                                            val f = fwdMsg.file!!
-                                                            com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
-                                                                com.privimemobile.chat.db.entities.AttachmentEntity(
-                                                                    messageId = msgId,
-                                                                    conversationId = fwdConv.id,
-                                                                    ipfsCid = f.cid.ifEmpty { "inline-${System.currentTimeMillis().toString(36)}" },
-                                                                    encryptionKey = f.key,
-                                                                    encryptionIv = f.iv,
-                                                                    fileName = f.name,
-                                                                    fileSize = f.size,
-                                                                    mimeType = f.mime,
-                                                                    inlineData = f.data,
-                                                                )
+                                                        var lastPreview: String? = null
+                                                        var lastTs = 0L
+                                                        for ((i, m) in allFwdMsgs.withIndex()) {
+                                                            val ts = System.currentTimeMillis() / 1000 + i  // offset to avoid dedup collision
+                                                            val isFile = m.file != null
+                                                            val msgType = if (isFile) "file" else "dm"
+                                                            val fwdFrom = if (m.sent) state.myHandle!! else m.from
+                                                            val payload = mutableMapOf<String, Any?>(
+                                                                "v" to 1, "t" to msgType, "ts" to ts,
+                                                                "from" to state.myHandle!!, "to" to toHandle,
+                                                                "dn" to (state.myDisplayName ?: ""),
+                                                                "fwd_from" to fwdFrom,
+                                                                "fwd_ts" to m.timestamp,
                                                             )
+                                                            if (m.text.isNotEmpty()) payload["msg"] = m.text
+                                                            if (isFile) {
+                                                                val f = m.file!!
+                                                                val fileMap = mutableMapOf<String, Any?>(
+                                                                    "name" to f.name, "size" to f.size,
+                                                                    "mime" to f.mime, "key" to f.key, "iv" to f.iv,
+                                                                )
+                                                                if (f.cid.isNotEmpty() && !f.cid.startsWith("inline-")) fileMap["cid"] = f.cid
+                                                                if (f.data != null) fileMap["data"] = f.data
+                                                                payload["file"] = fileMap
+                                                            }
+                                                            val dedupKey = "$ts:fwd:${m.timestamp}:true"
+                                                            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                                                                conversationId = fwdConv.id,
+                                                                text = m.text.ifEmpty { null },
+                                                                timestamp = ts,
+                                                                sent = true,
+                                                                type = msgType,
+                                                                senderHandle = state.myHandle,
+                                                                sbbsDedupKey = dedupKey,
+                                                                fwdFrom = fwdFrom,
+                                                                fwdTs = m.timestamp,
+                                                            )
+                                                            val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                                                            if (isFile && msgId != -1L) {
+                                                                val f = m.file!!
+                                                                com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                                                                    com.privimemobile.chat.db.entities.AttachmentEntity(
+                                                                        messageId = msgId,
+                                                                        conversationId = fwdConv.id,
+                                                                        ipfsCid = f.cid.ifEmpty { "inline-${System.currentTimeMillis().toString(36)}" },
+                                                                        encryptionKey = f.key,
+                                                                        encryptionIv = f.iv,
+                                                                        fileName = f.name,
+                                                                        fileSize = f.size,
+                                                                        mimeType = f.mime,
+                                                                        inlineData = f.data,
+                                                                    )
+                                                                )
+                                                            }
+                                                            lastPreview = if (isFile) "\uD83D\uDCCE ${m.file!!.name.ifEmpty { "File" }}" else m.text.take(100)
+                                                            lastTs = ts
+                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.walletId!!, payload)
+                                                            // Delay between forwards to avoid SBBS rate-limiting
+                                                            if (i < allFwdMsgs.size - 1) delay(2000)
                                                         }
-                                                        val preview = if (isFile) "\uD83D\uDCCE ${fwdMsg.file!!.name.ifEmpty { "File" }}" else fwdMsg.text.take(100)
-                                                        com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fwdConv.id, ts, preview)
-                                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.walletId!!, payload)
-                                                        Toast.makeText(context, "Forwarded to @${toHandle}", Toast.LENGTH_SHORT).show()
+                                                        if (lastTs > 0) {
+                                                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fwdConv.id, lastTs, lastPreview)
+                                                        }
+                                                        val count = allFwdMsgs.size
+                                                        Toast.makeText(context, "Forwarded $count message${if (count > 1) "s" else ""} to @${toHandle}", Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
                                                 forwardingMsg = null
+                                                forwardingMsgs = emptyList()
+                                                // Navigate to the forwarded-to chat
+                                                onNavigateToChat(contact.handle)
                                             }
                                             .padding(vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -2118,6 +2279,13 @@ private fun MessageBubble(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (msg.expiresAt > 0) {
+                        Text(
+                            "\u23F3",  // ⏳ hourglass
+                            fontSize = 10.sp,
+                        )
+                        Spacer(Modifier.width(3.dp))
+                    }
                     if (msg.edited) {
                         Text(
                             "edited",

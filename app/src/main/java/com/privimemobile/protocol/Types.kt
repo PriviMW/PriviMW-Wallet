@@ -46,6 +46,7 @@ data class ChatMessage(
     val file: FileAttachment? = null, // file attachment
     val type: String = "dm",         // "dm", "file", "tip", "system"
     val edited: Boolean = false,     // message was edited
+    val expiresAt: Long = 0,        // 0=never, unix seconds for disappearing msgs
 )
 
 /** A conversation (aggregated from messages). */

@@ -70,9 +70,7 @@ fun ContactInfoScreen(
     // States
     val isMuted = conv?.muted ?: false
     val isBlocked = conv?.isBlocked ?: false
-    val disappearTimer = conv?.disappearTimer ?: 0
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showDisappearPicker by remember { mutableStateOf(false) }
 
     // Avatar
     val avatarColors = listOf(
@@ -123,13 +121,6 @@ fun ContactInfoScreen(
                 Spacer(Modifier.height(12.dp))
                 Text(resolvedName, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text("@$handle", color = C.textSecondary, fontSize = 14.sp)
-                if (disappearTimer > 0) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "\u23F3 Disappearing: ${formatTimerLabel(disappearTimer)}",
-                        color = C.textMuted, fontSize = 12.sp,
-                    )
-                }
             }
 
             // Wallet ID (copyable)
@@ -211,14 +202,6 @@ fun ContactInfoScreen(
                         HorizontalDivider(color = C.border.copy(alpha = 0.5f))
 
                         // Disappearing messages
-                        InfoRow(
-                            icon = Icons.Default.Timer,
-                            label = "Disappearing messages",
-                            value = if (disappearTimer > 0) formatTimerLabel(disappearTimer) else "Off",
-                            onClick = { showDisappearPicker = true },
-                        )
-                        HorizontalDivider(color = C.border.copy(alpha = 0.5f))
-
                         // Block
                         InfoRow(
                             icon = Icons.Default.Block,
@@ -259,7 +242,10 @@ fun ContactInfoScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (convId > 0L) {
-                        scope.launch { ChatService.db?.conversationDao()?.softDelete(convId) }
+                        scope.launch {
+                            ChatService.db?.messageDao()?.softDeleteByConversation(convId)
+                            ChatService.db?.conversationDao()?.softDelete(convId)
+                        }
                     }
                     showDeleteConfirm = false
                     onDeleteChat()
@@ -275,58 +261,6 @@ fun ContactInfoScreen(
         )
     }
 
-    // Disappearing timer picker
-    if (showDisappearPicker) {
-        val timerOptions = listOf(0 to "Off", 30 to "30 seconds", 300 to "5 minutes", 3600 to "1 hour", 86400 to "1 day")
-        AlertDialog(
-            onDismissRequest = { showDisappearPicker = false },
-            containerColor = C.card,
-            shape = RoundedCornerShape(16.dp),
-            title = { Text("Disappearing messages", color = C.text, fontWeight = FontWeight.SemiBold) },
-            text = {
-                Column {
-                    timerOptions.forEach { (seconds, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    scope.launch {
-                                        if (convId > 0L) {
-                                            ChatService.db?.conversationDao()?.setDisappearTimer(convId, seconds)
-                                            // Send config to peer
-                                            val state = ChatService.db?.chatStateDao()?.get()
-                                            val wid = contact?.walletId
-                                            if (state?.myHandle != null && !wid.isNullOrEmpty()) {
-                                                val payload = mapOf(
-                                                    "v" to 1, "t" to "disappear_config",
-                                                    "ts" to System.currentTimeMillis() / 1000,
-                                                    "from" to state.myHandle!!, "to" to handle,
-                                                    "timer" to seconds,
-                                                )
-                                                ChatService.sbbs.sendWithRetry(wid, payload)
-                                            }
-                                        }
-                                    }
-                                    showDisappearPicker = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = disappearTimer == seconds,
-                                onClick = null,
-                                colors = RadioButtonDefaults.colors(selectedColor = C.accent, unselectedColor = C.textSecondary),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(label, color = C.text, fontSize = 15.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-        )
-    }
 }
 
 @Composable

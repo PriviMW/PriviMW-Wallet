@@ -38,7 +38,16 @@ interface ConversationDao {
     @Transaction
     suspend fun getOrCreate(convKey: String, handle: String? = null, displayName: String? = null, walletId: String? = null): ConversationEntity {
         val existing = findByKey(convKey)
-        if (existing != null) return existing
+        if (existing != null) {
+            // Un-delete if it was soft-deleted (user deleted chat then started new conversation)
+            if (existing.deletedAtTs > 0) {
+                setDeletedTs(existing.id, 0)
+                clearUnread(existing.id)
+                updateLastMessage(existing.id, 0, null)
+                return existing.copy(deletedAtTs = 0, unreadCount = 0, lastMessageTs = 0, lastMessagePreview = null)
+            }
+            return existing
+        }
         val entity = ConversationEntity(
             convKey = convKey,
             handle = handle,

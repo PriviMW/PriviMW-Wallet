@@ -289,6 +289,10 @@ fun AppNavigation() {
                     onBack = { navController.popBackStack() },
                     onMediaGallery = { navController.navigate("media_gallery/$handle") },
                     onContactInfo = { navController.navigate("contact_info/$handle") },
+                    onNavigateToChat = { toHandle ->
+                        navController.popBackStack()
+                        navController.navigate("chat/$toHandle")
+                    },
                     scrollToTimestamp = scrollToTs,
                 )
             }
@@ -329,7 +333,6 @@ fun AppNavigation() {
                     handle = handle,
                     onBack = { navController.popBackStack() },
                     onMediaGallery = {
-                        navController.popBackStack()
                         navController.navigate("media_gallery/$handle")
                     },
                     onDeleteChat = {

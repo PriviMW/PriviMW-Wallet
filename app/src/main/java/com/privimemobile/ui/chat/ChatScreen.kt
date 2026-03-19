@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -70,6 +71,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
@@ -948,102 +950,77 @@ fun ChatScreen(
                     DropdownMenu(
                         expanded = showOverflowMenu,
                         onDismissRequest = { showOverflowMenu = false },
-                        modifier = Modifier.background(C.card),
+                        modifier = Modifier.background(C.card).widthIn(min = 200.dp),
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(if (showSearch) "Close Search" else "Search", color = C.text) },
-                            onClick = {
-                                showSearch = !showSearch
-                                if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
-                                showOverflowMenu = false
-                            },
-                            leadingIcon = { Text("\uD83D\uDD0D", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Media", color = C.text) },
-                            onClick = { showOverflowMenu = false; onMediaGallery() },
-                            leadingIcon = { Text("\uD83D\uDDBC", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("View profile", color = C.text) },
-                            onClick = { showOverflowMenu = false; onContactInfo() },
-                            leadingIcon = { Text("\uD83D\uDC64", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Wallpaper", color = C.text) },
-                            onClick = { showOverflowMenu = false; showWallpaperPicker = true },
-                            leadingIcon = { Text("\uD83C\uDFA8", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Export chat", color = C.text) },
-                            onClick = {
-                                showOverflowMenu = false
-                                // Export chat as text
-                                scope.launch {
-                                    val sb = StringBuilder()
-                                    sb.appendLine("PriviMe Chat — @$handle")
-                                    sb.appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-                                    sb.appendLine("---")
-                                    messages.forEach { msg ->
-                                        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                                            .format(java.util.Date(msg.timestamp * 1000))
-                                        val sender = if (msg.sent) "You" else "@${msg.from}"
-                                        val text = when {
-                                            msg.isTip -> "[Tip: ${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}] ${msg.text}"
-                                            msg.type == "file" -> "[File: ${msg.file?.name ?: "file"}] ${msg.text}"
-                                            else -> msg.text
-                                        }
-                                        sb.appendLine("[$time] $sender: $text")
+                        @Composable fun OverflowItem(icon: String, label: String, color: Color = C.text, action: () -> Unit) {
+                            var pressed by remember { mutableStateOf(false) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (pressed) C.accent.copy(alpha = 0.15f) else Color.Transparent)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                                            onTap = { action() },
+                                        )
                                     }
-                                    withContext(Dispatchers.Main) {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
-                                            putExtra(android.content.Intent.EXTRA_SUBJECT, "PriviMe Chat — @$handle")
-                                        }
-                                        context.startActivity(android.content.Intent.createChooser(intent, "Export chat"))
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(icon, fontSize = 16.sp)
+                                Spacer(Modifier.width(14.dp))
+                                Text(label, color = color, fontSize = 15.sp)
+                            }
+                        }
+                        OverflowItem("\uD83D\uDD0D", if (showSearch) "Close Search" else "Search") {
+                            showSearch = !showSearch
+                            if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
+                            showOverflowMenu = false
+                        }
+                        OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
+                        OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
+                        OverflowItem("\uD83C\uDFA8", "Wallpaper") { showOverflowMenu = false; showWallpaperPicker = true }
+                        OverflowItem("\uD83D\uDCE4", "Export chat") {
+                            showOverflowMenu = false
+                            scope.launch {
+                                val sb = StringBuilder()
+                                sb.appendLine("PriviMe Chat — @$handle")
+                                sb.appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                                sb.appendLine("---")
+                                messages.forEach { msg ->
+                                    val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                                        .format(java.util.Date(msg.timestamp * 1000))
+                                    val sender = if (msg.sent) "You" else "@${msg.from}"
+                                    val text = when {
+                                        msg.isTip -> "[Tip: ${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}] ${msg.text}"
+                                        msg.type == "file" -> "[File: ${msg.file?.name ?: "file"}] ${msg.text}"
+                                        else -> msg.text
                                     }
+                                    sb.appendLine("[$time] $sender: $text")
                                 }
-                            },
-                            leadingIcon = { Text("\uD83D\uDCE4", fontSize = 16.sp) },
-                        )
+                                withContext(Dispatchers.Main) {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "PriviMe Chat — @$handle")
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(intent, "Export chat"))
+                                }
+                            }
+                        }
                         val isMuted = conv?.muted == true
-                        DropdownMenuItem(
-                            text = { Text(if (isMuted) "Unmute" else "Mute", color = C.text) },
-                            onClick = {
-                                if (convId > 0L) {
-                                    scope.launch {
-                                        com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted)
-                                    }
-                                }
-                                showOverflowMenu = false
-                            },
-                            leadingIcon = { Text(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", fontSize = 16.sp) },
-                        )
+                        OverflowItem(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", if (isMuted) "Unmute" else "Mute") {
+                            if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted) } }
+                            showOverflowMenu = false
+                        }
                         val isBlocked = conv?.isBlocked == true
-                        DropdownMenuItem(
-                            text = { Text(if (isBlocked) "Unblock" else "Block", color = if (isBlocked) C.text else C.error) },
-                            onClick = {
-                                if (convId > 0L) {
-                                    scope.launch {
-                                        com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked)
-                                    }
-                                }
-                                showOverflowMenu = false
-                            },
-                            leadingIcon = { Text(if (isBlocked) "\u2705" else "\uD83D\uDEAB", fontSize = 16.sp) },
-                        )
+                        OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) "Unblock" else "Block", color = if (isBlocked) C.text else C.error) {
+                            if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
+                            showOverflowMenu = false
+                        }
                         HorizontalDivider(color = C.border)
-                        DropdownMenuItem(
-                            text = { Text("Clear history", color = C.error) },
-                            onClick = { showOverflowMenu = false; showClearConfirm = true },
-                            leadingIcon = { Text("\uD83D\uDDD1", fontSize = 16.sp) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete chat", color = C.error) },
-                            onClick = { showOverflowMenu = false; showDeleteConfirm = true },
-                            leadingIcon = { Text("\u274C", fontSize = 16.sp) },
-                        )
+                        OverflowItem("\uD83D\uDDD1", "Clear history", color = C.error) { showOverflowMenu = false; showClearConfirm = true }
+                        OverflowItem("\u274C", "Delete chat", color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
                     }
                 }
             }
@@ -1765,100 +1742,184 @@ fun ChatScreen(
         }
         } // end Box wrapper
 
-        // Emoji picker panel (Telegram-style with categories)
+        // Emoji picker panel (Telegram-style: recent + scrollable categories, 9 columns)
         if (showEmojiPicker) {
-            val emojiCategories = listOf(
-                "Recent" to listOf("\uD83D\uDC4D", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDD25", "\uD83D\uDE0D", "\uD83D\uDE4F", "\uD83D\uDC4F", "\uD83E\uDD70"),
-                "\uD83D\uDE00 Smileys" to listOf(
-                    "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06", "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23",
-                    "\uD83D\uDE0A", "\uD83D\uDE07", "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D", "\uD83E\uDD70",
-                    "\uD83D\uDE18", "\uD83D\uDE17", "\uD83D\uDE19", "\uD83D\uDE1A", "\uD83D\uDE0B", "\uD83D\uDE1B", "\uD83D\uDE1C", "\uD83E\uDD2A",
-                    "\uD83D\uDE1D", "\uD83E\uDD11", "\uD83E\uDD17", "\uD83E\uDD2D", "\uD83E\uDD2B", "\uD83E\uDD14", "\uD83E\uDD10", "\uD83E\uDD28",
-                    "\uD83D\uDE10", "\uD83D\uDE11", "\uD83D\uDE36", "\uD83D\uDE0F", "\uD83D\uDE12", "\uD83D\uDE44", "\uD83D\uDE2C", "\uD83E\uDD25",
-                    "\uD83D\uDE0E", "\uD83E\uDD13", "\uD83E\uDD78", "\uD83E\uDD21", "\uD83D\uDE34", "\uD83D\uDE2A", "\uD83D\uDE31", "\uD83D\uDE28",
-                    "\uD83D\uDE30", "\uD83D\uDE25", "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE24", "\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2F",
+            // Track recent emojis in SharedPreferences
+            val recentPrefs = context.getSharedPreferences("emoji_recent", Context.MODE_PRIVATE)
+            val recentEmojis = remember {
+                mutableStateListOf<String>().apply {
+                    addAll(recentPrefs.getString("recent", "")?.split(",")?.filter { it.isNotEmpty() } ?: emptyList())
+                }
+            }
+            fun addRecent(emoji: String) {
+                recentEmojis.remove(emoji)
+                recentEmojis.add(0, emoji)
+                if (recentEmojis.size > 32) recentEmojis.removeRange(32, recentEmojis.size)
+                recentPrefs.edit().putString("recent", recentEmojis.joinToString(",")).apply()
+            }
+            fun insertEmoji(emoji: String) {
+                val current = inputText.text
+                val sel = inputText.selection.start
+                setInputText(current.substring(0, sel) + emoji + current.substring(sel))
+                addRecent(emoji)
+            }
+
+            // All emoji categories
+            val allCategories = listOf(
+                "Emoji & People" to listOf(
+                    "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06", "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23", "\uD83D\uDE0A",
+                    "\uD83D\uDE07", "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D", "\uD83E\uDD70", "\uD83D\uDE18", "\uD83D\uDE17",
+                    "\uD83D\uDE19", "\uD83D\uDE1A", "\uD83D\uDE0B", "\uD83D\uDE1B", "\uD83D\uDE1C", "\uD83E\uDD2A", "\uD83D\uDE1D", "\uD83E\uDD11", "\uD83E\uDD17",
+                    "\uD83E\uDD2D", "\uD83E\uDD2B", "\uD83E\uDD14", "\uD83E\uDD10", "\uD83E\uDD28", "\uD83D\uDE10", "\uD83D\uDE11", "\uD83D\uDE36", "\uD83D\uDE0F",
+                    "\uD83D\uDE12", "\uD83D\uDE44", "\uD83D\uDE2C", "\uD83E\uDD25", "\uD83D\uDE0E", "\uD83E\uDD13", "\uD83E\uDD78", "\uD83E\uDD21", "\uD83D\uDE34",
+                    "\uD83D\uDE2A", "\uD83D\uDE31", "\uD83D\uDE28", "\uD83D\uDE30", "\uD83D\uDE25", "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE24", "\uD83D\uDE21",
+                    "\uD83D\uDE20", "\uD83E\uDD2F", "\uD83D\uDE33", "\uD83E\uDD75", "\uD83E\uDD76", "\uD83D\uDE31", "\uD83D\uDE28", "\uD83E\uDD2E", "\uD83E\uDD27",
+                    "\uD83D\uDE37", "\uD83E\uDD12", "\uD83E\uDD15", "\uD83D\uDE35", "\uD83E\uDD74", "\uD83E\uDD22", "\uD83D\uDC7F", "\uD83D\uDC79", "\uD83D\uDC7A",
+                    "\uD83D\uDC80", "\uD83D\uDC7B", "\uD83D\uDC7D", "\uD83E\uDD16", "\uD83D\uDCA9", "\uD83D\uDE3A", "\uD83D\uDE38", "\uD83D\uDE39", "\uD83D\uDE3B",
                 ),
-                "\uD83D\uDC4B Hands" to listOf(
-                    "\uD83D\uDC4D", "\uD83D\uDC4E", "\u270A", "\uD83D\uDC4A", "\uD83E\uDD1B", "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C",
-                    "\uD83D\uDC50", "\uD83E\uDD32", "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270D\uFE0F", "\uD83D\uDC85", "\uD83E\uDD33", "\uD83D\uDCAA",
-                    "\uD83D\uDC4B", "\uD83E\uDD1A", "\uD83D\uDD90\uFE0F", "\u270B", "\uD83D\uDC4C", "\uD83E\uDD0C", "\uD83E\uDD0F", "\u270C\uFE0F",
-                    "\uD83E\uDD1E", "\uD83E\uDD1F", "\uD83E\uDD18", "\uD83E\uDD19", "\uD83D\uDC46", "\uD83D\uDC47", "\uD83D\uDC48", "\uD83D\uDC49",
+                "Hands & Gestures" to listOf(
+                    "\uD83D\uDC4D", "\uD83D\uDC4E", "\u270A", "\uD83D\uDC4A", "\uD83E\uDD1B", "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C", "\uD83D\uDC50",
+                    "\uD83E\uDD32", "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270D\uFE0F", "\uD83D\uDC85", "\uD83E\uDD33", "\uD83D\uDCAA", "\uD83D\uDC4B", "\uD83E\uDD1A",
+                    "\u270B", "\uD83D\uDC4C", "\uD83E\uDD0F", "\u270C\uFE0F", "\uD83E\uDD1E", "\uD83E\uDD1F", "\uD83E\uDD18", "\uD83E\uDD19", "\uD83D\uDC46",
+                    "\uD83D\uDC47", "\uD83D\uDC48", "\uD83D\uDC49", "\uD83D\uDD95", "\uD83D\uDC4B", "\uD83E\uDEF6", "\uD83E\uDEF1", "\uD83E\uDEF2", "\uD83E\uDEF3",
                 ),
-                "\u2764\uFE0F Symbols" to listOf(
+                "Hearts & Symbols" to listOf(
                     "\u2764\uFE0F", "\uD83E\uDDE1", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99", "\uD83D\uDC9C", "\uD83D\uDDA4", "\uD83D\uDC94",
-                    "\u2764\uFE0F\u200D\uD83D\uDD25", "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97", "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D",
-                    "\u2B50", "\uD83C\uDF1F", "\uD83D\uDCAB", "\u26A1", "\uD83D\uDD25", "\uD83D\uDCA5", "\uD83C\uDF89", "\uD83C\uDF8A",
-                    "\uD83C\uDFC6", "\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49", "\uD83D\uDCAF", "\uD83D\uDC8B", "\uD83D\uDCA4", "\uD83D\uDCA8",
+                    "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97", "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D", "\u2B50", "\uD83C\uDF1F",
+                    "\uD83D\uDCAB", "\u26A1", "\uD83D\uDD25", "\uD83D\uDCA5", "\uD83C\uDF89", "\uD83C\uDF8A", "\uD83C\uDFC6", "\uD83E\uDD47", "\uD83E\uDD48",
+                    "\uD83E\uDD49", "\uD83D\uDCAF", "\uD83D\uDC8B", "\uD83D\uDCA4", "\uD83D\uDCA8", "\uD83C\uDF08", "\u2600\uFE0F", "\uD83C\uDF19", "\u2744\uFE0F",
                 ),
-                "\uD83D\uDE38 Animals" to listOf(
-                    "\uD83D\uDE3A", "\uD83D\uDE38", "\uD83D\uDE39", "\uD83D\uDE3B", "\uD83D\uDE3C", "\uD83D\uDE3D", "\uD83D\uDE40", "\uD83D\uDE3F",
-                    "\uD83D\uDE3E", "\uD83D\uDC35", "\uD83D\uDE48", "\uD83D\uDE49", "\uD83D\uDE4A", "\uD83D\uDC36", "\uD83D\uDC31", "\uD83D\uDC2D",
-                    "\uD83D\uDC39", "\uD83D\uDC30", "\uD83E\uDD8A", "\uD83D\uDC3B", "\uD83D\uDC28", "\uD83D\uDC2F", "\uD83E\uDD81", "\uD83D\uDC2E",
-                    "\uD83D\uDC37", "\uD83D\uDC38", "\uD83D\uDC3C", "\uD83D\uDC27", "\uD83D\uDC26", "\uD83E\uDD85", "\uD83E\uDD86", "\uD83E\uDD89",
+                "Animals & Nature" to listOf(
+                    "\uD83D\uDC36", "\uD83D\uDC31", "\uD83D\uDC2D", "\uD83D\uDC39", "\uD83D\uDC30", "\uD83E\uDD8A", "\uD83D\uDC3B", "\uD83D\uDC28",
+                    "\uD83D\uDC2F", "\uD83E\uDD81", "\uD83D\uDC2E", "\uD83D\uDC37", "\uD83D\uDC38", "\uD83D\uDC35", "\uD83D\uDE48", "\uD83D\uDE49",
+                    "\uD83D\uDE4A", "\uD83D\uDC27", "\uD83D\uDC26", "\uD83E\uDD85", "\uD83E\uDD86", "\uD83E\uDD89", "\uD83D\uDC3C", "\uD83D\uDC22",
+                    "\uD83D\uDC0D", "\uD83E\uDD96", "\uD83D\uDC33", "\uD83D\uDC2C", "\uD83E\uDD8B", "\uD83C\uDF3A", "\uD83C\uDF39", "\uD83C\uDF3B",
+                    "\uD83C\uDF3C", "\uD83C\uDF37", "\uD83C\uDF34", "\uD83C\uDF35", "\uD83C\uDF32", "\uD83C\uDF33", "\uD83C\uDF40", "\uD83C\uDF3F",
                 ),
-                "\uD83C\uDF54 Food" to listOf(
+                "Food & Drink" to listOf(
                     "\uD83C\uDF4E", "\uD83C\uDF4A", "\uD83C\uDF4B", "\uD83C\uDF4C", "\uD83C\uDF49", "\uD83C\uDF47", "\uD83C\uDF53", "\uD83C\uDF48",
                     "\uD83C\uDF55", "\uD83C\uDF54", "\uD83C\uDF5F", "\uD83C\uDF2D", "\uD83C\uDF2E", "\uD83C\uDF2F", "\uD83C\uDF73", "\uD83C\uDF5E",
                     "\u2615", "\uD83C\uDF75", "\uD83C\uDF7A", "\uD83C\uDF77", "\uD83E\uDD42", "\uD83C\uDF78", "\uD83E\uDD64", "\uD83C\uDF70",
                     "\uD83C\uDF82", "\uD83C\uDF6B", "\uD83C\uDF6C", "\uD83C\uDF6D", "\uD83C\uDF6E", "\uD83C\uDF6F", "\uD83C\uDF7E", "\uD83E\uDD43",
                 ),
+                "Objects & Flags" to listOf(
+                    "\uD83D\uDCF1", "\uD83D\uDCBB", "\uD83D\uDCF7", "\uD83C\uDFB5", "\uD83C\uDFB6", "\uD83C\uDFA4", "\uD83C\uDFAC", "\uD83D\uDCDA",
+                    "\uD83D\uDD13", "\uD83D\uDD12", "\uD83D\uDD11", "\uD83D\uDCA1", "\uD83D\uDD0B", "\uD83D\uDCE7", "\uD83D\uDCE6", "\uD83D\uDCB0",
+                    "\uD83D\uDCB3", "\uD83D\uDE97", "\uD83D\uDE95", "\uD83D\uDE8C", "\u2708\uFE0F", "\uD83D\uDE80", "\uD83C\uDFE0", "\uD83C\uDFEB",
+                    "\uD83C\uDFE5", "\u26BD", "\uD83C\uDFC0", "\uD83C\uDFBE", "\uD83C\uDFAF", "\uD83C\uDFF3\uFE0F", "\uD83C\uDFF4", "\uD83C\uDDE6\uD83C\uDDFA",
+                ),
             )
-            var selectedCategory by remember { mutableStateOf(0) }
+
+            // Category tab icons (matching Telegram)
+            val categoryIcons = listOf("\uD83D\uDD53", "\uD83D\uDE00", "\uD83D\uDC4B", "\u2764\uFE0F", "\uD83D\uDC3B", "\uD83C\uDF54", "\uD83D\uDCF1", "\uD83C\uDFAD")
+            var mainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
+            val emojiGridState = rememberLazyGridState()
+
+            // Pre-compute grid indices for each category header (for tab scrolling)
+            val categoryGridIndices = remember(recentEmojis.size, allCategories) {
+                val indices = mutableListOf<Int>()
+                var idx = 0
+                // Recent
+                idx++ // "Recent" header
+                idx += recentEmojis.size
+                // Each category
+                allCategories.forEachIndexed { catIdx, (_, emojis) ->
+                    indices.add(idx) // category header position
+                    idx++ // header
+                    idx += emojis.size
+                }
+                indices
+            }
+
+            val screenHeight = LocalContext.current.resources.displayMetrics.heightPixels
+            val panelHeight = (screenHeight * 0.40f / LocalContext.current.resources.displayMetrics.density).dp
 
             Surface(color = C.card) {
-                // 45% of screen height like Telegram-X
-                val screenHeight = LocalContext.current.resources.displayMetrics.heightPixels
-                val panelHeight = (screenHeight * 0.40f / LocalContext.current.resources.displayMetrics.density).dp
                 Column(modifier = Modifier.height(panelHeight)) {
-                    // Category tabs (scrollable)
-                    ScrollableTabRow(
-                        selectedTabIndex = selectedCategory,
-                        containerColor = Color.Transparent,
-                        contentColor = C.accent,
-                        edgePadding = 4.dp,
-                        divider = {},
-                        indicator = {},
+                    // Main tabs: Emoji | Stickers
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.Start,
                     ) {
-                        emojiCategories.forEachIndexed { idx, (label, _) ->
-                            Tab(
-                                selected = selectedCategory == idx,
-                                onClick = { selectedCategory = idx },
-                                text = {
-                                    Text(
-                                        if (idx == 0) "\uD83D\uDD53" else label.split(" ").first(), // icon only for tab
-                                        fontSize = 18.sp,
-                                    )
-                                },
-                            )
+                        // Category icon tabs (Telegram-style)
+                        var activeTabIdx by remember { mutableStateOf(0) }
+                        categoryIcons.forEachIndexed { idx, icon ->
+                            val isActive = if (idx == categoryIcons.size - 1) mainTab == 1 else mainTab == 0 && activeTabIdx == idx
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isActive) C.accent.copy(alpha = 0.15f) else Color.Transparent)
+                                    .clickable {
+                                        if (idx == categoryIcons.size - 1) {
+                                            mainTab = 1 // Stickers tab
+                                        } else {
+                                            mainTab = 0
+                                            activeTabIdx = idx
+                                            if (idx == 0) {
+                                                // Recent — scroll to top
+                                                scope.launch { emojiGridState.animateScrollToItem(0) }
+                                            } else if (idx - 1 < categoryGridIndices.size) {
+                                                // Scroll to category header
+                                                scope.launch { emojiGridState.animateScrollToItem(categoryGridIndices[idx - 1]) }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(icon, fontSize = 20.sp)
+                            }
                         }
                     }
-                    // Category label
-                    Text(
-                        emojiCategories[selectedCategory].first,
-                        color = C.textSecondary, fontSize = 12.sp,
-                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
-                    )
-                    // Emoji grid
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(8),
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                    ) {
-                        val emojis = emojiCategories[selectedCategory].second
-                        items(emojis.size) { idx ->
-                            Text(
-                                emojis[idx],
-                                fontSize = 26.sp,
-                                modifier = Modifier
-                                    .clickable {
-                                        val current = inputText.text
-                                        val sel = inputText.selection.start
-                                        val newText = current.substring(0, sel) + emojis[idx] + current.substring(sel)
-                                        setInputText(newText)
-                                    }
-                                    .padding(6.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            )
+
+                    HorizontalDivider(color = C.border.copy(alpha = 0.3f))
+
+                    if (mainTab == 0) {
+                        // Emoji tab — single scrollable list with recent + all categories
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(9),
+                            state = emojiGridState,
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                        ) {
+                            // Recent emojis
+                            if (recentEmojis.isNotEmpty()) {
+                                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(9) }) {
+                                    Text("Recent", color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp))
+                                }
+                                items(recentEmojis.size) { idx ->
+                                    Text(
+                                        recentEmojis[idx], fontSize = 28.sp,
+                                        modifier = Modifier.clickable { insertEmoji(recentEmojis[idx]) }.padding(4.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    )
+                                }
+                            }
+                            // All categories with headers
+                            allCategories.forEach { (categoryName, emojis) ->
+                                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(9) }) {
+                                    Text(categoryName, color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp))
+                                }
+                                items(emojis.size) { idx ->
+                                    Text(
+                                        emojis[idx], fontSize = 28.sp,
+                                        modifier = Modifier.clickable { insertEmoji(emojis[idx]) }.padding(4.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Stickers tab — placeholder
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("\uD83C\uDFAD", fontSize = 48.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Text("Stickers coming soon", color = C.textSecondary, fontSize = 14.sp)
+                            }
                         }
                     }
                 }
@@ -2022,11 +2083,19 @@ fun ChatScreen(
         // Input bar — Telegram-X style (48dp bar, 180ms animations)
         val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
         val hasText = inputText.text.isNotBlank() || pendingFile != null
-        Surface(color = C.card, shadowElevation = 2.dp) {
+        // Close emoji picker when system keyboard appears
+        val imeVisible = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+        LaunchedEffect(imeVisible) {
+            if (imeVisible && showEmojiPicker) showEmojiPicker = false
+        }
+        Surface(
+            color = C.card,
+            shadowElevation = 2.dp,
+            modifier = Modifier.then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
                     .height(IntrinsicSize.Min)
                     .padding(horizontal = 2.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.Bottom,

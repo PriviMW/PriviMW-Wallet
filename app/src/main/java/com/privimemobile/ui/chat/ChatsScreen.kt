@@ -1,6 +1,8 @@
 package com.privimemobile.ui.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -268,141 +270,58 @@ fun ChatsScreen(
     // Conversation context menu
     if (menuTarget != null) {
         val target = menuTarget!!
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { menuTarget = null },
             containerColor = C.card,
-            shape = RoundedCornerShape(16.dp),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            dragHandle = {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.textMuted.copy(alpha = 0.4f)))
+                }
+            },
+        ) {
+            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                // Header with avatar
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     val avatarKey = target.handle ?: target.convKey
-                    Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(avatarColor(avatarKey)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val initial = (target.displayName ?: target.handle ?: target.convKey)
-                            .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
-                        Text(initial, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(avatarKey)), contentAlignment = Alignment.Center) {
+                        val initial = (target.displayName ?: target.handle ?: target.convKey).removePrefix("@").firstOrNull()?.uppercase() ?: "?"
+                        Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text(
-                            target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey,
-                            color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-                        )
+                        Text(target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                         if (target.handle != null && target.displayName?.isNotEmpty() == true) {
                             Text("@${target.handle}", color = C.textSecondary, fontSize = 12.sp)
                         }
                     }
                 }
-            },
-            text = {
-                Column {
-                    // Pin / Unpin
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                ChatService.db?.conversationDao()?.setPinned(target.id, !target.pinned)
-                            }
-                            menuTarget = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.PushPin, contentDescription = null,
-                                tint = C.textSecondary, modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(if (target.pinned) "Unpin" else "Pin", color = C.text)
-                        }
-                    }
+                HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
-                    // Mute / Unmute
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted)
-                            }
-                            menuTarget = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.NotificationsOff, contentDescription = null,
-                                tint = C.textSecondary, modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(if (target.muted) "Unmute" else "Mute", color = C.text)
-                        }
-                    }
-
-                    // Block / Unblock
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                ChatService.db?.conversationDao()?.setBlocked(target.id, !target.isBlocked)
-                            }
-                            menuTarget = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Block, contentDescription = null,
-                                tint = if (target.isBlocked) C.textSecondary else C.error,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                if (target.isBlocked) "Unblock" else "Block",
-                                color = if (target.isBlocked) C.text else C.error,
-                            )
-                        }
-                    }
-
-                    // Archive / Unarchive
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                ChatService.db?.conversationDao()?.setArchived(target.id, !target.archived)
-                            }
-                            menuTarget = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            if (target.archived) "Unarchive" else "Archive",
-                            color = C.text, modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-
-                    // Delete
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                ChatService.db?.messageDao()?.softDeleteByConversation(target.id)
-                                ChatService.db?.conversationDao()?.softDelete(target.id)
-                            }
-                            menuTarget = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Delete, contentDescription = null,
-                                tint = C.error, modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text("Delete", color = C.error)
-                        }
-                    }
+                // Menu items with touch highlight
+                ChatListMenuItem(if (target.pinned) "Unpin" else "Pin") {
+                    scope.launch { ChatService.db?.conversationDao()?.setPinned(target.id, !target.pinned) }; menuTarget = null
                 }
-            },
-            confirmButton = {},
-        )
+                ChatListMenuItem(if (target.muted) "Unmute" else "Mute") {
+                    scope.launch { ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted) }; menuTarget = null
+                }
+                ChatListMenuItem(if (target.archived) "Unarchive" else "Archive") {
+                    scope.launch { ChatService.db?.conversationDao()?.setArchived(target.id, !target.archived) }; menuTarget = null
+                }
+                ChatListMenuItem(if (target.isBlocked) "Unblock" else "Block", color = if (target.isBlocked) C.text else C.error) {
+                    scope.launch { ChatService.db?.conversationDao()?.setBlocked(target.id, !target.isBlocked) }; menuTarget = null
+                }
+                HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
+                ChatListMenuItem("Delete", color = C.error) {
+                    scope.launch {
+                        ChatService.db?.messageDao()?.softDeleteByConversation(target.id)
+                        ChatService.db?.conversationDao()?.softDelete(target.id)
+                    }; menuTarget = null
+                }
+            }
+        }
     }
 }
 
@@ -782,4 +701,25 @@ private fun formatTime(timestamp: Long): String {
     return if (now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR) &&
         now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
     ) timeFormat.format(date) else dateFormat.format(date)
+}
+
+/** Chat list menu item with Telegram-style touch highlight. */
+@Composable
+private fun ChatListMenuItem(text: String, color: Color = C.text, onClick: () -> Unit) {
+    var pressed by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (pressed) C.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                    onTap = { onClick() },
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = color, fontSize = 15.sp)
+    }
 }

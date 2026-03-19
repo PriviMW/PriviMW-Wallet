@@ -1,6 +1,7 @@
 package com.privimemobile.ui.navigation
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -151,18 +152,18 @@ fun AppNavigation() {
             navController = navController,
             startDestination = Tab.WALLET.route,
             modifier = Modifier.padding(innerPadding),
-            enterTransition = { slideInHorizontally(tween(450)) { it } + fadeIn(tween(400)) },
-            exitTransition = { slideOutHorizontally(tween(450)) { -it / 3 } + fadeOut(tween(400)) },
-            popEnterTransition = { slideInHorizontally(tween(450)) { -it / 3 } + fadeIn(tween(400)) },
-            popExitTransition = { slideOutHorizontally(tween(450)) { it } + fadeOut(tween(400)) },
+            enterTransition = { slideInHorizontally(tween(250)) { it } + fadeIn(tween(200)) },
+            exitTransition = { slideOutHorizontally(tween(250)) { -it / 4 } + fadeOut(tween(150)) },
+            popEnterTransition = { slideInHorizontally(tween(250)) { -it / 4 } + fadeIn(tween(200)) },
+            popExitTransition = { slideOutHorizontally(tween(250)) { it } + fadeOut(tween(150)) },
         ) {
             // Tab screens: instant fade (no slide — lateral navigation)
             composable(
                 Tab.WALLET.route,
-                enterTransition = { fadeIn(tween(400)) },
-                exitTransition = { fadeOut(tween(400)) },
-                popEnterTransition = { fadeIn(tween(400)) },
-                popExitTransition = { fadeOut(tween(400)) },
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { fadeIn(tween(150)) },
+                popExitTransition = { fadeOut(tween(150)) },
             ) {
                 WalletScreen(
                     onSend = { navController.navigate("send") },
@@ -263,10 +264,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.CHATS.route,
-                enterTransition = { fadeIn(tween(400)) },
-                exitTransition = { fadeOut(tween(400)) },
-                popEnterTransition = { fadeIn(tween(400)) },
-                popExitTransition = { fadeOut(tween(400)) },
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { fadeIn(tween(150)) },
+                popExitTransition = { fadeOut(tween(150)) },
             ) {
                 ChatsScreen(
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },
@@ -343,10 +344,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.DAPPS.route,
-                enterTransition = { fadeIn(tween(400)) },
-                exitTransition = { fadeOut(tween(400)) },
-                popEnterTransition = { fadeIn(tween(400)) },
-                popExitTransition = { fadeOut(tween(400)) },
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { fadeIn(tween(150)) },
+                popExitTransition = { fadeOut(tween(150)) },
             ) {
                 DAppsScreen(
                     onBrowseStore = { navController.navigate("dapp_store") },
@@ -380,10 +381,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.SETTINGS.route,
-                enterTransition = { fadeIn(tween(400)) },
-                exitTransition = { fadeOut(tween(400)) },
-                popEnterTransition = { fadeIn(tween(400)) },
-                popExitTransition = { fadeOut(tween(400)) },
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { fadeIn(tween(150)) },
+                popExitTransition = { fadeOut(tween(150)) },
             ) {
                 SettingsScreen(
                     onNavigateAddresses = { navController.navigate("addresses") },

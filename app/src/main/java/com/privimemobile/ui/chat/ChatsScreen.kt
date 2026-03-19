@@ -197,12 +197,14 @@ fun ChatsScreen(
                     LazyColumn {
                         items(filteredConversations, key = { it.id }) { conv ->
                             val peerTyping = typingVer >= 0 && ChatService.isTyping(conv.convKey)
+                            Box(modifier = Modifier.animateItem()) {
                             ConversationRow(
                                 conv = conv,
                                 onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
                                 onLongPress = { menuTarget = conv },
                                 isTyping = peerTyping,
                             )
+                            }
                         }
                     }
                 }

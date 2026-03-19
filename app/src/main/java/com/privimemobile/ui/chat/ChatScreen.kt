@@ -1,6 +1,18 @@
 package com.privimemobile.ui.chat
 
 import android.util.Log
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import android.Manifest
 import android.content.ContentValues
 import android.content.Context
@@ -45,8 +57,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +99,7 @@ import java.util.*
  * - Reply display + swipe-left to reply
  * - Pending file preview bar
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     handle: String,
@@ -97,6 +112,7 @@ fun ChatScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val view = androidx.compose.ui.platform.LocalView.current  // for haptic feedback
     val convKey = "@$handle"
 
     // Observe conversation reactively — updates when MessageProcessor creates it
@@ -526,8 +542,9 @@ fun ChatScreen(
                         )
                         if (assetId != 0) payload["asset_id"] = assetId
                         if (caption.isNotEmpty()) payload["msg"] = caption
-                        // Optimistic insert
+                        // Optimistic insert — un-delete if tombstoned
                         val tipConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                        if (tipConv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(tipConv.id)
                         val dedupKey = "$ts:tip:$amountGroth:$assetId:true"
                         val entity = com.privimemobile.chat.db.entities.MessageEntity(
                             conversationId = tipConv.id,
@@ -593,8 +610,9 @@ fun ChatScreen(
                             if (trimmed.isNotEmpty()) payload["msg"] = trimmed
                             if (fileReplyText != null) payload["reply"] = fileReplyText
 
-                            // Optimistic DB insert
+                            // Optimistic DB insert — un-delete if tombstoned
                             val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
                             val dedupKey = "$ts:file:${fileMeta["cid"]}:true"
                             val entity = com.privimemobile.chat.db.entities.MessageEntity(
                                 conversationId = conv.id, text = trimmed.ifEmpty { null },
@@ -666,8 +684,11 @@ fun ChatScreen(
                 // Disappearing message TTL — per-message one-shot takes priority over conversation-level
                 if (capturedTimer > 0) payload["ttl"] = capturedTimer
                 val expiresAt = if (capturedTimer > 0) ts + capturedTimer else 0L
-                // Optimistic insert into DB
+                // Optimistic insert into DB — un-delete if conversation was tombstoned
                 val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                if (convDb.deletedAtTs > 0) {
+                    com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(convDb.id)
+                }
                 val dedupKey = "$ts:${trimmed.hashCode().toString(16)}:true"
                 val entity = com.privimemobile.chat.db.entities.MessageEntity(
                     conversationId = convDb.id,
@@ -1034,10 +1055,11 @@ fun ChatScreen(
             }
         }
 
-        // Messages list
+        // Messages list + scroll-to-bottom button
+        Box(modifier = Modifier.weight(1f)) {
         LazyColumn(
             modifier = Modifier
-                .weight(1f)
+                .fillMaxSize()
                 .padding(horizontal = 12.dp),
             state = listState,
             reverseLayout = true,
@@ -1046,12 +1068,33 @@ fun ChatScreen(
         ) {
             val reversedMessages = messages.reversed()
             items(reversedMessages, key = { it.id }) { msg ->
+                // Message appear animation
+                var appeared by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { appeared = true }
+                val alpha by animateFloatAsState(
+                    targetValue = if (appeared) 1f else 0f,
+                    animationSpec = tween(200),
+                    label = "msgAlpha",
+                )
+                val offsetY by animateFloatAsState(
+                    targetValue = if (appeared) 0f else 20f,
+                    animationSpec = tween(200),
+                    label = "msgOffset",
+                )
+
                 val index = reversedMessages.indexOf(msg)
                 val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null
                 val showDateSep = prevMsg == null ||
                         formatDateSeparator(msg.timestamp) != formatDateSeparator(prevMsg.timestamp)
 
-                Column {
+                Column(
+                    modifier = Modifier
+                        .animateItem()
+                        .graphicsLayer {
+                            this.alpha = alpha
+                            translationY = offsetY
+                        },
+                ) {
                     if (showDateSep) {
                         // Centered pill date separator (Telegram-style)
                         Box(
@@ -1119,7 +1162,7 @@ fun ChatScreen(
                             handleDownload(cid, key, iv, mime, data)
                         },
                         onReply = if (selectionMode) {{ /* no-op in selection mode */ }} else {{ replyingTo = msg }},
-                        onLongPress = {
+                        onTap = {
                             if (selectionMode) {
                                 if (msg.id in selectedIds) selectedIds.remove(msg.id)
                                 else selectedIds.add(msg.id)
@@ -1127,10 +1170,22 @@ fun ChatScreen(
                                 contextMenuMsg = msg
                             }
                         },
+                        onLongPress = {
+                            if (!selectionMode) {
+                                // Enter multi-select mode
+                                selectionMode = true
+                                selectedIds.clear()
+                                selectedIds.add(msg.id)
+                            } else {
+                                if (msg.id in selectedIds) selectedIds.remove(msg.id)
+                                else selectedIds.add(msg.id)
+                            }
+                        },
                         onFullscreenImage = {
                             val fp = filePaths[msg.file?.cid ?: ""]
                             if (fp != null) fullscreenImage = Pair(fp, msg.file?.name ?: "Image")
                         },
+                        isSelected = selectionMode && msg.id in selectedIds,
                         reactions = reactionMap[msg.timestamp] ?: emptyList(),
                         onRemoveReaction = { emoji, msgTs ->
                             scope.launch {
@@ -1192,6 +1247,31 @@ fun ChatScreen(
                 }
             }
         }
+
+        // Scroll-to-bottom FAB
+        val showScrollButton by remember {
+            derivedStateOf { listState.firstVisibleItemIndex > 3 }
+        }
+        if (showScrollButton) {
+            SmallFloatingActionButton(
+                onClick = {
+                    scope.launch { listState.animateScrollToItem(0) }
+                },
+                containerColor = C.card,
+                contentColor = C.text,
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 12.dp),
+            ) {
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Scroll to bottom",
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        } // end Box wrapper
 
         // Self-destruct timer indicator bar
         if (oneShotTimer > 0) {
@@ -1452,36 +1532,50 @@ fun ChatScreen(
 
                 Spacer(Modifier.width(6.dp))
 
-                if (uploading) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(C.accent),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = C.textDark,
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                } else if (canSend) {
-                    // Filled circle send button (Telegram-style)
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(C.accent)
-                            .clickable { handleSend() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = C.textDark,
-                            modifier = Modifier.size(20.dp),
-                        )
+                // Animated send button — morphs between states
+                val sendState = when {
+                    uploading -> "uploading"
+                    canSend -> "send"
+                    else -> "idle"
+                }
+                AnimatedContent(
+                    targetState = sendState,
+                    transitionSpec = {
+                        (scaleIn(tween(150)) + fadeIn(tween(150)))
+                            .togetherWith(scaleOut(tween(150)) + fadeOut(tween(150)))
+                    },
+                    label = "sendButton",
+                ) { state ->
+                    when (state) {
+                        "uploading" -> Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(C.accent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = C.textDark,
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                        "send" -> Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(C.accent)
+                                .clickable { handleSend() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = C.textDark,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        else -> Spacer(Modifier.size(42.dp))
                     }
                 }
             }
@@ -1685,15 +1779,27 @@ fun ChatScreen(
             )
         }
 
-        // ── Context menu (long-press on message) ──
+        // ── Context menu (long-press on message) — Telegram-style bottom sheet ──
         if (contextMenuMsg != null) {
             val targetMsg = contextMenuMsg!!
-            AlertDialog(
+            ModalBottomSheet(
                 onDismissRequest = { contextMenuMsg = null },
                 containerColor = C.card,
-                title = null,
-                text = {
-                    Column {
+                dragHandle = {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp).height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(C.textMuted.copy(alpha = 0.4f)),
+                        )
+                    }
+                },
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                         // Quick reaction row
                         Row(
                             modifier = Modifier
@@ -1884,9 +1990,8 @@ fun ChatScreen(
                             }
                         }
                     }
-                },
-                confirmButton = {},
-            )
+                }
+            }
         }
 
         // ── Forward contact picker dialog ──
@@ -2096,7 +2201,6 @@ fun ChatScreen(
         )
     }
     } // end Box
-}
 
 @Composable
 private fun MessageBubble(
@@ -2105,13 +2209,16 @@ private fun MessageBubble(
     downloadStatus: String,
     onDownload: (cid: String, key: String, iv: String, mime: String, inlineData: String?) -> Unit,
     onReply: () -> Unit = {},
+    onTap: () -> Unit = {},
     onLongPress: () -> Unit = {},
     onFullscreenImage: () -> Unit = {},
     reactions: List<Triple<String, Int, Boolean>> = emptyList(),
     onRemoveReaction: (emoji: String, msgTs: Long) -> Unit = { _, _ -> },
     isHighlighted: Boolean = false,
+    isSelected: Boolean = false,
 ) {
     val context = LocalContext.current
+    val bubbleView = androidx.compose.ui.platform.LocalView.current
     val isMine = msg.sent
     val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
     val fileMime = msg.file?.mime ?: ""
@@ -2120,6 +2227,7 @@ private fun MessageBubble(
     // Swipe-left to reply
     var offsetX by remember { mutableStateOf(0f) }
     var swiped by remember { mutableStateOf(false) }
+    var swipeHapticFired by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
     Box(
@@ -2127,7 +2235,11 @@ private fun MessageBubble(
             .fillMaxWidth()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onLongPress = { onLongPress() },
+                    onTap = { onTap() },
+                    onLongPress = {
+                        bubbleView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onLongPress()
+                    },
                 )
             }
             .pointerInput(Unit) {
@@ -2135,6 +2247,7 @@ private fun MessageBubble(
                     onDragEnd = {
                         if (offsetX < -80f && !swiped) {
                             swiped = true
+                            bubbleView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                             onReply()
                         }
                         offsetX = 0f
@@ -2145,7 +2258,15 @@ private fun MessageBubble(
                         swiped = false
                     },
                     onHorizontalDrag = { _, dragAmount ->
+                        val prev = offsetX
                         offsetX = (offsetX + dragAmount).coerceIn(-150f, 0f)
+                        // Haptic buzz when crossing swipe threshold
+                        if (prev > -80f && offsetX <= -80f && !swipeHapticFired) {
+                            swipeHapticFired = true
+                            bubbleView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        } else if (offsetX > -80f) {
+                            swipeHapticFired = false
+                        }
                     },
                 )
             },
@@ -2179,8 +2300,16 @@ private fun MessageBubble(
                     bottomEnd = if (isMine) 4.dp else 12.dp,
                 ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isHighlighted) C.accent.copy(alpha = 0.3f)
-                        else if (isMine) Color(0xFF1B3A4B) else C.card,
+                    containerColor = androidx.compose.animation.animateColorAsState(
+                        targetValue = when {
+                            isSelected -> C.accent.copy(alpha = 0.25f)
+                            isHighlighted -> C.accent.copy(alpha = 0.3f)
+                            isMine -> Color(0xFF1B3A4B)
+                            else -> C.card
+                        },
+                        animationSpec = tween(180),
+                        label = "bubbleColor",
+                    ).value,
                 ),
                 modifier = Modifier.widthIn(max = if (isImage) 300.dp else 280.dp),
             ) {
@@ -2325,12 +2454,22 @@ private fun MessageBubble(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 reactions.forEach { (emoji, count, mine) ->
+                    // Scale-in animation for each reaction pill
+                    var reactionVisible by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { reactionVisible = true }
+                    val reactionScale by animateFloatAsState(
+                        targetValue = if (reactionVisible) 1f else 0f,
+                        animationSpec = tween(200),
+                        label = "rxScale",
+                    )
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = if (mine) C.accent.copy(alpha = 0.2f) else C.border,
-                        modifier = if (mine) Modifier.clickable {
-                            onRemoveReaction(emoji, msg.timestamp)
-                        } else Modifier,
+                        modifier = Modifier
+                            .graphicsLayer { scaleX = reactionScale; scaleY = reactionScale }
+                            .then(if (mine) Modifier.clickable {
+                                onRemoveReaction(emoji, msg.timestamp)
+                            } else Modifier),
                     ) {
                         Text(
                             if (count > 1) "$emoji $count" else emoji,

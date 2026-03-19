@@ -92,14 +92,14 @@ interface MessageDao {
     suspend fun findSentByTimestamp(convId: Long, ts: Long): MessageEntity?
 
     /** Get conversation IDs that have expiring messages (for preview update after cleanup). */
-    @Query("SELECT DISTINCT conversation_id FROM messages WHERE expires_at > 0 AND expires_at < :now")
+    @Query("SELECT DISTINCT conversation_id FROM messages WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun getConversationsWithExpired(now: Long): List<Long>
 
     /** Get the latest non-deleted message for a conversation (for preview update). */
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLatestMessage(convId: Long): MessageEntity?
 
-    /** Delete expired disappearing messages. Returns count deleted. */
-    @Query("DELETE FROM messages WHERE expires_at > 0 AND expires_at < :now")
+    /** Soft-delete expired disappearing messages (preserves dedup keys to block SBBS re-delivery). */
+    @Query("UPDATE messages SET deleted = 1 WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun deleteExpired(now: Long): Int
 }

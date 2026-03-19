@@ -170,6 +170,12 @@ class MessageProcessor(
         val messageId = db.messageDao().insert(message)
         if (messageId == -1L) { Log.d(TAG, "DEDUP: $dedupKey (${text?.take(20)})"); return }
 
+        // Un-delete conversation if tombstoned (genuinely new message passed tombstone + dedup checks)
+        if (conv.deletedAtTs > 0) {
+            db.conversationDao().undelete(conv.id)
+            Log.d(TAG, "Un-deleted conversation ${conv.convKey} for new message")
+        }
+
         // Handle file attachment
         if (type == "file") {
             val rawFile = payload["file"]

@@ -34,20 +34,11 @@ interface ConversationDao {
     @Update
     suspend fun update(conversation: ConversationEntity)
 
-    /** Get or create conversation for a conv_key. */
+    /** Get or create conversation for a conv_key. Does NOT un-delete tombstoned conversations. */
     @Transaction
     suspend fun getOrCreate(convKey: String, handle: String? = null, displayName: String? = null, walletId: String? = null): ConversationEntity {
         val existing = findByKey(convKey)
-        if (existing != null) {
-            // Un-delete if it was soft-deleted (user deleted chat then started new conversation)
-            if (existing.deletedAtTs > 0) {
-                setDeletedTs(existing.id, 0)
-                clearUnread(existing.id)
-                updateLastMessage(existing.id, 0, null)
-                return existing.copy(deletedAtTs = 0, unreadCount = 0, lastMessageTs = 0, lastMessagePreview = null)
-            }
-            return existing
-        }
+        if (existing != null) return existing
         val entity = ConversationEntity(
             convKey = convKey,
             handle = handle,
@@ -56,6 +47,14 @@ interface ConversationDao {
         )
         val id = insert(entity)
         return entity.copy(id = id)
+    }
+
+    /** Un-delete a tombstoned conversation (only when user explicitly sends a new message). */
+    @Transaction
+    suspend fun undelete(convId: Long) {
+        setDeletedTs(convId, 0)
+        clearUnread(convId)
+        updateLastMessage(convId, 0, null)
     }
 
     /** Update last message info. */

@@ -231,7 +231,7 @@ fun ChatScreen(
     var oneShotTimer by remember { mutableStateOf(0) }  // 0=off, seconds
     var showOneShotTimerPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
-    // showEmojiPicker removed
+    var showEmojiPicker by remember { mutableStateOf(false) }
 
     // Multi-select mode
     var selectionMode by remember { mutableStateOf(false) }
@@ -922,10 +922,28 @@ fun ChatScreen(
                         Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
                     }
                 }
-                // 3-dot overflow menu
+                // 3-dot overflow menu (animated rotation + smooth dropdown)
                 Box {
-                    IconButton(onClick = { showOverflowMenu = true }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+                    val menuRotation by animateFloatAsState(
+                        targetValue = if (showOverflowMenu) 90f else 0f,
+                        animationSpec = tween(200),
+                        label = "menuRotation",
+                    )
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            showOverflowMenu = !showOverflowMenu
+                        },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Menu",
+                            tint = if (showOverflowMenu) C.accent else C.textSecondary,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { rotationZ = menuRotation },
+                        )
                     }
                     DropdownMenu(
                         expanded = showOverflowMenu,
@@ -1747,6 +1765,106 @@ fun ChatScreen(
         }
         } // end Box wrapper
 
+        // Emoji picker panel (Telegram-style with categories)
+        if (showEmojiPicker) {
+            val emojiCategories = listOf(
+                "Recent" to listOf("\uD83D\uDC4D", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDD25", "\uD83D\uDE0D", "\uD83D\uDE4F", "\uD83D\uDC4F", "\uD83E\uDD70"),
+                "\uD83D\uDE00 Smileys" to listOf(
+                    "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06", "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23",
+                    "\uD83D\uDE0A", "\uD83D\uDE07", "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D", "\uD83E\uDD70",
+                    "\uD83D\uDE18", "\uD83D\uDE17", "\uD83D\uDE19", "\uD83D\uDE1A", "\uD83D\uDE0B", "\uD83D\uDE1B", "\uD83D\uDE1C", "\uD83E\uDD2A",
+                    "\uD83D\uDE1D", "\uD83E\uDD11", "\uD83E\uDD17", "\uD83E\uDD2D", "\uD83E\uDD2B", "\uD83E\uDD14", "\uD83E\uDD10", "\uD83E\uDD28",
+                    "\uD83D\uDE10", "\uD83D\uDE11", "\uD83D\uDE36", "\uD83D\uDE0F", "\uD83D\uDE12", "\uD83D\uDE44", "\uD83D\uDE2C", "\uD83E\uDD25",
+                    "\uD83D\uDE0E", "\uD83E\uDD13", "\uD83E\uDD78", "\uD83E\uDD21", "\uD83D\uDE34", "\uD83D\uDE2A", "\uD83D\uDE31", "\uD83D\uDE28",
+                    "\uD83D\uDE30", "\uD83D\uDE25", "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE24", "\uD83D\uDE21", "\uD83D\uDE20", "\uD83E\uDD2F",
+                ),
+                "\uD83D\uDC4B Hands" to listOf(
+                    "\uD83D\uDC4D", "\uD83D\uDC4E", "\u270A", "\uD83D\uDC4A", "\uD83E\uDD1B", "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C",
+                    "\uD83D\uDC50", "\uD83E\uDD32", "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270D\uFE0F", "\uD83D\uDC85", "\uD83E\uDD33", "\uD83D\uDCAA",
+                    "\uD83D\uDC4B", "\uD83E\uDD1A", "\uD83D\uDD90\uFE0F", "\u270B", "\uD83D\uDC4C", "\uD83E\uDD0C", "\uD83E\uDD0F", "\u270C\uFE0F",
+                    "\uD83E\uDD1E", "\uD83E\uDD1F", "\uD83E\uDD18", "\uD83E\uDD19", "\uD83D\uDC46", "\uD83D\uDC47", "\uD83D\uDC48", "\uD83D\uDC49",
+                ),
+                "\u2764\uFE0F Symbols" to listOf(
+                    "\u2764\uFE0F", "\uD83E\uDDE1", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99", "\uD83D\uDC9C", "\uD83D\uDDA4", "\uD83D\uDC94",
+                    "\u2764\uFE0F\u200D\uD83D\uDD25", "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97", "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D",
+                    "\u2B50", "\uD83C\uDF1F", "\uD83D\uDCAB", "\u26A1", "\uD83D\uDD25", "\uD83D\uDCA5", "\uD83C\uDF89", "\uD83C\uDF8A",
+                    "\uD83C\uDFC6", "\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49", "\uD83D\uDCAF", "\uD83D\uDC8B", "\uD83D\uDCA4", "\uD83D\uDCA8",
+                ),
+                "\uD83D\uDE38 Animals" to listOf(
+                    "\uD83D\uDE3A", "\uD83D\uDE38", "\uD83D\uDE39", "\uD83D\uDE3B", "\uD83D\uDE3C", "\uD83D\uDE3D", "\uD83D\uDE40", "\uD83D\uDE3F",
+                    "\uD83D\uDE3E", "\uD83D\uDC35", "\uD83D\uDE48", "\uD83D\uDE49", "\uD83D\uDE4A", "\uD83D\uDC36", "\uD83D\uDC31", "\uD83D\uDC2D",
+                    "\uD83D\uDC39", "\uD83D\uDC30", "\uD83E\uDD8A", "\uD83D\uDC3B", "\uD83D\uDC28", "\uD83D\uDC2F", "\uD83E\uDD81", "\uD83D\uDC2E",
+                    "\uD83D\uDC37", "\uD83D\uDC38", "\uD83D\uDC3C", "\uD83D\uDC27", "\uD83D\uDC26", "\uD83E\uDD85", "\uD83E\uDD86", "\uD83E\uDD89",
+                ),
+                "\uD83C\uDF54 Food" to listOf(
+                    "\uD83C\uDF4E", "\uD83C\uDF4A", "\uD83C\uDF4B", "\uD83C\uDF4C", "\uD83C\uDF49", "\uD83C\uDF47", "\uD83C\uDF53", "\uD83C\uDF48",
+                    "\uD83C\uDF55", "\uD83C\uDF54", "\uD83C\uDF5F", "\uD83C\uDF2D", "\uD83C\uDF2E", "\uD83C\uDF2F", "\uD83C\uDF73", "\uD83C\uDF5E",
+                    "\u2615", "\uD83C\uDF75", "\uD83C\uDF7A", "\uD83C\uDF77", "\uD83E\uDD42", "\uD83C\uDF78", "\uD83E\uDD64", "\uD83C\uDF70",
+                    "\uD83C\uDF82", "\uD83C\uDF6B", "\uD83C\uDF6C", "\uD83C\uDF6D", "\uD83C\uDF6E", "\uD83C\uDF6F", "\uD83C\uDF7E", "\uD83E\uDD43",
+                ),
+            )
+            var selectedCategory by remember { mutableStateOf(0) }
+
+            Surface(color = C.card) {
+                // 45% of screen height like Telegram-X
+                val screenHeight = LocalContext.current.resources.displayMetrics.heightPixels
+                val panelHeight = (screenHeight * 0.40f / LocalContext.current.resources.displayMetrics.density).dp
+                Column(modifier = Modifier.height(panelHeight)) {
+                    // Category tabs (scrollable)
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedCategory,
+                        containerColor = Color.Transparent,
+                        contentColor = C.accent,
+                        edgePadding = 4.dp,
+                        divider = {},
+                        indicator = {},
+                    ) {
+                        emojiCategories.forEachIndexed { idx, (label, _) ->
+                            Tab(
+                                selected = selectedCategory == idx,
+                                onClick = { selectedCategory = idx },
+                                text = {
+                                    Text(
+                                        if (idx == 0) "\uD83D\uDD53" else label.split(" ").first(), // icon only for tab
+                                        fontSize = 18.sp,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    // Category label
+                    Text(
+                        emojiCategories[selectedCategory].first,
+                        color = C.textSecondary, fontSize = 12.sp,
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                    )
+                    // Emoji grid
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(8),
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                    ) {
+                        val emojis = emojiCategories[selectedCategory].second
+                        items(emojis.size) { idx ->
+                            Text(
+                                emojis[idx],
+                                fontSize = 26.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        val current = inputText.text
+                                        val sel = inputText.selection.start
+                                        val newText = current.substring(0, sel) + emojis[idx] + current.substring(sel)
+                                        setInputText(newText)
+                                    }
+                                    .padding(6.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Self-destruct timer indicator bar
         if (oneShotTimer > 0) {
             Surface(
@@ -1901,68 +2019,56 @@ fun ChatScreen(
             }
         }
 
-        // Input bar — Telegram-style
-        Surface(color = C.inputBar) {
+        // Input bar — Telegram-X style (48dp bar, 180ms animations)
+        val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        val hasText = inputText.text.isNotBlank() || pendingFile != null
+        Surface(color = C.card, shadowElevation = 2.dp) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                    .height(IntrinsicSize.Min)
+                    .padding(horizontal = 2.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                // Attach button — opens bottom sheet picker
+                // Emoji toggle (left — 48dp like Telegram)
                 IconButton(
-                    onClick = { showAttachPicker = true },
-                    enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
-                    modifier = Modifier.size(40.dp),
+                    onClick = {
+                        if (showEmojiPicker) {
+                            showEmojiPicker = false
+                            keyboardController?.show()
+                        } else {
+                            showEmojiPicker = true
+                            keyboardController?.hide()
+                        }
+                    },
+                    modifier = Modifier.size(48.dp),
                 ) {
-                    Icon(
-                        Icons.Default.AttachFile,
-                        contentDescription = "Attach file",
-                        tint = C.textSecondary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-
-                // Per-message self-destruct timer button
-                Box(modifier = Modifier.size(32.dp)) {
-                    IconButton(
-                        onClick = { showOneShotTimerPicker = true },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Timer,
-                            contentDescription = "Self-destruct timer",
-                            tint = if (oneShotTimer > 0) C.accent else C.textMuted,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    if (oneShotTimer > 0) {
-                        // Small badge showing active timer
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 2.dp, y = (-2).dp)
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(C.accent),
-                        )
+                    AnimatedContent(
+                        targetState = showEmojiPicker,
+                        transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.6f)).togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.6f)) },
+                        label = "emojiIcon",
+                    ) { isEmoji ->
+                        if (isEmoji) {
+                            Icon(Icons.Default.KeyboardArrowDown, "Keyboard", tint = C.textSecondary, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("\uD83D\uDE00", fontSize = 24.sp)
+                        }
                     }
                 }
 
+                // Text field (center — fills available space)
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { newValue ->
                         inputText = newValue
                         val text = newValue.text
-                        // Show command menu when user types "/" at the start
-                        if (text == "/") {
-                            showCommandMenu = true
-                        } else if (showCommandMenu && !text.startsWith("/")) {
-                            showCommandMenu = false
-                        }
-                        if (text.isNotEmpty()) {
-                            com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
+                        if (text == "/") showCommandMenu = true
+                        else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
+                        if (text.isNotEmpty()) com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
+                        // Close emoji picker when user starts typing via keyboard
+                        if (showEmojiPicker && text.length > inputText.text.length) {
+                            // Only if keyboard added chars (not emoji picker)
                         }
                     },
                     placeholder = {
@@ -1972,85 +2078,76 @@ fun ChatScreen(
                                 resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
                                 else -> "Message"
                             },
-                            color = C.textMuted,
-                            fontSize = 15.sp,
+                            color = C.textMuted, fontSize = 15.sp,
                         )
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = C.card,
-                        unfocusedContainerColor = C.card,
-                        cursorColor = C.accent,
-                        focusedTextColor = C.text,
-                        unfocusedTextColor = C.text,
+                        focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
+                        cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                     maxLines = 4,
                     enabled = !resolvedWalletId.isNullOrEmpty() && !uploading,
-                    trailingIcon = {
-                        // Slash command button inside text field
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .clickable { showCommandMenu = !showCommandMenu }
-                                .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("/", color = C.textSecondary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                    },
                 )
 
-                Spacer(Modifier.width(6.dp))
-
-                // Animated send button — morphs between states
-                val sendState = when {
-                    uploading -> "uploading"
-                    canSend -> "send"
-                    else -> "idle"
-                }
+                // Right side: animated swap icons ↔ send (180ms, scale to 62.5% like Telegram)
                 AnimatedContent(
-                    targetState = sendState,
+                    targetState = hasText || uploading,
                     transitionSpec = {
-                        (scaleIn(tween(150)) + fadeIn(tween(150)))
-                            .togetherWith(scaleOut(tween(150)) + fadeOut(tween(150)))
+                        (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.625f))
+                            .togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.625f))
                     },
-                    label = "sendButton",
-                ) { state ->
-                    when (state) {
-                        "uploading" -> Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(C.accent),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = C.textDark,
-                                strokeWidth = 2.dp,
-                            )
+                    label = "rightIcons",
+                ) { showSend ->
+                    if (showSend) {
+                        if (uploading) {
+                            Box(
+                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = C.textDark, strokeWidth = 2.dp)
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent).clickable { handleSend() },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = C.textDark, modifier = Modifier.size(22.dp))
+                            }
                         }
-                        "send" -> Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(C.accent)
-                                .clickable { handleSend() },
-                            contentAlignment = Alignment.Center,
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.height(48.dp),
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = C.textDark,
-                                modifier = Modifier.size(20.dp),
-                            )
+                            IconButton(onClick = { showCommandMenu = !showCommandMenu }, modifier = Modifier.size(42.dp)) {
+                                Box(
+                                    modifier = Modifier.size(32.dp).clip(CircleShape)
+                                        .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text("/", color = C.textSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            IconButton(
+                                onClick = { showAttachPicker = true },
+                                enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
+                                modifier = Modifier.size(42.dp),
+                            ) {
+                                Icon(Icons.Default.AttachFile, "Attach", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+                            }
+                            Box(modifier = Modifier.size(42.dp)) {
+                                IconButton(onClick = { showOneShotTimerPicker = true }, modifier = Modifier.size(42.dp)) {
+                                    Icon(Icons.Default.Timer, "Timer", tint = if (oneShotTimer > 0) C.accent else C.textMuted, modifier = Modifier.size(20.dp))
+                                }
+                                if (oneShotTimer > 0) {
+                                    Box(modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp).size(8.dp).clip(CircleShape).background(C.accent))
+                                }
+                            }
                         }
-                        else -> Spacer(Modifier.size(42.dp))
                     }
                 }
             }
@@ -2469,153 +2566,84 @@ fun ChatScreen(
 
                         HorizontalDivider(color = C.border)
 
-                        // Copy
+                        // Menu items with touch highlight
                         if (targetMsg.text.isNotEmpty()) {
-                            TextButton(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("message", targetMsg.text))
-                                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-                                    contextMenuMsg = null
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Copy", color = C.text, modifier = Modifier.fillMaxWidth())
+                            MenuItemRow("Copy") {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("message", targetMsg.text))
+                                Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                contextMenuMsg = null
                             }
                         }
 
-                        // Save to Downloads (for file messages with cached file)
                         if (targetMsg.file != null) {
                             val targetPath = filePaths[targetMsg.file.cid]
                             if (targetPath != null) {
-                                TextButton(
-                                    onClick = {
-                                        saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
-                                        contextMenuMsg = null
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Text("Save to Downloads", color = C.text, modifier = Modifier.fillMaxWidth())
+                                MenuItemRow("Save to Downloads") {
+                                    saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
+                                    contextMenuMsg = null
                                 }
                             }
                         }
 
-                        // Reply
-                        TextButton(
-                            onClick = {
-                                replyingTo = targetMsg
-                                contextMenuMsg = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Reply", color = C.text, modifier = Modifier.fillMaxWidth())
+                        MenuItemRow("Reply") { replyingTo = targetMsg; contextMenuMsg = null }
+
+                        MenuItemRow(if (targetMsg.pinned) "Unpin" else "Pin") {
+                            scope.launch {
+                                if (targetMsg.pinned) com.privimemobile.chat.ChatService.db?.messageDao()?.unpinMessage(targetMsg.id.toLong())
+                                else com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
+                            }
+                            contextMenuMsg = null
                         }
 
-                        // Pin / Unpin (per-message)
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    if (targetMsg.pinned) {
-                                        com.privimemobile.chat.ChatService.db?.messageDao()?.unpinMessage(targetMsg.id.toLong())
-                                    } else {
-                                        com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
-                                    }
-                                }
-                                contextMenuMsg = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (targetMsg.pinned) "Unpin" else "Pin", color = C.text, modifier = Modifier.fillMaxWidth())
-                        }
-
-                        // Edit (own messages only, text messages)
                         if (targetMsg.sent && targetMsg.text.isNotEmpty() && targetMsg.type != "tip") {
-                            TextButton(
-                                onClick = {
-                                    editingMsg = targetMsg
-                                    replyingTo = null
-                                    setInputText(targetMsg.text)
-                                    contextMenuMsg = null
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Edit", color = C.text, modifier = Modifier.fillMaxWidth())
+                            MenuItemRow("Edit") {
+                                editingMsg = targetMsg; replyingTo = null
+                                setInputText(targetMsg.text); contextMenuMsg = null
                             }
                         }
 
-                        // Forward (text or file messages)
                         if (targetMsg.text.isNotEmpty() || targetMsg.file != null) {
-                            TextButton(
-                                onClick = {
-                                    forwardingMsgs = emptyList()  // single-message forward
-                                    forwardingMsg = targetMsg
-                                    contextMenuMsg = null
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Forward", color = C.text, modifier = Modifier.fillMaxWidth())
+                            MenuItemRow("Forward") {
+                                forwardingMsgs = emptyList()
+                                forwardingMsg = targetMsg; contextMenuMsg = null
                             }
                         }
 
-                        // Select (enter multi-select mode)
-                        TextButton(
-                            onClick = {
-                                selectionMode = true
-                                selectedIds.clear()
-                                selectedIds.add(targetMsg.id)
-                                contextMenuMsg = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Select", color = C.text, modifier = Modifier.fillMaxWidth())
+                        MenuItemRow("Select") {
+                            selectionMode = true; selectedIds.clear()
+                            selectedIds.add(targetMsg.id); contextMenuMsg = null
                         }
 
-                        // Delete for me
-                        TextButton(
-                            onClick = {
-                                val cid = convId
+                        MenuItemRow("Delete for me", color = C.error) {
+                            val cid = convId
+                            scope.launch {
+                                com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
+                                refreshConversationPreview(cid)
+                            }
+                            contextMenuMsg = null
+                        }
+
+                        if (targetMsg.sent) {
+                            MenuItemRow("Delete for everyone", color = C.error) {
                                 scope.launch {
-                                    com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
-                                    refreshConversationPreview(cid)
+                                    val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                    if (state?.myHandle != null) {
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
+                                        val walletId = resolvedWalletId
+                                        if (!walletId.isNullOrEmpty()) {
+                                            val payload = mapOf(
+                                                "v" to 1, "t" to "delete",
+                                                "ts" to System.currentTimeMillis() / 1000,
+                                                "from" to state.myHandle!!, "to" to handle,
+                                                "msg_ts" to targetMsg.timestamp,
+                                            )
+                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                        }
+                                        refreshConversationPreview(convId)
+                                    }
                                 }
                                 contextMenuMsg = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Delete for me", color = C.error, modifier = Modifier.fillMaxWidth())
-                        }
-
-                        // Delete for everyone (only own messages)
-                        if (targetMsg.sent) {
-                            TextButton(
-                                onClick = {
-                                    scope.launch {
-                                        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                        if (state?.myHandle != null) {
-                                            // Mark local as deleted
-                                            com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
-                                            // Send SBBS delete
-                                            val walletId = resolvedWalletId
-                                            if (!walletId.isNullOrEmpty()) {
-                                                val payload = mapOf(
-                                                    "v" to 1,
-                                                    "t" to "delete",
-                                                    "ts" to System.currentTimeMillis() / 1000,
-                                                    "from" to state.myHandle!!,
-                                                    "to" to handle,
-                                                    "msg_ts" to targetMsg.timestamp,
-                                                )
-                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
-                                            }
-                                            // Update chat list preview
-                                            refreshConversationPreview(convId)
-                                        }
-                                    }
-                                    contextMenuMsg = null
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Delete for everyone", color = C.error, modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
@@ -3875,6 +3903,35 @@ private fun loadGalleryImages(context: Context, limit: Int = 60): List<Uri> {
 
 // Date formatting
 private val msgTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+/** Telegram-style menu item with prominent touch highlight. */
+@Composable
+private fun MenuItemRow(
+    text: String,
+    color: Color = C.text,
+    onClick: () -> Unit,
+) {
+    var pressed by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (pressed) C.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        tryAwaitRelease()
+                        pressed = false
+                    },
+                    onTap = { onClick() },
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = color, fontSize = 15.sp)
+    }
+}
+
 private fun formatMessageTime(ts: Long): String {
     if (ts <= 0) return ""
     return msgTimeFormat.format(Date(ts * 1000))

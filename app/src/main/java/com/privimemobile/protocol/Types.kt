@@ -49,6 +49,7 @@ data class ChatMessage(
     val expiresAt: Long = 0,        // 0=never, unix seconds for disappearing msgs
     val pinned: Boolean = false,    // message is pinned
     val pinnedAt: Long = 0,        // 0=not pinned, unix seconds when pinned
+    val pollData: String? = null,  // JSON poll data
 )
 
 /** A conversation (aggregated from messages). */

@@ -119,6 +119,14 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND pinned = 1 AND deleted = 0")
     suspend fun countPinned(convId: Long): Int
 
+    /** Find a poll message by conversation + timestamp. */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND type = 'poll' AND deleted = 0 LIMIT 1")
+    suspend fun findPollByTimestamp(convId: Long, ts: Long): MessageEntity?
+
+    /** Update poll data for a message. */
+    @Query("UPDATE messages SET poll_data = :pollData WHERE id = :messageId")
+    suspend fun updatePollData(messageId: Long, pollData: String)
+
     /** Count messages with links in a conversation. */
     @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND deleted = 0 AND (text LIKE '%http://%' OR text LIKE '%https://%')")
     suspend fun countLinksInConversation(convId: Long): Int

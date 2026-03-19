@@ -8,6 +8,7 @@ import com.privimemobile.chat.db.entities.*
 import com.privimemobile.protocol.Helpers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 
@@ -103,12 +104,14 @@ class MessageProcessor(
         when (type) {
             "ack" -> handleAck(payload, convKey)
             "delivered" -> handleDelivered(payload, convKey)
-            "typing" -> handleTyping(from)
+            "typing" -> handleTyping(from, ts)
             "react" -> handleReaction(payload, convKey, from)
             "unreact" -> handleUnreact(payload, from)
             "delete" -> handleDelete(payload, convKey, from)
             "edit" -> handleEdit(payload, convKey, from)
             "disappear_config" -> handleDisappearConfig(payload, convKey)
+            "poll_vote" -> handlePollVote(payload, convKey, from, false)
+            "poll_unvote" -> handlePollVote(payload, convKey, from, true)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
                 if (!sent) ChatService.clearTyping(convKey)
@@ -164,6 +167,7 @@ class MessageProcessor(
             senderHandle = from.ifEmpty { null },
             sbbsDedupKey = dedupKey,
             expiresAt = expiresAt,
+            pollData = payload["poll"] as? String,
         )
 
         // Insert — IGNORE on duplicate
@@ -295,9 +299,11 @@ class MessageProcessor(
     }
 
     /** Handle typing indicator (ephemeral, no DB storage). */
-    private fun handleTyping(from: String) {
+    private fun handleTyping(from: String, ts: Long) {
+        // Ignore stale typing indicators (older than 10 seconds)
+        val now = System.currentTimeMillis() / 1000
+        if (now - ts > 10) return
         val convKey = "@$from"
-        Log.d(TAG, "Typing indicator from $convKey")
         ChatService.onTypingReceived(convKey)
     }
 
@@ -337,6 +343,63 @@ class MessageProcessor(
         val conv = db.conversationDao().findByKey(convKey) ?: return
         db.conversationDao().setDisappearTimer(conv.id, timer)
         Log.d(TAG, "Disappear timer set to ${timer}s for $convKey")
+    }
+
+    /** Handle poll vote/unvote (single-choice). */
+    private suspend fun handlePollVote(payload: Map<String, Any?>, convKey: String, from: String, isUnvote: Boolean) {
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val optIdx = (payload["option"] as? Number)?.toInt() ?: return
+        val conv = db.conversationDao().findByKey(convKey) ?: return
+        val pollMsg = db.messageDao().findPollByTimestamp(conv.id, msgTs) ?: return
+        val msgId = pollMsg.id
+        val pollData = pollMsg.pollData ?: return
+        try {
+            val pollObj = JSONObject(pollData)
+            val options = pollObj.optJSONArray("options") ?: return
+            if (optIdx >= options.length()) return
+
+            if (isUnvote) {
+                // Check if actually voted on this option
+                val opt = options.getJSONObject(optIdx)
+                val voters = opt.optJSONArray("voters") ?: JSONArray()
+                var found = false
+                for (i in 0 until voters.length()) { if (voters.getString(i) == from) { found = true; break } }
+                if (!found) return // not voted — nothing to unvote
+                val cleaned = JSONArray()
+                for (i in 0 until voters.length()) {
+                    if (voters.getString(i) != from) cleaned.put(voters.getString(i))
+                }
+                opt.put("voters", cleaned)
+                options.put(optIdx, opt)
+            } else {
+                // Check if already voted on this exact option — skip if duplicate
+                val currentVoters = options.getJSONObject(optIdx).optJSONArray("voters") ?: JSONArray()
+                for (i in 0 until currentVoters.length()) {
+                    if (currentVoters.getString(i) == from) return // already voted here, skip
+                }
+                // Single choice: remove from all options first
+                for (j in 0 until options.length()) {
+                    val o = options.getJSONObject(j)
+                    val v = o.optJSONArray("voters") ?: JSONArray()
+                    val cleaned = JSONArray()
+                    for (i in 0 until v.length()) {
+                        if (v.getString(i) != from) cleaned.put(v.getString(i))
+                    }
+                    o.put("voters", cleaned)
+                    options.put(j, o)
+                }
+                // Add vote to tapped option
+                val voters = options.getJSONObject(optIdx).optJSONArray("voters") ?: JSONArray()
+                voters.put(from)
+                options.getJSONObject(optIdx).put("voters", voters)
+            }
+
+            pollObj.put("options", options)
+            db.messageDao().updatePollData(msgId, pollObj.toString())
+            Log.d(TAG, "Poll ${if (isUnvote) "unvote" else "vote"} from @$from on option $optIdx for ts=$msgTs")
+        } catch (e: Exception) {
+            Log.w(TAG, "Poll vote error: ${e.message}")
+        }
     }
 
     /** Handle message edit. */

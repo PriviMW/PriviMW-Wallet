@@ -29,6 +29,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -184,6 +185,7 @@ fun ChatScreen(
             expiresAt = entity.expiresAt,
             pinned = entity.pinned,
             pinnedAt = entity.pinnedAt,
+            pollData = entity.pollData,
             file = if (att != null) FileAttachment(
                 cid = att.ipfsCid ?: "",
                 name = att.fileName,
@@ -229,6 +231,7 @@ fun ChatScreen(
     var oneShotTimer by remember { mutableStateOf(0) }  // 0=off, seconds
     var showOneShotTimerPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    // showEmojiPicker removed
 
     // Multi-select mode
     var selectionMode by remember { mutableStateOf(false) }
@@ -273,6 +276,10 @@ fun ChatScreen(
 
     // 3-dot overflow menu
     var showOverflowMenu by remember { mutableStateOf(false) }
+    // Chat wallpaper
+    var showWallpaperPicker by remember { mutableStateOf(false) }
+    val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+    var chatWallpaper by remember { mutableStateOf(prefs.getString("wallpaper_$convKey", "default") ?: "default") }
     var showCommandMenu by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -588,6 +595,57 @@ fun ChatScreen(
             return
         }
 
+        // /poll command — create a poll
+        // Usage: /poll Question? | Option 1 | Option 2 | Option 3
+        if (trimmed.startsWith("/poll ", ignoreCase = true)) {
+            val parts = trimmed.removePrefix("/poll ").split("|").map { it.trim() }.filter { it.isNotEmpty() }
+            if (parts.size >= 3) { // question + at least 2 options
+                val question = parts[0]
+                val options = parts.drop(1).map { mapOf("text" to it, "voters" to emptyList<String>()) }
+                val pollJson = org.json.JSONObject().apply {
+                    put("question", question)
+                    put("options", org.json.JSONArray(options.map { org.json.JSONObject(it) }))
+                }.toString()
+
+                scope.launch {
+                    val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                    if (state?.myHandle != null) {
+                        val walletId = resolvedWalletId
+                        if (!walletId.isNullOrEmpty()) {
+                            val ts = System.currentTimeMillis() / 1000
+                            val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                            if (convDb.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(convDb.id)
+                            val dedupKey = "$ts:poll:${question.hashCode().toString(16)}:true"
+                            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                                conversationId = convDb.id,
+                                text = question,
+                                timestamp = ts,
+                                sent = true,
+                                type = "poll",
+                                senderHandle = state.myHandle,
+                                sbbsDedupKey = dedupKey,
+                                pollData = pollJson,
+                            )
+                            com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(convDb.id, ts, "\uD83D\uDCCA $question")
+                            // Send via SBBS
+                            val payload = mapOf(
+                                "v" to 1, "t" to "poll", "ts" to ts,
+                                "from" to state.myHandle!!, "to" to handle,
+                                "dn" to (state.myDisplayName ?: ""),
+                                "msg" to question, "poll" to pollJson,
+                            )
+                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                        }
+                    }
+                }
+            } else {
+                Toast.makeText(context, "Usage: /poll Question | Option 1 | Option 2", Toast.LENGTH_LONG).show()
+            }
+            setInputText("")
+            return
+        }
+
         // Send file if pending
         if (pendingFile != null) {
             val file = pendingFile!!
@@ -892,6 +950,11 @@ fun ChatScreen(
                             text = { Text("View profile", color = C.text) },
                             onClick = { showOverflowMenu = false; onContactInfo() },
                             leadingIcon = { Text("\uD83D\uDC64", fontSize = 16.sp) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Wallpaper", color = C.text) },
+                            onClick = { showOverflowMenu = false; showWallpaperPicker = true },
+                            leadingIcon = { Text("\uD83C\uDFA8", fontSize = 16.sp) },
                         )
                         DropdownMenuItem(
                             text = { Text("Export chat", color = C.text) },
@@ -1263,7 +1326,50 @@ fun ChatScreen(
         }
 
         // Messages list + scroll-to-bottom button
-        Box(modifier = Modifier.weight(1f)) {
+        val wallpaperBg = when (chatWallpaper) {
+            "dark_blue" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838))))
+            "teal" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF004D40), Color(0xFF00695C))))
+            "purple" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A0033), Color(0xFF2D1B69))))
+            "midnight" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0F0F23), Color(0xFF1A1A3E))))
+            "forest" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B3A2D), Color(0xFF2D5016))))
+            "sunset" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2D1B00), Color(0xFF4A2600))))
+            else -> Modifier  // default uses C.bg from parent
+        }
+        // Pre-compute album groups outside LazyColumn (composable context)
+        val reversedMessages = remember(messages) { messages.reversed() }
+        val albumGroups = remember(reversedMessages) {
+                val groups = mutableMapOf<String, List<String>>() // first msg id → list of all msg ids in album
+                val skipIds = mutableSetOf<String>()
+                for (i in reversedMessages.indices) {
+                    if (reversedMessages[i].id in skipIds) continue
+                    val msg = reversedMessages[i]
+                    if (msg.type != "file" || msg.file == null || !com.privimemobile.protocol.Helpers.isImageMime(msg.file.mime)) continue
+                    // Collect consecutive images from same sender
+                    val albumIds = mutableListOf(msg.id)
+                    var j = i + 1
+                    while (j < reversedMessages.size) {
+                        val next = reversedMessages[j]
+                        if (next.type == "file" && next.file != null &&
+                            com.privimemobile.protocol.Helpers.isImageMime(next.file.mime) &&
+                            next.sent == msg.sent &&
+                            kotlin.math.abs(next.timestamp - msg.timestamp) < 60
+                        ) {
+                            albumIds.add(next.id)
+                            skipIds.add(next.id)
+                            j++
+                        } else break
+                    }
+                    if (albumIds.size > 1) {
+                        groups[msg.id] = albumIds
+                    }
+                }
+                groups
+            }
+        val albumSkipIds = remember(albumGroups) {
+            albumGroups.values.flatMap { it.drop(1) }.toSet()
+        }
+
+        Box(modifier = Modifier.weight(1f).then(wallpaperBg)) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -1273,8 +1379,9 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            val reversedMessages = messages.reversed()
             items(reversedMessages, key = { it.id }) { msg ->
+                // Skip non-first album images (rendered as grid in the first item)
+                if (msg.id in albumSkipIds) return@items
                 // Message appear animation
                 var appeared by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { appeared = true }
@@ -1362,6 +1469,96 @@ fun ChatScreen(
                                 modifier = Modifier.size(32.dp),
                             )
                         }
+                    // Album grid for grouped consecutive images
+                    val albumIds = albumGroups[msg.id]
+                    if (albumIds != null && albumIds.size > 1) {
+                        val albumMsgs = albumIds.mapNotNull { id -> reversedMessages.firstOrNull { it.id == id } }
+                        val isMine = msg.sent
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = if (isMine) Color(0xFF1B3A4B) else C.card),
+                                modifier = Modifier.widthIn(max = 280.dp),
+                            ) {
+                                // 2-column grid
+                                val columns = 2
+                                albumMsgs.chunked(columns).forEach { row ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        row.forEach { albumMsg ->
+                                            val fp = filePaths[albumMsg.file?.cid ?: ""]
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .clickable {
+                                                        if (fp != null) fullscreenImage = Pair(fp, albumMsg.file?.name ?: "Image")
+                                                    },
+                                            ) {
+                                                if (fp != null) {
+                                                    AsyncImage(
+                                                        model = java.io.File(fp),
+                                                        contentDescription = "Photo",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                    )
+                                                } else {
+                                                    Box(
+                                                        modifier = Modifier.fillMaxSize().background(C.bg),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(20.dp),
+                                                            color = C.accent, strokeWidth = 2.dp,
+                                                        )
+                                                    }
+                                                    // Trigger download
+                                                    val cid = albumMsg.file?.cid ?: ""
+                                                    if (cid.isNotEmpty() && downloadStatuses[cid] != "downloading") {
+                                                        LaunchedEffect(cid) {
+                                                            handleDownload(
+                                                                cid,
+                                                                albumMsg.file?.key ?: "",
+                                                                albumMsg.file?.iv ?: "",
+                                                                albumMsg.file?.mime ?: "image/jpeg",
+                                                                albumMsg.file?.data,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Pad incomplete rows
+                                        if (row.size < columns) {
+                                            Spacer(Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                                // Time + status row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("${albumMsgs.size} photos", color = C.textMuted, fontSize = 10.sp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
+                                    if (isMine) {
+                                        Spacer(Modifier.width(6.dp))
+                                        val lastMsg = albumMsgs.last()
+                                        when {
+                                            lastMsg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
+                                            lastMsg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
+                                            else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else
                     MessageBubble(
                         msg = msg,
                         filePath = filePaths[msg.file?.cid ?: ""],
@@ -1394,6 +1591,75 @@ fun ChatScreen(
                             if (fp != null) fullscreenImage = Pair(fp, msg.file?.name ?: "Image")
                         },
                         isSelected = selectionMode && msg.id in selectedIds,
+                        onPollVote = { optIdx ->
+                            val now = System.currentTimeMillis()
+                            if (now - lastSendTime < 3000) {
+                                Toast.makeText(context, "Wait a moment...", Toast.LENGTH_SHORT).show()
+                                return@MessageBubble
+                            }
+                            lastSendTime = now
+                            scope.launch {
+                                val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                if (state?.myHandle != null && msg.pollData != null) {
+                                    val pollObj = org.json.JSONObject(msg.pollData)
+                                    val options = pollObj.optJSONArray("options")
+                                    if (options != null && optIdx < options.length()) {
+                                        val myHandle = state.myHandle!!
+                                        // Check if tapping the same option (unvote)
+                                        val tappedOpt = options.getJSONObject(optIdx)
+                                        val tappedVoters = tappedOpt.optJSONArray("voters") ?: org.json.JSONArray()
+                                        var isUnvote = false
+                                        for (i in 0 until tappedVoters.length()) {
+                                            if (tappedVoters.getString(i) == myHandle) { isUnvote = true; break }
+                                        }
+
+                                        if (isUnvote) {
+                                            // Remove vote from this option
+                                            val newVoters = org.json.JSONArray()
+                                            for (i in 0 until tappedVoters.length()) {
+                                                if (tappedVoters.getString(i) != myHandle) newVoters.put(tappedVoters.getString(i))
+                                            }
+                                            tappedOpt.put("voters", newVoters)
+                                            options.put(optIdx, tappedOpt)
+                                        } else {
+                                            // Single choice: remove vote from ALL other options first
+                                            for (j in 0 until options.length()) {
+                                                val o = options.getJSONObject(j)
+                                                val v = o.optJSONArray("voters") ?: org.json.JSONArray()
+                                                val cleaned = org.json.JSONArray()
+                                                for (i in 0 until v.length()) {
+                                                    if (v.getString(i) != myHandle) cleaned.put(v.getString(i))
+                                                }
+                                                o.put("voters", cleaned)
+                                                options.put(j, o)
+                                            }
+                                            // Add vote to tapped option
+                                            val voters = options.getJSONObject(optIdx).optJSONArray("voters") ?: org.json.JSONArray()
+                                            voters.put(myHandle)
+                                            options.getJSONObject(optIdx).put("voters", voters)
+                                        }
+
+                                        pollObj.put("options", options)
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.updatePollData(
+                                            msg.id.toLong(), pollObj.toString()
+                                        )
+                                        // Send vote/unvote via SBBS
+                                        val walletId = resolvedWalletId
+                                        if (!walletId.isNullOrEmpty()) {
+                                            val payload = mapOf(
+                                                "v" to 1, "t" to if (isUnvote) "poll_unvote" else "poll_vote",
+                                                "ts" to System.currentTimeMillis() / 1000,
+                                                "from" to myHandle, "to" to handle,
+                                                "msg_ts" to msg.timestamp,
+                                                "option" to optIdx,
+                                            )
+                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        myHandle = myHandle,
                         reactions = reactionMap[msg.timestamp] ?: emptyList(),
                         onRemoveReaction = { emoji, msgTs ->
                             scope.launch {
@@ -1612,6 +1878,7 @@ fun ChatScreen(
                     Text("Commands", color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                     listOf(
                         Triple("/tip", "<amount> [asset_id] [message]", "Send BEAM (default) or any asset"),
+                        Triple("/poll", "Question | Option 1 | Option 2", "Create a poll"),
                     ).forEach { (cmd, args, desc) ->
                         Row(
                             modifier = Modifier
@@ -1933,6 +2200,67 @@ fun ChatScreen(
                         Text("Cancel", color = C.textSecondary)
                     }
                 },
+            )
+        }
+
+        // ── Wallpaper picker ──
+        if (showWallpaperPicker) {
+            val wallpaperOptions = listOf(
+                "default" to "Default",
+                "dark_blue" to "Dark Blue",
+                "teal" to "Teal",
+                "purple" to "Purple",
+                "midnight" to "Midnight",
+                "forest" to "Forest",
+                "sunset" to "Sunset",
+            )
+            AlertDialog(
+                onDismissRequest = { showWallpaperPicker = false },
+                containerColor = C.card,
+                title = { Text("Chat Wallpaper", color = C.text, fontWeight = FontWeight.SemiBold) },
+                text = {
+                    Column {
+                        wallpaperOptions.forEach { (key, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        chatWallpaper = key
+                                        prefs.edit().putString("wallpaper_$convKey", key).apply()
+                                        showWallpaperPicker = false
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // Color preview
+                                val previewColor = when (key) {
+                                    "dark_blue" -> Color(0xFF0D1B2A)
+                                    "teal" -> Color(0xFF004D40)
+                                    "purple" -> Color(0xFF1A0033)
+                                    "midnight" -> Color(0xFF0F0F23)
+                                    "forest" -> Color(0xFF1B3A2D)
+                                    "sunset" -> Color(0xFF2D1B00)
+                                    else -> C.bg
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(previewColor)
+                                        .then(if (chatWallpaper == key) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(label, color = C.text, fontSize = 15.sp)
+                                if (chatWallpaper == key) {
+                                    Spacer(Modifier.weight(1f))
+                                    Text("\u2713", color = C.accent, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
             )
         }
 
@@ -2481,6 +2809,20 @@ fun ChatScreen(
                 filePickerLauncher.launch("*/*")
             },
             onImageSelected = { uri -> handlePickedUri(uri) },
+            onMultiImageSelected = { uris ->
+                showAttachPicker = false
+                // Send images one by one with buffer
+                scope.launch {
+                    uris.forEach { uri ->
+                        handlePickedUri(uri)
+                        // Wait for upload to complete + buffer between sends
+                        delay(2000)
+                        // Auto-send each pending file
+                        handleSend()
+                        delay(1000)
+                    }
+                }
+            },
         )
     }
 
@@ -2517,6 +2859,8 @@ private fun MessageBubble(
     onRemoveReaction: (emoji: String, msgTs: Long) -> Unit = { _, _ -> },
     isHighlighted: Boolean = false,
     isSelected: Boolean = false,
+    onPollVote: (optionIndex: Int) -> Unit = {},
+    myHandle: String? = null,
 ) {
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
@@ -2524,6 +2868,29 @@ private fun MessageBubble(
     val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
     val fileMime = msg.file?.mime ?: ""
     val isImage = msg.type == "file" && Helpers.isImageMime(fileMime)
+
+    // Check if message is emoji-only (1-3 emojis, no other text) for large display
+    val isEmojiOnly = remember(msg.text) {
+        val t = msg.text.trim()
+        if (t.isEmpty() || msg.type != "dm" || msg.file != null || msg.isTip || msg.reply != null || msg.fwdFrom != null) false
+        else {
+            // Count emoji codepoints
+            val codePoints = t.codePoints().toArray()
+            codePoints.size in 1..3 && codePoints.all { cp ->
+                Character.getType(cp).let { type ->
+                    type == Character.OTHER_SYMBOL.toInt() ||
+                    type == Character.SURROGATE.toInt() ||
+                    type == Character.NON_SPACING_MARK.toInt() ||
+                    type == Character.FORMAT.toInt() ||
+                    (cp in 0x1F000..0x1FFFF) || // emoticons, symbols
+                    (cp in 0x2600..0x27BF) ||    // misc symbols
+                    (cp in 0xFE00..0xFE0F) ||    // variation selectors
+                    (cp in 0x200D..0x200D) ||     // ZWJ
+                    (cp in 0xE0020..0xE007F)      // tags
+                }
+            }
+        }
+    }
 
     // Swipe-left to reply
     var offsetX by remember { mutableStateOf(0f) }
@@ -2593,6 +2960,24 @@ private fun MessageBubble(
                 .offset(x = (offsetX / 3f).dp),
             horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         ) {
+            // Large emoji display (no bubble)
+            if (isEmojiOnly) {
+                Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
+                    Text(msg.text, fontSize = 48.sp, lineHeight = 56.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (msg.pinned) { Text("\uD83D\uDCCC", fontSize = 10.sp); Spacer(Modifier.width(3.dp)) }
+                        Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
+                        if (isMine) {
+                            Spacer(Modifier.width(6.dp))
+                            when {
+                                msg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
+                                msg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
+                                else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
+            } else
             Card(
                 shape = RoundedCornerShape(
                     topStart = 12.dp,
@@ -2697,6 +3082,59 @@ private fun MessageBubble(
                     )
                 }
 
+                // Poll display
+                if (msg.type == "poll" && msg.pollData != null) {
+                    val pollQuestion = remember(msg.pollData) {
+                        try { org.json.JSONObject(msg.pollData).optString("question", msg.text) } catch (_: Exception) { msg.text }
+                    }
+                    data class PollOpt(val text: String, val voteCount: Int, val voters: List<String>)
+                    val pollOptions = remember(msg.pollData) {
+                        try {
+                            val opts = org.json.JSONObject(msg.pollData).optJSONArray("options")
+                            val list = mutableListOf<PollOpt>()
+                            if (opts != null) {
+                                for (i in 0 until opts.length()) {
+                                    val opt = opts.getJSONObject(i)
+                                    val v = opt.optJSONArray("voters")
+                                    val voterList = mutableListOf<String>()
+                                    if (v != null) { for (j in 0 until v.length()) voterList.add(v.getString(j)) }
+                                    list.add(PollOpt(opt.optString("text", ""), voterList.size, voterList))
+                                }
+                            }
+                            list.toList()
+                        } catch (_: Exception) { emptyList<PollOpt>() }
+                    }
+                    val totalVotes = pollOptions.sumOf { it.voteCount }
+                    Text("\uD83D\uDCCA Poll", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(pollQuestion, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
+                    pollOptions.forEachIndexed { optIdx, opt ->
+                        val myVote = myHandle != null && myHandle in opt.voters
+                        val pct = if (totalVotes > 0) (opt.voteCount * 100 / totalVotes) else 0
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (myVote) C.accent.copy(alpha = 0.2f) else C.bg.copy(alpha = 0.4f),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                                .clickable { onPollVote(optIdx) },
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (myVote) {
+                                    Text("\u2713 ", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text(opt.text, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                if (totalVotes > 0) {
+                                    Text("$pct%", color = if (myVote) C.accent else C.textSecondary, fontSize = 12.sp)
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                if (opt.voteCount > 0) {
+                                    Text("${opt.voteCount}", color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else
                 // Text content
                 if (msg.text.isNotEmpty()) {
                     Text(
@@ -3089,6 +3527,7 @@ private fun AttachmentPickerSheet(
     onPickGallery: () -> Unit,
     onPickFile: () -> Unit,
     onImageSelected: (Uri) -> Unit,
+    onMultiImageSelected: (List<Uri>) -> Unit = {},
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) } // 0=Gallery, 1=Files
@@ -3256,23 +3695,76 @@ private fun AttachmentPickerSheet(
                                 Text("No images found", color = C.textMuted, fontSize = 14.sp)
                             }
                         } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                verticalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                items(galleryImages.value) { uri ->
-                                    AsyncImage(
-                                        model = uri,
-                                        contentDescription = null,
+                            val selectedUris = remember { mutableStateListOf<Uri>() }
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Send button when multiple selected
+                                if (selectedUris.size > 0) {
+                                    Surface(
+                                        color = C.accent,
                                         modifier = Modifier
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .clickable { onImageSelected(uri) },
-                                        contentScale = ContentScale.Crop,
-                                    )
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                if (selectedUris.size == 1) {
+                                                    onImageSelected(selectedUris.first())
+                                                } else {
+                                                    onMultiImageSelected(selectedUris.toList())
+                                                }
+                                            },
+                                    ) {
+                                        Text(
+                                            "Send ${selectedUris.size} photo${if (selectedUris.size > 1) "s" else ""}",
+                                            color = C.textDark,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(vertical = 10.dp).fillMaxWidth(),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        )
+                                    }
+                                }
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(3),
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    items(galleryImages.value) { uri ->
+                                        val isSelected = uri in selectedUris
+                                        Box(
+                                            modifier = Modifier
+                                                .aspectRatio(1f)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    if (isSelected) selectedUris.remove(uri)
+                                                    else selectedUris.add(uri)
+                                                },
+                                        ) {
+                                            AsyncImage(
+                                                model = uri,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                            )
+                                            // Selection overlay + number badge
+                                            if (isSelected) {
+                                                Box(modifier = Modifier.fillMaxSize().background(C.accent.copy(alpha = 0.3f)))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.TopEnd)
+                                                        .padding(4.dp)
+                                                        .size(22.dp)
+                                                        .clip(CircleShape)
+                                                        .background(C.accent),
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Text(
+                                                        "${selectedUris.indexOf(uri) + 1}",
+                                                        color = C.textDark, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

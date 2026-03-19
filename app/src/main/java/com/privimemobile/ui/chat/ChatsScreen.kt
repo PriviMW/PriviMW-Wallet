@@ -104,12 +104,20 @@ fun ChatsScreen(
     var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    // Filter conversations by search query
-    val filteredConversations = remember(conversations, searchQuery) {
-        if (searchQuery.isBlank()) conversations
+    // Chat folder tabs
+    var activeTab by remember { mutableStateOf(0) } // 0=All, 1=Unread, 2=Archived
+
+    // Filter conversations by tab + search query
+    val filteredConversations = remember(conversations, searchQuery, activeTab) {
+        val tabFiltered = when (activeTab) {
+            1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
+            2 -> conversations.filter { it.archived }
+            else -> conversations.filter { !it.archived }
+        }
+        if (searchQuery.isBlank()) tabFiltered
         else {
             val q = searchQuery.trim().lowercase()
-            conversations.filter { conv ->
+            tabFiltered.filter { conv ->
                 (conv.displayName ?: "").lowercase().contains(q) ||
                         (conv.handle ?: "").lowercase().contains(q)
             }
@@ -171,6 +179,39 @@ fun ChatsScreen(
                                 unfocusedTextColor = C.text,
                             ),
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                        )
+                    }
+                }
+
+                // ── Tab bar (All / Unread / Archived) ──
+                val tabLabels = listOf("All", "Unread", "Archived")
+                val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 }
+                val archivedTotal = conversations.count { it.archived }
+                ScrollableTabRow(
+                    selectedTabIndex = activeTab,
+                    containerColor = Color.Transparent,
+                    contentColor = C.accent,
+                    edgePadding = 12.dp,
+                    divider = {},
+                    indicator = {},
+                ) {
+                    tabLabels.forEachIndexed { idx, label ->
+                        val badge = when (idx) {
+                            1 -> if (unreadTotal > 0) " ($unreadTotal)" else ""
+                            2 -> if (archivedTotal > 0) " ($archivedTotal)" else ""
+                            else -> ""
+                        }
+                        Tab(
+                            selected = activeTab == idx,
+                            onClick = { activeTab = idx },
+                            text = {
+                                Text(
+                                    "$label$badge",
+                                    color = if (activeTab == idx) C.accent else C.textSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (activeTab == idx) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            },
                         )
                     }
                 }
@@ -318,6 +359,22 @@ fun ChatsScreen(
                                 color = if (target.isBlocked) C.text else C.error,
                             )
                         }
+                    }
+
+                    // Archive / Unarchive
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                ChatService.db?.conversationDao()?.setArchived(target.id, !target.archived)
+                            }
+                            menuTarget = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (target.archived) "Unarchive" else "Archive",
+                            color = C.text, modifier = Modifier.fillMaxWidth(),
+                        )
                     }
 
                     HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))

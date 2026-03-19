@@ -27,4 +27,5 @@ data class ConversationEntity(
     @ColumnInfo(name = "draft_text") val draftText: String? = null,
     @ColumnInfo(name = "disappear_timer") val disappearTimer: Int = 0,  // 0=off, seconds (30, 300, 3600, 86400)
     @ColumnInfo(name = "pinned_message_ts") val pinnedMessageTs: Long = 0,  // 0=none, timestamp of pinned msg
+    val archived: Boolean = false,
 )

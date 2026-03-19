@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -198,12 +199,12 @@ fun ChatsScreen(
                         items(filteredConversations, key = { it.id }) { conv ->
                             val peerTyping = typingVer >= 0 && ChatService.isTyping(conv.convKey)
                             Box(modifier = Modifier.animateItem()) {
-                            ConversationRow(
-                                conv = conv,
-                                onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
-                                onLongPress = { menuTarget = conv },
-                                isTyping = peerTyping,
-                            )
+                                ConversationRow(
+                                    conv = conv,
+                                    onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
+                                    onLongPress = { menuTarget = conv },
+                                    isTyping = peerTyping,
+                                )
                             }
                         }
                     }
@@ -597,7 +598,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
     val initial = (conv.displayName ?: conv.handle ?: conv.convKey)
         .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
 
-    Column {
+    Column(modifier = Modifier.background(C.bg)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

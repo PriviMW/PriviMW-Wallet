@@ -20,7 +20,7 @@ import net.sqlcipher.database.SupportFactory
         GroupMemberEntity::class,
         ChatStateEntity::class,
     ],
-    version = 5,
+    version = 8,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -70,6 +70,29 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        /** V5→V6: Pinned message timestamp on conversations. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN pinned_message_ts INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** V6→V7: Pinned flag on messages (multi-pin support). */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** V7→V8: Pin ordering (pinned_at timestamp). */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN pinned_at INTEGER NOT NULL DEFAULT 0")
+                // Backfill: existing pinned messages get pinned_at = their message timestamp
+                db.execSQL("UPDATE messages SET pinned_at = timestamp WHERE pinned = 1")
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -78,7 +101,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .build()
         }

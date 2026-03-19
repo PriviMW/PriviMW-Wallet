@@ -60,10 +60,12 @@ fun ContactInfoScreen(
     // Attachment counts
     var totalAttachments by remember { mutableStateOf(0) }
     var imageAttachments by remember { mutableStateOf(0) }
+    var linkCount by remember { mutableStateOf(0) }
     LaunchedEffect(convId) {
         if (convId > 0L) {
             totalAttachments = ChatService.db?.attachmentDao()?.countByConversation(convId) ?: 0
             imageAttachments = ChatService.db?.attachmentDao()?.countImagesByConversation(convId) ?: 0
+            linkCount = ChatService.db?.messageDao()?.countLinksInConversation(convId) ?: 0
         }
     }
 
@@ -173,6 +175,14 @@ fun ContactInfoScreen(
                                 icon = Icons.Default.InsertDriveFile,
                                 label = "Files",
                                 value = "${totalAttachments - imageAttachments}",
+                            )
+                        }
+                        if (linkCount > 0) {
+                            HorizontalDivider(color = C.border.copy(alpha = 0.5f))
+                            InfoRow(
+                                icon = Icons.Default.Link,
+                                label = "Links",
+                                value = "$linkCount",
                             )
                         }
                     }

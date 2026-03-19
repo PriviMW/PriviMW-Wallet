@@ -99,6 +99,30 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLatestMessage(convId: Long): MessageEntity?
 
+    /** Pin a message (sets pinned_at to current time for ordering). */
+    @Query("UPDATE messages SET pinned = 1, pinned_at = :pinnedAt WHERE id = :messageId")
+    suspend fun pinMessage(messageId: Long, pinnedAt: Long = System.currentTimeMillis() / 1000)
+
+    /** Unpin a message. */
+    @Query("UPDATE messages SET pinned = 0, pinned_at = 0 WHERE id = :messageId")
+    suspend fun unpinMessage(messageId: Long)
+
+    /** Unpin all messages in a conversation. */
+    @Query("UPDATE messages SET pinned = 0, pinned_at = 0 WHERE conversation_id = :convId AND pinned = 1")
+    suspend fun unpinAll(convId: Long)
+
+    /** Get all pinned messages in a conversation (ordered by pin time — first pinned = #1). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND pinned = 1 AND deleted = 0 ORDER BY pinned_at ASC")
+    suspend fun getPinnedMessages(convId: Long): List<MessageEntity>
+
+    /** Count pinned messages in a conversation. */
+    @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND pinned = 1 AND deleted = 0")
+    suspend fun countPinned(convId: Long): Int
+
+    /** Count messages with links in a conversation. */
+    @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND deleted = 0 AND (text LIKE '%http://%' OR text LIKE '%https://%')")
+    suspend fun countLinksInConversation(convId: Long): Int
+
     /** Soft-delete expired disappearing messages (preserves dedup keys to block SBBS re-delivery). */
     @Query("UPDATE messages SET deleted = 1 WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun deleteExpired(now: Long): Int

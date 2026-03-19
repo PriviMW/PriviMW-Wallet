@@ -128,4 +128,8 @@ interface ConversationDao {
     /** Set disappearing message timer (0 = off). */
     @Query("UPDATE conversations SET disappear_timer = :timer WHERE id = :convId")
     suspend fun setDisappearTimer(convId: Long, timer: Int)
+
+    /** Pin a message (0 to unpin). */
+    @Query("UPDATE conversations SET pinned_message_ts = :messageTs WHERE id = :convId")
+    suspend fun setPinnedMessage(convId: Long, messageTs: Long)
 }

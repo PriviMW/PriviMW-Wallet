@@ -30,6 +30,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -46,6 +48,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
@@ -55,6 +58,7 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
@@ -70,7 +74,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -176,6 +182,8 @@ fun ChatScreen(
             fwdFrom = entity.fwdFrom,
             edited = entity.edited,
             expiresAt = entity.expiresAt,
+            pinned = entity.pinned,
+            pinnedAt = entity.pinnedAt,
             file = if (att != null) FileAttachment(
                 cid = att.ipfsCid ?: "",
                 name = att.fileName,
@@ -220,6 +228,7 @@ fun ChatScreen(
     // Per-message self-destruct timer (one-shot, independent of conversation-level timer)
     var oneShotTimer by remember { mutableStateOf(0) }  // 0=off, seconds
     var showOneShotTimerPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     // Multi-select mode
     var selectionMode by remember { mutableStateOf(false) }
@@ -1055,6 +1064,204 @@ fun ChatScreen(
             }
         }
 
+        // Pinned messages bar — scroll-aware, ordered by pin time
+        val pinnedByOrder = messages.filter { it.pinned }.sortedBy { it.pinnedAt }  // #1 = first pinned
+        var pinHighlightTs by remember { mutableStateOf(0L) }
+        var showPinListDialog by remember { mutableStateOf(false) }
+        if (pinnedByOrder.isNotEmpty()) {
+            // Scroll-aware pin index (default)
+            val scrollAwarePinIndex by remember(pinnedByOrder) {
+                derivedStateOf {
+                    val visibleIdx = listState.firstVisibleItemIndex
+                    val revMsgs = messages.reversed()
+                    val pinPositions = pinnedByOrder.mapIndexedNotNull { pmIdx, pin ->
+                        val lcIdx = revMsgs.indexOfFirst { it.timestamp == pin.timestamp && it.id == pin.id }
+                        if (lcIdx >= 0) pmIdx to lcIdx else null
+                    }
+                    if (pinPositions.isEmpty()) 0
+                    else {
+                        val nextPin = pinPositions.filter { it.second >= visibleIdx }.minByOrNull { it.second }
+                        nextPin?.first ?: pinPositions.maxByOrNull { it.second }?.first ?: 0
+                    }
+                }
+            }
+
+            // Manual override from tap — cleared only on user-initiated scroll
+            var manualOverrideIndex by remember { mutableStateOf(-1) }
+            var scrollPosAtOverride by remember { mutableStateOf(-1) }
+            // Clear override when user scrolls AWAY from where the tap-scroll landed
+            LaunchedEffect(listState.firstVisibleItemIndex) {
+                if (manualOverrideIndex >= 0 && scrollPosAtOverride >= 0) {
+                    // Wait for the programmatic scroll to finish first
+                    delay(1000)
+                    // Only clear if user has actually scrolled from the landing position
+                    if (listState.firstVisibleItemIndex != scrollPosAtOverride) {
+                        manualOverrideIndex = -1
+                        scrollPosAtOverride = -1
+                    }
+                }
+            }
+
+            val safeIndex = if (manualOverrideIndex >= 0)
+                manualOverrideIndex.coerceIn(0, pinnedByOrder.size - 1)
+            else
+                scrollAwarePinIndex.coerceIn(0, pinnedByOrder.size - 1)
+            val currentPin = pinnedByOrder[safeIndex]
+
+            fun scrollToPinMsg(pin: ChatMessage) {
+                val revMsgs = messages.reversed()
+                val idx = revMsgs.indexOfFirst { it.timestamp == pin.timestamp && it.id == pin.id }
+                if (idx >= 0) {
+                    pinHighlightTs = pin.timestamp
+                    scope.launch {
+                        listState.animateScrollToItem(idx)
+                        delay(2000)
+                        pinHighlightTs = 0L
+                    }
+                }
+            }
+
+            Surface(
+                color = C.card,
+                shadowElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable {
+                            scrollToPinMsg(currentPin)
+                            // Set manual override to previous pin (stop at #1, don't cycle)
+                            manualOverrideIndex = if (safeIndex > 0) safeIndex - 1 else 0
+                            // Record where scroll will land so we only clear on USER scroll
+                            val revMsgs = messages.reversed()
+                            scrollPosAtOverride = revMsgs.indexOfFirst { it.timestamp == currentPin.timestamp && it.id == currentPin.id }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Accent segment bar
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val segments = pinnedByOrder.size.coerceAtMost(5)
+                        val segH = (26 / segments).coerceAtLeast(3)
+                        repeat(segments) { i ->
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .height(segH.dp)
+                                    .padding(vertical = 0.5.dp)
+                                    .background(if (i == safeIndex % segments) C.accent else C.accent.copy(alpha = 0.25f))
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text(
+                            if (pinnedByOrder.size > 1) "Pinned Message #${safeIndex + 1}" else "Pinned Message",
+                            color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            currentPin.text.ifEmpty { if (currentPin.file != null) "\uD83D\uDCCE File" else "Message" },
+                            color = C.textSecondary, fontSize = 13.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // Pin list icon — opens full pin list screen
+                    IconButton(
+                        onClick = { showPinListDialog = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(Icons.Default.PushPin, "All pins", tint = C.textSecondary, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            // Pin list dialog (full screen style)
+            if (showPinListDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPinListDialog = false },
+                    containerColor = C.card,
+                    title = {
+                        Text("Pinned Messages (${pinnedByOrder.size})", color = C.text, fontWeight = FontWeight.SemiBold)
+                    },
+                    text = {
+                        Column(modifier = Modifier.heightIn(max = 400.dp)) {
+                            LazyColumn {
+                                items(pinnedByOrder.size) { idx ->
+                                    val pin = pinnedByOrder[idx]
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        // Pin number
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(C.accent.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text("#${idx + 1}", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(Modifier.width(10.dp))
+                                        // Message preview
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                pin.text.ifEmpty { if (pin.file != null) "\uD83D\uDCCE File" else "Message" },
+                                                color = C.text, fontSize = 14.sp,
+                                                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                formatMessageTime(pin.timestamp),
+                                                color = C.textMuted, fontSize = 11.sp,
+                                            )
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        // Navigate to message button (chat bubble with arrow)
+                                        IconButton(
+                                            onClick = {
+                                                showPinListDialog = false
+                                                scrollToPinMsg(pin)
+                                            },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.ArrowForward,
+                                                "Go to message",
+                                                tint = C.accent,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    }
+                                    if (idx < pinnedByOrder.size - 1) {
+                                        HorizontalDivider(color = C.border.copy(alpha = 0.3f))
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        // Unpin all button
+                        TextButton(onClick = {
+                            scope.launch {
+                                if (convId > 0L) {
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.unpinAll(convId)
+                                }
+                            }
+                            showPinListDialog = false
+                        }) {
+                            Text("Unpin All", color = C.error, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPinListDialog = false }) {
+                            Text("Close", color = C.textSecondary)
+                        }
+                    },
+                )
+            }
+        }
+
         // Messages list + scroll-to-bottom button
         Box(modifier = Modifier.weight(1f)) {
         LazyColumn(
@@ -1096,7 +1303,7 @@ fun ChatScreen(
                         },
                 ) {
                     if (showDateSep) {
-                        // Centered pill date separator (Telegram-style)
+                        // Centered pill date separator — tap to jump to date
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
@@ -1104,6 +1311,7 @@ fun ChatScreen(
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = C.card.copy(alpha = 0.8f),
+                                modifier = Modifier.clickable { showDatePicker = true },
                             ) {
                                 Text(
                                     formatDateSeparator(msg.timestamp),
@@ -1210,7 +1418,7 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp,
+                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp,
                     )
                     } // close Row (selection mode wrapper)
                 }
@@ -1728,6 +1936,42 @@ fun ChatScreen(
             )
         }
 
+        // ── Date jump picker ──
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState()
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val selectedMillis = datePickerState.selectedDateMillis
+                        if (selectedMillis != null) {
+                            val targetTs = selectedMillis / 1000
+                            // Find the closest message to this date
+                            val reversedMessages = messages.reversed()
+                            val idx = reversedMessages.indexOfFirst { it.timestamp >= targetTs }
+                            if (idx >= 0) {
+                                scope.launch { listState.animateScrollToItem(idx) }
+                            } else if (reversedMessages.isNotEmpty()) {
+                                // Date is after all messages — scroll to newest
+                                scope.launch { listState.animateScrollToItem(0) }
+                            }
+                        }
+                        showDatePicker = false
+                    }) {
+                        Text("Jump", color = C.accent)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("Cancel", color = C.textSecondary)
+                    }
+                },
+                colors = DatePickerDefaults.colors(containerColor = C.card),
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
+
         // ── Per-message self-destruct timer picker ──
         if (showOneShotTimerPicker) {
             val timerOptions = listOf(
@@ -1800,59 +2044,99 @@ fun ChatScreen(
                 },
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                        // Quick reaction row
+                        // Quick reaction emojis — first row + expandable grid
+                        val allEmojis = listOf(
+                            "\uD83D\uDC4D", "\uD83D\uDC4E", "\u2764\uFE0F", "\uD83D\uDD25", "\uD83E\uDD70", "\uD83D\uDC4F", "\uD83D\uDE02",
+                            "\uD83E\uDD14", "\uD83E\uDD2F", "\uD83D\uDE22", "\uD83C\uDF89", "\uD83D\uDE31", "\uD83D\uDE4F", "\uD83D\uDC40",
+                            "\uD83D\uDE0D", "\uD83D\uDE0E", "\uD83E\uDD23", "\u26A1", "\uD83C\uDFC6", "\uD83D\uDC94", "\uD83E\uDD28",
+                            "\uD83D\uDE10", "\uD83D\uDE34", "\uD83D\uDE2D", "\uD83E\uDD13", "\uD83D\uDC7B", "\uD83D\uDE08", "\uD83E\uDD21",
+                            "\uD83D\uDC4C", "\uD83E\uDD1D", "\uD83E\uDD17", "\uD83E\uDEE1", "\uD83D\uDC8B", "\uD83D\uDCA5", "\uD83D\uDCAF",
+                        )
+                        val quickEmojis = allEmojis.take(7)
+                        var emojiExpanded by remember { mutableStateOf(false) }
+
+                        fun sendReaction(emoji: String) {
+                            scope.launch {
+                                val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                if (state?.myHandle != null) {
+                                    val ts = System.currentTimeMillis() / 1000
+                                    val insertId = com.privimemobile.chat.ChatService.db!!.reactionDao().insert(
+                                        com.privimemobile.chat.db.entities.ReactionEntity(
+                                            messageTs = targetMsg.timestamp,
+                                            senderHandle = state.myHandle!!,
+                                            emoji = emoji,
+                                            timestamp = ts,
+                                        )
+                                    )
+                                    if (insertId == -1L) {
+                                        com.privimemobile.chat.ChatService.db!!.reactionDao().reactivate(
+                                            targetMsg.timestamp, state.myHandle!!, emoji, ts
+                                        )
+                                    }
+                                    val walletId = resolvedWalletId
+                                    if (!walletId.isNullOrEmpty()) {
+                                        val payload = mapOf(
+                                            "v" to 1, "t" to "react",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "from" to state.myHandle!!, "to" to handle,
+                                            "msg_ts" to targetMsg.timestamp, "emoji" to emoji,
+                                        )
+                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                    }
+                                }
+                            }
+                            contextMenuMsg = null
+                        }
+
+                        // First row: 7 quick emojis + expand button
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = if (emojiExpanded) 4.dp else 12.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            listOf("\uD83D\uDC4D", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDE2E", "\uD83D\uDE22", "\uD83D\uDC4E").forEach { emoji ->
+                            quickEmojis.forEach { emoji ->
                                 Text(
-                                    emoji,
-                                    fontSize = 28.sp,
-                                    modifier = Modifier
-                                        .clickable {
-                                            // Send reaction
-                                            scope.launch {
-                                                val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                                if (state?.myHandle != null) {
-                                                    // Insert locally (reactivate if soft-deleted)
-                                                    val ts = System.currentTimeMillis() / 1000
-                                                    val insertId = com.privimemobile.chat.ChatService.db!!.reactionDao().insert(
-                                                        com.privimemobile.chat.db.entities.ReactionEntity(
-                                                            messageTs = targetMsg.timestamp,
-                                                            senderHandle = state.myHandle!!,
-                                                            emoji = emoji,
-                                                            timestamp = ts,
-                                                        )
-                                                    )
-                                                    if (insertId == -1L) {
-                                                        com.privimemobile.chat.ChatService.db!!.reactionDao().reactivate(
-                                                            targetMsg.timestamp, state.myHandle!!, emoji, ts
-                                                        )
-                                                    }
-                                                    // Send SBBS
-                                                    val walletId = resolvedWalletId
-                                                    if (!walletId.isNullOrEmpty()) {
-                                                        val payload = mapOf(
-                                                            "v" to 1,
-                                                            "t" to "react",
-                                                            "ts" to System.currentTimeMillis() / 1000,
-                                                            "from" to state.myHandle!!,
-                                                            "to" to handle,
-                                                            "msg_ts" to targetMsg.timestamp,
-                                                            "emoji" to emoji,
-                                                        )
-                                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
-                                                    }
-                                                }
-                                            }
-                                            contextMenuMsg = null
-                                        }
-                                        .padding(4.dp),
+                                    emoji, fontSize = 28.sp,
+                                    modifier = Modifier.clickable { sendReaction(emoji) }.padding(4.dp),
                                 )
                             }
+                            // Expand/collapse button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(C.bg.copy(alpha = 0.5f))
+                                    .clickable { emojiExpanded = !emojiExpanded },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    if (emojiExpanded) "\u25B2" else "\u25BC",
+                                    color = C.textSecondary, fontSize = 14.sp,
+                                )
+                            }
+                        }
+
+                        // Expanded emoji grid
+                        if (emojiExpanded) {
+                            val gridEmojis = allEmojis.drop(7)
+                            val columns = 7
+                            gridEmojis.chunked(columns).forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                ) {
+                                    row.forEach { emoji ->
+                                        Text(
+                                            emoji, fontSize = 28.sp,
+                                            modifier = Modifier.clickable { sendReaction(emoji) }.padding(4.dp),
+                                        )
+                                    }
+                                    // Pad incomplete rows
+                                    repeat(columns - row.size) {
+                                        Spacer(Modifier.size(36.dp))
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
                         }
 
                         HorizontalDivider(color = C.border)
@@ -1897,6 +2181,23 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Reply", color = C.text, modifier = Modifier.fillMaxWidth())
+                        }
+
+                        // Pin / Unpin (per-message)
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    if (targetMsg.pinned) {
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.unpinMessage(targetMsg.id.toLong())
+                                    } else {
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
+                                    }
+                                }
+                                contextMenuMsg = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (targetMsg.pinned) "Unpin" else "Pin", color = C.text, modifier = Modifier.fillMaxWidth())
                         }
 
                         // Edit (own messages only, text messages)
@@ -2398,7 +2699,10 @@ private fun MessageBubble(
 
                 // Text content
                 if (msg.text.isNotEmpty()) {
-                    Text(msg.text, color = C.text, fontSize = 15.sp, lineHeight = 20.sp)
+                    Text(
+                        text = parseMarkdown(msg.text),
+                        color = C.text, fontSize = 15.sp, lineHeight = 20.sp,
+                    )
                 }
 
                 // Meta row (time + read status)
@@ -2408,11 +2712,12 @@ private fun MessageBubble(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (msg.pinned) {
+                        Text("\uD83D\uDCCC", fontSize = 10.sp)  // 📌
+                        Spacer(Modifier.width(3.dp))
+                    }
                     if (msg.expiresAt > 0) {
-                        Text(
-                            "\u23F3",  // ⏳ hourglass
-                            fontSize = 10.sp,
-                        )
+                        Text("\u23F3", fontSize = 10.sp)  // ⏳
                         Spacer(Modifier.width(3.dp))
                     }
                     if (msg.edited) {
@@ -3081,6 +3386,61 @@ private val msgTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 private fun formatMessageTime(ts: Long): String {
     if (ts <= 0) return ""
     return msgTimeFormat.format(Date(ts * 1000))
+}
+
+/** Parse simple markdown: **bold**, *italic*, `code`, ~~strikethrough~~ */
+private fun parseMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
+    return androidx.compose.ui.text.buildAnnotatedString {
+        var i = 0
+        while (i < text.length) {
+            when {
+                // **bold**
+                i + 1 < text.length && text[i] == '*' && text[i + 1] == '*' -> {
+                    val end = text.indexOf("**", i + 2)
+                    if (end > i + 2) {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else { append(text[i]); i++ }
+                }
+                // *italic*
+                text[i] == '*' -> {
+                    val end = text.indexOf('*', i + 1)
+                    if (end > i + 1) {
+                        withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else { append(text[i]); i++ }
+                }
+                // ~~strikethrough~~
+                i + 1 < text.length && text[i] == '~' && text[i + 1] == '~' -> {
+                    val end = text.indexOf("~~", i + 2)
+                    if (end > i + 2) {
+                        withStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else { append(text[i]); i++ }
+                }
+                // `code`
+                text[i] == '`' -> {
+                    val end = text.indexOf('`', i + 1)
+                    if (end > i + 1) {
+                        withStyle(SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            background = Color(0x20FFFFFF),
+                        )) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else { append(text[i]); i++ }
+                }
+                else -> { append(text[i]); i++ }
+            }
+        }
+    }
 }
 
 private val dateSepFormat = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())

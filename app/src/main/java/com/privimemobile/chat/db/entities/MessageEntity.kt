@@ -39,4 +39,6 @@ data class MessageEntity(
     val edited: Boolean = false,           // message was edited
     @ColumnInfo(name = "original_text") val originalText: String? = null,  // text before edit
     @ColumnInfo(name = "expires_at") val expiresAt: Long = 0,  // 0=never, unix seconds for disappearing msgs
+    val pinned: Boolean = false,  // message is pinned in this conversation
+    @ColumnInfo(name = "pinned_at") val pinnedAt: Long = 0,  // 0=not pinned, unix seconds when pinned (for ordering)
 )

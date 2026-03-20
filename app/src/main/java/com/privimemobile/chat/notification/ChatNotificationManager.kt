@@ -125,9 +125,40 @@ object ChatNotificationManager {
             messagingStyle.addMessage(msg.text, msg.timestamp, person)
         }
 
+        // Per-chat notification channel (Android O+) for custom sound
+        val prefs = appContext.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+        val soundUri = prefs.getString("notif_sound_$convKey", null)
+        val effectiveChannelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !soundUri.isNullOrEmpty()) {
+            val nm2 = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val chatChannelId = "privime_chat_${convKey.hashCode().and(0x7FFFFFFF)}"
+            val version = prefs.getInt("notif_channel_ver_$convKey", 0)
+            val versionedChannelId = "${chatChannelId}_v$version"
+            // Create/recreate channel with custom sound
+            nm2.createNotificationChannel(NotificationChannel(
+                versionedChannelId,
+                "Chat: ${convKey.removePrefix("@")}",
+                if (soundUri == "silent") NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                group = GROUP_ID
+                setShowBadge(true)
+                if (soundUri == "silent") {
+                    setSound(null, null)
+                    enableVibration(false)
+                } else {
+                    setSound(android.net.Uri.parse(soundUri), android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+                }
+            })
+            versionedChannelId
+        } else {
+            channelId // Use default channel
+        }
+
         // Individual message notification with MessagingStyle
         val notifId = (convKey.hashCode() and 0x7FFFFFFF) % 7000 + 1000  // 1000-7999 range
-        val notification = NotificationCompat.Builder(appContext, channelId)
+        val notification = NotificationCompat.Builder(appContext, effectiveChannelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setStyle(messagingStyle)
             .setContentIntent(pendingIntent)
@@ -135,7 +166,7 @@ object ChatNotificationManager {
             .setGroup(GROUP_ID)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .build()
 
         nm.notify(notifId, notification)

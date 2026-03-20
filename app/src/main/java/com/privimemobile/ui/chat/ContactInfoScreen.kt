@@ -3,7 +3,10 @@ package com.privimemobile.ui.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.media.RingtoneManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -73,6 +76,33 @@ fun ContactInfoScreen(
     val isMuted = conv?.muted ?: false
     val isBlocked = conv?.isBlocked ?: false
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Notification sound
+    val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+    var notifSoundName by remember {
+        mutableStateOf(prefs.getString("notif_sound_name_$convKey", "Default") ?: "Default")
+    }
+    val soundPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        // Bump channel version to force new Android notification channel with new sound
+        val ver = prefs.getInt("notif_channel_ver_$convKey", 0) + 1
+        if (uri != null) {
+            val ringtone = RingtoneManager.getRingtone(context, uri)
+            val name = ringtone?.getTitle(context) ?: "Custom"
+            prefs.edit().putString("notif_sound_$convKey", uri.toString())
+                .putString("notif_sound_name_$convKey", name)
+                .putInt("notif_channel_ver_$convKey", ver).apply()
+            notifSoundName = name
+        } else {
+            // "Silent" was picked (null URI)
+            prefs.edit().putString("notif_sound_$convKey", "silent")
+                .putString("notif_sound_name_$convKey", "Silent")
+                .putInt("notif_channel_ver_$convKey", ver).apply()
+            notifSoundName = "Silent"
+        }
+    }
 
     // Avatar
     val avatarColors = listOf(
@@ -211,7 +241,27 @@ fun ContactInfoScreen(
                         )
                         HorizontalDivider(color = C.border.copy(alpha = 0.5f))
 
-                        // Disappearing messages
+                        // Notification sound
+                        InfoRow(
+                            icon = Icons.Default.MusicNote,
+                            label = "Notification sound",
+                            value = notifSoundName,
+                            onClick = {
+                                val intent = android.content.Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Notification sound")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    val currentUri = prefs.getString("notif_sound_$convKey", null)
+                                    if (!currentUri.isNullOrEmpty() && currentUri != "silent") {
+                                        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(currentUri))
+                                    }
+                                }
+                                soundPickerLauncher.launch(intent)
+                            },
+                        )
+                        HorizontalDivider(color = C.border.copy(alpha = 0.5f))
+
                         // Block
                         InfoRow(
                             icon = Icons.Default.Block,

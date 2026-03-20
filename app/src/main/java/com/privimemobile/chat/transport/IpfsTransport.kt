@@ -125,9 +125,12 @@ object IpfsTransport {
 
         uploadInProgress = true
         try {
-            // Read file bytes
-            var data = context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
-                ?: throw Exception("Could not read file")
+            // Read file bytes (support both content:// and file:// URIs)
+            var data = if (fileUri.scheme == "file") {
+                java.io.File(fileUri.path!!).readBytes()
+            } else {
+                context.contentResolver.openInputStream(fileUri)?.use { it.readBytes() }
+            } ?: throw Exception("Could not read file")
 
             // Compress images
             if (Helpers.isImageMime(mimeType)) {

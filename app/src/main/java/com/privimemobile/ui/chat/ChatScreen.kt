@@ -76,6 +76,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
@@ -301,6 +305,10 @@ fun ChatScreen(
     }
     var showCommandMenu by remember { mutableStateOf(false) }
     var showSchedulePicker by remember { mutableStateOf(false) }
+    var showCreateStickerPack by remember { mutableStateOf(false) }
+    var emojiMainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // showDisappearPicker removed — per-message self-destruct replaces conversation-level timer
@@ -1921,7 +1929,7 @@ fun ChatScreen(
 
             // Category tab icons (matching Telegram)
             val categoryIcons = listOf("\uD83D\uDD53", "\uD83D\uDE00", "\uD83D\uDC4B", "\u2764\uFE0F", "\uD83D\uDC3B", "\uD83C\uDF54", "\uD83D\uDCF1", "\uD83C\uDFAD")
-            var mainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
+            // emojiMainTab declared at screen level for IME detection access
             val emojiGridState = rememberLazyGridState()
 
             // Pre-compute grid indices for each category header (for tab scrolling)
@@ -1953,7 +1961,7 @@ fun ChatScreen(
                         // Category icon tabs (Telegram-style)
                         var activeTabIdx by remember { mutableStateOf(0) }
                         categoryIcons.forEachIndexed { idx, icon ->
-                            val isActive = if (idx == categoryIcons.size - 1) mainTab == 1 else mainTab == 0 && activeTabIdx == idx
+                            val isActive = if (idx == categoryIcons.size - 1) emojiMainTab == 1 else emojiMainTab == 0 && activeTabIdx == idx
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -1961,9 +1969,9 @@ fun ChatScreen(
                                     .background(if (isActive) C.accent.copy(alpha = 0.15f) else Color.Transparent)
                                     .clickable {
                                         if (idx == categoryIcons.size - 1) {
-                                            mainTab = 1 // Stickers tab
+                                            emojiMainTab = 1 // Stickers tab
                                         } else {
-                                            mainTab = 0
+                                            emojiMainTab = 0
                                             activeTabIdx = idx
                                             if (idx == 0) {
                                                 // Recent — scroll to top
@@ -1983,7 +1991,7 @@ fun ChatScreen(
 
                     HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
-                    if (mainTab == 0) {
+                    if (emojiMainTab == 0) {
                         // Emoji tab — single scrollable list with recent + all categories
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(9),
@@ -2019,16 +2027,251 @@ fun ChatScreen(
                             }
                         }
                     } else {
-                        // Stickers tab — placeholder
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("\uD83C\uDFAD", fontSize = 48.sp)
-                                Spacer(Modifier.height(8.dp))
-                                Text("Stickers coming soon", color = C.textSecondary, fontSize = 14.sp)
+                        // Stickers tab — pack-based system
+                        val stickersRoot = remember { java.io.File(context.filesDir, "stickers").also { it.mkdirs() } }
+                        fun loadPacks(): List<Pair<String, List<java.io.File>>> {
+                            val dirs = stickersRoot.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
+                            return dirs.map { dir ->
+                                dir.name to (dir.listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList())
                             }
+                        }
+                        var packs by remember { mutableStateOf(loadPacks()) }
+                        var activePackIdx by remember { mutableStateOf(0) }
+                        var newPackName by remember { mutableStateOf("") }
+
+                        // Helper to save a bitmap as sticker WebP
+                        fun saveStickerBitmap(bmp: android.graphics.Bitmap, packDir: java.io.File, suffix: String = "") {
+                            val maxSz = 512
+                            val scale = minOf(maxSz.toFloat() / bmp.width, maxSz.toFloat() / bmp.height, 1f)
+                            val w = (bmp.width * scale).toInt()
+                            val h = (bmp.height * scale).toInt()
+                            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
+                            val file = java.io.File(packDir, "sticker_${System.currentTimeMillis()}$suffix.webp")
+                            file.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, 80, it) }
+                        }
+
+                        // Multi-image picker for adding stickers to a pack
+                        val addToPackLauncher = rememberLauncherForActivityResult(
+                            contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+                        ) { uris ->
+                            if (uris.isNotEmpty() && packs.isNotEmpty() && activePackIdx < packs.size) {
+                                val packDir = java.io.File(stickersRoot, packs[activePackIdx].first)
+                                for ((i, uri) in uris.withIndex()) {
+                                    try {
+                                        val input = context.contentResolver.openInputStream(uri)
+                                        val bmp = android.graphics.BitmapFactory.decodeStream(input)
+                                        input?.close()
+                                        if (bmp != null) saveStickerBitmap(bmp, packDir, "_$i")
+                                    } catch (_: Exception) {}
+                                }
+                                packs = loadPacks()
+                                Toast.makeText(context, "${uris.size} sticker(s) added", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
+                        // ZIP file picker for importing sticker packs
+                        val zipImportLauncher = rememberLauncherForActivityResult(
+                            contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                        ) { uri ->
+                            if (uri != null && packs.isNotEmpty() && activePackIdx < packs.size) {
+                                val packDir = java.io.File(stickersRoot, packs[activePackIdx].first)
+                                var count = 0
+                                try {
+                                    val input = context.contentResolver.openInputStream(uri) ?: return@rememberLauncherForActivityResult
+                                    val zip = java.util.zip.ZipInputStream(input)
+                                    var entry = zip.nextEntry
+                                    while (entry != null) {
+                                        val name = entry.name.lowercase()
+                                        if (!entry.isDirectory && (name.endsWith(".webp") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg"))) {
+                                            val bytes = zip.readBytes()
+                                            val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                            if (bmp != null) {
+                                                saveStickerBitmap(bmp, packDir, "_z$count")
+                                                count++
+                                            }
+                                        }
+                                        zip.closeEntry()
+                                        entry = zip.nextEntry
+                                    }
+                                    zip.close()
+                                    input.close()
+                                } catch (_: Exception) {}
+                                packs = loadPacks()
+                                if (count > 0) {
+                                    Toast.makeText(context, "$count sticker(s) imported from ZIP", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No images found in ZIP", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Pack tabs row
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // + button to create new pack
+                                Box(
+                                    modifier = Modifier.size(36.dp).clip(CircleShape)
+                                        .background(C.accent.copy(alpha = 0.15f))
+                                        .clickable { showCreateStickerPack = true },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text("+", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                                Spacer(Modifier.width(4.dp))
+
+                                // Pack tabs (scrollable) — only render when packs exist
+                                // Pack tabs as simple scrollable Row (avoids ScrollableTabRow index crash)
+                                Row(
+                                    modifier = Modifier.weight(1f)
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    packs.forEachIndexed { idx, (name, _) ->
+                                        val selected = idx == activePackIdx.coerceIn(0, maxOf(packs.size - 1, 0))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(if (selected) C.accent.copy(alpha = 0.15f) else Color.Transparent)
+                                                .clickable { activePackIdx = idx }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        ) {
+                                            Text(
+                                                name, fontSize = 12.sp, maxLines = 1,
+                                                color = if (selected) C.accent else C.textSecondary,
+                                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (packs.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("\uD83C\uDFAD", fontSize = 48.sp)
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("No sticker packs", color = C.textSecondary, fontSize = 14.sp)
+                                        Text("Tap + to create a pack", color = C.textMuted, fontSize = 12.sp)
+                                    }
+                                }
+                            } else {
+                                val currentPack = packs.getOrNull(activePackIdx)
+                                if (currentPack != null) {
+                                    // Pack header with add + delete buttons
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(currentPack.first, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                        Text(" (${currentPack.second.size})", color = C.textMuted, fontSize = 12.sp)
+                                        Spacer(Modifier.weight(1f))
+                                        TextButton(onClick = { zipImportLauncher.launch("application/zip") }) {
+                                            Text("ZIP", color = C.accent, fontSize = 12.sp)
+                                        }
+                                        TextButton(onClick = { addToPackLauncher.launch("image/*") }) {
+                                            Text("+ Add", color = C.accent, fontSize = 12.sp)
+                                        }
+                                        TextButton(onClick = {
+                                            val dir = java.io.File(stickersRoot, currentPack.first)
+                                            dir.deleteRecursively()
+                                            packs = loadPacks()
+                                            activePackIdx = 0
+                                            Toast.makeText(context, "Pack deleted", Toast.LENGTH_SHORT).show()
+                                        }) {
+                                            Text("Delete", color = C.error, fontSize = 12.sp)
+                                        }
+                                    }
+
+                                    // Sticker grid
+                                    if (currentPack.second.isEmpty()) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("Empty pack — tap + Add", color = C.textMuted, fontSize = 13.sp)
+                                        }
+                                    } else {
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Fixed(4),
+                                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                            contentPadding = PaddingValues(4.dp),
+                                        ) {
+                                            items(currentPack.second.size) { idx ->
+                                                val file = currentPack.second[idx]
+                                                val bmp = remember(file.absolutePath, file.lastModified()) {
+                                                    android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                                                }
+                                                if (bmp != null) {
+                                                    Image(
+                                                        bitmap = bmp.asImageBitmap(),
+                                                        contentDescription = "Sticker",
+                                                        modifier = Modifier
+                                                            .aspectRatio(1f)
+                                                            .padding(4.dp)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .pointerInput(file.absolutePath) {
+                                                                detectTapGestures(
+                                                                    onTap = {
+                                                                        // Copy sticker to cache for content URI compatibility
+                                                                        val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.webp")
+                                                                        file.copyTo(cached, overwrite = true)
+                                                                        val uri = android.net.Uri.fromFile(cached)
+                                                                        pendingFile = PendingFile(uri = uri, name = file.name, size = cached.length(), mimeType = "image/webp")
+                                                                        showEmojiPicker = false
+                                                                        handleSend()
+                                                                    },
+                                                                    onLongPress = {
+                                                                        file.delete()
+                                                                        packs = loadPacks()
+                                                                        Toast.makeText(context, "Sticker removed", Toast.LENGTH_SHORT).show()
+                                                                    },
+                                                                )
+                                                            },
+                                                        contentScale = ContentScale.Fit,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Create pack dialog
+                        if (showCreateStickerPack) {
+                            AlertDialog(
+                                onDismissRequest = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() },
+                                containerColor = C.card,
+                                title = { Text("New Sticker Pack", color = C.text) },
+                                text = {
+                                    OutlinedTextField(
+                                        value = newPackName,
+                                        onValueChange = { newPackName = it.take(20) },
+                                        placeholder = { Text("Pack name", color = C.textMuted) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = C.text, unfocusedTextColor = C.text,
+                                            focusedBorderColor = C.accent, cursorColor = C.accent,
+                                        ),
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val name = newPackName.trim()
+                                        if (name.isNotEmpty()) {
+                                            java.io.File(stickersRoot, name).mkdirs()
+                                            packs = loadPacks()
+                                            activePackIdx = packs.indexOfFirst { it.first == name }.coerceAtLeast(0)
+                                            showCreateStickerPack = false; newPackName = ""
+                                            focusManager.clearFocus(); keyboardController?.hide()
+                                        }
+                                    }) { Text("Create", color = C.accent) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() }) {
+                                        Text("Cancel", color = C.textSecondary)
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -2190,12 +2433,13 @@ fun ChatScreen(
         }
 
         // Input bar — Telegram-X style (48dp bar, 180ms animations)
-        val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        // keyboardController declared at screen level
         val hasText = inputText.text.isNotBlank() || pendingFile != null
         // Close emoji picker when system keyboard appears
         val imeVisible = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
         LaunchedEffect(imeVisible) {
-            if (imeVisible && showEmojiPicker) showEmojiPicker = false
+            if (imeVisible && showEmojiPicker && emojiMainTab == 0) showEmojiPicker = false
+            // Only auto-close on emoji tab (emojiMainTab=0). Sticker tab (emojiMainTab=1) uses dialogs/pickers that open keyboard.
         }
         Surface(
             color = C.card,
@@ -2917,6 +3161,67 @@ fun ChatScreen(
                                 MenuItemRow("Save to Downloads") {
                                     saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
                                     contextMenuMsg = null
+                                }
+                                // Save to stickers for image files
+                                if (Helpers.isImageMime(targetMsg.file.mime)) {
+                                    var showSaveToPackPicker by remember { mutableStateOf(false) }
+                                    MenuItemRow("Save to stickers") {
+                                        showSaveToPackPicker = true
+                                    }
+                                    if (showSaveToPackPicker) {
+                                        val stickersRoot = java.io.File(context.filesDir, "stickers")
+                                        val packDirs = stickersRoot.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
+                                        AlertDialog(
+                                            onDismissRequest = { showSaveToPackPicker = false },
+                                            containerColor = C.card,
+                                            title = { Text("Save to pack", color = C.text) },
+                                            text = {
+                                                Column {
+                                                    if (packDirs.isEmpty()) {
+                                                        Text("No packs yet. Create one in the sticker tab first.", color = C.textSecondary, fontSize = 13.sp)
+                                                    }
+                                                    packDirs.forEach { dir ->
+                                                        val count = dir.listFiles()?.size ?: 0
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                                                .clickable {
+                                                                    try {
+                                                                        val src = java.io.File(targetPath)
+                                                                        val bmp = android.graphics.BitmapFactory.decodeFile(src.absolutePath)
+                                                                        if (bmp != null) {
+                                                                            val maxSz = 512
+                                                                            val scale = minOf(maxSz.toFloat() / bmp.width, maxSz.toFloat() / bmp.height, 1f)
+                                                                            val w = (bmp.width * scale).toInt()
+                                                                            val h = (bmp.height * scale).toInt()
+                                                                            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
+                                                                            val dest = java.io.File(dir, "sticker_${System.currentTimeMillis()}.webp")
+                                                                            dest.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, 80, it) }
+                                                                            Toast.makeText(context, "Saved to ${dir.name}", Toast.LENGTH_SHORT).show()
+                                                                        }
+                                                                    } catch (_: Exception) {}
+                                                                    showSaveToPackPicker = false
+                                                                    contextMenuMsg = null
+                                                                }
+                                                                .padding(vertical = 10.dp, horizontal = 8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                        ) {
+                                                            Text("\uD83C\uDFAD", fontSize = 20.sp)
+                                                            Spacer(Modifier.width(12.dp))
+                                                            Text(dir.name, color = C.text, fontSize = 15.sp)
+                                                            Spacer(Modifier.weight(1f))
+                                                            Text("$count", color = C.textMuted, fontSize = 12.sp)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            confirmButton = {},
+                                            dismissButton = {
+                                                TextButton(onClick = { showSaveToPackPicker = false }) {
+                                                    Text("Cancel", color = C.textSecondary)
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -35,7 +35,7 @@ object IpfsTransport {
         private set
 
     // File cache directory
-    private var cacheDir: File? = null
+    internal var cacheDir: File? = null
     private const val MAX_CACHED_FILES = 100
 
     fun init(context: Context) {

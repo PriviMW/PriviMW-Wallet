@@ -313,6 +313,103 @@ fun SettingsScreen(
                     }
                 }
 
+                // Profile Picture
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
+                    if (chatState?.myAvatarCid != null) {
+                        Text("Set", color = C.textSecondary, fontSize = 12.sp)
+                    } else {
+                        Text("Not set", color = C.textMuted, fontSize = 12.sp)
+                    }
+                }
+                var avatarUploading by remember { mutableStateOf(false) }
+                val avatarPicker = rememberLauncherForActivityResult(
+                    contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                ) { uri ->
+                    if (uri != null) {
+                        avatarUploading = true
+                        scope.launch {
+                            try {
+                                // Compress to 128x128 WebP
+                                val input = context.contentResolver.openInputStream(uri)
+                                val bmp = android.graphics.BitmapFactory.decodeStream(input)
+                                input?.close()
+                                if (bmp != null) {
+                                    val size = 128
+                                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, size, size, true)
+                                    val baos = java.io.ByteArrayOutputStream()
+                                    scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, 80, baos)
+                                    val bytes = baos.toByteArray()
+
+                                    // Compute SHA-256 hash
+                                    val digest = java.security.MessageDigest.getInstance("SHA-256")
+                                    val hashBytes = digest.digest(bytes)
+                                    val hashHex = hashBytes.joinToString("") { "%02x".format(it) }
+
+                                    // Save avatar locally
+                                    val avatarFile = java.io.File(context.filesDir, "my_avatar.webp")
+                                    avatarFile.writeBytes(bytes)
+
+                                    // Set on-chain
+                                    com.privimemobile.chat.ChatService.identity.setAvatar(hashHex) { success, err ->
+                                        avatarUploading = false
+                                        if (success) {
+                                            toast("Profile picture updated (TX pending)")
+                                            // Distribute to contacts via SBBS
+                                            scope.launch {
+                                                distributeAvatarToContacts(context, bytes, hashHex)
+                                            }
+                                        } else {
+                                            toast(err ?: "Failed to set avatar")
+                                        }
+                                    }
+                                } else {
+                                    avatarUploading = false
+                                    toast("Failed to decode image")
+                                }
+                            } catch (e: Exception) {
+                                avatarUploading = false
+                                toast("Error: ${e.message}")
+                            }
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { avatarPicker.launch("image/*") },
+                        enabled = !avatarUploading,
+                        colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        if (avatarUploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.textDark, strokeWidth = 2.dp)
+                        else Text(if (chatState?.myAvatarCid != null) "Change" else "Set Picture", color = C.textDark, fontSize = 13.sp)
+                    }
+                    if (chatState?.myAvatarCid != null) {
+                        OutlinedButton(
+                            onClick = {
+                                avatarUploading = true
+                                com.privimemobile.chat.ChatService.identity.setAvatar(null) { success, err ->
+                                    avatarUploading = false
+                                    if (success) toast("Profile picture removed")
+                                    else toast(err ?: "Failed")
+                                }
+                            },
+                            enabled = !avatarUploading,
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text("Remove", color = C.error, fontSize = 13.sp)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
                 // Update Messaging Address
                 Row(
                     modifier = Modifier
@@ -1311,4 +1408,35 @@ private fun PasswordField(value: String, onValueChange: (String) -> Unit, placeh
             focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
         ),
     )
+}
+
+/** Distribute avatar image to all contacts via SBBS profile_update message. */
+private suspend fun distributeAvatarToContacts(context: android.content.Context, imageBytes: ByteArray, hashHex: String) {
+    val db = com.privimemobile.chat.ChatService.db ?: return
+    val state = db.chatStateDao().get() ?: return
+    val myHandle = state.myHandle ?: return
+    val contacts = db.contactDao().getAll()
+
+    val base64Data = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
+
+    for (contact in contacts) {
+        val walletId = contact.walletId ?: continue
+        try {
+            val payload = mapOf(
+                "v" to 1, "t" to "profile_update",
+                "ts" to System.currentTimeMillis() / 1000,
+                "from" to myHandle,
+                "to" to contact.handle,
+                "dn" to (state.myDisplayName ?: ""),
+                "avatar_hash" to hashHex,
+                "avatar_data" to base64Data,
+                "avatar_mime" to "image/webp",
+            )
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+            kotlinx.coroutines.delay(500) // small delay between sends
+        } catch (e: Exception) {
+            android.util.Log.w("Settings", "Failed to send avatar to ${contact.handle}: ${e.message}")
+        }
+    }
+    android.util.Log.d("Settings", "Avatar distributed to ${contacts.size} contacts")
 }

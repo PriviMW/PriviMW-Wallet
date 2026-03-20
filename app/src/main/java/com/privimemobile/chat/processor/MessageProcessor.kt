@@ -112,6 +112,7 @@ class MessageProcessor(
             "disappear_config" -> handleDisappearConfig(payload, convKey)
             "poll_vote" -> handlePollVote(payload, convKey, from, false)
             "poll_unvote" -> handlePollVote(payload, convKey, from, true)
+            "profile_update" -> handleProfileUpdate(payload, from)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
                 if (!sent) ChatService.clearTyping(convKey)
@@ -415,6 +416,35 @@ class MessageProcessor(
     }
 
     /** Handle message edit. */
+    /** Handle profile_update: receive avatar image from contact. */
+    private suspend fun handleProfileUpdate(payload: Map<String, Any?>, from: String) {
+        val avatarHash = payload["avatar_hash"] as? String ?: return
+        val avatarData = payload["avatar_data"] as? String // base64
+        val displayName = com.privimemobile.protocol.Helpers.fixBvmUtf8(payload["dn"] as? String)
+
+        // Update contact's avatar hash
+        db.contactDao().updateAvatarHash(from, avatarHash)
+
+        // Update display name if provided
+        if (displayName != null) {
+            db.contactDao().updateDisplayName(from, displayName)
+        }
+
+        // Save avatar image locally if data provided
+        if (avatarData != null) {
+            try {
+                val bytes = android.util.Base64.decode(avatarData, android.util.Base64.NO_WRAP)
+                val cacheDir = com.privimemobile.chat.transport.IpfsTransport.cacheDir ?: return
+                val avatarDir = java.io.File(cacheDir.parentFile, "avatars").also { it.mkdirs() }
+                val avatarFile = java.io.File(avatarDir, "${from}.webp")
+                avatarFile.writeBytes(bytes)
+                Log.d(TAG, "Saved avatar for @$from (${bytes.size} bytes, hash=$avatarHash)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save avatar for @$from: ${e.message}")
+            }
+        }
+    }
+
     private suspend fun handleEdit(payload: Map<String, Any?>, convKey: String, from: String) {
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val newText = payload["msg"] as? String ?: return

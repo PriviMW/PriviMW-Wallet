@@ -71,16 +71,16 @@ class ContactManager(
 
             val walletId = Helpers.normalizeWalletId(result["wallet_id"] as? String ?: "")
             val displayName = Helpers.fixBvmUtf8(result["display_name"] as? String)
-            val avatarCid = result["avatar_cid"] as? String
+            val avatarHash = (result["avatar_hash"] as? String) ?: (result["avatar_cid"] as? String)
             val height = (result["registered_height"] as? Number)?.toLong() ?: 0
 
             if (walletId == null) return null
 
             // Update contact in DB
-            db.contactDao().updateResolved(handle, walletId, displayName, avatarCid, height)
+            db.contactDao().updateResolved(handle, walletId, displayName, avatarHash, height)
 
             // Also update conversation display info
-            db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarCid)
+            db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarHash)
 
             return db.contactDao().findByHandle(handle)
         } catch (e: Exception) {
@@ -113,14 +113,14 @@ class ContactManager(
 
             val handle = result["handle"] as? String ?: return null
             val displayName = Helpers.fixBvmUtf8(result["display_name"] as? String)
-            val avatarCid = result["avatar_cid"] as? String
+            val avatarHash = (result["avatar_hash"] as? String) ?: (result["avatar_cid"] as? String)
             val height = (result["registered_height"] as? Number)?.toLong() ?: 0
 
             db.contactDao().upsert(ContactEntity(
                 handle = handle,
                 walletId = normalized,
                 displayName = displayName,
-                avatarCid = avatarCid,
+                avatarCid = avatarHash,
                 registeredHeight = height,
                 lastResolvedAt = System.currentTimeMillis() / 1000,
             ))

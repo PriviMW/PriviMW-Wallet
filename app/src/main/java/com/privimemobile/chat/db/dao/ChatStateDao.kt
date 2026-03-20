@@ -49,9 +49,9 @@ interface ChatStateDao {
     @Query("UPDATE chat_state SET registration_fee = :fee WHERE id = 1")
     suspend fun updateRegistrationFee(fee: Long)
 
-    /** Update avatar CID. */
-    @Query("UPDATE chat_state SET my_avatar_cid = :cid WHERE id = 1")
-    suspend fun updateAvatarCid(cid: String?)
+    /** Update avatar hash (stored in my_avatar_cid column). */
+    @Query("UPDATE chat_state SET my_avatar_cid = :hash WHERE id = 1")
+    suspend fun updateAvatarHash(hash: String?)
 
     /** Clear identity (handle released). */
     @Query("""

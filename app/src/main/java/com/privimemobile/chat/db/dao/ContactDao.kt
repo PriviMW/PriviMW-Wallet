@@ -62,6 +62,18 @@ interface ContactDao {
         resolvedAt: Long = System.currentTimeMillis() / 1000,
     )
 
+    /** Get all contacts (non-Flow, for iteration). */
+    @Query("SELECT * FROM contacts")
+    suspend fun getAll(): List<ContactEntity>
+
+    /** Update avatar hash for a contact. */
+    @Query("UPDATE contacts SET avatar_cid = :avatarHash WHERE handle = :handle")
+    suspend fun updateAvatarHash(handle: String, avatarHash: String?)
+
+    /** Update display name for a contact. */
+    @Query("UPDATE contacts SET display_name = :displayName WHERE handle = :handle")
+    suspend fun updateDisplayName(handle: String, displayName: String?)
+
     /** Get contacts that need resolution (no wallet_id or stale). */
     @Query("SELECT * FROM contacts WHERE wallet_id IS NULL OR last_resolved_at < :staleThreshold")
     suspend fun getUnresolved(staleThreshold: Long): List<ContactEntity>

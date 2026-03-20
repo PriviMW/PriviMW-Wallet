@@ -317,26 +317,27 @@ fun SettingsScreen(
                 Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(vertical = 8.dp))
                 var avatarUploading by remember { mutableStateOf(false) }
+                var avatarVersion by remember { mutableStateOf(0) }  // triggers recomposition on change
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val myAvatarPath = remember { java.io.File(context.filesDir, "my_avatar.webp").let { if (it.exists()) it.absolutePath else null } }
+                    val myAvatarPath = remember(avatarVersion) { java.io.File(context.filesDir, "my_avatar.webp").let { if (it.exists()) it.absolutePath else null } }
                     com.privimemobile.ui.components.AvatarPicker(
                         currentAvatarPath = myAvatarPath,
                         initialLetter = chatState?.myDisplayName?.take(1) ?: chatState?.myHandle?.take(1) ?: "?",
                         size = 80.dp,
+                        cacheVersion = avatarVersion,
                     ) { result ->
-                        avatarUploading = true
-                        // Save locally
+                        // Save locally + distribute via SBBS (no on-chain TX needed for 1-on-1)
                         java.io.File(context.filesDir, "my_avatar.webp").writeBytes(result.bytes)
-                        // Set on-chain
-                        com.privimemobile.chat.ChatService.identity.setAvatar(result.hashHex) { success, err ->
-                            avatarUploading = false
-                            if (success) {
-                                toast("Profile picture updated (TX pending)")
-                                scope.launch { distributeAvatarToContacts(context, result.bytes, result.hashHex) }
-                            } else toast(err ?: "Failed to set avatar")
+                        avatarVersion++
+                        toast("Profile picture updated")
+                        scope.launch {
+                            // Store hash in local DB
+                            com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(result.hashHex)
+                            // Distribute to all contacts via SBBS
+                            distributeAvatarToContacts(context, result.bytes, result.hashHex)
                         }
                     }
                     Spacer(Modifier.width(16.dp))
@@ -350,12 +351,10 @@ fun SettingsScreen(
                             Spacer(Modifier.height(4.dp))
                             Text("Remove", color = C.error, fontSize = 13.sp,
                                 modifier = Modifier.clickable {
-                                    avatarUploading = true
-                                    com.privimemobile.chat.ChatService.identity.setAvatar(null) { success, err ->
-                                        avatarUploading = false
-                                        if (success) { java.io.File(context.filesDir, "my_avatar.webp").delete(); toast("Removed") }
-                                        else toast(err ?: "Failed")
-                                    }
+                                    java.io.File(context.filesDir, "my_avatar.webp").delete()
+                                    avatarVersion++
+                                    scope.launch { com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(null) }
+                                    toast("Profile picture removed")
                                 })
                         }
                     }

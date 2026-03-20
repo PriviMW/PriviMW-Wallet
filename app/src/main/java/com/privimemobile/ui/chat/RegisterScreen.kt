@@ -56,11 +56,11 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
 
     LaunchedEffect(txStatus) {
         if (txStatus == "confirmed") {
-            // Set avatar if one was selected during registration
+            // Save avatar locally if one was selected during registration (no TX needed)
             if (avatarResult != null) {
                 try {
                     java.io.File(context.filesDir, "my_avatar.webp").writeBytes(avatarResult!!.bytes)
-                    ChatService.identity.setAvatar(avatarResult!!.hashHex, null)
+                    ChatService.db?.chatStateDao()?.updateAvatarHash(avatarResult!!.hashHex)
                 } catch (_: Exception) {}
             }
             delay(1500)

@@ -82,6 +82,18 @@ class ContactManager(
             // Also update conversation display info
             db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarHash)
 
+            // Request avatar if hash exists but no cached file
+            if (!avatarHash.isNullOrEmpty() && avatarHash != "0000000000000000000000000000000000000000000000000000000000000000") {
+                val avatarFile = java.io.File(
+                    com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return db.contactDao().findByHandle(handle),
+                    "avatars/$handle.webp"
+                )
+                if (!avatarFile.exists()) {
+                    // Request avatar from contact
+                    requestAvatar(handle, walletId)
+                }
+            }
+
             return db.contactDao().findByHandle(handle)
         } catch (e: Exception) {
             Log.e(TAG, "resolveHandle($handle) failed: ${e.message}")
@@ -183,6 +195,23 @@ class ContactManager(
             for (contact in unresolved) {
                 resolveHandle(contact.handle)
             }
+        }
+    }
+
+    /** Send avatar_request to a contact. */
+    private suspend fun requestAvatar(handle: String, walletId: String) {
+        try {
+            val state = db.chatStateDao().get() ?: return
+            val myHandle = state.myHandle ?: return
+            val payload = mapOf(
+                "v" to 1, "t" to "avatar_request",
+                "ts" to System.currentTimeMillis() / 1000,
+                "from" to myHandle, "to" to handle,
+            )
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+            Log.d(TAG, "Sent avatar_request to @$handle")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to request avatar from @$handle: ${e.message}")
         }
     }
 }

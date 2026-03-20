@@ -36,10 +36,12 @@ object IpfsTransport {
 
     // File cache directory
     internal var cacheDir: File? = null
+    internal var filesDir: File? = null
     private const val MAX_CACHED_FILES = 100
 
     fun init(context: Context) {
         cacheDir = File(context.cacheDir, "privime-files").also { it.mkdirs() }
+        filesDir = context.filesDir
     }
 
     // === Encryption ===

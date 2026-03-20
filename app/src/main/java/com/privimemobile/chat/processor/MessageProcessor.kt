@@ -113,6 +113,8 @@ class MessageProcessor(
             "poll_vote" -> handlePollVote(payload, convKey, from, false)
             "poll_unvote" -> handlePollVote(payload, convKey, from, true)
             "profile_update" -> handleProfileUpdate(payload, from)
+            "avatar_request" -> handleAvatarRequest(from, senderWalletId)
+            "avatar_response" -> handleAvatarResponse(payload, from)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
                 if (!sent) ChatService.clearTyping(convKey)
@@ -416,29 +418,115 @@ class MessageProcessor(
     }
 
     /** Handle message edit. */
-    /** Handle profile_update: receive avatar image from contact. */
+    /** Rate-limit avatar responses: max 1 per contact per hour. */
+    private val avatarResponseTimes = mutableMapOf<String, Long>()
+
+    /** Handle avatar_request: someone wants our avatar. Auto-respond (with security checks). */
+    private suspend fun handleAvatarRequest(from: String, senderWalletId: String?) {
+        if (senderWalletId.isNullOrEmpty()) return
+
+        // Security: only respond to known contacts
+        val contact = db.contactDao().findByHandle(from) ?: run {
+            Log.d(TAG, "Ignoring avatar_request from unknown handle @$from")
+            return
+        }
+
+        // Security: rate-limit — max 1 response per contact per hour
+        val now = System.currentTimeMillis() / 1000
+        val lastResponse = avatarResponseTimes[from] ?: 0
+        if (now - lastResponse < 3600) {
+            Log.d(TAG, "Rate-limited avatar_request from @$from (last=${now - lastResponse}s ago)")
+            return
+        }
+
+        val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+        val myAvatarFile = java.io.File(filesDir, "my_avatar.webp")
+        if (!myAvatarFile.exists()) return
+
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+        val avatarHash = state.myAvatarCid ?: return
+
+        val bytes = myAvatarFile.readBytes()
+        val base64Data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+
+        val payload = mapOf(
+            "v" to 1, "t" to "avatar_response",
+            "ts" to System.currentTimeMillis() / 1000,
+            "from" to myHandle, "to" to from,
+            "avatar_hash" to avatarHash,
+            "avatar_data" to base64Data,
+        )
+        ChatService.sbbs.sendWithRetry(senderWalletId, payload)
+        avatarResponseTimes[from] = now
+        Log.d(TAG, "Sent avatar_response to @$from (${bytes.size} bytes)")
+    }
+
+    /** Handle avatar_response: received avatar image we requested. Verify hash before saving. */
+    private suspend fun handleAvatarResponse(payload: Map<String, Any?>, from: String) {
+        val avatarData = payload["avatar_data"] as? String ?: return
+        val claimedHash = payload["avatar_hash"] as? String ?: return
+
+        // Security: verify image hash matches on-chain avatar_hash for this contact
+        val contact = db.contactDao().findByHandle(from)
+        val onChainHash = contact?.avatarCid
+        if (onChainHash != null && onChainHash != claimedHash) {
+            Log.w(TAG, "Avatar hash mismatch for @$from: claimed=$claimedHash, on-chain=$onChainHash — REJECTED")
+            return
+        }
+
+        // Verify SHA-256 of received data matches claimed hash
+        try {
+            val bytes = android.util.Base64.decode(avatarData, android.util.Base64.NO_WRAP)
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val computedHash = digest.digest(bytes).joinToString("") { "%02x".format(it) }
+            if (computedHash != claimedHash) {
+                Log.w(TAG, "Avatar data hash mismatch for @$from: computed=$computedHash, claimed=$claimedHash — REJECTED")
+                return
+            }
+
+            // Hash verified — safe to save
+            val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+            val avatarDir = java.io.File(filesDir, "avatars").also { it.mkdirs() }
+            val avatarFile = java.io.File(avatarDir, "${from}.webp")
+            avatarFile.writeBytes(bytes)
+            db.contactDao().updateAvatarHash(from, claimedHash)
+            Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to process avatar for @$from: ${e.message}")
+        }
+    }
+
+    /** Handle profile_update: receive avatar image from contact (with hash verification). */
     private suspend fun handleProfileUpdate(payload: Map<String, Any?>, from: String) {
         val avatarHash = payload["avatar_hash"] as? String ?: return
-        val avatarData = payload["avatar_data"] as? String // base64
+        val avatarData = payload["avatar_data"] as? String
         val displayName = com.privimemobile.protocol.Helpers.fixBvmUtf8(payload["dn"] as? String)
-
-        // Update contact's avatar hash
-        db.contactDao().updateAvatarHash(from, avatarHash)
 
         // Update display name if provided
         if (displayName != null) {
             db.contactDao().updateDisplayName(from, displayName)
         }
 
-        // Save avatar image locally if data provided
+        // Save avatar image locally if data provided (with hash verification)
         if (avatarData != null) {
             try {
                 val bytes = android.util.Base64.decode(avatarData, android.util.Base64.NO_WRAP)
-                val cacheDir = com.privimemobile.chat.transport.IpfsTransport.cacheDir ?: return
-                val avatarDir = java.io.File(cacheDir.parentFile, "avatars").also { it.mkdirs() }
+
+                // Verify SHA-256 hash matches claimed hash
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val computedHash = digest.digest(bytes).joinToString("") { "%02x".format(it) }
+                if (computedHash != avatarHash) {
+                    Log.w(TAG, "profile_update avatar hash mismatch for @$from — REJECTED")
+                    return
+                }
+
+                val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+                val avatarDir = java.io.File(filesDir, "avatars").also { it.mkdirs() }
                 val avatarFile = java.io.File(avatarDir, "${from}.webp")
                 avatarFile.writeBytes(bytes)
-                Log.d(TAG, "Saved avatar for @$from (${bytes.size} bytes, hash=$avatarHash)")
+                db.contactDao().updateAvatarHash(from, avatarHash)
+                Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save avatar for @$from: ${e.message}")
             }

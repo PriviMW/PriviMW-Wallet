@@ -134,4 +134,20 @@ interface MessageDao {
     /** Soft-delete expired disappearing messages (preserves dedup keys to block SBBS re-delivery). */
     @Query("UPDATE messages SET deleted = 1 WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun deleteExpired(now: Long): Int
+
+    /** Get all pending scheduled messages ready to send. */
+    @Query("SELECT * FROM messages WHERE scheduled_at > 0 AND scheduled_at <= :now AND deleted = 0 AND sent = 1")
+    suspend fun getReadyScheduledMessages(now: Long): List<MessageEntity>
+
+    /** Clear scheduled_at after sending (marks as sent). */
+    @Query("UPDATE messages SET scheduled_at = 0 WHERE id = :messageId")
+    suspend fun clearScheduled(messageId: Long)
+
+    /** Cancel a scheduled message (soft-delete). */
+    @Query("UPDATE messages SET deleted = 1 WHERE id = :messageId AND scheduled_at > 0")
+    suspend fun cancelScheduled(messageId: Long)
+
+    /** Update message timestamp (used when scheduled message is actually sent). */
+    @Query("UPDATE messages SET timestamp = :newTs WHERE id = :messageId")
+    suspend fun updateTimestamp(messageId: Long, newTs: Long)
 }

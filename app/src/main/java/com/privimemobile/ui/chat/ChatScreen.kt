@@ -189,6 +189,7 @@ fun ChatScreen(
             pinned = entity.pinned,
             pinnedAt = entity.pinnedAt,
             pollData = entity.pollData,
+            scheduledAt = entity.scheduledAt,
             file = if (att != null) FileAttachment(
                 cid = att.ipfsCid ?: "",
                 name = att.fileName,
@@ -299,6 +300,7 @@ fun ChatScreen(
         }
     }
     var showCommandMenu by remember { mutableStateOf(false) }
+    var showSchedulePicker by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     // showDisappearPicker removed — per-message self-destruct replaces conversation-level timer
@@ -463,6 +465,37 @@ fun ChatScreen(
 
     // Send cooldown — 1s between sends to prevent spam
     var lastSendTime by remember { mutableStateOf(0L) }
+
+    // Schedule a message for later sending
+    fun scheduleMessage(text: String, scheduledAt: Long) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        scope.launch {
+            val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get() ?: return@launch
+            val myHandle = state.myHandle ?: return@launch
+            val ts = System.currentTimeMillis() / 1000
+            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+            val dedupKey = "$ts:${trimmed.hashCode().toString(16)}:scheduled:true"
+            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                conversationId = conv.id,
+                text = trimmed,
+                timestamp = ts,
+                sent = true,
+                type = "dm",
+                senderHandle = myHandle,
+                sbbsDedupKey = dedupKey,
+                scheduledAt = scheduledAt,
+            )
+            com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+            val sdf = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
+            val timeStr = sdf.format(java.util.Date(scheduledAt * 1000))
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Message scheduled for $timeStr", Toast.LENGTH_LONG).show()
+            }
+        }
+        setInputText("")
+    }
 
     // Send message
     fun handleSend() {
@@ -2257,7 +2290,13 @@ fun ChatScreen(
                             }
                         } else {
                             Box(
-                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent).clickable { handleSend() },
+                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = { handleSend() },
+                                            onLongPress = { showSchedulePicker = true },
+                                        )
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = C.textDark, modifier = Modifier.size(22.dp))
@@ -2529,6 +2568,134 @@ fun ChatScreen(
             )
         }
 
+        // ── Schedule message picker ──
+        if (showSchedulePicker) {
+            val scheduleOptions = listOf(
+                "10min" to "In 10 minutes",
+                "30min" to "In 30 minutes",
+                "1h" to "In 1 hour",
+                "3h" to "In 3 hours",
+                "tomorrow" to "Tomorrow morning (9:00 AM)",
+                "custom" to "Pick date & time...",
+            )
+            var showCustomDateTime by remember { mutableStateOf(false) }
+
+            if (!showCustomDateTime) {
+                AlertDialog(
+                    onDismissRequest = { showSchedulePicker = false },
+                    containerColor = C.card,
+                    title = { Text("Schedule Message", color = C.text, fontWeight = FontWeight.SemiBold) },
+                    text = {
+                        Column {
+                            Text("Long-press send to schedule", color = C.textSecondary, fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 8.dp))
+                            scheduleOptions.forEach { (key, label) ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            if (key == "custom") {
+                                                showCustomDateTime = true
+                                            } else {
+                                                val now = System.currentTimeMillis() / 1000
+                                                val scheduledAt = when (key) {
+                                                    "10min" -> now + 600
+                                                    "30min" -> now + 1800
+                                                    "1h" -> now + 3600
+                                                    "3h" -> now + 10800
+                                                    "tomorrow" -> {
+                                                        val cal = java.util.Calendar.getInstance()
+                                                        cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                                        cal.set(java.util.Calendar.HOUR_OF_DAY, 9)
+                                                        cal.set(java.util.Calendar.MINUTE, 0)
+                                                        cal.set(java.util.Calendar.SECOND, 0)
+                                                        cal.timeInMillis / 1000
+                                                    }
+                                                    else -> now + 600
+                                                }
+                                                scheduleMessage(inputText.text, scheduledAt)
+                                                showSchedulePicker = false
+                                            }
+                                        }
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(if (key == "custom") "\uD83D\uDCC5" else "\u23F0", fontSize = 18.sp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(label, color = C.text, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            } else {
+                // Two-step: date picker → time picker
+                var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
+
+                if (selectedDateMillis == null) {
+                    // Step 1: Date picker
+                    val dateState = rememberDatePickerState()
+                    DatePickerDialog(
+                        onDismissRequest = { showCustomDateTime = false; showSchedulePicker = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val millis = dateState.selectedDateMillis
+                                if (millis != null) selectedDateMillis = millis
+                            }) { Text("Next", color = C.accent) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showCustomDateTime = false; showSchedulePicker = false }) {
+                                Text("Cancel", color = C.textSecondary)
+                            }
+                        },
+                    ) {
+                        DatePicker(state = dateState, colors = DatePickerDefaults.colors(containerColor = C.card))
+                    }
+                } else {
+                    // Step 2: Time picker
+                    val cal = java.util.Calendar.getInstance()
+                    val initMin = cal.get(java.util.Calendar.MINUTE) + 5
+                    val timeState = rememberTimePickerState(
+                        initialHour = cal.get(java.util.Calendar.HOUR_OF_DAY) + initMin / 60,
+                        initialMinute = initMin % 60,
+                    )
+                    AlertDialog(
+                        onDismissRequest = { showCustomDateTime = false; showSchedulePicker = false },
+                        containerColor = C.card,
+                        title = { Text("Pick time", color = C.text, fontWeight = FontWeight.SemiBold) },
+                        text = {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                TimePicker(state = timeState)
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val dateCal = java.util.Calendar.getInstance()
+                                dateCal.timeInMillis = selectedDateMillis!!
+                                dateCal.set(java.util.Calendar.HOUR_OF_DAY, timeState.hour)
+                                dateCal.set(java.util.Calendar.MINUTE, timeState.minute)
+                                dateCal.set(java.util.Calendar.SECOND, 0)
+                                val scheduledAt = dateCal.timeInMillis / 1000
+                                val now = System.currentTimeMillis() / 1000
+                                if (scheduledAt > now) {
+                                    scheduleMessage(inputText.text, scheduledAt)
+                                } else {
+                                    Toast.makeText(context, "Time must be in the future", Toast.LENGTH_SHORT).show()
+                                }
+                                showCustomDateTime = false
+                                showSchedulePicker = false
+                            }) { Text("Schedule", color = C.accent) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { selectedDateMillis = null }) {
+                                Text("Back", color = C.textSecondary)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
         // ── Date jump picker ──
         if (showDatePicker) {
             val datePickerState = rememberDatePickerState()
@@ -2778,9 +2945,46 @@ fun ChatScreen(
                             }
                         }
 
+                        // Resend option for sent messages not yet delivered
+                        if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L && targetMsg.type == "dm") {
+                            MenuItemRow("Resend") {
+                                scope.launch {
+                                    val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                    val wid = resolvedWalletId
+                                    if (state?.myHandle != null && !wid.isNullOrEmpty()) {
+                                        val payload = mapOf(
+                                            "v" to 1, "t" to "dm",
+                                            "ts" to targetMsg.timestamp,
+                                            "from" to state.myHandle!!, "to" to handle,
+                                            "dn" to (state.myDisplayName ?: ""),
+                                            "msg" to targetMsg.text,
+                                        )
+                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(wid, payload)
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                                contextMenuMsg = null
+                            }
+                        }
+
                         MenuItemRow("Select") {
                             selectionMode = true; selectedIds.clear()
                             selectedIds.add(targetMsg.id); contextMenuMsg = null
+                        }
+
+                        // Cancel scheduled message option
+                        if (targetMsg.scheduledAt > 0) {
+                            MenuItemRow("Cancel scheduled", color = C.error) {
+                                val cid = convId
+                                scope.launch {
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.cancelScheduled(targetMsg.id.toLong())
+                                    refreshConversationPreview(cid)
+                                }
+                                contextMenuMsg = null
+                                Toast.makeText(context, "Scheduled message cancelled", Toast.LENGTH_SHORT).show()
+                            }
                         }
 
                         MenuItemRow("Delete for me", color = C.error) {
@@ -3377,13 +3581,18 @@ private fun MessageBubble(
                         color = C.textSecondary,
                         fontSize = 10.sp,
                     )
-                    // Status ticks for sent messages: ✓ sent, ✓✓ delivered, ✓✓ read (blue)
+                    // Status ticks or schedule indicator
                     if (isMine) {
                         Spacer(Modifier.width(6.dp))
-                        when {
-                            msg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
-                            msg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
-                            else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
+                        if (msg.scheduledAt > 0) {
+                            val sdf = remember { java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()) }
+                            Text(
+                                "\uD83D\uDD52 ${sdf.format(java.util.Date(msg.scheduledAt * 1000))}",
+                                color = C.accent,
+                                fontSize = 9.sp,
+                            )
+                        } else {
+                            TickIndicator(read = msg.read, delivered = msg.delivered)
                         }
                     }
                 }

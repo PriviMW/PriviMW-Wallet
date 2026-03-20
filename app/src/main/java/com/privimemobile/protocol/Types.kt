@@ -50,6 +50,7 @@ data class ChatMessage(
     val pinned: Boolean = false,    // message is pinned
     val pinnedAt: Long = 0,        // 0=not pinned, unix seconds when pinned
     val pollData: String? = null,  // JSON poll data
+    val scheduledAt: Long = 0,     // 0=sent, >0=unix seconds when scheduled to send
 )
 
 /** A conversation (aggregated from messages). */

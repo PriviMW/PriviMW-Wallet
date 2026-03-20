@@ -136,14 +136,17 @@ object ChatService {
             }
         }
 
-        // Periodic cleanup of expired disappearing messages (immediate + every 15s)
+        // Periodic cleanup of expired messages + send scheduled messages (immediate + every 15s)
         scope.launch {
-            // Run immediately on startup to clear any expired msgs from previous session
             try { cleanupExpiredMessages() } catch (_: Exception) {}
+            try { sendScheduledMessages() } catch (_: Exception) {}
             while (true) {
                 delay(15_000)
                 try { cleanupExpiredMessages() } catch (e: Exception) {
                     Log.w(TAG, "Disappearing cleanup error: ${e.message}")
+                }
+                try { sendScheduledMessages() } catch (e: Exception) {
+                    Log.w(TAG, "Scheduled send error: ${e.message}")
                 }
             }
         }
@@ -174,6 +177,42 @@ object ChatService {
                     // No messages left — clear preview
                     db?.conversationDao()?.updateLastMessage(convId, 0, null)
                 }
+            }
+        }
+    }
+
+    /** Send any scheduled messages whose time has arrived. */
+    private suspend fun sendScheduledMessages() {
+        val now = System.currentTimeMillis() / 1000
+        val ready = db?.messageDao()?.getReadyScheduledMessages(now) ?: return
+        if (ready.isEmpty()) return
+        val state = db?.chatStateDao()?.get() ?: return
+        val myHandle = state.myHandle ?: return
+
+        for (msg in ready) {
+            try {
+                val conv = db?.conversationDao()?.findById(msg.conversationId) ?: continue
+                val contactHandle = conv.convKey.removePrefix("@")
+                val contact = db?.contactDao()?.findByHandle(contactHandle)
+                val walletId = contact?.walletId ?: continue
+
+                val ts = System.currentTimeMillis() / 1000
+                val payload = mutableMapOf<String, Any?>(
+                    "v" to 1, "t" to "dm", "ts" to ts,
+                    "from" to myHandle, "to" to contactHandle,
+                    "dn" to (state.myDisplayName ?: ""),
+                    "msg" to (msg.text ?: ""),
+                )
+                sbbs.sendWithRetry(walletId, payload)
+                // Update message: clear scheduled_at + move timestamp to actual send time
+                db?.messageDao()?.clearScheduled(msg.id)
+                db?.messageDao()?.updateTimestamp(msg.id, ts)
+                // Update conversation preview
+                val preview = msg.text?.take(100)
+                db?.conversationDao()?.updateLastMessage(msg.conversationId, ts, preview)
+                Log.d(TAG, "Sent scheduled message id=${msg.id} to @$contactHandle at ts=$ts")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send scheduled msg id=${msg.id}: ${e.message}")
             }
         }
     }

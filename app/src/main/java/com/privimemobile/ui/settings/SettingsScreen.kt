@@ -314,97 +314,49 @@ fun SettingsScreen(
                 }
 
                 // Profile Picture
+                Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 8.dp))
+                var avatarUploading by remember { mutableStateOf(false) }
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.weight(1f))
-                    if (chatState?.myAvatarCid != null) {
-                        Text("Set", color = C.textSecondary, fontSize = 12.sp)
-                    } else {
-                        Text("Not set", color = C.textMuted, fontSize = 12.sp)
-                    }
-                }
-                var avatarUploading by remember { mutableStateOf(false) }
-                val avatarPicker = rememberLauncherForActivityResult(
-                    contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
-                ) { uri ->
-                    if (uri != null) {
+                    val myAvatarPath = remember { java.io.File(context.filesDir, "my_avatar.webp").let { if (it.exists()) it.absolutePath else null } }
+                    com.privimemobile.ui.components.AvatarPicker(
+                        currentAvatarPath = myAvatarPath,
+                        initialLetter = chatState?.myDisplayName?.take(1) ?: chatState?.myHandle?.take(1) ?: "?",
+                        size = 80.dp,
+                    ) { result ->
                         avatarUploading = true
-                        scope.launch {
-                            try {
-                                // Compress to 128x128 WebP
-                                val input = context.contentResolver.openInputStream(uri)
-                                val bmp = android.graphics.BitmapFactory.decodeStream(input)
-                                input?.close()
-                                if (bmp != null) {
-                                    val size = 128
-                                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, size, size, true)
-                                    val baos = java.io.ByteArrayOutputStream()
-                                    scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, 80, baos)
-                                    val bytes = baos.toByteArray()
-
-                                    // Compute SHA-256 hash
-                                    val digest = java.security.MessageDigest.getInstance("SHA-256")
-                                    val hashBytes = digest.digest(bytes)
-                                    val hashHex = hashBytes.joinToString("") { "%02x".format(it) }
-
-                                    // Save avatar locally
-                                    val avatarFile = java.io.File(context.filesDir, "my_avatar.webp")
-                                    avatarFile.writeBytes(bytes)
-
-                                    // Set on-chain
-                                    com.privimemobile.chat.ChatService.identity.setAvatar(hashHex) { success, err ->
-                                        avatarUploading = false
-                                        if (success) {
-                                            toast("Profile picture updated (TX pending)")
-                                            // Distribute to contacts via SBBS
-                                            scope.launch {
-                                                distributeAvatarToContacts(context, bytes, hashHex)
-                                            }
-                                        } else {
-                                            toast(err ?: "Failed to set avatar")
-                                        }
-                                    }
-                                } else {
-                                    avatarUploading = false
-                                    toast("Failed to decode image")
-                                }
-                            } catch (e: Exception) {
-                                avatarUploading = false
-                                toast("Error: ${e.message}")
-                            }
+                        // Save locally
+                        java.io.File(context.filesDir, "my_avatar.webp").writeBytes(result.bytes)
+                        // Set on-chain
+                        com.privimemobile.chat.ChatService.identity.setAvatar(result.hashHex) { success, err ->
+                            avatarUploading = false
+                            if (success) {
+                                toast("Profile picture updated (TX pending)")
+                                scope.launch { distributeAvatarToContacts(context, result.bytes, result.hashHex) }
+                            } else toast(err ?: "Failed to set avatar")
                         }
                     }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { avatarPicker.launch("image/*") },
-                        enabled = !avatarUploading,
-                        colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        if (avatarUploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.textDark, strokeWidth = 2.dp)
-                        else Text(if (chatState?.myAvatarCid != null) "Change" else "Set Picture", color = C.textDark, fontSize = 13.sp)
-                    }
-                    if (chatState?.myAvatarCid != null) {
-                        OutlinedButton(
-                            onClick = {
-                                avatarUploading = true
-                                com.privimemobile.chat.ChatService.identity.setAvatar(null) { success, err ->
-                                    avatarUploading = false
-                                    if (success) toast("Profile picture removed")
-                                    else toast(err ?: "Failed")
-                                }
-                            },
-                            enabled = !avatarUploading,
-                            shape = RoundedCornerShape(8.dp),
-                        ) {
-                            Text("Remove", color = C.error, fontSize = 13.sp)
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text("Tap to change", color = C.textSecondary, fontSize = 13.sp)
+                        if (avatarUploading) {
+                            Spacer(Modifier.height(4.dp))
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
+                        }
+                        if (chatState?.myAvatarCid != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("Remove", color = C.error, fontSize = 13.sp,
+                                modifier = Modifier.clickable {
+                                    avatarUploading = true
+                                    com.privimemobile.chat.ChatService.identity.setAvatar(null) { success, err ->
+                                        avatarUploading = false
+                                        if (success) { java.io.File(context.filesDir, "my_avatar.webp").delete(); toast("Removed") }
+                                        else toast(err ?: "Failed")
+                                    }
+                                })
                         }
                     }
                 }

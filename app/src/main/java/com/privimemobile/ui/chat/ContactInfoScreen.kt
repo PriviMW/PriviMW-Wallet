@@ -141,15 +141,11 @@ fun ContactInfoScreen(
                     .padding(vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(avatarBg),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(initial, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                }
+                com.privimemobile.ui.components.AvatarDisplay(
+                    handle = handle,
+                    displayName = resolvedName,
+                    size = 80.dp,
+                )
                 Spacer(Modifier.height(12.dp))
                 Text(resolvedName, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text("@$handle", color = C.textSecondary, fontSize = 14.sp)

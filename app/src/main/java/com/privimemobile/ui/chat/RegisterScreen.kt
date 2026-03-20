@@ -14,14 +14,18 @@ import androidx.compose.ui.unit.sp
 import com.privimemobile.chat.ChatService
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
+import com.privimemobile.ui.components.AvatarPicker
+import com.privimemobile.ui.components.AvatarResult
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var handle by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
+    var avatarResult by remember { mutableStateOf<AvatarResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var registering by remember { mutableStateOf(false) }
     var handleStatus by remember { mutableStateOf("idle") }
@@ -52,6 +56,13 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
 
     LaunchedEffect(txStatus) {
         if (txStatus == "confirmed") {
+            // Set avatar if one was selected during registration
+            if (avatarResult != null) {
+                try {
+                    java.io.File(context.filesDir, "my_avatar.webp").writeBytes(avatarResult!!.bytes)
+                    ChatService.identity.setAvatar(avatarResult!!.hashHex, null)
+                } catch (_: Exception) {}
+            }
             delay(1500)
             onRegistered()
         }
@@ -158,6 +169,27 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 focusedLabelColor = C.accent, cursorColor = C.accent,
             ),
         )
+
+        // Profile Picture (optional)
+        Spacer(Modifier.height(16.dp))
+        Text("Profile Picture (optional)", color = C.textSecondary, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AvatarPicker(
+                initialLetter = displayName.ifEmpty { handle }.take(1).ifEmpty { "?" },
+                size = 72.dp,
+            ) { result -> avatarResult = result }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                if (avatarResult != null) {
+                    Text("Picture selected", color = C.accent, fontSize = 13.sp)
+                    Text("Will be set after registration", color = C.textMuted, fontSize = 11.sp)
+                } else {
+                    Text("Tap to add a photo", color = C.textSecondary, fontSize = 13.sp)
+                    Text("You can add one later too", color = C.textMuted, fontSize = 11.sp)
+                }
+            }
+        }
 
         Spacer(Modifier.height(16.dp))
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = C.card), modifier = Modifier.fillMaxWidth()) {

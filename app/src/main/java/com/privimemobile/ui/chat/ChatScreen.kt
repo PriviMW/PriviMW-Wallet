@@ -1012,11 +1012,13 @@ fun ChatScreen(
                 val avatarBg = avatarColors[kotlin.math.abs(avatarKey.hashCode()) % avatarColors.size]
                 val initial = (resolvedName.removePrefix("@")).firstOrNull()?.uppercase() ?: "?"
                 Box(
-                    modifier = Modifier.size(38.dp).clip(CircleShape).background(avatarBg)
-                        .clickable { onContactInfo() },
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.clickable { onContactInfo() },
                 ) {
-                    Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    com.privimemobile.ui.components.AvatarDisplay(
+                        handle = handle,
+                        displayName = resolvedName,
+                        size = 38.dp,
+                    )
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(

@@ -584,13 +584,12 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Circular avatar with deterministic color
-            Box(
-                modifier = Modifier.size(52.dp).clip(CircleShape).background(avatarColor(avatarKey)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(initial, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            }
+            // Avatar (loads cached image or falls back to letter circle)
+            com.privimemobile.ui.components.AvatarDisplay(
+                handle = conv.convKey.removePrefix("@"),
+                displayName = conv.displayName,
+                size = 52.dp,
+            )
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {

@@ -51,6 +51,10 @@ data class ChatMessage(
     val pinnedAt: Long = 0,        // 0=not pinned, unix seconds when pinned
     val pollData: String? = null,  // JSON poll data
     val scheduledAt: Long = 0,     // 0=sent, >0=unix seconds when scheduled to send
+    val stickerPackName: String? = null,  // sticker pack name
+    val stickerPackId: String? = null,    // sticker pack hash ID
+    val stickerEmoji: String? = null,     // associated emoji
+    val stickerPackTotal: Int = 0,        // total stickers in pack
 )
 
 /** A conversation (aggregated from messages). */

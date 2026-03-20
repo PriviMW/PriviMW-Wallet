@@ -152,7 +152,7 @@ fun ChatScreen(
     var attachmentMap by remember { mutableStateOf<Map<Long, com.privimemobile.chat.db.entities.AttachmentEntity>>(emptyMap()) }
     LaunchedEffect(roomMessages) {
         val map = mutableMapOf<Long, com.privimemobile.chat.db.entities.AttachmentEntity>()
-        roomMessages.filter { it.type == "file" }.forEach { msg ->
+        roomMessages.filter { it.type == "file" || it.type == "sticker" || it.type == "sticker_pack" }.forEach { msg ->
             val att = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByMessageId(msg.id)
             if (att != null) {
                 map[msg.id] = att
@@ -194,6 +194,10 @@ fun ChatScreen(
             pinnedAt = entity.pinnedAt,
             pollData = entity.pollData,
             scheduledAt = entity.scheduledAt,
+            stickerPackName = entity.stickerPackName,
+            stickerPackId = entity.stickerPackId,
+            stickerEmoji = entity.stickerEmoji,
+            stickerPackTotal = entity.stickerPackTotal,
             file = if (att != null) FileAttachment(
                 cid = att.ipfsCid ?: "",
                 name = att.fileName,
@@ -228,6 +232,9 @@ fun ChatScreen(
 
     // Pending file to send
     var pendingFile by remember { mutableStateOf<PendingFile?>(null) }
+    // Sticker metadata for the pending file (null = regular file, non-null = sticker)
+    data class StickerMeta(val packName: String, val packId: String, val packTotal: Int, val emoji: String? = null)
+    var pendingStickerMeta by remember { mutableStateOf<StickerMeta?>(null) }
 
     // Reply target — set by swiping left on a message
     var replyingTo by remember { mutableStateOf<ChatMessage?>(null) }
@@ -245,6 +252,7 @@ fun ChatScreen(
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<String>() }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var viewPackId by remember { mutableStateOf<String?>(null) }  // pack_id to show in View Pack dialog
     var pendingDeleteIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Long-press context menu target
@@ -400,11 +408,11 @@ fun ChatScreen(
                 val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(fileCid)
                 if (path != null) {
                     filePaths[fileCid] = path
-                } else if (Helpers.isImageMime(msg.file?.mime ?: "")
+                } else if ((Helpers.isImageMime(msg.file?.mime ?: "") || msg.type == "sticker_pack" || msg.type == "sticker")
                     && (msg.file?.size ?: 0) <= Config.AUTO_DL_MAX_SIZE
                     && downloadStatuses[fileCid] == null
                 ) {
-                    // Auto-download images and GIFs — inline to avoid forward reference
+                    // Auto-download images, GIFs, and sticker packs
                     downloadStatuses[fileCid] = "downloading"
                     scope.launch {
                         try {
@@ -745,44 +753,74 @@ fun ChatScreen(
                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                         if (state?.myHandle != null) {
                             val ts = System.currentTimeMillis() / 1000
+                            val stickerMeta = pendingStickerMeta
+                            val msgType = if (stickerMeta != null) "sticker" else "file"
                             val payload = mutableMapOf<String, Any?>(
-                                "v" to 1, "t" to "file", "ts" to ts,
+                                "v" to 1, "t" to msgType, "ts" to ts,
                                 "from" to state.myHandle!!, "to" to handle,
                                 "dn" to (state.myDisplayName ?: ""),
                                 "file" to fileMeta,
                             )
                             if (trimmed.isNotEmpty()) payload["msg"] = trimmed
                             if (fileReplyText != null) payload["reply"] = fileReplyText
+                            // Add sticker pack metadata
+                            if (stickerMeta != null) {
+                                payload["pack_name"] = stickerMeta.packName
+                                payload["pack_id"] = stickerMeta.packId
+                                payload["pack_total"] = stickerMeta.packTotal
+                                if (stickerMeta.emoji != null) payload["sticker_emoji"] = stickerMeta.emoji
+                            }
 
                             // Optimistic DB insert — un-delete if tombstoned
                             val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                             if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
-                            val dedupKey = "$ts:file:${fileMeta["cid"]}:true"
+                            val dedupKey = "$ts:$msgType:${fileMeta["cid"]}:true"
                             val entity = com.privimemobile.chat.db.entities.MessageEntity(
                                 conversationId = conv.id, text = trimmed.ifEmpty { null },
-                                timestamp = ts, sent = true, type = "file",
+                                timestamp = ts, sent = true, type = msgType,
                                 senderHandle = state.myHandle, sbbsDedupKey = dedupKey,
+                                stickerPackName = stickerMeta?.packName,
+                                stickerPackId = stickerMeta?.packId,
+                                stickerEmoji = stickerMeta?.emoji,
+                                stickerPackTotal = stickerMeta?.packTotal ?: 0,
                             )
                             val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
 
                             // Insert attachment
+                            val cid = fileMeta["cid"] as? String ?: ""
+                            // Pre-cache decrypted file BEFORE message insert (prevents blank bubble flicker)
+                            if (cid.isNotEmpty()) {
+                                try {
+                                    val dlPath = com.privimemobile.chat.transport.IpfsTransport.downloadFile(
+                                        0L, cid,
+                                        fileMeta["key"] as? String ?: "",
+                                        fileMeta["iv"] as? String ?: "",
+                                        fileMeta["data"] as? String,
+                                    )
+                                    filePaths[cid] = dlPath
+                                } catch (_: Exception) {}
+                            }
                             if (msgId > 0) {
                                 com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
                                     com.privimemobile.chat.db.entities.AttachmentEntity(
                                         messageId = msgId, conversationId = conv.id,
-                                        ipfsCid = fileMeta["cid"] as? String,
+                                        ipfsCid = cid,
                                         encryptionKey = fileMeta["key"] as? String ?: "",
                                         encryptionIv = fileMeta["iv"] as? String ?: "",
                                         fileName = fileMeta["name"] as? String ?: "file",
                                         fileSize = (fileMeta["size"] as? Number)?.toLong() ?: 0,
                                         mimeType = fileMeta["mime"] as? String ?: "",
                                         inlineData = fileMeta["data"] as? String,
-                                        downloadStatus = "done", // we already have the file locally
+                                        downloadStatus = "done",
                                     )
                                 )
                             }
 
-                            val preview = "\uD83D\uDCCE ${fileMeta["name"]}"
+                            val preview = if (msgType == "sticker") {
+                                "${stickerMeta?.emoji ?: "\uD83C\uDFAD"} Sticker"
+                            } else {
+                                "\uD83D\uDCCE ${fileMeta["name"]}"
+                            }
                             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, preview)
 
                             // Send via SBBS
@@ -795,6 +833,7 @@ fun ChatScreen(
                 } finally {
                     uploading = false
                     pendingFile = null
+                    pendingStickerMeta = null
                     setInputText("")
                     replyingTo = null
                 }
@@ -1683,16 +1722,22 @@ fun ChatScreen(
                             if (selectionMode) {
                                 if (msg.id in selectedIds) selectedIds.remove(msg.id)
                                 else selectedIds.add(msg.id)
+                            } else if (msg.type == "sticker" && msg.stickerPackId != null) {
+                                // Sticker tap → view pack
+                                viewPackId = msg.stickerPackId
                             } else {
                                 contextMenuMsg = msg
                             }
                         },
                         onLongPress = {
                             if (!selectionMode) {
-                                // Enter multi-select mode
-                                selectionMode = true
-                                selectedIds.clear()
-                                selectedIds.add(msg.id)
+                                if (msg.type == "sticker") {
+                                    contextMenuMsg = msg
+                                } else {
+                                    selectionMode = true
+                                    selectedIds.clear()
+                                    selectedIds.add(msg.id)
+                                }
                             } else {
                                 if (msg.id in selectedIds) selectedIds.remove(msg.id)
                                 else selectedIds.add(msg.id)
@@ -2082,12 +2127,25 @@ fun ChatScreen(
                                     var entry = zip.nextEntry
                                     while (entry != null) {
                                         val name = entry.name.lowercase()
-                                        if (!entry.isDirectory && (name.endsWith(".webp") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg"))) {
+                                        if (!entry.isDirectory && (name.endsWith(".webp") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".tgs") || name.endsWith(".json"))) {
                                             val bytes = zip.readBytes()
-                                            val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                            if (bmp != null) {
-                                                saveStickerBitmap(bmp, packDir, "_z$count")
+                                            if (name.endsWith(".tgs")) {
+                                                // TGS animated sticker — save directly
+                                                val dest = java.io.File(packDir, "sticker_${System.currentTimeMillis()}_z$count.tgs")
+                                                dest.writeBytes(bytes)
                                                 count++
+                                            } else if (name.endsWith(".json")) {
+                                                // Lottie JSON — compress to TGS (gzip)
+                                                val dest = java.io.File(packDir, "sticker_${System.currentTimeMillis()}_z$count.tgs")
+                                                java.util.zip.GZIPOutputStream(dest.outputStream()).use { it.write(bytes) }
+                                                count++
+                                            } else {
+                                                // Static image — decode and save as WebP
+                                                val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                                if (bmp != null) {
+                                                    saveStickerBitmap(bmp, packDir, "_z$count")
+                                                    count++
+                                                }
                                             }
                                         }
                                         zip.closeEntry()
@@ -2174,6 +2232,120 @@ fun ChatScreen(
                                             Text("+ Add", color = C.accent, fontSize = 12.sp)
                                         }
                                         TextButton(onClick = {
+                                            // Share entire pack as ZIP
+                                            val packFiles = currentPack?.second ?: emptyList()
+                                            if (packFiles.isEmpty()) {
+                                                Toast.makeText(context, "Pack is empty", Toast.LENGTH_SHORT).show()
+                                            } else if (resolvedWalletId.isNullOrEmpty()) {
+                                                Toast.makeText(context, "Resolving address...", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                val pName = currentPack!!.first
+                                                val pId = pName.hashCode().toString(16)
+                                                val pTotal = packFiles.size
+                                                showEmojiPicker = false
+                                                Toast.makeText(context, "Packaging $pTotal stickers...", Toast.LENGTH_SHORT).show()
+                                                com.privimemobile.chat.ChatService.scope.launch {
+                                                    try {
+                                                        // Build ZIP of all stickers (try 512px first, then 256px if too large)
+                                                        fun buildZip(maxPx: Int, quality: Int): java.io.File {
+                                                            val zipFile = java.io.File(context.cacheDir, "pack_${pId}_${System.currentTimeMillis()}.zip")
+                                                            java.util.zip.ZipOutputStream(zipFile.outputStream()).use { zos ->
+                                                                packFiles.forEachIndexed { idx, file ->
+                                                                    if (file.name.endsWith(".tgs", ignoreCase = true)) {
+                                                                        // TGS animated sticker — include as-is
+                                                                        val entry = java.util.zip.ZipEntry("sticker_${idx}.tgs")
+                                                                        zos.putNextEntry(entry)
+                                                                        file.inputStream().use { it.copyTo(zos) }
+                                                                        zos.closeEntry()
+                                                                    } else {
+                                                                        // Static sticker — resize and compress
+                                                                        val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath) ?: return@forEachIndexed
+                                                                        val scale = minOf(maxPx.toFloat() / bmp.width, maxPx.toFloat() / bmp.height, 1f)
+                                                                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true)
+                                                                        val entry = java.util.zip.ZipEntry("sticker_${idx}.webp")
+                                                                        zos.putNextEntry(entry)
+                                                                        scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, quality, zos)
+                                                                        zos.closeEntry()
+                                                                    }
+                                                                }
+                                                            }
+                                                            return zipFile
+                                                        }
+
+                                                        var zipFile = buildZip(512, 80)
+                                                        if (zipFile.length() > 500_000) {
+                                                            zipFile.delete()
+                                                            zipFile = buildZip(256, 50)  // More aggressive compression
+                                                        }
+
+                                                        if (zipFile.length() > 700_000) {
+                                                            withContext(Dispatchers.Main) {
+                                                                Toast.makeText(context, "Pack too large to share (${zipFile.length() / 1024}KB)", Toast.LENGTH_LONG).show()
+                                                            }
+                                                            zipFile.delete()
+                                                            return@launch
+                                                        }
+
+                                                        // Send ZIP as sticker_pack message
+                                                        val uri = android.net.Uri.fromFile(zipFile)
+                                                        val fileMeta = com.privimemobile.chat.transport.IpfsTransport.prepareFile(
+                                                            context, uri, "${pName}.zip", zipFile.length(), "application/zip"
+                                                        )
+                                                        if (fileMeta != null) {
+                                                            val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get() ?: return@launch
+                                                            val myHandle = state.myHandle ?: return@launch
+                                                            val ts = System.currentTimeMillis() / 1000
+                                                            val payload = mutableMapOf<String, Any?>(
+                                                                "v" to 1, "t" to "sticker_pack", "ts" to ts,
+                                                                "from" to myHandle, "to" to handle,
+                                                                "dn" to (state.myDisplayName ?: ""),
+                                                                "file" to fileMeta,
+                                                                "pack_name" to pName,
+                                                                "pack_id" to pId,
+                                                                "pack_total" to pTotal,
+                                                            )
+                                                            val cid = fileMeta["cid"] as? String ?: ""
+                                                            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                                                            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                                                            val dedupKey = "$ts:sticker_pack:$cid:true"
+                                                            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                                                                conversationId = conv.id, text = "\uD83D\uDCE6 Sticker pack: $pName ($pTotal stickers)",
+                                                                timestamp = ts, sent = true, type = "sticker_pack",
+                                                                senderHandle = myHandle, sbbsDedupKey = dedupKey,
+                                                                stickerPackName = pName, stickerPackId = pId, stickerPackTotal = pTotal,
+                                                            )
+                                                            val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                                                            if (msgId > 0 && cid.isNotEmpty()) {
+                                                                com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                                                                    com.privimemobile.chat.db.entities.AttachmentEntity(
+                                                                        messageId = msgId, conversationId = conv.id,
+                                                                        ipfsCid = cid, encryptionKey = fileMeta["key"] as? String ?: "",
+                                                                        encryptionIv = fileMeta["iv"] as? String ?: "",
+                                                                        fileName = "${pName}.zip", fileSize = zipFile.length(),
+                                                                        mimeType = "application/zip", inlineData = fileMeta["data"] as? String,
+                                                                        downloadStatus = "done",
+                                                                    )
+                                                                )
+                                                            }
+                                                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, "\uD83D\uDCE6 Sticker pack: $pName")
+                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                                                            withContext(Dispatchers.Main) {
+                                                                Toast.makeText(context, "Pack shared! ($pTotal stickers, ${zipFile.length() / 1024}KB)", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                        zipFile.delete()
+                                                    } catch (e: Exception) {
+                                                        Log.e("ChatScreen", "Share pack error: ${e.message}")
+                                                        withContext(Dispatchers.Main) {
+                                                            Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }) {
+                                            Text("Share", color = C.accent, fontSize = 12.sp)
+                                        }
+                                        TextButton(onClick = {
                                             val dir = java.io.File(stickersRoot, currentPack.first)
                                             dir.deleteRecursively()
                                             packs = loadPacks()
@@ -2197,37 +2369,62 @@ fun ChatScreen(
                                         ) {
                                             items(currentPack.second.size) { idx ->
                                                 val file = currentPack.second[idx]
-                                                val bmp = remember(file.absolutePath, file.lastModified()) {
-                                                    android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                                                }
-                                                if (bmp != null) {
-                                                    Image(
-                                                        bitmap = bmp.asImageBitmap(),
-                                                        contentDescription = "Sticker",
-                                                        modifier = Modifier
-                                                            .aspectRatio(1f)
-                                                            .padding(4.dp)
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .pointerInput(file.absolutePath) {
-                                                                detectTapGestures(
-                                                                    onTap = {
-                                                                        // Copy sticker to cache for content URI compatibility
-                                                                        val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.webp")
-                                                                        file.copyTo(cached, overwrite = true)
-                                                                        val uri = android.net.Uri.fromFile(cached)
-                                                                        pendingFile = PendingFile(uri = uri, name = file.name, size = cached.length(), mimeType = "image/webp")
-                                                                        showEmojiPicker = false
-                                                                        handleSend()
-                                                                    },
-                                                                    onLongPress = {
-                                                                        file.delete()
-                                                                        packs = loadPacks()
-                                                                        Toast.makeText(context, "Sticker removed", Toast.LENGTH_SHORT).show()
-                                                                    },
-                                                                )
+                                                val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
+                                                val stickerMod = Modifier
+                                                    .aspectRatio(1f)
+                                                    .padding(4.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .pointerInput(file.absolutePath) {
+                                                        detectTapGestures(
+                                                            onTap = {
+                                                                val mime = if (isTgs) "application/x-tgsticker" else "image/webp"
+                                                                val ext = if (isTgs) "tgs" else "webp"
+                                                                val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
+                                                                file.copyTo(cached, overwrite = true)
+                                                                pendingFile = PendingFile(uri = android.net.Uri.fromFile(cached), name = file.name, size = cached.length(), mimeType = mime)
+                                                                val pName = currentPack?.first ?: "Stickers"
+                                                                pendingStickerMeta = StickerMeta(pName, pName.hashCode().toString(16), currentPack?.second?.size ?: 0)
+                                                                showEmojiPicker = false
+                                                                handleSend()
                                                             },
-                                                        contentScale = ContentScale.Fit,
-                                                    )
+                                                            onLongPress = {
+                                                                file.delete()
+                                                                packs = loadPacks()
+                                                                Toast.makeText(context, "Sticker removed", Toast.LENGTH_SHORT).show()
+                                                            },
+                                                        )
+                                                    }
+
+                                                if (isTgs) {
+                                                    // Animated TGS sticker — decompress and render with Lottie
+                                                    val lottieJson = remember(file.absolutePath, file.lastModified()) {
+                                                        try {
+                                                            java.util.zip.GZIPInputStream(file.inputStream()).bufferedReader().readText()
+                                                        } catch (_: Exception) { null }
+                                                    }
+                                                    if (lottieJson != null) {
+                                                        val composition by com.airbnb.lottie.compose.rememberLottieComposition(
+                                                            com.airbnb.lottie.compose.LottieCompositionSpec.JsonString(lottieJson)
+                                                        )
+                                                        com.airbnb.lottie.compose.LottieAnimation(
+                                                            composition = composition,
+                                                            iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
+                                                            modifier = stickerMod,
+                                                        )
+                                                    }
+                                                } else {
+                                                    // Static sticker (WebP/PNG)
+                                                    val bmp = remember(file.absolutePath, file.lastModified()) {
+                                                        android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                                                    }
+                                                    if (bmp != null) {
+                                                        Image(
+                                                            bitmap = bmp.asImageBitmap(),
+                                                            contentDescription = "Sticker",
+                                                            modifier = stickerMod,
+                                                            contentScale = ContentScale.Fit,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -2940,6 +3137,81 @@ fun ChatScreen(
             }
         }
 
+        // ── View Sticker Pack dialog (local only) ──
+        if (viewPackId != null) {
+            // Get pack name from the sticker message that triggered this
+            val packName = messages.firstOrNull { it.stickerPackId == viewPackId }?.stickerPackName ?: "Stickers"
+            val stickersRoot = java.io.File(context.filesDir, "stickers")
+            val localPackDir = java.io.File(stickersRoot, packName)
+            val localFiles = remember(viewPackId) {
+                if (localPackDir.exists()) localPackDir.listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
+                else emptyList()
+            }
+
+            AlertDialog(
+                onDismissRequest = { viewPackId = null },
+                containerColor = C.card,
+                title = {
+                    Column {
+                        Text(packName, color = C.text, fontWeight = FontWeight.SemiBold)
+                        if (localFiles.isNotEmpty()) {
+                            Text("${localFiles.size} stickers", color = C.accent, fontSize = 12.sp)
+                        } else {
+                            Text("Pack not saved yet. Ask sender to share it.", color = C.textSecondary, fontSize = 12.sp)
+                        }
+                    }
+                },
+                text = {
+                    if (localFiles.isEmpty()) {
+                        Text("You don't have this pack. The sender can share it using the Share button in their sticker picker.", color = C.textMuted, fontSize = 13.sp)
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(4),
+                            modifier = Modifier.heightIn(max = 300.dp),
+                            contentPadding = PaddingValues(4.dp),
+                        ) {
+                            items(localFiles.size) { idx ->
+                                val file = localFiles[idx]
+                                val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
+                                if (isTgs) {
+                                    val lottieJson = remember(file.absolutePath) {
+                                        try { java.util.zip.GZIPInputStream(file.inputStream()).bufferedReader().readText() }
+                                        catch (_: Exception) { null }
+                                    }
+                                    if (lottieJson != null) {
+                                        val composition by com.airbnb.lottie.compose.rememberLottieComposition(
+                                            com.airbnb.lottie.compose.LottieCompositionSpec.JsonString(lottieJson)
+                                        )
+                                        com.airbnb.lottie.compose.LottieAnimation(
+                                            composition = composition,
+                                            iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
+                                            modifier = Modifier.aspectRatio(1f).padding(4.dp).clip(RoundedCornerShape(8.dp)),
+                                        )
+                                    }
+                                } else {
+                                    val bmp = remember(file.absolutePath, file.lastModified()) {
+                                        android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                                    }
+                                    if (bmp != null) {
+                                        Image(
+                                            bitmap = bmp.asImageBitmap(),
+                                            contentDescription = "Sticker",
+                                            modifier = Modifier.aspectRatio(1f).padding(4.dp).clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewPackId = null }) { Text("OK", color = C.accent) }
+                },
+                dismissButton = {},
+            )
+        }
+
         // ── Date jump picker ──
         if (showDatePicker) {
             val datePickerState = rememberDatePickerState()
@@ -3146,6 +3418,14 @@ fun ChatScreen(
                         HorizontalDivider(color = C.border)
 
                         // Menu items with touch highlight
+                        // View Pack for sticker messages
+                        if (targetMsg.type == "sticker" && targetMsg.stickerPackId != null) {
+                            MenuItemRow("View Pack \u2014 ${targetMsg.stickerPackName ?: "Stickers"}") {
+                                viewPackId = targetMsg.stickerPackId
+                                contextMenuMsg = null
+                            }
+                        }
+
                         if (targetMsg.text.isNotEmpty()) {
                             MenuItemRow("Copy") {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -3584,9 +3864,10 @@ private fun MessageBubble(
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
     val isMine = msg.sent
+    val isSticker = msg.type == "sticker"
     val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
     val fileMime = msg.file?.mime ?: ""
-    val isImage = msg.type == "file" && Helpers.isImageMime(fileMime)
+    val isImage = (msg.type == "file" || msg.type == "sticker") && Helpers.isImageMime(fileMime)
 
     // Check if message is emoji-only (1-3 emojis, no other text) for large display
     val isEmojiOnly = remember(msg.text) {
@@ -3679,6 +3960,136 @@ private fun MessageBubble(
                 .offset(x = (offsetX / 3f).dp),
             horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         ) {
+            // Sticker display (no bubble, larger image — show placeholder even before attachment loads)
+            // Sticker pack message — show card with Save button
+            if (msg.type == "sticker_pack") {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (isMine) Color(0xFF1B3A4B) else C.card),
+                    modifier = Modifier.widthIn(max = 260.dp).clickable { onTap() },
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("\uD83D\uDCE6 Sticker Pack", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(msg.stickerPackName ?: "Stickers", color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("${msg.stickerPackTotal} stickers", color = C.textSecondary, fontSize = 12.sp)
+                        Spacer(Modifier.height(8.dp))
+                        if (!isMine && filePath != null) {
+                            val packSaved = remember(msg.stickerPackName) {
+                                val dir = java.io.File(context.filesDir, "stickers/${msg.stickerPackName}")
+                                dir.exists() && (dir.listFiles()?.isNotEmpty() == true)
+                            }
+                            Button(
+                                onClick = {
+                                    // Extract ZIP and save stickers
+                                    try {
+                                        val packDir = java.io.File(context.filesDir, "stickers/${msg.stickerPackName}").also { it.mkdirs() }
+                                        val src = java.io.File(filePath!!)
+                                        var count = 0
+                                        java.util.zip.ZipInputStream(src.inputStream()).use { zis ->
+                                            var entry = zis.nextEntry
+                                            while (entry != null) {
+                                                val name = entry.name.lowercase()
+                                                if (!entry.isDirectory && (name.endsWith(".webp") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".tgs"))) {
+                                                    val bytes = zis.readBytes()
+                                                    val dest = java.io.File(packDir, entry.name)
+                                                    if (!dest.exists()) {
+                                                        dest.writeBytes(bytes)
+                                                        count++
+                                                    }
+                                                }
+                                                zis.closeEntry()
+                                                entry = zis.nextEntry
+                                            }
+                                        }
+                                        Toast.makeText(context, "Saved $count stickers to \"${msg.stickerPackName}\"", Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(if (packSaved) "Update Pack" else "Save Pack", color = C.textDark)
+                            }
+                        } else if (!isMine) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = C.accent, strokeWidth = 2.dp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
+                            if (isMine) { Spacer(Modifier.width(6.dp)); TickIndicator(read = msg.read, delivered = msg.delivered) }
+                        }
+                    }
+                }
+            } else
+            if (isSticker) {
+                val isTgsSticker = filePath != null && (filePath.endsWith(".tgs", ignoreCase = true)
+                    || msg.file?.mime == "application/x-tgsticker"
+                    || msg.file?.name?.endsWith(".tgs", ignoreCase = true) == true
+                    || run {
+                        // Detect GZIP magic bytes (TGS is gzipped Lottie)
+                        try {
+                            val f = java.io.File(filePath)
+                            if (f.exists() && f.length() > 2) {
+                                val header = ByteArray(2)
+                                f.inputStream().use { it.read(header) }
+                                header[0] == 0x1f.toByte() && header[1] == 0x8b.toByte()
+                            } else false
+                        } catch (_: Exception) { false }
+                    })
+                Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
+                    if (filePath != null && isTgsSticker) {
+                        // Animated TGS sticker
+                        val lottieJson = remember(filePath) {
+                            try { java.util.zip.GZIPInputStream(java.io.File(filePath).inputStream()).bufferedReader().readText() }
+                            catch (_: Exception) { null }
+                        }
+                        if (lottieJson != null) {
+                            val composition by com.airbnb.lottie.compose.rememberLottieComposition(
+                                com.airbnb.lottie.compose.LottieCompositionSpec.JsonString(lottieJson)
+                            )
+                            com.airbnb.lottie.compose.LottieAnimation(
+                                composition = composition,
+                                iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
+                                modifier = Modifier.size(180.dp).clip(RoundedCornerShape(8.dp))
+                                    .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }, onLongPress = { onLongPress() }) },
+                            )
+                        }
+                    } else if (filePath != null) {
+                        // Static sticker (WebP/PNG)
+                        AsyncImage(
+                            model = filePath,
+                            contentDescription = "Sticker",
+                            modifier = Modifier
+                                .size(180.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }, onLongPress = { onLongPress() }) },
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        // Loading placeholder
+                        Box(
+                            modifier = Modifier.size(180.dp).clip(RoundedCornerShape(8.dp))
+                                .background(C.card.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = C.accent, strokeWidth = 2.dp)
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                        if (msg.stickerEmoji != null) { Text(msg.stickerEmoji, fontSize = 10.sp); Spacer(Modifier.width(3.dp)) }
+                        if (msg.pinned) { Text("\uD83D\uDCCC", fontSize = 10.sp); Spacer(Modifier.width(3.dp)) }
+                        Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
+                        if (isMine) {
+                            Spacer(Modifier.width(6.dp))
+                            TickIndicator(read = msg.read, delivered = msg.delivered)
+                        }
+                    }
+                    if (msg.stickerPackName != null) {
+                        Text(msg.stickerPackName, color = C.textMuted, fontSize = 9.sp)
+                    }
+                }
+            } else
             // Large emoji display (no bubble)
             if (isEmojiOnly) {
                 Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {

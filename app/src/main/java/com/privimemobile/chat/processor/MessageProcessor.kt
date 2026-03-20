@@ -152,6 +152,12 @@ class MessageProcessor(
         val ttl = (payload["ttl"] as? Number)?.toLong() ?: 0
         val expiresAt = if (ttl > 0) (System.currentTimeMillis() / 1000) + ttl else 0L
 
+        // Sticker pack metadata
+        val stickerPackName = payload["pack_name"] as? String
+        val stickerPackId = payload["pack_id"] as? String
+        val stickerEmoji = payload["sticker_emoji"] as? String
+        val stickerPackTotal = (payload["pack_total"] as? Number)?.toInt() ?: 0
+
         // Build message entity
         val message = MessageEntity(
             conversationId = conv.id,
@@ -168,6 +174,10 @@ class MessageProcessor(
             sbbsDedupKey = dedupKey,
             expiresAt = expiresAt,
             pollData = payload["poll"] as? String,
+            stickerPackName = stickerPackName,
+            stickerPackId = stickerPackId,
+            stickerEmoji = stickerEmoji,
+            stickerPackTotal = stickerPackTotal,
         )
 
         // Insert — IGNORE on duplicate
@@ -180,8 +190,8 @@ class MessageProcessor(
             Log.d(TAG, "Un-deleted conversation ${conv.convKey} for new message")
         }
 
-        // Handle file attachment
-        if (type == "file") {
+        // Handle file attachment (file, sticker, and sticker_pack types carry file data)
+        if (type == "file" || type == "sticker" || type == "sticker_pack") {
             val rawFile = payload["file"]
             Log.d(TAG, "File attachment: type=${rawFile?.javaClass?.simpleName}, value=${rawFile.toString().take(100)}")
             val fileData = rawFile as? Map<*, *>
@@ -193,6 +203,8 @@ class MessageProcessor(
         // Update conversation
         val preview = when (type) {
             "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
+            "sticker" -> "${stickerEmoji ?: "\uD83C\uDFAD"} Sticker"
+            "sticker_pack" -> "\uD83D\uDCE6 Sticker pack: ${stickerPackName ?: "Stickers"}"
             "file" -> {
                 val fileName = (payload["file"] as? Map<*, *>)?.get("name") as? String
                 "\uD83D\uDCCE ${fileName ?: "File"}"  // 📎

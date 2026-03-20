@@ -131,6 +131,10 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND deleted = 0 AND (text LIKE '%http://%' OR text LIKE '%https://%')")
     suspend fun countLinksInConversation(convId: Long): Int
 
+    /** Get all sticker messages from a specific pack (for View Pack). */
+    @Query("SELECT * FROM messages WHERE sticker_pack_id = :packId AND type = 'sticker' AND deleted = 0 ORDER BY timestamp ASC")
+    suspend fun getStickersByPackId(packId: String): List<MessageEntity>
+
     /** Soft-delete expired disappearing messages (preserves dedup keys to block SBBS re-delivery). */
     @Query("UPDATE messages SET deleted = 1 WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun deleteExpired(now: Long): Int

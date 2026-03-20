@@ -43,4 +43,8 @@ data class MessageEntity(
     @ColumnInfo(name = "pinned_at") val pinnedAt: Long = 0,  // 0=not pinned, unix seconds when pinned (for ordering)
     @ColumnInfo(name = "poll_data") val pollData: String? = null,  // JSON: {question, options: [{text, voters: [handle]}]}
     @ColumnInfo(name = "scheduled_at") val scheduledAt: Long = 0,  // 0=send now, >0=unix seconds to send at
+    @ColumnInfo(name = "sticker_pack_name") val stickerPackName: String? = null,
+    @ColumnInfo(name = "sticker_pack_id") val stickerPackId: String? = null,
+    @ColumnInfo(name = "sticker_emoji") val stickerEmoji: String? = null,
+    @ColumnInfo(name = "sticker_pack_total") val stickerPackTotal: Int = 0,
 )

@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
 
+    // Lottie (animated stickers — TGS format)
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
+
     // Room + SQLCipher
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

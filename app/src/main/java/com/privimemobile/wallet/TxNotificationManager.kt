@@ -27,11 +27,11 @@ import org.json.JSONArray
 object TxNotificationManager {
     private const val TAG = "TxNotifMgr"
 
-    private const val GROUP_ID = "privime_chat"  // Same group as chat — all PriviMW notifications together
+    private const val GROUP_ID = "privime_chat"  // Same visual group as chat — all under "PriviMW"
     private const val CHANNEL_TX = "privime_transactions"
     private const val SUMMARY_ID = 9000
 
-    private const val MAX_STACKED_LINES = 5
+    private var activeNotifCount = 0
 
     private var initialized = false
     private lateinit var appContext: Context
@@ -43,7 +43,7 @@ object TxNotificationManager {
     private val notifiedTxIds = mutableSetOf<String>()
 
     /** Recent notification lines for InboxStyle stacking. */
-    private val recentLines = mutableListOf<String>()
+    // recentLines removed — each TX is now its own notification card
 
     // TX status constants (mirrors TxStatus in WalletScreen)
     private const val PENDING = 0
@@ -81,6 +81,16 @@ object TxNotificationManager {
                 val obj = arr.optJSONObject(i) ?: continue
                 val txId = obj.optString("txId")
                 if (txId.isEmpty()) continue
+                val caList = obj.optJSONArray("contractAssets")?.let { ca ->
+                    (0 until ca.length()).mapNotNull { j ->
+                        val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                        ContractAssetEntry(
+                            assetId = ao.optInt("assetId"),
+                            sending = ao.optLong("sending"),
+                            receiving = ao.optLong("receiving"),
+                        )
+                    }
+                } ?: emptyList()
                 currentTxs[txId] = TxSnapshot(
                     txId = txId,
                     status = obj.optInt("status"),
@@ -90,6 +100,7 @@ object TxNotificationManager {
                     isDapps = obj.optBoolean("isDapps"),
                     contractCids = obj.optString("contractCids", "").ifEmpty { null },
                     appName = obj.optString("appName", "").ifEmpty { null },
+                    contractAssets = caList,
                 )
             }
 
@@ -145,21 +156,48 @@ object TxNotificationManager {
         val ticker = assetTicker(tx.assetId)
         val amountStr = Helpers.grothToBeam(tx.amount)
 
+        // For DApp contract TXs, sender flag is inverted (positive amount = spending but sender=false)
+        val isOutgoing = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
+        val dappName = if (tx.isDapps) tx.appName ?: "DApp" else null
+
+        // Build per-asset breakdown for DApp TXs (e.g., "-10.0 BEAM, +50.0 BEAMX")
+        val assetBreakdown = if (dappName != null && tx.contractAssets.isNotEmpty()) {
+            tx.contractAssets.mapNotNull { ca ->
+                val isSpending = ca.sending != 0L
+                val amt = Math.abs(if (isSpending) ca.sending else ca.receiving)
+                if (amt == 0L) return@mapNotNull null
+                val prefix = if (isSpending) "-" else "+"
+                "$prefix${Helpers.grothToBeam(amt)} ${assetTicker(ca.assetId)}"
+            }.joinToString(", ")
+        } else null
+
         // Build notification line
-        val line = when (action) {
-            "Receiving" -> "Receiving $amountStr $ticker..."
-            "Received" -> "Received $amountStr $ticker"
-            "Sent" -> "Sent $amountStr $ticker"
-            "Failed" -> "${if (tx.sender) "Send" else "Receive"} $amountStr $ticker failed"
-            "Cancelled" -> "${if (tx.sender) "Send" else "Receive"} $amountStr $ticker cancelled"
-            else -> return
+        val amountDisplay = assetBreakdown ?: "$amountStr $ticker"
+        val hasBreakdown = assetBreakdown != null
+        val line = if (dappName != null) {
+            // DApp TX: use "processing/completed/failed" instead of "receiving/sent"
+            when (action) {
+                "Receiving" -> "Processing: $amountDisplay"
+                "Received", "Sent" -> if (hasBreakdown) amountDisplay
+                    else "${if (isOutgoing) "Spent" else "Received"}: $amountDisplay"
+                "Failed" -> "Failed: $amountDisplay"
+                "Cancelled" -> "Cancelled: $amountDisplay"
+                else -> amountDisplay
+            }
+        } else {
+            // Regular TX: standard format
+            when (action) {
+                "Receiving" -> "Receiving $amountStr $ticker..."
+                "Received" -> "Received $amountStr $ticker"
+                "Sent" -> "Sent $amountStr $ticker"
+                "Failed" -> "${if (isOutgoing) "Send" else "Receive"} $amountStr $ticker failed"
+                "Cancelled" -> "${if (isOutgoing) "Send" else "Receive"} $amountStr $ticker cancelled"
+                else -> "$amountStr $ticker"
+            }
         }
 
-        // Add to stacked lines (keep last N)
-        recentLines.add(line)
-        if (recentLines.size > MAX_STACKED_LINES) {
-            recentLines.removeAt(0)
-        }
+        // Track active notification count
+        activeNotifCount++
 
         val intent = Intent(appContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -170,41 +208,60 @@ object TxNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Build InboxStyle with stacked lines
-        val inboxStyle = NotificationCompat.InboxStyle()
-            .setBigContentTitle("PriviMW Transactions")
-        for (l in recentLines) {
-            inboxStyle.addLine(l)
-        }
-        if (recentLines.size > 1) {
-            inboxStyle.setSummaryText("${recentLines.size} updates")
+        // Title: DApp name or direction
+        val title = when {
+            dappName != null -> dappName
+            action == "Receiving" -> "Receiving"
+            action == "Received" -> "Received"
+            action == "Sent" -> "Sent"
+            action == "Failed" -> "Failed"
+            action == "Cancelled" -> "Cancelled"
+            else -> "Transaction"
         }
 
-        // Single stacked notification (always same ID so they merge)
+        // Individual notification per TX — grouped under app
+        val notifId = tx.txId.hashCode()
         val notification = NotificationCompat.Builder(appContext, CHANNEL_TX)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(if (recentLines.size > 1) "PriviMW Transactions" else "Transaction")
+            .setContentTitle(title)
             .setContentText(line)
-            .setStyle(inboxStyle)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(line))
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setGroup(GROUP_ID)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
-            .setNumber(recentLines.size)
             .build()
 
-        nm.notify(SUMMARY_ID, notification)
-        Log.d(TAG, "TX notification: $line (${recentLines.size} stacked)")
+        nm.notify(notifId, notification)
+
+        // Summary notification (Android groups individual notifications under this)
+        if (activeNotifCount > 1) {
+            val summary = NotificationCompat.Builder(appContext, CHANNEL_TX)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("PriviMW Transactions")
+                .setContentText("$activeNotifCount updates")
+                .setGroup(GROUP_ID)
+                .setGroupSummary(true)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(SUMMARY_ID, summary)
+        }
+
+        Log.d(TAG, "TX notification: $line (id=$notifId)")
     }
 
-    /** Clear stacked notifications (e.g., when user opens wallet). */
+    /** Clear all TX notifications (e.g., when user opens wallet). */
     fun clearNotifications() {
         if (!initialized) return
         val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(SUMMARY_ID)
-        recentLines.clear()
+        // Cancel all active TX notifications
+        nm.activeNotifications.filter { it.groupKey?.contains(GROUP_ID) == true }.forEach {
+            nm.cancel(it.id)
+        }
+        activeNotifCount = 0
     }
 
     private fun createChannel() {
@@ -225,6 +282,12 @@ object TxNotificationManager {
         Log.d(TAG, "TX notification channel created")
     }
 
+    private data class ContractAssetEntry(
+        val assetId: Int,
+        val sending: Long,
+        val receiving: Long,
+    )
+
     private data class TxSnapshot(
         val txId: String,
         val status: Int,
@@ -234,5 +297,6 @@ object TxNotificationManager {
         val isDapps: Boolean,
         val contractCids: String?,
         val appName: String?,
+        val contractAssets: List<ContractAssetEntry> = emptyList(),
     )
 }

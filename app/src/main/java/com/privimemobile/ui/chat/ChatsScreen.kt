@@ -31,8 +31,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.*
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.ChatStateEntity
 import com.privimemobile.chat.db.entities.ConversationEntity
@@ -630,13 +632,21 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val hasDraft = !conv.draftText.isNullOrEmpty()
                     if (isTyping) {
-                        Text(
-                            "typing...",
-                            color = C.accent,
-                            fontSize = 14.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Text("typing", color = C.accent, fontSize = 14.sp)
+                            val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
+                            repeat(3) { i ->
+                                val offsetY by infiniteTransition.animateFloat(
+                                    initialValue = 0f, targetValue = -3f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(400, easing = FastOutSlowInEasing, delayMillis = i * 120),
+                                        repeatMode = RepeatMode.Reverse,
+                                    ), label = "dot$i",
+                                )
+                                Text(".", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.offset(y = offsetY.dp))
+                            }
+                        }
                     } else if (hasDraft) {
                         Text(
                             buildAnnotatedString {
@@ -662,8 +672,18 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                     }
                     if (conv.unreadCount > 0) {
                         Spacer(Modifier.width(8.dp))
+                        // Pulse animation on badge
+                        val infiniteTransition = rememberInfiniteTransition(label = "badgePulse")
+                        val badgeScale by infiniteTransition.animateFloat(
+                            initialValue = 1f, targetValue = 1.12f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(600, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse,
+                            ), label = "badgeScale",
+                        )
                         Box(
                             modifier = Modifier
+                                .graphicsLayer(scaleX = badgeScale, scaleY = badgeScale)
                                 .defaultMinSize(minWidth = 22.dp)
                                 .clip(CircleShape)
                                 .background(C.accent)

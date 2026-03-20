@@ -4,8 +4,7 @@ import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -72,7 +71,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -282,6 +283,21 @@ fun ChatScreen(
     var showWallpaperPicker by remember { mutableStateOf(false) }
     val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
     var chatWallpaper by remember { mutableStateOf(prefs.getString("wallpaper_$convKey", "default") ?: "default") }
+    val wallpaperImagePicker = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val file = java.io.File(context.filesDir, "wallpaper_${convKey.replace("@", "")}.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { output -> input.copyTo(output) }
+                }
+                chatWallpaper = "custom:${file.absolutePath}#${System.currentTimeMillis()}"
+                prefs.edit().putString("wallpaper_$convKey", chatWallpaper).apply()
+                showWallpaperPicker = false
+            } catch (_: Exception) {}
+        }
+    }
     var showCommandMenu by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -531,6 +547,24 @@ fun ChatScreen(
             val amountGroth = (amountBeam * 100_000_000).toLong()
             val assetName = com.privimemobile.wallet.assetTicker(assetId)
             val tipLabel = "Tip: ${Helpers.formatBeam(amountGroth)} $assetName"
+
+            // Balance check — available + shielded must cover tip amount
+            val bal = com.privimemobile.wallet.WalletEventBus.assetBalances[assetId]
+            val spendable = (bal?.available ?: 0L) + (bal?.shielded ?: 0L)
+            if (spendable < amountGroth) {
+                Toast.makeText(context, "Insufficient $assetName balance (have ${Helpers.formatBeam(spendable)}, need ${Helpers.formatBeam(amountGroth)})", Toast.LENGTH_LONG).show()
+                return
+            }
+            // Also check BEAM for fee if tipping a non-BEAM asset
+            if (assetId != 0) {
+                val beamBal = com.privimemobile.wallet.WalletEventBus.assetBalances[0]
+                val beamSpendable = (beamBal?.available ?: 0L) + (beamBal?.shielded ?: 0L)
+                if (beamSpendable <= 0) {
+                    Toast.makeText(context, "Insufficient BEAM for transaction fee", Toast.LENGTH_LONG).show()
+                    return
+                }
+            }
+
             val txComment = "Tip to @$handle" + if (caption.isNotEmpty()) " — $caption" else ""
             scope.launch {
                 try {
@@ -919,7 +953,27 @@ fun ChatScreen(
                     val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
                     val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(convKey)
                     if (peerTyping) {
-                        Text("typing...", color = C.accent, fontSize = 12.sp)
+                        // Bouncing dots animation (Telegram-style)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("typing", color = C.accent, fontSize = 12.sp)
+                            val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
+                            repeat(3) { i ->
+                                val offsetY by infiniteTransition.animateFloat(
+                                    initialValue = 0f, targetValue = -3f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(400, easing = FastOutSlowInEasing, delayMillis = i * 120),
+                                        repeatMode = RepeatMode.Reverse,
+                                    ), label = "dot$i",
+                                )
+                                Text(
+                                    ".",
+                                    color = C.accent,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.offset(y = offsetY.dp),
+                                )
+                            }
+                        }
                     } else {
                         Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
                     }
@@ -1321,13 +1375,39 @@ fun ChatScreen(
         }
 
         // Messages list + scroll-to-bottom button
-        val wallpaperBg = when (chatWallpaper) {
-            "dark_blue" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838))))
-            "teal" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF004D40), Color(0xFF00695C))))
-            "purple" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A0033), Color(0xFF2D1B69))))
-            "midnight" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0F0F23), Color(0xFF1A1A3E))))
-            "forest" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B3A2D), Color(0xFF2D5016))))
-            "sunset" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2D1B00), Color(0xFF4A2600))))
+        val wallpaperBg = when {
+            chatWallpaper.startsWith("custom:") -> {
+                val path = chatWallpaper.removePrefix("custom:").substringBefore("#")
+                val file = java.io.File(path)
+                if (file.exists()) {
+                    // Cache decoded bitmap to avoid re-decoding on every recomposition
+                    val cachedBmp = remember(chatWallpaper) { android.graphics.BitmapFactory.decodeFile(path) }
+                    if (cachedBmp != null) {
+                        Modifier.drawBehind {
+                            // Center-crop: scale to fill, crop overflow
+                            val bw = cachedBmp.width.toFloat()
+                            val bh = cachedBmp.height.toFloat()
+                            val cw = size.width
+                            val ch = size.height
+                            val scale = maxOf(cw / bw, ch / bh)
+                            val sw = (cw / scale).toInt()
+                            val sh = (ch / scale).toInt()
+                            val sx = ((bw - sw) / 2).toInt().coerceAtLeast(0)
+                            val sy = ((bh - sh) / 2).toInt().coerceAtLeast(0)
+                            val srcRect = android.graphics.Rect(sx, sy, sx + sw, sy + sh)
+                            val dstRect = android.graphics.Rect(0, 0, cw.toInt(), ch.toInt())
+                            val paint = android.graphics.Paint().apply { isFilterBitmap = true }
+                            drawContext.canvas.nativeCanvas.drawBitmap(cachedBmp, srcRect, dstRect, paint)
+                        }
+                    } else Modifier
+                } else Modifier
+            }
+            chatWallpaper == "dark_blue" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838))))
+            chatWallpaper == "teal" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF004D40), Color(0xFF00695C))))
+            chatWallpaper == "purple" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A0033), Color(0xFF2D1B69))))
+            chatWallpaper == "midnight" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0F0F23), Color(0xFF1A1A3E))))
+            chatWallpaper == "forest" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B3A2D), Color(0xFF2D5016))))
+            chatWallpaper == "sunset" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2D1B00), Color(0xFF4A2600))))
             else -> Modifier  // default uses C.bg from parent
         }
         // Pre-compute album groups outside LazyColumn (composable context)
@@ -1544,11 +1624,7 @@ fun ChatScreen(
                                     if (isMine) {
                                         Spacer(Modifier.width(6.dp))
                                         val lastMsg = albumMsgs.last()
-                                        when {
-                                            lastMsg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
-                                            lastMsg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
-                                            else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
-                                        }
+                                        TickIndicator(read = lastMsg.read, delivered = lastMsg.delivered)
                                     }
                                 }
                             }
@@ -2386,6 +2462,29 @@ fun ChatScreen(
                 title = { Text("Chat Wallpaper", color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
+                        // Custom image option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { wallpaperImagePicker.launch("image/*") }
+                                .padding(vertical = 10.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier.size(32.dp).clip(CircleShape)
+                                    .background(C.accent.copy(alpha = 0.3f))
+                                    .then(if (chatWallpaper.startsWith("custom:")) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
+                                contentAlignment = Alignment.Center,
+                            ) { Text("\uD83D\uDDBC", fontSize = 16.sp) }
+                            Spacer(Modifier.width(12.dp))
+                            Text("Custom Image", color = C.text, fontSize = 15.sp)
+                            if (chatWallpaper.startsWith("custom:")) {
+                                Spacer(Modifier.weight(1f))
+                                Text("\u2713", color = C.accent, fontSize = 16.sp)
+                            }
+                        }
+                        HorizontalDivider(color = C.textSecondary.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 4.dp))
                         wallpaperOptions.forEach { (key, label) ->
                             Row(
                                 modifier = Modifier
@@ -2943,6 +3042,20 @@ fun ChatScreen(
     } // end Box
 
 @Composable
+private fun TickIndicator(read: Boolean, delivered: Boolean) {
+    val tickText = if (read || delivered) "\u2713\u2713" else "\u2713"
+    val tickColor = if (read) C.accent else C.textSecondary
+    // Animate scale when status upgrades
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 800f),
+        label = "tickScale",
+    )
+    Text(tickText, color = tickColor, fontSize = 10.sp,
+        modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale))
+}
+
+@Composable
 private fun MessageBubble(
     msg: ChatMessage,
     filePath: String?,
@@ -3066,11 +3179,7 @@ private fun MessageBubble(
                         Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
                         if (isMine) {
                             Spacer(Modifier.width(6.dp))
-                            when {
-                                msg.read -> Text("\u2713\u2713", color = C.accent, fontSize = 10.sp)
-                                msg.delivered -> Text("\u2713\u2713", color = C.textSecondary, fontSize = 10.sp)
-                                else -> Text("\u2713", color = C.textSecondary, fontSize = 10.sp)
-                            }
+                            TickIndicator(read = msg.read, delivered = msg.delivered)
                         }
                     }
                 }
@@ -3299,7 +3408,7 @@ private fun MessageBubble(
                     LaunchedEffect(Unit) { reactionVisible = true }
                     val reactionScale by animateFloatAsState(
                         targetValue = if (reactionVisible) 1f else 0f,
-                        animationSpec = tween(200),
+                        animationSpec = spring(dampingRatio = 0.4f, stiffness = 600f),
                         label = "rxScale",
                     )
                     Surface(

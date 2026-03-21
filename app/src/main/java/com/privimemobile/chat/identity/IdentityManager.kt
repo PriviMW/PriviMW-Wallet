@@ -71,15 +71,10 @@ class IdentityManager(
             val walletId = Helpers.normalizeWalletId(result["wallet_id"] as? String ?: "") ?: ""
             val displayName = Helpers.fixBvmUtf8(result["display_name"] as? String)
             val height = (result["registered_height"] as? Number)?.toLong() ?: 0
-            val avatarHash = result["avatar_hash"] as? String
-
-            Log.d(TAG, "Identity: @$handle, height=$height, avatar=${avatarHash?.take(16)}")
+            Log.d(TAG, "Identity: @$handle, height=$height")
 
             // Update DB
             db.chatStateDao().updateIdentity(handle, walletId, displayName, height)
-            if (avatarHash != null) {
-                db.chatStateDao().updateAvatarHash(avatarHash)
-            }
 
             // Set contractStartTs on first registration (one-time)
             db.chatStateDao().setContractStartTs(System.currentTimeMillis() / 1000)
@@ -292,27 +287,21 @@ class IdentityManager(
     }
 
     /**
-     * Set avatar hash on-chain.
+     * Set avatar locally (SBBS-only, no contract TX).
      * @param avatarHash 64-char hex SHA-256 hash of compressed avatar image. Empty/null = clear avatar.
      */
     fun setAvatar(
         avatarHash: String?,
         onResult: ((success: Boolean, error: String?) -> Unit)? = null,
     ) {
-        val hash = avatarHash ?: "0000000000000000000000000000000000000000000000000000000000000000"
-        ShaderInvoker.tx("user", "set_avatar",
-            mapOf("avatar_hash" to hash),
-            callback = { result ->
-                if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
-                } else {
-                    scope.launch {
-                        db.chatStateDao().updateAvatarHash(if (avatarHash.isNullOrEmpty()) null else avatarHash)
-                    }
-                    onResult?.invoke(true, null)
-                }
+        scope.launch {
+            try {
+                db.chatStateDao().updateAvatarHash(if (avatarHash.isNullOrEmpty()) null else avatarHash)
+                onResult?.invoke(true, null)
+            } catch (e: Exception) {
+                onResult?.invoke(false, e.message)
             }
-        )
+        }
     }
 
     /** Mark SBBS as updated (after successful re-registration). */

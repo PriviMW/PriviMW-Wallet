@@ -42,7 +42,7 @@ fun CreateGroupScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.surface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
             )
         },
         containerColor = C.bg,
@@ -59,7 +59,7 @@ fun CreateGroupScreen(
             Box(
                 modifier = Modifier
                     .size(80.dp)
-                    .background(C.surface, RoundedCornerShape(40.dp))
+                    .background(C.card, RoundedCornerShape(40.dp))
                     .align(Alignment.CenterHorizontally),
                 contentAlignment = Alignment.Center,
             ) {

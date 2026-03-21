@@ -64,7 +64,7 @@ fun GroupSettingsScreen(
                         Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.surface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
             )
         },
         containerColor = C.bg,
@@ -105,7 +105,7 @@ fun GroupSettingsScreen(
             }
 
             // Divider
-            item { HorizontalDivider(color = C.surface, thickness = 1.dp) }
+            item { HorizontalDivider(color = C.card, thickness = 1.dp) }
 
             // Members section header
             item {
@@ -166,7 +166,7 @@ fun GroupSettingsScreen(
             }
 
             // Divider
-            item { Spacer(Modifier.height(16.dp)); HorizontalDivider(color = C.surface) }
+            item { Spacer(Modifier.height(16.dp)); HorizontalDivider(color = C.card) }
 
             // Actions
             if (!isCreator) {
@@ -230,7 +230,7 @@ private fun MemberRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarDisplay(handle = member.handle, size = 44)
+        AvatarDisplay(handle = member.handle, size = 44.dp)
 
         Spacer(Modifier.width(12.dp))
 

@@ -300,7 +300,7 @@ fun ChatsScreen(
                 // Small FAB - Create Group
                 SmallFloatingActionButton(
                     onClick = onCreateGroup,
-                    containerColor = C.surface,
+                    containerColor = C.card,
                     contentColor = C.accent,
                     shape = CircleShape,
                 ) {

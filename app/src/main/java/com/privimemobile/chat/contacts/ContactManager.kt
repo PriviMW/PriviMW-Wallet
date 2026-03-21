@@ -71,7 +71,7 @@ class ContactManager(
 
             val walletId = Helpers.normalizeWalletId(result["wallet_id"] as? String ?: "")
             val displayName = Helpers.fixBvmUtf8(result["display_name"] as? String)
-            val avatarHash = null // Avatar is SBBS-only, not from contract
+            val avatarHash: String? = null // Avatar is SBBS-only, not from contract
             val height = (result["registered_height"] as? Number)?.toLong() ?: 0
 
             if (walletId == null) return null
@@ -125,7 +125,7 @@ class ContactManager(
 
             val handle = result["handle"] as? String ?: return null
             val displayName = Helpers.fixBvmUtf8(result["display_name"] as? String)
-            val avatarHash = null // Avatar is SBBS-only, not from contract
+            val avatarHash: String? = null // Avatar is SBBS-only, not from contract
             val height = (result["registered_height"] as? Number)?.toLong() ?: 0
 
             db.contactDao().upsert(ContactEntity(

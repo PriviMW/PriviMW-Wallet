@@ -123,7 +123,7 @@ fun GroupChatScreen(
                         Icon(Icons.Default.MoreVert, "Settings", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.surface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
             )
         },
         containerColor = C.bg,
@@ -149,7 +149,7 @@ fun GroupChatScreen(
 
             // Input bar
             Surface(
-                color = C.surface,
+                color = C.card,
                 tonalElevation = 2.dp,
             ) {
                 Row(
@@ -219,7 +219,7 @@ private fun GroupMessageBubble(
                 color = C.textMuted,
                 fontSize = 13.sp,
                 modifier = Modifier
-                    .background(C.surface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .background(C.card.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
@@ -234,7 +234,7 @@ private fun GroupMessageBubble(
     ) {
         if (!isMe) {
             // Sender avatar
-            AvatarDisplay(handle = msg.senderHandle ?: "", size = 32)
+            AvatarDisplay(handle = msg.senderHandle ?: "", size = 32.dp)
             Spacer(Modifier.width(6.dp))
         }
 
@@ -262,7 +262,7 @@ private fun GroupMessageBubble(
                     bottomEnd = 16.dp,
                 ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isMe) C.accent.copy(alpha = 0.2f) else C.surface,
+                    containerColor = if (isMe) C.accent.copy(alpha = 0.2f) else C.card,
                 ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {

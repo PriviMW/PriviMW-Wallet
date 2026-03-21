@@ -207,13 +207,9 @@ fun NewChatScreen(
                             ChatService.groups.joinGroup(groupId) { success, error ->
                                 if (success) {
                                     android.widget.Toast.makeText(context,
-                                        if (needsApproval) "Join request sent!" else "Joined group!",
-                                        android.widget.Toast.LENGTH_SHORT).show()
-                                    scope.launch {
-                                        delay(3000)
-                                        ChatService.groups.refreshMyGroups()
-                                    }
-                                    if (!needsApproval) onJoinGroup?.invoke(groupId)
+                                        if (needsApproval) "Join request sent!" else "Transaction submitted. Group will appear when confirmed.",
+                                        android.widget.Toast.LENGTH_LONG).show()
+                                    onBack()
                                 } else {
                                     android.widget.Toast.makeText(context, error ?: "Failed to join", android.widget.Toast.LENGTH_SHORT).show()
                                 }

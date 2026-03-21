@@ -44,6 +44,8 @@ object ChatService {
         private set
     lateinit var groups: com.privimemobile.chat.group.GroupManager
         private set
+    lateinit var pendingTxs: com.privimemobile.chat.group.PendingTxManager
+        private set
 
     // Active chat — suppress unread + notifications for this conversation
     private val _activeChat = MutableStateFlow<String?>(null)
@@ -116,6 +118,7 @@ object ChatService {
         processor = MessageProcessor(db!!, contacts, scope)
         sbbs = SbbsTransport(db!!, processor, scope)
         groups = com.privimemobile.chat.group.GroupManager(db!!, scope)
+        pendingTxs = com.privimemobile.chat.group.PendingTxManager(db!!, scope)
 
         // Initialize chat_state row + migrate legacy SharedPreferences data
         scope.launch {

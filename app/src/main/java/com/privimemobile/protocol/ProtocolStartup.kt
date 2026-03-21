@@ -42,6 +42,7 @@ object ProtocolStartup {
             refreshWalletData()
             if (com.privimemobile.chat.ChatService.initialized.value) {
                 com.privimemobile.chat.ChatService.sbbs.onTxsChanged()
+                com.privimemobile.chat.ChatService.pendingTxs.onTxsChanged()
             }
         }
 

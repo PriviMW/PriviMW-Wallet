@@ -140,7 +140,7 @@ fun CreateGroupScreen(
                     ) { success, _, error ->
                         creating = false
                         if (success) {
-                            Toast.makeText(context, "Group created!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Transaction submitted. Group will appear when confirmed.", Toast.LENGTH_LONG).show()
                             onGroupCreated()
                         } else {
                             Toast.makeText(context, error ?: "Failed to create group", Toast.LENGTH_SHORT).show()

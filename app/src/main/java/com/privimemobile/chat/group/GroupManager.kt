@@ -5,6 +5,7 @@ import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.GroupEntity
 import com.privimemobile.chat.db.entities.GroupMemberEntity
+import com.privimemobile.chat.db.entities.PendingTxEntity
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.ShaderInvoker
 import kotlinx.coroutines.*
@@ -69,11 +70,12 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, null, result["error"]?.toString())
                 } else {
-                    Log.d(TAG, "Create group TX submitted: $name")
-                    // Refresh groups after TX confirms
-                    scope.launch {
-                        delay(5000)
-                        refreshMyGroups()
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    Log.d(TAG, "Create group TX submitted: $name txId=$txId")
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_CREATE_GROUP, name)
+                        }
                     }
                     onResult?.invoke(true, null, null)
                 }
@@ -96,9 +98,11 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
-                    scope.launch {
-                        delay(5000)
-                        refreshMyGroups()
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_JOIN_GROUP, groupId)
+                        }
                     }
                     onResult?.invoke(true, null)
                 }
@@ -116,10 +120,11 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
-                    scope.launch {
-                        delay(5000)
-                        db.groupDao().deleteByGroupId(groupId)
-                        db.groupDao().removeAllMembers(groupId)
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_LEAVE_GROUP, groupId)
+                        }
                     }
                     onResult?.invoke(true, null)
                 }
@@ -315,10 +320,11 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
-                    scope.launch {
-                        delay(3000)
-                        db.groupDao().deleteByGroupId(groupId)
-                        db.groupDao().removeAllMembers(groupId)
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_DELETE_GROUP, groupId)
+                        }
                     }
                     onResult?.invoke(true, null)
                 }

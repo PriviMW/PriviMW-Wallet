@@ -6,6 +6,7 @@ import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.PendingTxEntity
 import com.privimemobile.protocol.WalletApi
 import kotlinx.coroutines.*
+import kotlinx.coroutines.delay
 
 /**
  * PendingTxManager — tracks on-chain TXs and gates features until confirmed.
@@ -125,8 +126,13 @@ class PendingTxManager(
                 // Refresh groups + members
                 ChatService.groups.refreshMyGroups()
                 ChatService.groups.refreshGroupMembers(tx.targetId)
+                // Notify other members
+                scope.launch { ChatService.groups.sendGroupService(tx.targetId, "joined") }
             }
             PendingTxEntity.ACTION_LEAVE_GROUP -> {
+                // Notify other members before removing
+                scope.launch { ChatService.groups.sendGroupService(tx.targetId, "left") }
+                delay(1000)
                 // Remove from local DB
                 db.groupDao().deleteByGroupId(tx.targetId)
                 db.groupDao().removeAllMembers(tx.targetId)

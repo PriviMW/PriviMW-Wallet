@@ -726,9 +726,16 @@ class MessageProcessor(
         // Update preview
         db.groupDao().updateLastMessage(groupId, entity.timestamp, serviceText)
 
-        // Refresh member list after service events
+        // Update member count immediately based on action
+        when (action) {
+            "joined" -> db.groupDao().updateMemberCount(groupId, group.memberCount + 1)
+            "left", "kicked", "banned" -> db.groupDao().updateMemberCount(groupId, maxOf(0, group.memberCount - 1))
+        }
+
+        // Refresh member list from contract in background
         scope.launch {
-            kotlinx.coroutines.delay(2000)
+            kotlinx.coroutines.delay(3000)
+            ChatService.groups.refreshGroupInfo(groupId)
             ChatService.groups.refreshGroupMembers(groupId)
         }
     }

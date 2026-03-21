@@ -50,6 +50,11 @@ fun NewChatScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // Groups user is already a member of
+    val myGroups by ChatService.db?.groupDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val myGroupIds = remember(myGroups) { myGroups.map { it.groupId }.toSet() }
+
     // Local contacts from Room DB
     val allContacts by ChatService.db?.contactDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
@@ -197,13 +202,15 @@ fun NewChatScreen(
                     val creator = g["creator"] as? String ?: ""
                     val memberCount = g["member_count"] as? Int ?: 0
                     val needsApproval = (g["require_approval"] as? Int ?: 0) == 1
+                    val alreadyMember = groupId in myGroupIds
 
                     GroupSearchRow(
                         name = name,
                         creator = creator,
                         memberCount = memberCount,
                         needsApproval = needsApproval,
-                        onJoin = {
+                        alreadyMember = alreadyMember,
+                        onJoin = { onDone ->
                             ChatService.groups.joinGroup(groupId) { success, error ->
                                 if (success) {
                                     android.widget.Toast.makeText(context,
@@ -212,6 +219,7 @@ fun NewChatScreen(
                                     onBack()
                                 } else {
                                     android.widget.Toast.makeText(context, error ?: "Failed to join", android.widget.Toast.LENGTH_SHORT).show()
+                                    onDone() // reset spinner on failure/cancel
                                 }
                             }
                         },
@@ -292,7 +300,8 @@ private fun GroupSearchRow(
     creator: String,
     memberCount: Int,
     needsApproval: Boolean,
-    onJoin: () -> Unit,
+    alreadyMember: Boolean = false,
+    onJoin: (onDone: () -> Unit) -> Unit,
 ) {
     var joining by remember { mutableStateOf(false) }
 
@@ -319,10 +328,13 @@ private fun GroupSearchRow(
                 )
             }
             Spacer(Modifier.width(8.dp))
+            if (alreadyMember) {
+                Text("Joined", color = C.textMuted, fontSize = 13.sp)
+            } else {
             Button(
                 onClick = {
                     joining = true
-                    onJoin()
+                    onJoin { joining = false }
                 },
                 enabled = !joining,
                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
@@ -339,6 +351,7 @@ private fun GroupSearchRow(
                     )
                 }
             }
+            } // end !alreadyMember
         }
         HorizontalDivider(
             color = C.border.copy(alpha = 0.5f),

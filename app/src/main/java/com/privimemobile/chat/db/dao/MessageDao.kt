@@ -87,6 +87,10 @@ interface MessageDao {
     """)
     suspend fun editMessage(convId: Long, ts: Long, senderHandle: String, newText: String)
 
+    /** Mark a message as edited (used for invite responded flag). */
+    @Query("UPDATE messages SET edited = 1 WHERE id = :messageId")
+    suspend fun markEdited(messageId: Long)
+
     /** Find a sent message by timestamp (for editing). */
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND sent = 1 LIMIT 1")
     suspend fun findSentByTimestamp(convId: Long, ts: Long): MessageEntity?
@@ -106,6 +110,14 @@ interface MessageDao {
     /** Unpin a message. */
     @Query("UPDATE messages SET pinned = 0, pinned_at = 0 WHERE id = :messageId")
     suspend fun unpinMessage(messageId: Long)
+
+    /** Pin a message by conversation ID + timestamp (for group sync). */
+    @Query("UPDATE messages SET pinned = 1, pinned_at = :pinnedAt WHERE conversation_id = :convId AND timestamp = :ts")
+    suspend fun pinByTimestamp(convId: Long, ts: Long, pinnedAt: Long = System.currentTimeMillis() / 1000)
+
+    /** Unpin a message by conversation ID + timestamp (for group sync). */
+    @Query("UPDATE messages SET pinned = 0, pinned_at = 0 WHERE conversation_id = :convId AND timestamp = :ts")
+    suspend fun unpinByTimestamp(convId: Long, ts: Long)
 
     /** Unpin all messages in a conversation. */
     @Query("UPDATE messages SET pinned = 0, pinned_at = 0 WHERE conversation_id = :convId AND pinned = 1")

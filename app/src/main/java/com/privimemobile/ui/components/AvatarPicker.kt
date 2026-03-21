@@ -210,10 +210,10 @@ private fun AvatarCropDialog(
 
     Dialog(
         onDismissRequest = onCancel,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().background(Color.Black),
+            modifier = Modifier.fillMaxSize().background(Color.Black).statusBarsPadding(),
         ) {
             // Top bar
             Row(
@@ -294,9 +294,9 @@ private fun AvatarCropDialog(
                 }
             }
 
-            // Bottom bar
+            // Bottom bar — extra bottom padding for devices with gesture nav / tall displays
             Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 48.dp),
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Button(

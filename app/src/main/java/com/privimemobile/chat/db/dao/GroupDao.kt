@@ -19,7 +19,11 @@ interface GroupDao {
     @Query("SELECT * FROM groups WHERE group_id = :groupId LIMIT 1")
     suspend fun findByGroupId(groupId: String): GroupEntity?
 
-    @Query("SELECT * FROM groups WHERE archived = 0 ORDER BY last_message_ts DESC")
+    /** Find group by convKey prefix (e.g., "g_abc123" matches group_id starting with "abc123"). */
+    @Query("SELECT * FROM groups WHERE group_id LIKE :prefix || '%' LIMIT 1")
+    suspend fun findByConvKey(prefix: String): GroupEntity?
+
+    @Query("SELECT * FROM groups ORDER BY last_message_ts DESC")
     fun observeAll(): Flow<List<GroupEntity>>
 
     @Query("SELECT * FROM groups WHERE archived = 0 ORDER BY last_message_ts DESC")
@@ -59,6 +63,9 @@ interface GroupDao {
 
     @Query("UPDATE groups SET avatar_hash = :hash WHERE group_id = :groupId")
     suspend fun updateAvatarHash(groupId: String, hash: String?)
+
+    @Query("UPDATE groups SET description = :desc WHERE group_id = :groupId")
+    suspend fun updateDescription(groupId: String, desc: String?)
 
     // --- Members ---
 

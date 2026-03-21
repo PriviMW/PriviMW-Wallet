@@ -70,28 +70,28 @@ class PendingTxManager(
                     // Completed (status 3 in Beam = Completed)
                     status == 3 || statusString.contains("completed", ignoreCase = true) -> {
                         Log.d(TAG, "TX confirmed: ${tx.txId} action=${tx.action}")
+                        db.pendingTxDao().deleteByTxId(tx.txId) // delete FIRST to prevent double-processing
                         onTxConfirmed(tx)
-                        db.pendingTxDao().deleteByTxId(tx.txId)
                     }
                     // Failed (status 4)
                     status == 4 || statusString.contains("failed", ignoreCase = true) -> {
                         Log.w(TAG, "TX failed: ${tx.txId} action=${tx.action}")
-                        onTxFailed(tx)
                         db.pendingTxDao().deleteByTxId(tx.txId)
+                        onTxFailed(tx)
                     }
                     // Cancelled (status 2)
                     status == 2 || statusString.contains("cancel", ignoreCase = true) -> {
                         Log.w(TAG, "TX cancelled: ${tx.txId} action=${tx.action}")
-                        onTxFailed(tx)
                         db.pendingTxDao().deleteByTxId(tx.txId)
+                        onTxFailed(tx)
                     }
                     // Still pending — check if too old (>1 hour)
                     else -> {
                         val age = System.currentTimeMillis() / 1000 - tx.createdAt
                         if (age > 3600) {
                             Log.w(TAG, "TX expired (>1h): ${tx.txId}")
-                            onTxFailed(tx)
                             db.pendingTxDao().deleteByTxId(tx.txId)
+                            onTxFailed(tx)
                         }
                     }
                 }
@@ -117,17 +117,36 @@ class PendingTxManager(
             PendingTxEntity.ACTION_CREATE_GROUP -> {
                 // Refresh groups to get the new group
                 ChatService.groups.refreshMyGroups()
-                // Mark group as not pending
-                db.groupDao().findByGroupId(tx.targetId)?.let { group ->
-                    db.groupDao().updateGroup(group.copy(/* pending would be cleared */))
+                // Save join password + description (tx.extraData = JSON, tx.targetId = group name)
+                if (tx.extraData != null) {
+                    try {
+                        val extra = org.json.JSONObject(tx.extraData)
+                        val password = extra.optString("password").ifEmpty { null }
+                        val description = extra.optString("description").ifEmpty { null }
+                        val allGroups = db.groupDao().getAll()
+                        val newGroup = allGroups.firstOrNull { it.name == tx.targetId }
+                        if (newGroup != null) {
+                            db.groupDao().updateGroup(newGroup.copy(
+                                joinPassword = password ?: newGroup.joinPassword,
+                                description = description ?: newGroup.description,
+                            ))
+                        }
+                    } catch (_: Exception) {}
                 }
             }
             PendingTxEntity.ACTION_JOIN_GROUP -> {
-                // Refresh groups + members
+                // extraData = target handle (for admin-add), null (for self-join)
+                val addedHandle = tx.extraData
                 ChatService.groups.refreshMyGroups()
                 ChatService.groups.refreshGroupMembers(tx.targetId)
-                // Notify other members
-                scope.launch { ChatService.groups.sendGroupService(tx.targetId, "joined") }
+                // Notify other members — only AFTER TX confirms
+                if (addedHandle != null) {
+                    // Admin added someone else
+                    scope.launch { ChatService.groups.sendGroupService(tx.targetId, "joined", addedHandle) }
+                } else {
+                    // Self-join
+                    scope.launch { ChatService.groups.sendGroupService(tx.targetId, "joined") }
+                }
             }
             PendingTxEntity.ACTION_LEAVE_GROUP -> {
                 // Notify other members before removing
@@ -137,14 +156,44 @@ class PendingTxManager(
                 db.groupDao().deleteByGroupId(tx.targetId)
                 db.groupDao().removeAllMembers(tx.targetId)
             }
-            PendingTxEntity.ACTION_REMOVE_MEMBER,
-            PendingTxEntity.ACTION_SET_ROLE,
-            PendingTxEntity.ACTION_TRANSFER_OWNERSHIP -> {
-                // Refresh members
+            PendingTxEntity.ACTION_REMOVE_MEMBER -> {
                 ChatService.groups.refreshGroupMembers(tx.targetId)
                 ChatService.groups.refreshGroupInfo(tx.targetId)
+                // tx.extraData = "ban:handle" or just "handle"
+                if (tx.extraData != null) {
+                    val isBan = tx.extraData.startsWith("ban:")
+                    val targetHandle = if (isBan) tx.extraData.removePrefix("ban:") else tx.extraData
+                    val action = if (isBan) "banned" else "kicked"
+                    scope.launch { ChatService.groups.sendGroupService(tx.targetId, action, targetHandle) }
+                }
+            }
+            PendingTxEntity.ACTION_SET_ROLE -> {
+                ChatService.groups.refreshGroupMembers(tx.targetId)
+                ChatService.groups.refreshGroupInfo(tx.targetId)
+                // tx.extraData = target handle. Determine promote vs demote from refreshed data.
+                if (tx.extraData != null) {
+                    val member = db.groupDao().findMember(tx.targetId, tx.extraData)
+                    val action = if (member?.role == 1) "promoted" else "demoted"
+                    scope.launch { ChatService.groups.sendGroupService(tx.targetId, action, tx.extraData) }
+                }
+            }
+            PendingTxEntity.ACTION_TRANSFER_OWNERSHIP -> {
+                ChatService.groups.refreshGroupMembers(tx.targetId)
+                ChatService.groups.refreshGroupInfo(tx.targetId)
+                if (tx.extraData != null) {
+                    scope.launch { ChatService.groups.sendGroupService(tx.targetId, "ownership_transferred", tx.extraData) }
+                }
+            }
+            PendingTxEntity.ACTION_UPDATE_GROUP_INFO -> {
+                ChatService.groups.refreshGroupInfo(tx.targetId)
+            }
+            PendingTxEntity.ACTION_RELEASE_HANDLE -> {
+                ChatService.identity.refreshIdentity()
             }
             PendingTxEntity.ACTION_DELETE_GROUP -> {
+                // Notify all members before deleting
+                scope.launch { ChatService.groups.sendGroupService(tx.targetId, "group_deleted") }
+                kotlinx.coroutines.delay(2000) // wait for SBBS to send
                 // Remove from local DB
                 db.groupDao().deleteByGroupId(tx.targetId)
                 db.groupDao().removeAllMembers(tx.targetId)
@@ -162,8 +211,13 @@ class PendingTxManager(
                 db.groupDao().deleteByGroupId(tx.targetId)
             }
             PendingTxEntity.ACTION_JOIN_GROUP -> {
-                // Remove from local DB (never actually joined)
-                db.groupDao().deleteByGroupId(tx.targetId)
+                if (tx.extraData == null) {
+                    // Self-join failed — remove the group we optimistically added
+                    db.groupDao().deleteByGroupId(tx.targetId)
+                }
+                // Admin-add failed (extraData = target handle) — don't touch the group,
+                // just refresh to get correct member list
+                ChatService.groups.refreshGroupMembers(tx.targetId)
             }
             // Other failures: just refresh to get correct state
             else -> {

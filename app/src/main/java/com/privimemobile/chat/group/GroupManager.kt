@@ -56,16 +56,21 @@ class GroupManager(
         requireApproval: Boolean = false,
         maxMembers: Int = 0,
         defaultPermissions: Int = 0,
+        joinPassword: String? = null,
+        description: String? = null,
         onResult: ((success: Boolean, groupId: String?, error: String?) -> Unit)? = null,
     ) {
-        ShaderInvoker.tx("user", "create_group",
-            mapOf(
-                "name" to name,
-                "is_public" to if (isPublic) 1 else 0,
-                "require_approval" to if (requireApproval) 1 else 0,
-                "max_members" to maxMembers,
-                "default_permissions" to defaultPermissions,
-            ),
+        val args = mutableMapOf<String, Any?>(
+            "name" to name,
+            "is_public" to if (isPublic) 1 else 0,
+            "require_approval" to if (requireApproval) 1 else 0,
+            "max_members" to maxMembers,
+            "default_permissions" to defaultPermissions,
+        )
+        if (!joinPassword.isNullOrEmpty()) {
+            args["join_password"] = joinPassword
+        }
+        ShaderInvoker.tx("user", "create_group", args,
             callback = { result ->
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, null, result["error"]?.toString())
@@ -74,7 +79,11 @@ class GroupManager(
                     Log.d(TAG, "Create group TX submitted: $name txId=$txId")
                     if (txId != null) {
                         scope.launch {
-                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_CREATE_GROUP, name)
+                            val extra = org.json.JSONObject().apply {
+                                if (joinPassword != null) put("password", joinPassword)
+                                if (description != null) put("description", description)
+                            }.toString()
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_CREATE_GROUP, name, extra)
                         }
                     }
                     onResult?.invoke(true, null, null)
@@ -85,12 +94,12 @@ class GroupManager(
 
     fun joinGroup(
         groupId: String,
-        inviteSecret: String? = null,
+        joinPassword: String? = null,
         onResult: ((success: Boolean, error: String?) -> Unit)? = null,
     ) {
         val args = mutableMapOf<String, Any?>("group_id" to groupId)
-        if (!inviteSecret.isNullOrEmpty()) {
-            args["invite_secret"] = inviteSecret
+        if (!joinPassword.isNullOrEmpty()) {
+            args["join_password"] = joinPassword
         }
 
         ShaderInvoker.tx("user", "join_group", args,
@@ -108,6 +117,44 @@ class GroupManager(
                 }
             }
         )
+    }
+
+    /** Admin adds another user to the group. Uses join_group with target_handle. */
+    /**
+     * Send a group invite to a user via SBBS DM.
+     * The target user receives the invite and can accept (calls joinGroup themselves).
+     */
+    suspend fun sendGroupInvite(groupId: String, targetHandle: String): Boolean {
+        val state = db.chatStateDao().get() ?: return false
+        val myHandle = state.myHandle ?: return false
+        val group = db.groupDao().findByGroupId(groupId) ?: return false
+
+        // Resolve target's wallet ID for SBBS
+        val contact = ChatService.contacts.resolveHandle(targetHandle)
+        val walletId = contact?.walletId
+        if (walletId.isNullOrEmpty()) {
+            Log.w(TAG, "Cannot invite @$targetHandle — no wallet ID")
+            return false
+        }
+
+        val payload = mutableMapOf<String, Any?>(
+            "v" to 1,
+            "t" to "group_invite",
+            "ts" to System.currentTimeMillis() / 1000,
+            "from" to myHandle,
+            "to" to targetHandle,
+            "dn" to (state.myDisplayName ?: ""),
+            "invite_group_id" to groupId,
+            "group_name" to group.name,
+            "member_count" to group.memberCount,
+        )
+        // Include join password for private groups
+        if (!group.joinPassword.isNullOrEmpty()) {
+            payload["join_password"] = group.joinPassword
+        }
+        ChatService.sbbs.sendWithRetry(walletId, payload)
+        Log.d(TAG, "Sent group invite for '${ group.name}' to @$targetHandle")
+        return true
     }
 
     fun leaveGroup(
@@ -148,6 +195,13 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            val extra = if (ban) "ban:$targetHandle" else targetHandle
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_REMOVE_MEMBER, groupId, extra)
+                        }
+                    }
                     scope.launch {
                         delay(3000)
                         refreshGroupMembers(groupId)
@@ -176,6 +230,12 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_SET_ROLE, groupId, targetHandle)
+                        }
+                    }
                     scope.launch {
                         delay(3000)
                         refreshGroupMembers(groupId)
@@ -189,6 +249,7 @@ class GroupManager(
     fun updateGroupInfo(
         groupId: String,
         name: String? = null,
+        description: String? = null,
         isPublic: Int? = null,       // null = no change, 0 = private, 1 = public
         requireApproval: Int? = null, // null = no change
         defaultPermissions: Int = 0,  // 0 = no change
@@ -196,6 +257,7 @@ class GroupManager(
     ) {
         val args = mutableMapOf<String, Any?>("group_id" to groupId)
         if (name != null) args["name"] = name
+        if (description != null) args["description"] = description
         if (isPublic != null) args["is_public"] = isPublic
         if (requireApproval != null) args["require_approval"] = requireApproval
         if (defaultPermissions > 0) args["default_permissions"] = defaultPermissions
@@ -205,58 +267,16 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_UPDATE_GROUP_INFO, groupId)
+                        }
+                    }
                     scope.launch {
                         delay(3000)
                         refreshGroupInfo(groupId)
                     }
-                    onResult?.invoke(true, null)
-                }
-            }
-        )
-    }
-
-    fun approveJoinRequest(
-        groupId: String,
-        targetHandle: String,
-        approve: Boolean = true,
-        onResult: ((success: Boolean, error: String?) -> Unit)? = null,
-    ) {
-        ShaderInvoker.tx("user", "approve_join_request",
-            mapOf(
-                "group_id" to groupId,
-                "target_handle" to targetHandle,
-                "approve" to if (approve) 1 else 0,
-            ),
-            callback = { result ->
-                if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
-                } else {
-                    scope.launch {
-                        delay(3000)
-                        refreshGroupMembers(groupId)
-                    }
-                    onResult?.invoke(true, null)
-                }
-            }
-        )
-    }
-
-    fun setInviteLink(
-        groupId: String,
-        inviteHash: String,  // SHA256(secret), 64 hex
-        expiryHeight: Int = 0,
-        onResult: ((success: Boolean, error: String?) -> Unit)? = null,
-    ) {
-        ShaderInvoker.tx("user", "set_invite_link",
-            mapOf(
-                "group_id" to groupId,
-                "invite_hash" to inviteHash,
-                "expiry_height" to expiryHeight,
-            ),
-            callback = { result ->
-                if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
-                } else {
                     onResult?.invoke(true, null)
                 }
             }
@@ -277,33 +297,17 @@ class GroupManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_TRANSFER_OWNERSHIP, groupId, newCreatorHandle)
+                        }
+                    }
                     scope.launch {
                         delay(3000)
                         refreshGroupInfo(groupId)
                         refreshGroupMembers(groupId)
                     }
-                    onResult?.invoke(true, null)
-                }
-            }
-        )
-    }
-
-    fun reportMember(
-        groupId: String,
-        targetHandle: String,
-        reason: Int,  // 0=spam, 1=harassment, 2=inappropriate, 3=other
-        onResult: ((success: Boolean, error: String?) -> Unit)? = null,
-    ) {
-        ShaderInvoker.tx("user", "report_member",
-            mapOf(
-                "group_id" to groupId,
-                "target_handle" to targetHandle,
-                "reason" to reason,
-            ),
-            callback = { result ->
-                if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
-                } else {
                     onResult?.invoke(true, null)
                 }
             }
@@ -414,7 +418,9 @@ class GroupManager(
                     maxMembers = maxMembers,
                     defaultPermissions = defaultPerms,
                     createdHeight = createdHeight,
-                    avatarHash = avatarHash,
+                    // Preserve local avatar/description if contract returns null (SBBS-only fields)
+                    avatarHash = avatarHash ?: existing.avatarHash,
+                    description = existing.description,
                 ))
             } else {
                 db.groupDao().insertGroup(GroupEntity(
@@ -508,7 +514,12 @@ class GroupManager(
      * Each member gets an individual SBBS send (200ms spacing).
      * The message includes group_id so the receiver routes it correctly.
      */
-    suspend fun sendGroupMessage(groupId: String, text: String) {
+    suspend fun sendGroupMessage(
+        groupId: String,
+        text: String,
+        replyText: String? = null,
+        ttl: Int = 0,
+    ) {
         val state = db.chatStateDao().get() ?: return
         val myHandle = state.myHandle ?: return
         val myDisplayName = state.myDisplayName
@@ -539,6 +550,10 @@ class GroupManager(
             "msg" to text,
         )
         if (!myDisplayName.isNullOrEmpty()) payload["dn"] = myDisplayName
+        if (replyText != null) payload["reply"] = replyText
+        if (ttl > 0) payload["ttl"] = ttl
+
+        val expiresAt = if (ttl > 0) ts + ttl else 0L
 
         // Insert own message into DB immediately (optimistic)
         val entity = com.privimemobile.chat.db.entities.MessageEntity(
@@ -549,6 +564,8 @@ class GroupManager(
             type = "group_msg",
             sent = true,
             sbbsDedupKey = "$ts:${text.hashCode().toString(16)}:$myHandle:$groupId".hashCode().toString(16),
+            replyText = replyText,
+            expiresAt = expiresAt,
         )
         db.messageDao().insert(entity)
 
@@ -569,9 +586,11 @@ class GroupManager(
     }
 
     /**
-     * Send a group service notification to all members.
+     * Send an arbitrary SBBS payload to all group members.
+     * Used for reactions, edits, deletes, polls, file messages, etc.
+     * Caller builds the payload; this method adds group_id + from and broadcasts.
      */
-    suspend fun sendGroupService(groupId: String, action: String, target: String? = null) {
+    suspend fun sendGroupPayload(groupId: String, payload: Map<String, Any?>) {
         val state = db.chatStateDao().get() ?: return
         val myHandle = state.myHandle ?: return
 
@@ -579,10 +598,117 @@ class GroupManager(
             .filterNotNull()
             .filter { it.isNotEmpty() }
 
+        val fullPayload = mutableMapOf<String, Any?>()
+        fullPayload.putAll(payload)
+        fullPayload["group_id"] = groupId
+        fullPayload["from"] = myHandle
+
+        for (walletId in memberWalletIds) {
+            try {
+                ChatService.sbbs.sendOnce(walletId, fullPayload)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send group payload to $walletId: ${e.message}")
+            }
+            delay(200)
+        }
+        Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberWalletIds.size} members in $groupId")
+    }
+
+    /**
+     * Request group avatar + description from another member if missing locally.
+     * Same pattern as user profile picture avatar_request/avatar_response.
+     */
+    suspend fun requestGroupInfoIfNeeded(groupId: String) {
+        val group = db.groupDao().findByGroupId(groupId) ?: return
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+
+        // Check if we're missing avatar or description
+        val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
+        val avatarFile = if (filesDir != null) java.io.File(filesDir, "group_avatars/$groupId.webp") else null
+        val hasAvatarLocally = avatarFile?.exists() == true
+        val hasDescLocally = !group.description.isNullOrEmpty()
+
+        if (hasAvatarLocally && hasDescLocally) return // have everything
+
+        // Find a member to ask (prefer creator, then any member with a wallet ID)
+        val members = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            .filterNotNull()
+            .filter { it.isNotEmpty() }
+        if (members.isEmpty()) return
+
+        val targetWalletId = members.first()
+
+        // Get my wallet ID for the response to come back to
+        val myWalletId = state.myWalletId ?: return
+
+        val request = mapOf(
+            "v" to 1,
+            "t" to "group_info_request",
+            "ts" to System.currentTimeMillis() / 1000,
+            "from" to myHandle,
+            "group_id" to groupId,
+            "requester_wallet_id" to myWalletId,
+        )
+
+        try {
+            ChatService.sbbs.sendOnce(targetWalletId, request)
+            Log.d(TAG, "Sent group_info_request for $groupId (hasAvatar=$hasAvatarLocally, hasDesc=$hasDescLocally)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to send group_info_request: ${e.message}")
+        }
+    }
+
+    /**
+     * Send a group service notification to all members.
+     */
+    suspend fun sendGroupService(groupId: String, action: String, target: String? = null) {
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+
+        val ts = System.currentTimeMillis() / 1000
+
+        // Insert service message locally for the sender (SBBS excludes self)
+        val group = db.groupDao().findByGroupId(groupId)
+        if (group != null) {
+            val convId = getOrCreateGroupConversation(groupId, group.name)
+            val serviceText = when (action) {
+                "joined" -> if (target != null) "You invited @$target to the group" else "You joined the group"
+                "left" -> "You left the group"
+                "kicked" -> "You removed @$target"
+                "banned" -> "You banned @$target"
+                "promoted" -> "You promoted @$target to admin"
+                "demoted" -> "You demoted @$target to member"
+                "ownership_transferred" -> "You transferred ownership to @$target"
+                "group_deleted" -> "You deleted the group"
+                else -> "You $action" + if (target != null) " @$target" else ""
+            }
+            val dedupKey = "svc:$action:${target ?: myHandle}:$groupId".hashCode().toString(16)
+            val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                conversationId = convId,
+                timestamp = ts,
+                senderHandle = myHandle,
+                text = serviceText,
+                type = "group_service",
+                sent = true,
+                sbbsDedupKey = dedupKey,
+            )
+            val insertedId = db.messageDao().insert(entity)
+            if (insertedId != -1L) {
+                db.groupDao().updateLastMessage(groupId, ts, serviceText)
+            }
+
+        }
+
+        // Send SBBS FIRST (before removing member, so their wallet ID is still in the list)
+        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            .filterNotNull()
+            .filter { it.isNotEmpty() }
+
         val payload = mutableMapOf<String, Any?>(
             "v" to 1,
             "t" to "group_service",
-            "ts" to System.currentTimeMillis() / 1000,
+            "ts" to ts,
             "from" to myHandle,
             "group_id" to groupId,
             "action" to action,
@@ -596,6 +722,15 @@ class GroupManager(
                 Log.w(TAG, "Failed to send group service to $walletId: ${e.message}")
             }
             delay(200)
+        }
+
+        // Update local member list AFTER SBBS sent (so kicked/banned user received the message)
+        if (target != null && group != null) {
+            when (action) {
+                "kicked", "banned" -> db.groupDao().removeMember(groupId, target)
+                "promoted" -> db.groupDao().updateMemberRole(groupId, target, 1, 0)
+                "demoted" -> db.groupDao().updateMemberRole(groupId, target, 0, 0)
+            }
         }
     }
 

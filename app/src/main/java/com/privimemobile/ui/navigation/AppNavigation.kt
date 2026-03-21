@@ -48,7 +48,6 @@ import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
 import com.privimemobile.ui.chat.ContactInfoScreen
 import com.privimemobile.ui.chat.CreateGroupScreen
-import com.privimemobile.ui.chat.GroupChatScreen
 import com.privimemobile.ui.chat.GroupSettingsScreen
 import com.privimemobile.ui.chat.MediaGalleryScreen
 import com.privimemobile.ui.chat.NewChatScreen
@@ -83,13 +82,23 @@ fun AppNavigation() {
     val pendingDeepLink by activity?.pendingDeepLink?.collectAsState() ?: remember { mutableStateOf(null) }
     LaunchedEffect(pendingDeepLink) {
         val convKey = pendingDeepLink ?: return@LaunchedEffect
-        // convKey is "@handle" — strip the @ prefix for navigation route
-        val handle = convKey.removePrefix("@")
-        if (handle.isNotEmpty()) {
-            navController.navigate("chat/$handle") {
-                // Ensure we land on chats tab first so back works properly
+        if (convKey.startsWith("g_")) {
+            // Group chat — convKey is "g_{groupId.take(16)}", need full groupId from DB
+            val groupIdPrefix = convKey.removePrefix("g_")
+            val groupEntity = com.privimemobile.chat.ChatService.db?.groupDao()?.findByConvKey(groupIdPrefix)
+            val groupId = groupEntity?.groupId ?: convKey.removePrefix("g_")
+            navController.navigate("group_chat/$groupId") {
                 popUpTo(Tab.CHATS.route) { inclusive = false }
                 launchSingleTop = true
+            }
+        } else {
+            // DM chat — convKey is "@handle"
+            val handle = convKey.removePrefix("@")
+            if (handle.isNotEmpty()) {
+                navController.navigate("chat/$handle") {
+                    popUpTo(Tab.CHATS.route) { inclusive = false }
+                    launchSingleTop = true
+                }
             }
         }
         activity?.consumeDeepLink()
@@ -107,7 +116,10 @@ fun AppNavigation() {
                 route == "new_chat" ||
                 route == "search_messages" ||
                 route.startsWith("media_gallery/") ||
-                route.startsWith("contact_info/")
+                route.startsWith("contact_info/") ||
+                route.startsWith("group_chat/") ||
+                route.startsWith("group_settings/") ||
+                route == "create_group"
     } ?: false
 
     Scaffold(
@@ -362,10 +374,12 @@ fun AppNavigation() {
                 arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
             ) { backStackEntry ->
                 val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
-                GroupChatScreen(
+                ChatScreen(
+                    handle = "",
                     groupId = groupId,
                     onBack = { navController.popBackStack() },
                     onGroupSettings = { navController.navigate("group_settings/$groupId") },
+                    onViewContact = { h -> navController.navigate("contact_info/$h") },
                 )
             }
             composable(
@@ -378,6 +392,9 @@ fun AppNavigation() {
                     onBack = { navController.popBackStack() },
                     onDeleteGroup = {
                         navController.popBackStack(Tab.CHATS.route, inclusive = false)
+                    },
+                    onContactInfo = { handle ->
+                        navController.navigate("contact_info/$handle")
                     },
                 )
             }

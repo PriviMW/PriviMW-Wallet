@@ -42,6 +42,8 @@ data class PendingTxEntity(
         const val ACTION_REMOVE_MEMBER = "remove_member"
         const val ACTION_SET_ROLE = "set_role"
         const val ACTION_TRANSFER_OWNERSHIP = "transfer_ownership"
+        const val ACTION_UPDATE_GROUP_INFO = "update_group_info"
         const val ACTION_DELETE_GROUP = "delete_group"
+        const val ACTION_RELEASE_HANDLE = "release_handle"
     }
 }

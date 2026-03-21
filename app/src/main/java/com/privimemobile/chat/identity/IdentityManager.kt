@@ -310,6 +310,14 @@ class IdentityManager(
                 if (result.containsKey("error")) {
                     onResult?.invoke(false, result["error"]?.toString())
                 } else {
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    if (txId != null) {
+                        scope.launch {
+                            com.privimemobile.chat.ChatService.pendingTxs.trackTx(
+                                txId, com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_RELEASE_HANDLE, "release"
+                            )
+                        }
+                    }
                     scope.launch { db.chatStateDao().clearIdentity() }
                     onResult?.invoke(true, null)
                 }

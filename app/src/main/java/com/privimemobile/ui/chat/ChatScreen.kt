@@ -54,7 +54,11 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -123,17 +127,58 @@ fun ChatScreen(
     onContactInfo: () -> Unit = {},
     onNavigateToChat: (String) -> Unit = {},
     scrollToTimestamp: Long = 0L,
+    groupId: String? = null,
+    onGroupSettings: () -> Unit = {},
+    onViewContact: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val view = androidx.compose.ui.platform.LocalView.current  // for haptic feedback
-    val convKey = "@$handle"
+    val isGroupMode = groupId != null
+
+    // --- Group mode state (reactive — observes DB changes) ---
+    val allGroups by com.privimemobile.chat.ChatService.db?.groupDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val group = if (isGroupMode) allGroups.firstOrNull { it.groupId == groupId } else null
+
+    var groupConvId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(groupId) {
+        if (groupId != null) {
+            // Initial load if not in DB yet
+            if (allGroups.none { it.groupId == groupId }) {
+                com.privimemobile.chat.ChatService.groups.refreshGroupInfo(groupId)
+            }
+            com.privimemobile.chat.ChatService.groups.refreshGroupMembers(groupId)
+            com.privimemobile.chat.ChatService.db?.groupDao()?.clearUnread(groupId)
+            val grp = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId)
+            groupConvId = com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, grp?.name ?: "Group")
+
+            // Request group avatar + description if missing locally
+            com.privimemobile.chat.ChatService.groups.requestGroupInfoIfNeeded(groupId)
+        }
+    }
+
+    // Observe group members reactively for accurate count
+    val groupMembers by if (isGroupMode) {
+        com.privimemobile.chat.ChatService.db?.groupDao()?.observeMembers(groupId!!)
+            ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    } else {
+        remember { mutableStateOf(emptyList<com.privimemobile.chat.db.entities.GroupMemberEntity>()) }
+    }
+    val groupMemberCount = groupMembers.size
+    // Map handle → display name for sender labels in chat bubbles
+    val groupMemberNames = remember(groupMembers) {
+        groupMembers.filter { !it.displayName.isNullOrEmpty() }
+            .associate { it.handle to it.displayName!! }
+    }
+
+    val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"
 
     // Observe conversation reactively — updates when MessageProcessor creates it
     val conversations by com.privimemobile.chat.ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     val conv = conversations.firstOrNull { it.convKey == convKey }
-    val convId = conv?.id ?: 0L
+    val convId = if (isGroupMode) (groupConvId ?: conv?.id ?: 0L) else (conv?.id ?: 0L)
 
     // Messages from Room DB — automatically updates when convId changes
     val roomMessages by remember(convId) {
@@ -215,8 +260,10 @@ fun ChatScreen(
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     val contact = roomContact.firstOrNull { it.handle == handle }
 
-    val resolvedName = displayName.ifEmpty {
-        contact?.displayName?.ifEmpty { null } ?: "@$handle"
+    val resolvedName = if (isGroupMode) {
+        group?.name ?: "Group"
+    } else {
+        displayName.ifEmpty { contact?.displayName?.ifEmpty { null } ?: "@$handle" }
     }
     val resolvedWalletId = contact?.walletId
 
@@ -360,11 +407,13 @@ fun ChatScreen(
     val currentConvId by rememberUpdatedState(convId)
 
     // Mark chat as active, clear unread, send read receipts
-    LaunchedEffect(handle) {
+    LaunchedEffect(handle, groupId) {
         com.privimemobile.chat.ChatService.setActiveChat(convKey)
-        com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
+        if (!isGroupMode) {
+            com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
+        }
     }
-    DisposableEffect(handle) {
+    DisposableEffect(handle, groupId) {
         onDispose {
             com.privimemobile.chat.ChatService.setActiveChat(null)
             // Save draft on dispose
@@ -490,15 +539,20 @@ fun ChatScreen(
             val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get() ?: return@launch
             val myHandle = state.myHandle ?: return@launch
             val ts = System.currentTimeMillis() / 1000
-            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
-            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+            val schedConvId = if (isGroupMode && groupId != null) {
+                com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: "Group")
+            } else {
+                val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                conv.id
+            }
             val dedupKey = "$ts:${trimmed.hashCode().toString(16)}:scheduled:true"
             val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                conversationId = conv.id,
+                conversationId = schedConvId,
                 text = trimmed,
                 timestamp = ts,
                 sent = true,
-                type = "dm",
+                type = if (isGroupMode) "group_msg" else "dm",
                 senderHandle = myHandle,
                 sbbsDedupKey = dedupKey,
                 scheduledAt = scheduledAt,
@@ -546,19 +600,23 @@ fun ChatScreen(
                         if (convEntity != null && convEntity.lastMessageTs == editTarget.timestamp) {
                             com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, editTarget.timestamp, trimmed.take(100))
                         }
-                        // Send SBBS edit to recipient
-                        val walletId = resolvedWalletId
-                        if (!walletId.isNullOrEmpty()) {
-                            val payload = mapOf(
-                                "v" to 1,
-                                "t" to "edit",
-                                "ts" to System.currentTimeMillis() / 1000,
-                                "from" to state.myHandle!!,
-                                "to" to handle,
-                                "msg_ts" to editTarget.timestamp,
-                                "msg" to trimmed,
-                            )
-                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                        // Send SBBS edit to recipient(s)
+                        val editPayload = mapOf(
+                            "v" to 1,
+                            "t" to "edit",
+                            "ts" to System.currentTimeMillis() / 1000,
+                            "from" to state.myHandle!!,
+                            "to" to (if (isGroupMode) groupId!! else handle),
+                            "msg_ts" to editTarget.timestamp,
+                            "msg" to trimmed,
+                        )
+                        if (isGroupMode && groupId != null) {
+                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, editPayload)
+                        } else {
+                            val walletId = resolvedWalletId
+                            if (!walletId.isNullOrEmpty()) {
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, editPayload)
+                            }
                         }
                     }
                 }
@@ -569,58 +627,89 @@ fun ChatScreen(
         }
 
         // /tip command — send BEAM or any asset
-        // Usage: /tip <amount> [asset_id] [message]
-        // Examples: /tip 5  |  /tip 5 hello  |  /tip 1 7 enjoy!
+        // DM:    /tip <amount> [asset_id] [message]
+        // Group: /tip @handle <amount> [asset_id] [message]
         if (trimmed.startsWith("/tip ", ignoreCase = true)) {
             val parts = trimmed.removePrefix("/tip ").trimStart()
-            val tokens = parts.split("\\s+".toRegex(), limit = 3)
-            val amountBeam = tokens.getOrNull(0)?.toDoubleOrNull()
-            val walletId = resolvedWalletId
-            if (amountBeam == null || amountBeam <= 0) {
-                Toast.makeText(context, "Usage: /tip <amount> [asset_id] [message]", Toast.LENGTH_SHORT).show()
-                return
-            }
-            if (walletId.isNullOrEmpty()) {
-                Toast.makeText(context, "Resolving address...", Toast.LENGTH_SHORT).show()
-                return
-            }
-            // If second token is a number, it's the asset ID; otherwise it's part of the message
-            val secondToken = tokens.getOrNull(1)
-            val secondIsAssetId = secondToken?.toIntOrNull() != null
-            val assetId = if (secondIsAssetId) secondToken!!.toInt() else 0
-            val caption = if (secondIsAssetId) {
-                tokens.getOrNull(2)?.trim() ?: ""
-            } else {
-                tokens.drop(1).joinToString(" ").trim()
-            }
-            val amountGroth = (amountBeam * 100_000_000).toLong()
-            val assetName = com.privimemobile.wallet.assetTicker(assetId)
-            val tipLabel = "Tip: ${Helpers.formatBeam(amountGroth)} $assetName"
+            val tokens = parts.split("\\s+".toRegex(), limit = 5)
 
-            // Balance check — available + shielded must cover tip amount
-            val bal = com.privimemobile.wallet.WalletEventBus.assetBalances[assetId]
-            val spendable = (bal?.available ?: 0L) + (bal?.shielded ?: 0L)
-            if (spendable < amountGroth) {
-                Toast.makeText(context, "Insufficient $assetName balance (have ${Helpers.formatBeam(spendable)}, need ${Helpers.formatBeam(amountGroth)})", Toast.LENGTH_LONG).show()
-                return
-            }
-            // Also check BEAM for fee if tipping a non-BEAM asset
-            if (assetId != 0) {
-                val beamBal = com.privimemobile.wallet.WalletEventBus.assetBalances[0]
-                val beamSpendable = (beamBal?.available ?: 0L) + (beamBal?.shielded ?: 0L)
-                if (beamSpendable <= 0) {
-                    Toast.makeText(context, "Insufficient BEAM for transaction fee", Toast.LENGTH_LONG).show()
-                    return
+            // In group mode: first token must be @handle
+            val tipTargetHandle: String
+            val tipTokens: List<String>
+            if (isGroupMode) {
+                val firstToken = tokens.getOrNull(0) ?: ""
+                if (!firstToken.startsWith("@") || firstToken.length < 2) {
+                    Toast.makeText(context, "Usage: /tip @handle <amount> [asset_id] [message]", Toast.LENGTH_LONG).show()
+                    setInputText(""); return
                 }
+                tipTargetHandle = firstToken.removePrefix("@")
+                tipTokens = tokens.drop(1)
+            } else {
+                tipTargetHandle = handle
+                tipTokens = tokens
             }
 
-            val txComment = "Tip to @$handle" + if (caption.isNotEmpty()) " — $caption" else ""
+            val amountBeam = tipTokens.getOrNull(0)?.toDoubleOrNull()
+            if (amountBeam == null || amountBeam <= 0) {
+                val usage = if (isGroupMode) "Usage: /tip @handle <amount> [asset_id] [message]"
+                    else "Usage: /tip <amount> [asset_id] [message]"
+                Toast.makeText(context, usage, Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // Resolve wallet ID for tip target
             scope.launch {
+                val tipWalletId = if (isGroupMode) {
+                    // Look up target handle's wallet ID from group members or contacts
+                    val member = com.privimemobile.chat.ChatService.db?.groupDao()?.findMember(groupId!!, tipTargetHandle)
+                    member?.walletId ?: com.privimemobile.chat.ChatService.db?.contactDao()?.findByHandle(tipTargetHandle)?.walletId
+                } else {
+                    resolvedWalletId
+                }
+
+                if (tipWalletId.isNullOrEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Cannot resolve @$tipTargetHandle address", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                // Parse asset ID and caption
+                val secondToken = tipTokens.getOrNull(1)
+                val secondIsAssetId = secondToken?.toIntOrNull() != null
+                val assetId = if (secondIsAssetId) secondToken!!.toInt() else 0
+                val caption = if (secondIsAssetId) {
+                    tipTokens.getOrNull(2)?.trim() ?: ""
+                } else {
+                    tipTokens.drop(1).joinToString(" ").trim()
+                }
+                val amountGroth = (amountBeam * 100_000_000).toLong()
+                val assetName = com.privimemobile.wallet.assetTicker(assetId)
+                val tipLabel = "Tip to @$tipTargetHandle: ${Helpers.formatBeam(amountGroth)} $assetName"
+
+                // Balance check
+                val bal = com.privimemobile.wallet.WalletEventBus.assetBalances[assetId]
+                val spendable = (bal?.available ?: 0L) + (bal?.shielded ?: 0L)
+                if (spendable < amountGroth) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Insufficient $assetName balance (have ${Helpers.formatBeam(spendable)}, need ${Helpers.formatBeam(amountGroth)})", Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+                if (assetId != 0) {
+                    val beamBal = com.privimemobile.wallet.WalletEventBus.assetBalances[0]
+                    val beamSpendable = (beamBal?.available ?: 0L) + (beamBal?.shielded ?: 0L)
+                    if (beamSpendable <= 0) {
+                        withContext(Dispatchers.Main) { Toast.makeText(context, "Insufficient BEAM for transaction fee", Toast.LENGTH_LONG).show() }
+                        return@launch
+                    }
+                }
+
                 try {
-                    // Send via wallet API tx_send (same approach as desktop DApp)
+                    val txComment = "Tip to @$tipTargetHandle" + if (caption.isNotEmpty()) " — $caption" else ""
                     val txResult = com.privimemobile.protocol.WalletApi.callAsync("tx_send", mapOf(
                         "value" to amountGroth,
-                        "address" to walletId,
+                        "address" to tipWalletId,
                         "asset_id" to assetId,
                         "comment" to txComment,
                     ))
@@ -631,25 +720,14 @@ fun ChatScreen(
                         return@launch
                     }
 
-                    // Send tip SBBS message
+                    // Insert tip message + send SBBS notification
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {
                         val ts = System.currentTimeMillis() / 1000
-                        val payload = mutableMapOf<String, Any?>(
-                            "v" to 1, "t" to "tip", "ts" to ts,
-                            "from" to state.myHandle!!, "to" to handle,
-                            "dn" to (state.myDisplayName ?: ""),
-                            "amount" to amountGroth,
-                        )
-                        if (assetId != 0) payload["asset_id"] = assetId
-                        if (caption.isNotEmpty()) payload["msg"] = caption
-                        // Optimistic insert — un-delete if tombstoned
-                        val tipConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
-                        if (tipConv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(tipConv.id)
                         val dedupKey = "$ts:tip:$amountGroth:$assetId:true"
                         val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                            conversationId = tipConv.id,
-                            text = caption.ifEmpty { null },
+                            conversationId = convId,
+                            text = "\u2192@$tipTargetHandle" + if (caption.isNotEmpty()) "\n$caption" else "",
                             timestamp = ts,
                             sent = true,
                             type = "tip",
@@ -659,8 +737,26 @@ fun ChatScreen(
                             sbbsDedupKey = dedupKey,
                         )
                         com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
-                        com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(tipConv.id, ts, tipLabel)
-                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+
+                        val payload = mutableMapOf<String, Any?>(
+                            "v" to 1, "t" to "tip", "ts" to ts,
+                            "from" to state.myHandle!!, "to" to tipTargetHandle,
+                            "dn" to (state.myDisplayName ?: ""),
+                            "amount" to amountGroth,
+                        )
+                        if (assetId != 0) payload["asset_id"] = assetId
+                        if (caption.isNotEmpty()) payload["msg"] = caption
+
+                        if (isGroupMode && groupId != null) {
+                            // Broadcast tip to group + update group preview
+                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, tipLabel)
+                        } else {
+                            val tipConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, tipTargetHandle)
+                            if (tipConv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(tipConv.id)
+                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(tipConv.id, ts, tipLabel)
+                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(tipWalletId, payload)
+                        }
                     }
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Tip sent! $tipLabel", Toast.LENGTH_SHORT).show()
@@ -695,32 +791,36 @@ fun ChatScreen(
                 scope.launch {
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {
-                        val walletId = resolvedWalletId
-                        if (!walletId.isNullOrEmpty()) {
-                            val ts = System.currentTimeMillis() / 1000
+                        val ts = System.currentTimeMillis() / 1000
+                        val dedupKey = "$ts:poll:${question.hashCode().toString(16)}:true"
+                        val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                            conversationId = convId,
+                            text = question,
+                            timestamp = ts,
+                            sent = true,
+                            type = "poll",
+                            senderHandle = state.myHandle,
+                            sbbsDedupKey = dedupKey,
+                            pollData = pollJson,
+                        )
+                        com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                        val payload = mapOf(
+                            "v" to 1, "t" to "poll", "ts" to ts,
+                            "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
+                            "dn" to (state.myDisplayName ?: ""),
+                            "msg" to question, "poll" to pollJson,
+                        )
+                        if (isGroupMode && groupId != null) {
+                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "\uD83D\uDCCA $question")
+                        } else {
                             val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                             if (convDb.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(convDb.id)
-                            val dedupKey = "$ts:poll:${question.hashCode().toString(16)}:true"
-                            val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                                conversationId = convDb.id,
-                                text = question,
-                                timestamp = ts,
-                                sent = true,
-                                type = "poll",
-                                senderHandle = state.myHandle,
-                                sbbsDedupKey = dedupKey,
-                                pollData = pollJson,
-                            )
-                            com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
                             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(convDb.id, ts, "\uD83D\uDCCA $question")
-                            // Send via SBBS
-                            val payload = mapOf(
-                                "v" to 1, "t" to "poll", "ts" to ts,
-                                "from" to state.myHandle!!, "to" to handle,
-                                "dn" to (state.myDisplayName ?: ""),
-                                "msg" to question, "poll" to pollJson,
-                            )
-                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                            val walletId = resolvedWalletId
+                            if (!walletId.isNullOrEmpty()) {
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                            }
                         }
                     }
                 }
@@ -734,8 +834,8 @@ fun ChatScreen(
         // Send file if pending
         if (pendingFile != null) {
             val file = pendingFile!!
-            Log.d("ChatScreen", "Sending file: ${file.name}, ${file.size} bytes, walletId=${resolvedWalletId?.take(16)}")
-            if (resolvedWalletId.isNullOrEmpty()) {
+            Log.d("ChatScreen", "Sending file: ${file.name}, ${file.size} bytes, isGroup=$isGroupMode")
+            if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
                 Log.w("ChatScreen", "Cannot send file — no resolved wallet ID")
                 return
             }
@@ -757,7 +857,7 @@ fun ChatScreen(
                             val msgType = if (stickerMeta != null) "sticker" else "file"
                             val payload = mutableMapOf<String, Any?>(
                                 "v" to 1, "t" to msgType, "ts" to ts,
-                                "from" to state.myHandle!!, "to" to handle,
+                                "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
                                 "dn" to (state.myDisplayName ?: ""),
                                 "file" to fileMeta,
                             )
@@ -771,14 +871,18 @@ fun ChatScreen(
                                 if (stickerMeta.emoji != null) payload["sticker_emoji"] = stickerMeta.emoji
                             }
 
-                            // Optimistic DB insert — un-delete if tombstoned
-                            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
-                            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                            // Optimistic DB insert
+                            val fileConvId = if (isGroupMode) convId else {
+                                val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                                if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                                conv.id
+                            }
                             val dedupKey = "$ts:$msgType:${fileMeta["cid"]}:true"
                             val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                                conversationId = conv.id, text = trimmed.ifEmpty { null },
+                                conversationId = fileConvId, text = trimmed.ifEmpty { null },
                                 timestamp = ts, sent = true, type = msgType,
                                 senderHandle = state.myHandle, sbbsDedupKey = dedupKey,
+                                replyText = fileReplyText,
                                 stickerPackName = stickerMeta?.packName,
                                 stickerPackId = stickerMeta?.packId,
                                 stickerEmoji = stickerMeta?.emoji,
@@ -803,7 +907,7 @@ fun ChatScreen(
                             if (msgId > 0) {
                                 com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
                                     com.privimemobile.chat.db.entities.AttachmentEntity(
-                                        messageId = msgId, conversationId = conv.id,
+                                        messageId = msgId, conversationId = fileConvId,
                                         ipfsCid = cid,
                                         encryptionKey = fileMeta["key"] as? String ?: "",
                                         encryptionIv = fileMeta["iv"] as? String ?: "",
@@ -821,10 +925,13 @@ fun ChatScreen(
                             } else {
                                 "\uD83D\uDCCE ${fileMeta["name"]}"
                             }
-                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, preview)
-
-                            // Send via SBBS
-                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                            if (isGroupMode && groupId != null) {
+                                com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
+                            } else {
+                                com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fileConvId, ts, preview)
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -842,8 +949,29 @@ fun ChatScreen(
         }
 
         // Regular text message
+        if (trimmed.isEmpty()) return
+
+        // Group mode — send via GroupManager
+        if (isGroupMode && groupId != null) {
+            val grpReplyText = replyingTo?.text?.take(200)?.ifEmpty { null }
+            val grpTimer = oneShotTimer
+            scope.launch {
+                com.privimemobile.chat.ChatService.groups.sendGroupMessage(
+                    groupId, trimmed, replyText = grpReplyText, ttl = grpTimer,
+                )
+            }
+            setInputText("")
+            replyingTo = null
+            oneShotTimer = 0
+            // Clear draft
+            if (convId > 0L) {
+                scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(convId, null) }
+            }
+            return
+        }
+
         val walletId = resolvedWalletId
-        if (trimmed.isEmpty() || walletId.isNullOrEmpty()) return
+        if (walletId.isNullOrEmpty()) return
 
         // Capture state BEFORE coroutine (state may be cleared by main thread before coroutine runs)
         val replyText = replyingTo?.text?.take(200)?.ifEmpty { null }
@@ -938,7 +1066,7 @@ fun ChatScreen(
         }
     }
 
-    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && !resolvedWalletId.isNullOrEmpty()
+    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && (isGroupMode || !resolvedWalletId.isNullOrEmpty())
 
     // BackHandler: intercept system back when overlays are visible
     BackHandler(enabled = selectionMode) { selectionMode = false; selectedIds.clear() }
@@ -1003,6 +1131,30 @@ fun ChatScreen(
                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = C.text, modifier = Modifier.size(22.dp))
                 }
+                if (isGroupMode) {
+                    // Group avatar — custom image or default icon
+                    val groupAvatarBmp = remember(groupId, group?.avatarHash) {
+                        try {
+                            val f = java.io.File(context.filesDir, "group_avatars/$groupId.webp")
+                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+                        } catch (_: Exception) { null }
+                    }
+                    if (groupAvatarBmp != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = groupAvatarBmp.asImageBitmap(),
+                            contentDescription = "Group",
+                            modifier = Modifier.size(38.dp).clip(CircleShape).clickable { onGroupSettings() },
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(38.dp).background(C.accent, CircleShape).clickable { onGroupSettings() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                } else {
                 // Avatar
                 val avatarKey = handle
                 val avatarColors = listOf(
@@ -1020,18 +1172,40 @@ fun ChatScreen(
                         size = 38.dp,
                     )
                 }
+                }
                 Spacer(Modifier.width(10.dp))
                 Column(
-                    modifier = Modifier.weight(1f).clickable { onContactInfo() },
+                    modifier = Modifier.weight(1f).clickable {
+                        if (isGroupMode) onGroupSettings() else onContactInfo()
+                    },
                 ) {
-                    Text(
-                        resolvedName,
-                        color = C.text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isGroupMode && group?.isPublic == false) {
+                            Icon(Icons.Default.Lock, "Private", tint = C.textSecondary, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            resolvedName,
+                            color = C.text,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (isGroupMode) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "$groupMemberCount members",
+                                color = C.textSecondary,
+                                fontSize = 12.sp,
+                            )
+                            if (group?.muted == true) {
+                                Icon(Icons.Default.NotificationsOff, "Muted", tint = C.textSecondary,
+                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
+                            }
+                        }
+                    } else {
                     val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
                     val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(convKey)
                     if (peerTyping) {
@@ -1057,8 +1231,19 @@ fun ChatScreen(
                             }
                         }
                     } else {
-                        Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
+                            if (conv?.muted == true) {
+                                Icon(Icons.Default.NotificationsOff, "Muted", tint = C.textSecondary,
+                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
+                            }
+                            if (conv?.isBlocked == true) {
+                                Icon(Icons.Default.Block, "Blocked", tint = Color(0xFFEF5350),
+                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
+                            }
+                        }
                     }
+                    } // end !isGroupMode else
                 }
                 // 3-dot overflow menu (animated rotation + smooth dropdown)
                 Box {
@@ -1113,14 +1298,21 @@ fun ChatScreen(
                             if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
                             showOverflowMenu = false
                         }
-                        OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
-                        OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
+                        if (!isGroupMode) {
+                            OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
+                        }
+                        if (isGroupMode) {
+                            OverflowItem("\u2699\uFE0F", "Group info") { showOverflowMenu = false; onGroupSettings() }
+                        } else {
+                            OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
+                        }
                         OverflowItem("\uD83C\uDFA8", "Wallpaper") { showOverflowMenu = false; showWallpaperPicker = true }
                         OverflowItem("\uD83D\uDCE4", "Export chat") {
                             showOverflowMenu = false
+                            val exportTitle = if (isGroupMode) "PriviMe Group — ${group?.name ?: "Group"}" else "PriviMe Chat — @$handle"
                             scope.launch {
                                 val sb = StringBuilder()
-                                sb.appendLine("PriviMe Chat — @$handle")
+                                sb.appendLine(exportTitle)
                                 sb.appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
                                 sb.appendLine("---")
                                 messages.forEach { msg ->
@@ -1138,25 +1330,33 @@ fun ChatScreen(
                                     val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                         type = "text/plain"
                                         putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
-                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "PriviMe Chat — @$handle")
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, exportTitle)
                                     }
                                     context.startActivity(android.content.Intent.createChooser(intent, "Export chat"))
                                 }
                             }
                         }
-                        val isMuted = conv?.muted == true
+                        val isMuted = if (isGroupMode) group?.muted == true else conv?.muted == true
                         OverflowItem(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", if (isMuted) "Unmute" else "Mute") {
-                            if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted) } }
+                            scope.launch {
+                                if (isGroupMode && groupId != null) {
+                                    com.privimemobile.chat.ChatService.db?.groupDao()?.setMuted(groupId, !isMuted)
+                                } else if (convId > 0L) {
+                                    com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted)
+                                }
+                            }
                             showOverflowMenu = false
                         }
-                        val isBlocked = conv?.isBlocked == true
-                        OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) "Unblock" else "Block", color = if (isBlocked) C.text else C.error) {
-                            if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
-                            showOverflowMenu = false
+                        if (!isGroupMode) {
+                            val isBlocked = conv?.isBlocked == true
+                            OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) "Unblock" else "Block", color = if (isBlocked) C.text else C.error) {
+                                if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
+                                showOverflowMenu = false
+                            }
                         }
                         HorizontalDivider(color = C.border)
                         OverflowItem("\uD83D\uDDD1", "Clear history", color = C.error) { showOverflowMenu = false; showClearConfirm = true }
-                        OverflowItem("\u274C", "Delete chat", color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
+                        OverflowItem("\u274C", if (isGroupMode) "Leave group" else "Delete chat", color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
                     }
                 }
             }
@@ -1435,16 +1635,19 @@ fun ChatScreen(
                         }
                     },
                     confirmButton = {
-                        // Unpin all button
-                        TextButton(onClick = {
-                            scope.launch {
-                                if (convId > 0L) {
-                                    com.privimemobile.chat.ChatService.db?.messageDao()?.unpinAll(convId)
+                        // Unpin all — only admin/creator in group mode, always in DM
+                        val canUnpin = !isGroupMode || (group?.myRole ?: 0) >= 1
+                        if (canUnpin) {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    if (convId > 0L) {
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.unpinAll(convId)
+                                    }
                                 }
+                                showPinListDialog = false
+                            }) {
+                                Text("Unpin All", color = C.error, fontWeight = FontWeight.Bold)
                             }
-                            showPinListDialog = false
-                        }) {
-                            Text("Unpin All", color = C.error, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
@@ -1703,7 +1906,7 @@ fun ChatScreen(
                                     Text("${albumMsgs.size} photos", color = C.textMuted, fontSize = 10.sp)
                                     Spacer(Modifier.width(6.dp))
                                     Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
-                                    if (isMine) {
+                                    if (isMine && !isGroupMode) {
                                         Spacer(Modifier.width(6.dp))
                                         val lastMsg = albumMsgs.last()
                                         TickIndicator(read = lastMsg.read, delivered = lastMsg.delivered)
@@ -1803,16 +2006,20 @@ fun ChatScreen(
                                             msg.id.toLong(), pollObj.toString()
                                         )
                                         // Send vote/unvote via SBBS
-                                        val walletId = resolvedWalletId
-                                        if (!walletId.isNullOrEmpty()) {
-                                            val payload = mapOf(
-                                                "v" to 1, "t" to if (isUnvote) "poll_unvote" else "poll_vote",
-                                                "ts" to System.currentTimeMillis() / 1000,
-                                                "from" to myHandle, "to" to handle,
-                                                "msg_ts" to msg.timestamp,
-                                                "option" to optIdx,
-                                            )
-                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                        val votePayload = mapOf(
+                                            "v" to 1, "t" to if (isUnvote) "poll_unvote" else "poll_vote",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "from" to myHandle, "to" to (if (isGroupMode) groupId!! else handle),
+                                            "msg_ts" to msg.timestamp,
+                                            "option" to optIdx,
+                                        )
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, votePayload)
+                                        } else {
+                                            val walletId = resolvedWalletId
+                                            if (!walletId.isNullOrEmpty()) {
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, votePayload)
+                                            }
                                         }
                                     }
                                 }
@@ -1827,23 +2034,32 @@ fun ChatScreen(
                                     val nowTs = System.currentTimeMillis() / 1000
                                     com.privimemobile.chat.ChatService.db!!.reactionDao().remove(msgTs, myHandle, emoji, nowTs)
                                     // Send unreact SBBS to remove on other side
-                                    val walletId = resolvedWalletId
-                                    if (!walletId.isNullOrEmpty()) {
-                                        val payload = mapOf(
-                                            "v" to 1,
-                                            "t" to "unreact",
-                                            "ts" to System.currentTimeMillis() / 1000,
-                                            "from" to myHandle,
-                                            "to" to handle,
-                                            "msg_ts" to msgTs,
-                                            "emoji" to emoji,
-                                        )
-                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                    val unreactPayload = mapOf(
+                                        "v" to 1,
+                                        "t" to "unreact",
+                                        "ts" to System.currentTimeMillis() / 1000,
+                                        "from" to myHandle,
+                                        "to" to (if (isGroupMode) groupId!! else handle),
+                                        "msg_ts" to msgTs,
+                                        "emoji" to emoji,
+                                    )
+                                    if (isGroupMode && groupId != null) {
+                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, unreactPayload)
+                                    } else {
+                                        val walletId = resolvedWalletId
+                                        if (!walletId.isNullOrEmpty()) {
+                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, unreactPayload)
+                                        }
                                     }
                                 }
                             }
                         },
                         isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp,
+                        isGroupMode = isGroupMode,
+                        onSenderTap = { senderHandle ->
+                            if (senderHandle.isNotEmpty()) onViewContact(senderHandle)
+                        },
+                        groupMemberNames = groupMemberNames,
                     )
                     } // close Row (selection mode wrapper)
                 }
@@ -2238,7 +2454,7 @@ fun ChatScreen(
                                             val packFiles = currentPack?.second ?: emptyList()
                                             if (packFiles.isEmpty()) {
                                                 Toast.makeText(context, "Pack is empty", Toast.LENGTH_SHORT).show()
-                                            } else if (resolvedWalletId.isNullOrEmpty()) {
+                                            } else if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
                                                 Toast.makeText(context, "Resolving address...", Toast.LENGTH_SHORT).show()
                                             } else {
                                                 val pName = currentPack!!.first
@@ -2299,7 +2515,7 @@ fun ChatScreen(
                                                             val ts = System.currentTimeMillis() / 1000
                                                             val payload = mutableMapOf<String, Any?>(
                                                                 "v" to 1, "t" to "sticker_pack", "ts" to ts,
-                                                                "from" to myHandle, "to" to handle,
+                                                                "from" to myHandle, "to" to (if (isGroupMode) groupId!! else handle),
                                                                 "dn" to (state.myDisplayName ?: ""),
                                                                 "file" to fileMeta,
                                                                 "pack_name" to pName,
@@ -2307,11 +2523,14 @@ fun ChatScreen(
                                                                 "pack_total" to pTotal,
                                                             )
                                                             val cid = fileMeta["cid"] as? String ?: ""
-                                                            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
-                                                            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                                                            val stkConvId = if (isGroupMode) convId else {
+                                                                val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+                                                                if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+                                                                conv.id
+                                                            }
                                                             val dedupKey = "$ts:sticker_pack:$cid:true"
                                                             val entity = com.privimemobile.chat.db.entities.MessageEntity(
-                                                                conversationId = conv.id, text = "\uD83D\uDCE6 Sticker pack: $pName ($pTotal stickers)",
+                                                                conversationId = stkConvId, text = "\uD83D\uDCE6 Sticker pack: $pName ($pTotal stickers)",
                                                                 timestamp = ts, sent = true, type = "sticker_pack",
                                                                 senderHandle = myHandle, sbbsDedupKey = dedupKey,
                                                                 stickerPackName = pName, stickerPackId = pId, stickerPackTotal = pTotal,
@@ -2320,7 +2539,7 @@ fun ChatScreen(
                                                             if (msgId > 0 && cid.isNotEmpty()) {
                                                                 com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
                                                                     com.privimemobile.chat.db.entities.AttachmentEntity(
-                                                                        messageId = msgId, conversationId = conv.id,
+                                                                        messageId = msgId, conversationId = stkConvId,
                                                                         ipfsCid = cid, encryptionKey = fileMeta["key"] as? String ?: "",
                                                                         encryptionIv = fileMeta["iv"] as? String ?: "",
                                                                         fileName = "${pName}.zip", fileSize = zipFile.length(),
@@ -2329,8 +2548,13 @@ fun ChatScreen(
                                                                     )
                                                                 )
                                                             }
-                                                            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(conv.id, ts, "\uD83D\uDCE6 Sticker pack: $pName")
-                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                                                            if (isGroupMode && groupId != null) {
+                                                                com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+                                                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
+                                                            } else {
+                                                                com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(stkConvId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
+                                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                                                            }
                                                             withContext(Dispatchers.Main) {
                                                                 Toast.makeText(context, "Pack shared! ($pTotal stickers, ${zipFile.length() / 1024}KB)", Toast.LENGTH_SHORT).show()
                                                             }
@@ -2607,7 +2831,9 @@ fun ChatScreen(
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text("Commands", color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                     listOf(
-                        Triple("/tip", "<amount> [asset_id] [message]", "Send BEAM (default) or any asset"),
+                        Triple("/tip",
+                            if (isGroupMode) "@handle <amount> [asset_id] [message]" else "<amount> [asset_id] [message]",
+                            if (isGroupMode) "Tip a group member" else "Send BEAM (default) or any asset"),
                         Triple("/poll", "Question | Option 1 | Option 2", "Create a poll"),
                     ).forEach { (cmd, args, desc) ->
                         Row(
@@ -2686,7 +2912,7 @@ fun ChatScreen(
                         val text = newValue.text
                         if (text == "/") showCommandMenu = true
                         else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
-                        if (text.isNotEmpty()) com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
+                        if (text.isNotEmpty() && !isGroupMode) com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
                         // Close emoji picker when user starts typing via keyboard
                         if (showEmojiPicker && text.length > inputText.text.length) {
                             // Only if keyboard added chars (not emoji picker)
@@ -2696,7 +2922,7 @@ fun ChatScreen(
                         Text(
                             when {
                                 pendingFile != null -> "Add a caption..."
-                                resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
+                                !isGroupMode && resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
                                 else -> "Message"
                             },
                             color = C.textMuted, fontSize = 15.sp,
@@ -2711,7 +2937,7 @@ fun ChatScreen(
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                     maxLines = 4,
-                    enabled = !resolvedWalletId.isNullOrEmpty() && !uploading,
+                    enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading,
                 )
 
                 // Right side: animated swap icons ↔ send (180ms, scale to 62.5% like Telegram)
@@ -2813,8 +3039,12 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
                 containerColor = C.card,
-                title = { Text("Delete chat", color = C.text, fontWeight = FontWeight.SemiBold) },
-                text = { Text("Delete this entire conversation? New messages from this contact will start a fresh chat.", color = C.textSecondary) },
+                title = { Text(if (isGroupMode) "Leave group" else "Delete chat", color = C.text, fontWeight = FontWeight.SemiBold) },
+                text = { Text(
+                    if (isGroupMode) "Leave this group and delete all messages? You can rejoin later."
+                    else "Delete this entire conversation? New messages from this contact will start a fresh chat.",
+                    color = C.textSecondary,
+                ) },
                 confirmButton = {
                     TextButton(onClick = {
                         if (convId > 0L) {
@@ -2886,20 +3116,24 @@ fun ChatScreen(
                                     scope.launch {
                                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                         if (state?.myHandle != null) {
-                                            val walletId = resolvedWalletId
                                             for ((i, msg) in msgsToDelete.withIndex()) {
-                                                // Soft-delete locally (by entity ID — reliable)
                                                 com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(msg.id.toLong())
-                                                // Send SBBS delete to recipient for own messages
-                                                if (msg.sent && !walletId.isNullOrEmpty()) {
-                                                    val payload = mapOf(
+                                                if (msg.sent) {
+                                                    val delPayload = mapOf(
                                                         "v" to 1, "t" to "delete",
                                                         "ts" to System.currentTimeMillis() / 1000,
                                                         "from" to state.myHandle!!,
-                                                        "to" to handle,
+                                                        "to" to (if (isGroupMode) groupId!! else handle),
                                                         "msg_ts" to msg.timestamp,
                                                     )
-                                                    com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                                    if (isGroupMode && groupId != null) {
+                                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
+                                                    } else {
+                                                        val walletId = resolvedWalletId
+                                                        if (!walletId.isNullOrEmpty()) {
+                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
+                                                        }
+                                                    }
                                                     if (i < msgsToDelete.size - 1) delay(1000)
                                                 }
                                             }
@@ -3351,15 +3585,19 @@ fun ChatScreen(
                                             targetMsg.timestamp, state.myHandle!!, emoji, ts
                                         )
                                     }
-                                    val walletId = resolvedWalletId
-                                    if (!walletId.isNullOrEmpty()) {
-                                        val payload = mapOf(
-                                            "v" to 1, "t" to "react",
-                                            "ts" to System.currentTimeMillis() / 1000,
-                                            "from" to state.myHandle!!, "to" to handle,
-                                            "msg_ts" to targetMsg.timestamp, "emoji" to emoji,
-                                        )
-                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                    val reactPayload = mapOf(
+                                        "v" to 1, "t" to "react",
+                                        "ts" to System.currentTimeMillis() / 1000,
+                                        "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
+                                        "msg_ts" to targetMsg.timestamp, "emoji" to emoji,
+                                    )
+                                    if (isGroupMode && groupId != null) {
+                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, reactPayload)
+                                    } else {
+                                        val walletId = resolvedWalletId
+                                        if (!walletId.isNullOrEmpty()) {
+                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, reactPayload)
+                                        }
                                     }
                                 }
                             }
@@ -3510,12 +3748,28 @@ fun ChatScreen(
 
                         MenuItemRow("Reply") { replyingTo = targetMsg; contextMenuMsg = null }
 
-                        MenuItemRow(if (targetMsg.pinned) "Unpin" else "Pin") {
-                            scope.launch {
-                                if (targetMsg.pinned) com.privimemobile.chat.ChatService.db?.messageDao()?.unpinMessage(targetMsg.id.toLong())
-                                else com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
+                        // Pin/Unpin — in group mode, only admin (role>=1) or creator (role==2) can pin
+                        val canPin = !isGroupMode || (group?.myRole ?: 0) >= 1
+                        if (canPin) {
+                            MenuItemRow(if (targetMsg.pinned) "Unpin" else "Pin") {
+                                val isPinning = !targetMsg.pinned
+                                scope.launch {
+                                    if (isPinning) com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
+                                    else com.privimemobile.chat.ChatService.db?.messageDao()?.unpinMessage(targetMsg.id.toLong())
+                                    // Broadcast pin/unpin to group members
+                                    if (isGroupMode && groupId != null) {
+                                        val pinPayload = mapOf(
+                                            "v" to 1, "t" to "group_pin",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "msg_ts" to targetMsg.timestamp,
+                                            "msg" to (targetMsg.text.take(100)),
+                                            "pin" to isPinning,
+                                        )
+                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, pinPayload)
+                                    }
+                                }
+                                contextMenuMsg = null
                             }
-                            contextMenuMsg = null
                         }
 
                         if (targetMsg.sent && targetMsg.text.isNotEmpty() && targetMsg.type != "tip") {
@@ -3533,22 +3787,33 @@ fun ChatScreen(
                         }
 
                         // Resend option for sent messages not yet delivered
-                        if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L && targetMsg.type == "dm") {
+                        if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L && (targetMsg.type == "dm" || targetMsg.type == "group_msg")) {
                             MenuItemRow("Resend") {
                                 scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                    val wid = resolvedWalletId
-                                    if (state?.myHandle != null && !wid.isNullOrEmpty()) {
-                                        val payload = mapOf(
-                                            "v" to 1, "t" to "dm",
-                                            "ts" to targetMsg.timestamp,
-                                            "from" to state.myHandle!!, "to" to handle,
-                                            "dn" to (state.myDisplayName ?: ""),
-                                            "msg" to targetMsg.text,
-                                        )
-                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(wid, payload)
-                                        withContext(Dispatchers.Main) {
-                                            Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
+                                    if (state?.myHandle != null) {
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups.sendGroupMessage(
+                                                groupId, targetMsg.text, replyText = targetMsg.reply,
+                                            )
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(context, "Message resent to group", Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            val wid = resolvedWalletId
+                                            if (!wid.isNullOrEmpty()) {
+                                                val payload = mapOf(
+                                                    "v" to 1, "t" to "dm",
+                                                    "ts" to targetMsg.timestamp,
+                                                    "from" to state.myHandle!!, "to" to handle,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "msg" to targetMsg.text,
+                                                )
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(wid, payload)
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -3589,15 +3854,19 @@ fun ChatScreen(
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
                                         com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
-                                        val walletId = resolvedWalletId
-                                        if (!walletId.isNullOrEmpty()) {
-                                            val payload = mapOf(
-                                                "v" to 1, "t" to "delete",
-                                                "ts" to System.currentTimeMillis() / 1000,
-                                                "from" to state.myHandle!!, "to" to handle,
-                                                "msg_ts" to targetMsg.timestamp,
-                                            )
-                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                        val delPayload = mapOf(
+                                            "v" to 1, "t" to "delete",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
+                                            "msg_ts" to targetMsg.timestamp,
+                                        )
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
+                                        } else {
+                                            val walletId = resolvedWalletId
+                                            if (!walletId.isNullOrEmpty()) {
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
+                                            }
                                         }
                                         refreshConversationPreview(convId)
                                     }
@@ -3862,6 +4131,9 @@ private fun MessageBubble(
     isSelected: Boolean = false,
     onPollVote: (optionIndex: Int) -> Unit = {},
     myHandle: String? = null,
+    isGroupMode: Boolean = false,
+    onSenderTap: (String) -> Unit = {},
+    groupMemberNames: Map<String, String> = emptyMap(),
 ) {
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
@@ -3871,10 +4143,100 @@ private fun MessageBubble(
     val fileMime = msg.file?.mime ?: ""
     val isImage = (msg.type == "file" || msg.type == "sticker") && Helpers.isImageMime(fileMime)
 
+    // Group service messages (join/leave/kick/ban) — centered pill
+    if (msg.type == "group_service") {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = msg.text,
+                color = C.textSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .background(C.card, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
+        return
+    }
+
+    // Group invite message — card with Accept/Decline buttons
+    if (msg.type == "group_invite" && msg.pollData != null) {
+        val inviteData = remember(msg.pollData) {
+            try { org.json.JSONObject(msg.pollData) } catch (_: Exception) { null }
+        }
+        val inviteGroupId = inviteData?.optString("group_id") ?: ""
+        val inviteGroupName = inviteData?.optString("group_name") ?: "Group"
+        val invitedBy = inviteData?.optString("invited_by") ?: msg.from
+        val inviteMemberCount = inviteData?.optInt("member_count", 0) ?: 0
+        val invitePassword = inviteData?.optString("join_password")
+        var joining by remember { mutableStateOf(false) }
+        val inviteScope = rememberCoroutineScope()
+        // Use msg.edited as persistent "responded" flag (survives navigation)
+        val alreadyResponded = msg.edited
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = C.card),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 16.dp),
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("\uD83D\uDC65 Group Invite", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Text(inviteGroupName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("$inviteMemberCount members \u2022 Invited by @$invitedBy", color = C.textSecondary, fontSize = 12.sp)
+                Spacer(Modifier.height(10.dp))
+                if (!alreadyResponded && !joining) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                joining = true
+                                // Mark as responded in DB immediately
+                                inviteScope.launch {
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.markEdited(msg.id.toLong())
+                                }
+                                com.privimemobile.chat.ChatService.groups.joinGroup(inviteGroupId, joinPassword = invitePassword) { s, e ->
+                                    if (s) {
+                                        android.widget.Toast.makeText(context, "Joining $inviteGroupName...", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        joining = false
+                                        android.widget.Toast.makeText(context, e ?: "Join failed", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            enabled = inviteGroupId.isNotEmpty(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                        ) {
+                            Text("Accept", color = C.textDark, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                // Mark as responded in DB
+                                inviteScope.launch {
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.markEdited(msg.id.toLong())
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text("Decline", color = C.textSecondary)
+                        }
+                    }
+                } else if (joining) {
+                    Text("Joining...", color = C.accent, fontSize = 13.sp)
+                } else {
+                    Text("\u2705 Responded", color = C.textMuted, fontSize = 13.sp)
+                }
+            }
+        }
+        return
+    }
+
     // Check if message is emoji-only (1-3 emojis, no other text) for large display
     val isEmojiOnly = remember(msg.text) {
         val t = msg.text.trim()
-        if (t.isEmpty() || msg.type != "dm" || msg.file != null || msg.isTip || msg.reply != null || msg.fwdFrom != null) false
+        if (t.isEmpty() || (msg.type != "dm" && msg.type != "group_msg") || msg.file != null || msg.isTip || msg.reply != null || msg.fwdFrom != null) false
         else {
             // Count emoji codepoints
             val codePoints = t.codePoints().toArray()
@@ -3962,6 +4324,38 @@ private fun MessageBubble(
                 .offset(x = (offsetX / 3f).dp),
             horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         ) {
+            // Group mode: show sender avatar for non-self messages (tap → contact info)
+            if (isGroupMode && !isMine) {
+                Box(modifier = Modifier.clickable { onSenderTap(msg.from) }) {
+                    com.privimemobile.ui.components.AvatarDisplay(
+                        handle = msg.from,
+                        size = 32.dp,
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+            }
+            // Wrap group sender name + bubble content
+            Column(
+                horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+                modifier = Modifier.widthIn(max = 300.dp),
+            ) {
+            // Group mode: sender name (display name or @handle, colored, tap → contact info)
+            if (isGroupMode && !isMine && msg.from.isNotEmpty()) {
+                val senderColors = listOf(
+                    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+                    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+                    Color(0xFFFFA726), Color(0xFF78909C),
+                )
+                val senderColor = senderColors[kotlin.math.abs(msg.from.hashCode()) % senderColors.size]
+                val senderDisplayName = groupMemberNames[msg.from]
+                Text(
+                    senderDisplayName ?: "@${msg.from}",
+                    color = senderColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 1.dp).clickable { onSenderTap(msg.from) },
+                )
+            }
             // Sticker display (no bubble, larger image — show placeholder even before attachment loads)
             // Sticker pack message — show card with Save button
             if (msg.type == "sticker_pack") {
@@ -4019,7 +4413,7 @@ private fun MessageBubble(
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
-                            if (isMine) { Spacer(Modifier.width(6.dp)); TickIndicator(read = msg.read, delivered = msg.delivered) }
+                            if (isMine && !isGroupMode) { Spacer(Modifier.width(6.dp)); TickIndicator(read = msg.read, delivered = msg.delivered) }
                         }
                     }
                 }
@@ -4140,10 +4534,15 @@ private fun MessageBubble(
                     )
                 }
 
-                // Tip label
+                // Tip label — parse →@handle prefix for group tips
                 if (msg.isTip) {
+                    val assetLabel = "${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}"
+                    val tipTarget = if (msg.text.startsWith("\u2192@")) {
+                        msg.text.lineSequence().first().removePrefix("\u2192")
+                    } else null
+                    val tipLabel = if (tipTarget != null) "Tip to $tipTarget: $assetLabel" else "Tip: $assetLabel"
                     Text(
-                        "Tip: ${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}",
+                        tipLabel,
                         color = C.accent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -4262,13 +4661,18 @@ private fun MessageBubble(
                             }
                         }
                     }
-                } else
-                // Text content
-                if (msg.text.isNotEmpty()) {
+                } else {
+                // Text content — strip →@handle prefix from tip messages
+                val displayText = if (msg.isTip && msg.text.startsWith("\u2192@")) {
+                    val lines = msg.text.lines()
+                    lines.drop(1).joinToString("\n").trim() // skip "→@handle" line, show caption only
+                } else msg.text
+                if (displayText.isNotEmpty()) {
                     Text(
-                        text = parseMarkdown(msg.text),
+                        text = parseMarkdown(displayText),
                         color = C.text, fontSize = 15.sp, lineHeight = 20.sp,
                     )
+                }
                 }
 
                 // Meta row (time + read status)
@@ -4317,6 +4721,7 @@ private fun MessageBubble(
             }
 
         }
+        }  // close group sender name/bubble wrapper Column
         }  // close Card Row
     }  // close Box (swipe container)
 

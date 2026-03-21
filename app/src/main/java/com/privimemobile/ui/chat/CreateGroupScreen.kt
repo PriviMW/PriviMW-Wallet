@@ -4,11 +4,14 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,14 +32,15 @@ fun CreateGroupScreen(
 ) {
     val context = LocalContext.current
     var groupName by remember { mutableStateOf("") }
-    var isPublic by remember { mutableStateOf(false) }
+    var description by remember { mutableStateOf("") }
+    var isPublic by remember { mutableStateOf(true) }
     var requireApproval by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Create Group", color = Color.White) },
+                title = { Text("New Group", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -53,73 +57,116 @@ fun CreateGroupScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Group icon placeholder
+            // Group icon
             Box(
                 modifier = Modifier
                     .size(80.dp)
-                    .background(C.card, RoundedCornerShape(40.dp))
+                    .background(C.accent, CircleShape)
                     .align(Alignment.CenterHorizontally),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Group, contentDescription = null, tint = C.accent, modifier = Modifier.size(40.dp))
+                Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
+            Text(
+                "Set group icon later in Group Info",
+                color = C.textMuted, fontSize = 12.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+
+            Spacer(Modifier.height(4.dp))
 
             // Group name
             OutlinedTextField(
                 value = groupName,
                 onValueChange = { if (it.length <= 32) groupName = it },
-                label = { Text("Group Name") },
+                label = { Text("Group Name *") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+                supportingText = { Text("${groupName.length}/32", color = C.textMuted) },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = C.accent,
-                    unfocusedBorderColor = C.textSecondary,
-                    focusedLabelColor = C.accent,
-                    unfocusedLabelColor = C.textSecondary,
-                    cursorColor = C.accent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = C.accent, unfocusedBorderColor = C.textSecondary,
+                    focusedLabelColor = C.accent, unfocusedLabelColor = C.textSecondary,
+                    cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                 ),
             )
 
-            // Public/Private toggle
-            Row(
+            // Description (optional)
+            OutlinedTextField(
+                value = description,
+                onValueChange = { if (it.length <= 200) description = it },
+                label = { Text("Description (optional)") },
+                maxLines = 3,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("Public Group", color = Color.White, fontSize = 16.sp)
-                    Text(
-                        if (isPublic) "Anyone can find and join" else "Invite only",
-                        color = C.textSecondary, fontSize = 13.sp,
-                    )
-                }
-                Switch(
-                    checked = isPublic,
-                    onCheckedChange = { isPublic = it },
-                    colors = SwitchDefaults.colors(checkedTrackColor = C.accent),
-                )
-            }
+                supportingText = { Text("${description.length}/200", color = C.textMuted) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.accent, unfocusedBorderColor = C.textSecondary,
+                    focusedLabelColor = C.accent, unfocusedLabelColor = C.textSecondary,
+                    cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                ),
+            )
 
-            // Require approval (only for public groups)
-            if (isPublic) {
+            HorizontalDivider(color = C.border.copy(alpha = 0.3f))
+
+            // Group type selector — card-style
+            Text("Group Type", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+            // Public option
+            Surface(
+                onClick = { isPublic = true },
+                shape = RoundedCornerShape(12.dp),
+                color = if (isPublic) C.accent.copy(alpha = 0.12f) else C.card,
+                border = if (isPublic) androidx.compose.foundation.BorderStroke(1.5.dp, C.accent) else null,
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
-                        Text("Require Approval", color = Color.White, fontSize = 16.sp)
-                        Text("Admin must approve join requests", color = C.textSecondary, fontSize = 13.sp)
+                    Icon(Icons.Default.Public, null, tint = if (isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Public", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Anyone can find and join this group", color = C.textSecondary, fontSize = 12.sp)
                     }
-                    Switch(
-                        checked = requireApproval,
-                        onCheckedChange = { requireApproval = it },
-                        colors = SwitchDefaults.colors(checkedTrackColor = C.accent),
-                    )
+                    RadioButton(selected = isPublic, onClick = { isPublic = true }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))
+                }
+            }
+
+            // Private option
+            Surface(
+                onClick = { isPublic = false },
+                shape = RoundedCornerShape(12.dp),
+                color = if (!isPublic) C.accent.copy(alpha = 0.12f) else C.card,
+                border = if (!isPublic) androidx.compose.foundation.BorderStroke(1.5.dp, C.accent) else null,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Lock, null, tint = if (!isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Private", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Only people with an invite can join", color = C.textSecondary, fontSize = 12.sp)
+                    }
+                    RadioButton(selected = !isPublic, onClick = { isPublic = false }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))
+                }
+            }
+
+            if (!isPublic) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF1B3A4B),
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Default.Lock, null, tint = C.accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Private groups are protected by a password. When you invite someone, the password is shared automatically via encrypted SBBS.",
+                            color = C.textSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+                        )
+                    }
                 }
             }
 
@@ -133,10 +180,14 @@ fun CreateGroupScreen(
                         return@Button
                     }
                     creating = true
+                    val password = if (!isPublic) java.util.UUID.randomUUID().toString().replace("-", "") else null
+                    val desc = description.trim().ifEmpty { null }
                     ChatService.groups.createGroup(
                         name = groupName.trim(),
                         isPublic = isPublic,
                         requireApproval = requireApproval,
+                        joinPassword = password,
+                        description = desc,
                     ) { success, _, error ->
                         creating = false
                         if (success) {
@@ -147,9 +198,7 @@ fun CreateGroupScreen(
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
                 enabled = groupName.isNotBlank() && !creating,
                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 shape = RoundedCornerShape(12.dp),
@@ -157,7 +206,9 @@ fun CreateGroupScreen(
                 if (creating) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Create Group", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Icon(if (isPublic) Icons.Default.Public else Icons.Default.Lock, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Create ${if (isPublic) "Public" else "Private"} Group", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

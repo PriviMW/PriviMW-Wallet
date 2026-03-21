@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
@@ -27,6 +28,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +120,7 @@ fun ChatsScreen(
     }
 
     var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
+    var menuTargetGroup by remember { mutableStateOf<com.privimemobile.chat.db.entities.GroupEntity?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -159,6 +164,7 @@ fun ChatsScreen(
             refreshing = true
             ChatService.sbbs.pollNow()
             scope.launch {
+                ChatService.groups.refreshMyGroups()
                 delay(2000)
                 refreshing = false
             }
@@ -214,8 +220,8 @@ fun ChatsScreen(
 
                 // ── Tab bar (All / Unread / Archived) ──
                 val tabLabels = listOf("All", "Unread", "Archived")
-                val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 }
-                val archivedTotal = conversations.count { it.archived }
+                val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 } + groups.count { !it.archived && it.unreadCount > 0 }
+                val archivedTotal = conversations.count { it.archived } + groups.count { it.archived }
                 ScrollableTabRow(
                     selectedTabIndex = activeTab,
                     containerColor = Color.Transparent,
@@ -267,16 +273,17 @@ fun ChatsScreen(
 
                     // Unified list: conversations + groups sorted by last message time
                     val unifiedList = remember(filteredConversations, filteredGroups) {
-                        data class ChatListItem(val isGroup: Boolean, val sortTs: Long, val conv: ConversationEntity? = null, val group: com.privimemobile.chat.db.entities.GroupEntity? = null)
+                        data class ChatListItem(val isGroup: Boolean, val sortTs: Long, val pinned: Boolean, val conv: ConversationEntity? = null, val group: com.privimemobile.chat.db.entities.GroupEntity? = null)
                         val items = mutableListOf<ChatListItem>()
                         for (c in filteredConversations) {
                             if (c.convKey.startsWith("g_")) continue // skip group conversation entries
-                            items.add(ChatListItem(false, c.lastMessageTs, conv = c))
+                            items.add(ChatListItem(false, c.lastMessageTs, c.pinned, conv = c))
                         }
                         for (g in filteredGroups) {
-                            items.add(ChatListItem(true, g.lastMessageTs, group = g))
+                            items.add(ChatListItem(true, g.lastMessageTs, false, group = g))
                         }
-                        items.sortedByDescending { it.sortTs }
+                        // Pinned items first, then by timestamp descending
+                        items.sortedWith(compareByDescending<ChatListItem> { it.pinned }.thenByDescending { it.sortTs })
                     }
 
                     LazyColumn {
@@ -287,7 +294,7 @@ fun ChatsScreen(
                             val item = unifiedList[i]
                             Box(modifier = Modifier.animateItem()) {
                                 if (item.isGroup) {
-                                    GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) })
+                                    GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) }, onLongPress = { menuTargetGroup = item.group })
                                 } else {
                                     val peerTyping = typingVer >= 0 && ChatService.isTyping(item.conv!!.convKey)
                                     ConversationRow(conv = item.conv!!, onClick = { onOpenChat(item.conv!!.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
@@ -321,6 +328,53 @@ fun ChatsScreen(
                     shape = CircleShape,
                 ) {
                     Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                }
+            }
+        }
+    }
+
+    // Group context menu
+    if (menuTargetGroup != null) {
+        val target = menuTargetGroup!!
+        ModalBottomSheet(
+            onDismissRequest = { menuTargetGroup = null },
+            containerColor = C.card,
+            dragHandle = {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.textMuted.copy(alpha = 0.4f)))
+                }
+            },
+        ) {
+            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(target.groupId)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(target.name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text("${target.memberCount} members", color = C.textSecondary, fontSize = 12.sp)
+                    }
+                }
+                HorizontalDivider(color = C.border.copy(alpha = 0.3f))
+
+                ChatListMenuItem(if (target.muted) "Unmute" else "Mute") {
+                    scope.launch { ChatService.db?.groupDao()?.setMuted(target.groupId, !target.muted) }
+                    menuTargetGroup = null
+                }
+                ChatListMenuItem(if (target.archived) "Unarchive" else "Archive") {
+                    scope.launch { ChatService.db?.groupDao()?.setArchived(target.groupId, !target.archived) }
+                    menuTargetGroup = null
+                }
+                HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
+                ChatListMenuItem("Leave group", color = C.error) {
+                    scope.launch {
+                        ChatService.groups.leaveGroup(target.groupId)
+                    }
+                    menuTargetGroup = null
                 }
             }
         }
@@ -674,6 +728,14 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )
                     }
+                    if (conv.isBlocked) {
+                        Icon(
+                            Icons.Default.Block,
+                            contentDescription = "Blocked",
+                            tint = Color(0xFFEF5350),
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                     Text(
                         formatTime(conv.lastMessageTs),
@@ -801,32 +863,52 @@ private fun ChatListMenuItem(text: String, color: Color = C.text, onClick: () ->
 }
 
 /** Group chat row in the chat list. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GroupRow(
     group: com.privimemobile.chat.db.entities.GroupEntity,
     onClick: () -> Unit,
+    onLongPress: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Group avatar (icon)
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .background(avatarColor(group.groupId), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+        // Group avatar (custom image or default icon)
+        val context = LocalContext.current
+        val groupAvatarBmp = remember(group.groupId, group.avatarHash) {
+            try {
+                val f = java.io.File(context.filesDir, "group_avatars/${group.groupId}.webp")
+                if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+            } catch (_: Exception) { null }
+        }
+        if (groupAvatarBmp != null) {
+            androidx.compose.foundation.Image(
+                bitmap = groupAvatarBmp.asImageBitmap(),
+                contentDescription = "Group",
+                modifier = Modifier.size(52.dp).clip(CircleShape),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier.size(52.dp).background(avatarColor(group.groupId), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
         }
 
         Spacer(Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!group.isPublic) {
+                    Icon(Icons.Default.Lock, "Private", tint = C.textSecondary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
                 Text(
                     text = group.name,
                     color = Color.White,
@@ -836,8 +918,19 @@ private fun GroupRow(
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Spacer(Modifier.width(4.dp))
-                Text("${group.memberCount} members", color = C.textSecondary, fontSize = 12.sp)
+                if (group.muted) {
+                    Icon(
+                        Icons.Default.NotificationsOff,
+                        contentDescription = "Muted",
+                        tint = C.textSecondary,
+                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    formatTime(group.lastMessageTs),
+                    color = C.textSecondary, fontSize = 12.sp,
+                )
             }
             if (group.lastMessagePreview != null) {
                 Text(

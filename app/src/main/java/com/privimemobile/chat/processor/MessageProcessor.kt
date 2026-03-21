@@ -640,15 +640,15 @@ class MessageProcessor(
             return
         }
 
-        // Use group convKey format: "g_<groupId_first16>"
-        val convKey = "g_${groupId.take(16)}"
+        // Get or create conversation for this group
+        val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         // Dedup key includes group context
         val dedupKey = "$ts:${text.hashCode().toString(16)}:$from:$groupId".hashCode().toString(16)
 
         // Build message entity
         val entity = MessageEntity(
-            conversationId = group.id,
+            conversationId = convId,
             timestamp = ts,
             senderHandle = from,
             text = text,
@@ -697,6 +697,7 @@ class MessageProcessor(
         val target = payload["target"] as? String
 
         val group = db.groupDao().findByGroupId(groupId) ?: return
+        val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         val serviceText = when (action) {
             "joined" -> "@${target ?: from} joined the group"
@@ -711,7 +712,7 @@ class MessageProcessor(
 
         // Insert as a service message
         val entity = MessageEntity(
-            conversationId = group.id,
+            conversationId = convId,
             timestamp = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000),
             senderHandle = from,
             text = serviceText,
@@ -753,8 +754,9 @@ class MessageProcessor(
         val senderHandle = payload["msg_sender"] as? String ?: return
 
         val group = db.groupDao().findByGroupId(groupId) ?: return
+        val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         // Soft-delete the message
-        db.messageDao().markDeleted(group.id, msgTs, senderHandle)
+        db.messageDao().markDeleted(convId, msgTs, senderHandle)
     }
 }

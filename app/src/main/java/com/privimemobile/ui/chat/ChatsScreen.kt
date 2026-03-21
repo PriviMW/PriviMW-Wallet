@@ -265,26 +265,33 @@ fun ChatsScreen(
                     // Observe typing state for all conversations
                     val typingVer by ChatService.typingVersion.collectAsState()
 
-                    LazyColumn {
-                        // Group items
-                        items(filteredGroups, key = { "g_${it.groupId}" }) { group ->
-                            Box(modifier = Modifier.animateItem()) {
-                                GroupRow(
-                                    group = group,
-                                    onClick = { onOpenGroup(group.groupId) },
-                                )
-                            }
+                    // Unified list: conversations + groups sorted by last message time
+                    val unifiedList = remember(filteredConversations, filteredGroups) {
+                        data class ChatListItem(val isGroup: Boolean, val sortTs: Long, val conv: ConversationEntity? = null, val group: com.privimemobile.chat.db.entities.GroupEntity? = null)
+                        val items = mutableListOf<ChatListItem>()
+                        for (c in filteredConversations) {
+                            if (c.convKey.startsWith("g_")) continue // skip group conversation entries
+                            items.add(ChatListItem(false, c.lastMessageTs, conv = c))
                         }
-                        // Conversation items
-                        items(filteredConversations, key = { it.id }) { conv ->
-                            val peerTyping = typingVer >= 0 && ChatService.isTyping(conv.convKey)
+                        for (g in filteredGroups) {
+                            items.add(ChatListItem(true, g.lastMessageTs, group = g))
+                        }
+                        items.sortedByDescending { it.sortTs }
+                    }
+
+                    LazyColumn {
+                        items(unifiedList.size, key = { i ->
+                            val item = unifiedList[i]
+                            if (item.isGroup) "g_${item.group!!.groupId}" else "c_${item.conv!!.id}"
+                        }) { i ->
+                            val item = unifiedList[i]
                             Box(modifier = Modifier.animateItem()) {
-                                ConversationRow(
-                                    conv = conv,
-                                    onClick = { onOpenChat(conv.convKey.removePrefix("@")) },
-                                    onLongPress = { menuTarget = conv },
-                                    isTyping = peerTyping,
-                                )
+                                if (item.isGroup) {
+                                    GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) })
+                                } else {
+                                    val peerTyping = typingVer >= 0 && ChatService.isTyping(item.conv!!.convKey)
+                                    ConversationRow(conv = item.conv, onClick = { onOpenChat(item.conv.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
+                                }
                             }
                         }
                     }

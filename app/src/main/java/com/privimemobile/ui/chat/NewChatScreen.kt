@@ -125,11 +125,10 @@ fun NewChatScreen(
         OutlinedTextField(
             value = input,
             onValueChange = { onInputChange(it) },
-            placeholder = { Text("Search handle or wallet ID...", color = C.textMuted, fontSize = 14.sp) },
+            placeholder = { Text("Search handles or groups...", color = C.textMuted, fontSize = 14.sp) },
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(20.dp))
             },
-            prefix = { Text("@", color = C.accent, fontWeight = FontWeight.Bold, fontSize = 15.sp) },
             trailingIcon = {
                 if (searching) {
                     CircularProgressIndicator(Modifier.size(18.dp), color = C.accent, strokeWidth = 2.dp)

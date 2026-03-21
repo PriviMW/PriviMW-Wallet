@@ -22,6 +22,30 @@ class GroupManager(
     private val TAG = "GroupManager"
 
     // ========================================================================
+    // Group conversation helpers
+    // ========================================================================
+
+    /** Get or create a ConversationEntity for a group (used to store messages). */
+    suspend fun getOrCreateGroupConversation(groupId: String, groupName: String = "Group"): Long {
+        val convKey = "g_${groupId.take(16)}"
+        val existing = db.conversationDao().findByKey(convKey)
+        if (existing != null) return existing.id
+
+        val conv = com.privimemobile.chat.db.entities.ConversationEntity(
+            convKey = convKey,
+            displayName = groupName,
+            handle = groupId,
+        )
+        return db.conversationDao().insert(conv)
+    }
+
+    /** Get conversation ID for a group (returns null if not created yet). */
+    suspend fun getGroupConversationId(groupId: String): Long? {
+        val convKey = "g_${groupId.take(16)}"
+        return db.conversationDao().findByKey(convKey)?.id
+    }
+
+    // ========================================================================
     // TX methods (invoke contract, generate kernel)
     // ========================================================================
 
@@ -344,6 +368,8 @@ class GroupManager(
                     refreshGroupInfo(groupId)
                     refreshGroupMembers(groupId)
                 }
+                // Ensure a ConversationEntity exists for this group's messages
+                getOrCreateGroupConversation(groupId, name)
             }
 
             Log.d(TAG, "Refreshed ${groups.size} groups")
@@ -482,6 +508,7 @@ class GroupManager(
         val myDisplayName = state.myDisplayName
 
         val group = db.groupDao().findByGroupId(groupId) ?: return
+        val convId = getOrCreateGroupConversation(groupId, group.name)
 
         // Get all member wallet_ids (exclude self)
         val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
@@ -509,7 +536,7 @@ class GroupManager(
 
         // Insert own message into DB immediately (optimistic)
         val entity = com.privimemobile.chat.db.entities.MessageEntity(
-            conversationId = group.id,
+            conversationId = convId,
             timestamp = ts,
             senderHandle = myHandle,
             text = text,

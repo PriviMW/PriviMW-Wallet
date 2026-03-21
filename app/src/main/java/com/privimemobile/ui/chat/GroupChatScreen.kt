@@ -63,10 +63,17 @@ fun GroupChatScreen(
         ChatService.db?.groupDao()?.clearUnread(groupId)
     }
 
-    // Observe messages for this group
-    val groupEntity = group
-    val messages by if (groupEntity != null) {
-        ChatService.db?.messageDao()?.observeAll(groupEntity.id)
+    // Get group conversation ID for messages
+    var groupConvId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(group) {
+        if (group != null) {
+            groupConvId = ChatService.groups.getOrCreateGroupConversation(groupId, group!!.name)
+        }
+    }
+
+    // Observe messages for this group's conversation
+    val messages by if (groupConvId != null) {
+        ChatService.db?.messageDao()?.observeAll(groupConvId!!)
             ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     } else {
         remember { mutableStateOf(emptyList<MessageEntity>()) }

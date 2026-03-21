@@ -20,7 +20,7 @@ import net.sqlcipher.database.SupportFactory
         GroupMemberEntity::class,
         ChatStateEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -31,6 +31,7 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun attachmentDao(): AttachmentDao
     abstract fun reactionDao(): ReactionDao
     abstract fun chatStateDao(): ChatStateDao
+    abstract fun groupDao(): GroupDao
 
     companion object {
         @Volatile
@@ -118,6 +119,57 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        /** V11→V12: Group chat — rebuild groups/group_members tables with new schema. */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Drop old group tables (schema changed significantly)
+                db.execSQL("DROP TABLE IF EXISTS group_members")
+                db.execSQL("DROP TABLE IF EXISTS groups")
+
+                // Create new groups table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS groups (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        group_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT DEFAULT NULL,
+                        creator_handle TEXT NOT NULL,
+                        is_public INTEGER NOT NULL DEFAULT 0,
+                        require_approval INTEGER NOT NULL DEFAULT 0,
+                        max_members INTEGER NOT NULL DEFAULT 200,
+                        member_count INTEGER NOT NULL DEFAULT 0,
+                        default_permissions INTEGER NOT NULL DEFAULT 3,
+                        avatar_hash TEXT DEFAULT NULL,
+                        my_role INTEGER NOT NULL DEFAULT 0,
+                        my_permissions INTEGER NOT NULL DEFAULT 3,
+                        created_height INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        last_message_ts INTEGER NOT NULL DEFAULT 0,
+                        last_message_preview TEXT DEFAULT NULL,
+                        unread_count INTEGER NOT NULL DEFAULT 0,
+                        muted INTEGER NOT NULL DEFAULT 0,
+                        archived INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_groups_group_id ON groups (group_id)")
+
+                // Create new group_members table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS group_members (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        group_id TEXT NOT NULL,
+                        handle TEXT NOT NULL,
+                        display_name TEXT DEFAULT NULL,
+                        role INTEGER NOT NULL DEFAULT 0,
+                        permissions INTEGER NOT NULL DEFAULT 3,
+                        wallet_id TEXT DEFAULT NULL,
+                        joined_height INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_group_members_group_id_handle ON group_members (group_id, handle)")
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -126,7 +178,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                 .fallbackToDestructiveMigration()
                 .build()
         }

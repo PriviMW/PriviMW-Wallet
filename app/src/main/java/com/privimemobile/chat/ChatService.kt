@@ -42,6 +42,8 @@ object ChatService {
         private set
     lateinit var contacts: ContactManager
         private set
+    lateinit var groups: com.privimemobile.chat.group.GroupManager
+        private set
 
     // Active chat — suppress unread + notifications for this conversation
     private val _activeChat = MutableStateFlow<String?>(null)
@@ -113,6 +115,7 @@ object ChatService {
         contacts = ContactManager(db!!, scope)
         processor = MessageProcessor(db!!, contacts, scope)
         sbbs = SbbsTransport(db!!, processor, scope)
+        groups = com.privimemobile.chat.group.GroupManager(db!!, scope)
 
         // Initialize chat_state row + migrate legacy SharedPreferences data
         scope.launch {

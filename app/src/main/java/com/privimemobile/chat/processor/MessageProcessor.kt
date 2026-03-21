@@ -670,9 +670,10 @@ class MessageProcessor(
 
             // Notification (if not muted)
             if (!group.muted) {
+                val groupConvKey = "g_${groupId.take(16)}"
                 com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
-                    convKey = convKey,
-                    convId = group.id,
+                    convKey = groupConvKey,
+                    convId = convId,
                     senderName = "${group.name}: $senderLabel",
                     text = text ?: "sent a message",
                     type = "group_msg",

@@ -290,7 +290,7 @@ fun ChatsScreen(
                                     GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) })
                                 } else {
                                     val peerTyping = typingVer >= 0 && ChatService.isTyping(item.conv!!.convKey)
-                                    ConversationRow(conv = item.conv, onClick = { onOpenChat(item.conv.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
+                                    ConversationRow(conv = item.conv!!, onClick = { onOpenChat(item.conv!!.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
                                 }
                             }
                         }

@@ -47,6 +47,9 @@ import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
 import com.privimemobile.ui.chat.ContactInfoScreen
+import com.privimemobile.ui.chat.CreateGroupScreen
+import com.privimemobile.ui.chat.GroupChatScreen
+import com.privimemobile.ui.chat.GroupSettingsScreen
 import com.privimemobile.ui.chat.MediaGalleryScreen
 import com.privimemobile.ui.chat.NewChatScreen
 import com.privimemobile.ui.chat.RegisterScreen
@@ -274,6 +277,8 @@ fun AppNavigation() {
                     onNewChat = { navController.navigate("new_chat") },
                     onRegister = { navController.navigate("register") },
                     onSearch = { navController.navigate("search_messages") },
+                    onCreateGroup = { navController.navigate("create_group") },
+                    onOpenGroup = { groupId -> navController.navigate("group_chat/$groupId") },
                 )
             }
             composable(
@@ -339,6 +344,36 @@ fun AppNavigation() {
                     onDeleteChat = {
                         // Pop back to chats list
                         navController.popBackStack("chats", inclusive = false)
+                    },
+                )
+            }
+            composable("create_group") {
+                CreateGroupScreen(
+                    onBack = { navController.popBackStack() },
+                    onGroupCreated = { navController.popBackStack() },
+                )
+            }
+            composable(
+                "group_chat/{groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
+                GroupChatScreen(
+                    groupId = groupId,
+                    onBack = { navController.popBackStack() },
+                    onGroupSettings = { navController.navigate("group_settings/$groupId") },
+                )
+            }
+            composable(
+                "group_settings/{groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
+                GroupSettingsScreen(
+                    groupId = groupId,
+                    onBack = { navController.popBackStack() },
+                    onDeleteGroup = {
+                        navController.popBackStack(Tab.CHATS.route, inclusive = false)
                     },
                 )
             }

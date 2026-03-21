@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
@@ -72,6 +73,8 @@ fun ChatsScreen(
     onNewChat: () -> Unit = {},
     onRegister: () -> Unit = {},
     onSearch: () -> Unit = {},
+    onCreateGroup: () -> Unit = {},
+    onOpenGroup: (String) -> Unit = {},
 ) {
     // Wait for ChatService to initialize
     val isInitialized by ChatService.initialized.collectAsState()
@@ -103,6 +106,15 @@ fun ChatsScreen(
     val conversations by ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
+    // Group list — observe from Room DAO
+    val groups by ChatService.db?.groupDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+
+    // Refresh groups on mount
+    LaunchedEffect(Unit) {
+        ChatService.groups.refreshMyGroups()
+    }
+
     var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -125,6 +137,19 @@ fun ChatsScreen(
                 (conv.displayName ?: "").lowercase().contains(q) ||
                         (conv.handle ?: "").lowercase().contains(q)
             }
+        }
+    }
+
+    val filteredGroups = remember(groups, searchQuery, activeTab) {
+        val tabFiltered = when (activeTab) {
+            1 -> groups.filter { !it.archived && it.unreadCount > 0 }
+            2 -> groups.filter { it.archived }
+            else -> groups.filter { !it.archived }
+        }
+        if (searchQuery.isBlank()) tabFiltered
+        else {
+            val q = searchQuery.trim().lowercase()
+            tabFiltered.filter { it.name.lowercase().contains(q) }
         }
     }
 
@@ -221,7 +246,7 @@ fun ChatsScreen(
                 }
 
                 // ── Conversation list ──
-                if (filteredConversations.isEmpty()) {
+                if (filteredConversations.isEmpty() && filteredGroups.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -241,6 +266,16 @@ fun ChatsScreen(
                     val typingVer by ChatService.typingVersion.collectAsState()
 
                     LazyColumn {
+                        // Group items
+                        items(filteredGroups, key = { "g_${it.groupId}" }) { group ->
+                            Box(modifier = Modifier.animateItem()) {
+                                GroupRow(
+                                    group = group,
+                                    onClick = { onOpenGroup(group.groupId) },
+                                )
+                            }
+                        }
+                        // Conversation items
                         items(filteredConversations, key = { it.id }) { conv ->
                             val peerTyping = typingVer >= 0 && ChatService.isTyping(conv.convKey)
                             Box(modifier = Modifier.animateItem()) {
@@ -256,15 +291,30 @@ fun ChatsScreen(
                 }
             }
 
-            // FAB - New Chat (pencil icon like Telegram)
-            FloatingActionButton(
-                onClick = onNewChat,
-                containerColor = C.accent,
-                contentColor = C.textDark,
+            // FABs - New Chat + Create Group
+            Column(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                shape = CircleShape,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End,
             ) {
-                Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                // Small FAB - Create Group
+                SmallFloatingActionButton(
+                    onClick = onCreateGroup,
+                    containerColor = C.surface,
+                    contentColor = C.accent,
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Filled.Group, contentDescription = "Create Group", modifier = Modifier.size(20.dp))
+                }
+                // Main FAB - New Chat
+                FloatingActionButton(
+                    onClick = onNewChat,
+                    containerColor = C.accent,
+                    contentColor = C.textDark,
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                }
             }
         }
     }
@@ -740,5 +790,80 @@ private fun ChatListMenuItem(text: String, color: Color = C.text, onClick: () ->
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, color = color, fontSize = 15.sp)
+    }
+}
+
+/** Group chat row in the chat list. */
+@Composable
+private fun GroupRow(
+    group: com.privimemobile.chat.db.entities.GroupEntity,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Group avatar (icon)
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .background(avatarColor(group.groupId), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = group.name,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("${group.memberCount} members", color = C.textSecondary, fontSize = 12.sp)
+            }
+            if (group.lastMessagePreview != null) {
+                Text(
+                    text = group.lastMessagePreview!!,
+                    color = C.textSecondary,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    text = if (group.myRole == 2) "You created this group" else "Group chat",
+                    color = C.textMuted,
+                    fontSize = 14.sp,
+                )
+            }
+        }
+
+        // Unread badge
+        if (group.unreadCount > 0) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(C.accent, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (group.unreadCount > 99) "99+" else group.unreadCount.toString(),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                )
+            }
+        }
     }
 }

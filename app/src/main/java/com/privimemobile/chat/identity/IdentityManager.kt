@@ -166,7 +166,18 @@ class IdentityManager(
                     Log.e(TAG, "Register failed: $error")
                     onResult?.invoke(false, error)
                 } else {
-                    Log.d(TAG, "Register TX submitted for @$handle")
+                    val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                    Log.d(TAG, "Register TX submitted for @$handle txId=$txId")
+                    // Track TX — identity will refresh on confirmation
+                    if (txId != null) {
+                        scope.launch {
+                            com.privimemobile.chat.ChatService.pendingTxs.trackTx(
+                                txId,
+                                com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_REGISTER_HANDLE,
+                                handle
+                            )
+                        }
+                    }
                     // Optimistic update — will be confirmed on next refreshIdentity
                     scope.launch {
                         db.chatStateDao().updateIdentity(handle, sbbsAddress, displayName, 0)
@@ -219,6 +230,16 @@ class IdentityManager(
                     if (result.containsKey("error")) {
                         onResult?.invoke(false, result["error"]?.toString())
                     } else {
+                        val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                        if (txId != null) {
+                            scope.launch {
+                                com.privimemobile.chat.ChatService.pendingTxs.trackTx(
+                                    txId,
+                                    com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_UPDATE_PROFILE,
+                                    state.myHandle ?: ""
+                                )
+                            }
+                        }
                         scope.launch { db.chatStateDao().update(state.copy(myDisplayName = newDisplayName)) }
                         onResult?.invoke(true, null)
                     }
@@ -254,6 +275,16 @@ class IdentityManager(
                     if (result.containsKey("error")) {
                         onResult?.invoke(false, result["error"]?.toString())
                     } else {
+                        val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
+                        if (txId != null) {
+                            scope.launch {
+                                com.privimemobile.chat.ChatService.pendingTxs.trackTx(
+                                    txId,
+                                    com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_UPDATE_PROFILE,
+                                    state.myHandle ?: ""
+                                )
+                            }
+                        }
                         scope.launch {
                             db.chatStateDao().update(state.copy(
                                 myWalletId = newAddress,

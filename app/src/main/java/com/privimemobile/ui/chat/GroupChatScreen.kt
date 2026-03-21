@@ -154,10 +154,9 @@ fun GroupChatScreen(
                 }
             }
 
-            // Input bar
+            // Input bar — matches ChatScreen style
             Surface(
-                color = C.card,
-                tonalElevation = 2.dp,
+                color = C.inputBar,
             ) {
                 Row(
                     modifier = Modifier
@@ -169,23 +168,34 @@ fun GroupChatScreen(
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message", color = C.textMuted) },
-                        maxLines = 4,
+                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                        placeholder = { Text("Message", color = C.textMuted, fontSize = 15.sp) },
+                        maxLines = 6,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = C.accent,
+                            focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = C.card,
+                            unfocusedContainerColor = C.card,
                             cursorColor = C.accent,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                         ),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(22.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                     )
 
                     Spacer(Modifier.width(6.dp))
 
-                    // Send button
-                    if (inputText.isNotBlank()) {
+                    // Send button — animated visibility
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = inputText.isNotBlank(),
+                        enter = androidx.compose.animation.scaleIn(
+                            animationSpec = androidx.compose.animation.core.tween(180)
+                        ),
+                        exit = androidx.compose.animation.scaleOut(
+                            animationSpec = androidx.compose.animation.core.tween(180)
+                        ),
+                    ) {
                         IconButton(
                             onClick = {
                                 val text = inputText.trim()
@@ -206,7 +216,14 @@ fun GroupChatScreen(
     }
 }
 
-/** Group message bubble — shows sender name for non-self messages. */
+/** Sender name colors — deterministic from handle hash. */
+private val senderColors = listOf(
+    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+    Color(0xFFFFA726), Color(0xFF78909C),
+)
+
+/** Group message bubble — shows sender name + avatar for non-self messages. */
 @Composable
 private fun GroupMessageBubble(
     msg: MessageEntity,
@@ -218,15 +235,15 @@ private fun GroupMessageBubble(
     // Service messages (join/leave/etc.)
     if (msg.type == "group_service") {
         Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = msg.text ?: "",
-                color = C.textMuted,
-                fontSize = 13.sp,
+                color = C.textSecondary,
+                fontSize = 12.sp,
                 modifier = Modifier
-                    .background(C.card.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .background(C.card, RoundedCornerShape(12.dp))
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
@@ -234,13 +251,13 @@ private fun GroupMessageBubble(
     }
 
     val arrangement = if (isMe) Arrangement.End else Arrangement.Start
+    val senderColor = senderColors[kotlin.math.abs((msg.senderHandle ?: "").hashCode()) % senderColors.size]
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 8.dp),
         horizontalArrangement = arrangement,
     ) {
         if (!isMe) {
-            // Sender avatar
             AvatarDisplay(handle = msg.senderHandle ?: "", size = 32.dp)
             Spacer(Modifier.width(6.dp))
         }
@@ -249,27 +266,27 @@ private fun GroupMessageBubble(
             horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
             modifier = Modifier.widthIn(max = 280.dp),
         ) {
-            // Sender name (only for others)
+            // Sender name (colored, only for others)
             if (!isMe && msg.senderHandle != null) {
                 Text(
                     text = "@${msg.senderHandle}",
-                    color = C.accent,
+                    color = senderColor,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 10.dp, bottom = 1.dp),
                 )
             }
 
-            // Message bubble
+            // Message bubble — matches ChatScreen style
             Card(
                 shape = RoundedCornerShape(
-                    topStart = if (isMe) 16.dp else 4.dp,
-                    topEnd = if (isMe) 4.dp else 16.dp,
-                    bottomStart = 16.dp,
-                    bottomEnd = 16.dp,
+                    topStart = if (isMe) 18.dp else 4.dp,
+                    topEnd = if (isMe) 4.dp else 18.dp,
+                    bottomStart = 18.dp,
+                    bottomEnd = 18.dp,
                 ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isMe) C.accent.copy(alpha = 0.2f) else C.card,
+                    containerColor = if (isMe) C.accent.copy(alpha = 0.15f) else C.card,
                 ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -277,15 +294,20 @@ private fun GroupMessageBubble(
                         text = msg.text ?: "",
                         color = Color.White,
                         fontSize = 15.sp,
+                        lineHeight = 20.sp,
                     )
                     Text(
                         text = timeFormat.format(Date(msg.timestamp * 1000)),
                         color = C.textMuted,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
                     )
                 }
             }
+        }
+
+        if (isMe) {
+            Spacer(Modifier.width(4.dp))
         }
     }
 }

@@ -109,6 +109,10 @@ class PendingTxManager(
                 // Refresh identity from contract
                 ChatService.identity.refreshIdentity()
             }
+            PendingTxEntity.ACTION_UPDATE_PROFILE -> {
+                // Refresh identity to confirm profile update
+                ChatService.identity.refreshIdentity()
+            }
             PendingTxEntity.ACTION_CREATE_GROUP -> {
                 // Refresh groups to get the new group
                 ChatService.groups.refreshMyGroups()

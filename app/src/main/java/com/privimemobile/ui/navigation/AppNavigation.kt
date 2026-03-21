@@ -309,6 +309,10 @@ fun AppNavigation() {
                         navController.navigate("chat/$handle")
                     },
                     onBack = { navController.popBackStack() },
+                    onJoinGroup = { groupId ->
+                        navController.popBackStack()
+                        navController.navigate("group_chat/$groupId")
+                    },
                 )
             }
             composable("register") {

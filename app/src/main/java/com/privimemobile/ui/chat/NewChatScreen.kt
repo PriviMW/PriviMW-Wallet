@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,12 +37,18 @@ private val contactAvatarColors = listOf(
 )
 
 @Composable
-fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
+fun NewChatScreen(
+    onStartChat: (String) -> Unit,
+    onBack: () -> Unit,
+    onJoinGroup: ((String) -> Unit)? = null,
+) {
     var input by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
     var onChainResults by remember { mutableStateOf<List<ContactEntity>>(emptyList()) }
+    var groupResults by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Local contacts from Room DB
     val allContacts by ChatService.db?.contactDao()?.observeAll()
@@ -89,6 +96,9 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
             delay(300) // debounce
             val results = ChatService.contacts.searchOnChain(trimmed)
             onChainResults = results
+            // Also search groups
+            val groups = ChatService.groups.searchGroups(trimmed)
+            groupResults = groups
             searching = false
         }
     }
@@ -171,8 +181,51 @@ fun NewChatScreen(onStartChat: (String) -> Unit, onBack: () -> Unit) {
                 }
             }
 
+            // Public group results
+            if (groupResults.isNotEmpty()) {
+                item {
+                    Text(
+                        "PUBLIC GROUPS",
+                        color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
+                    )
+                }
+                items(groupResults.size, key = { "group_$it" }) { idx ->
+                    val g = groupResults[idx]
+                    val groupId = g["group_id"] as? String ?: return@items
+                    val name = g["name"] as? String ?: ""
+                    val creator = g["creator"] as? String ?: ""
+                    val memberCount = g["member_count"] as? Int ?: 0
+                    val needsApproval = (g["require_approval"] as? Int ?: 0) == 1
+
+                    GroupSearchRow(
+                        name = name,
+                        creator = creator,
+                        memberCount = memberCount,
+                        needsApproval = needsApproval,
+                        onJoin = {
+                            ChatService.groups.joinGroup(groupId) { success, error ->
+                                if (success) {
+                                    android.widget.Toast.makeText(context,
+                                        if (needsApproval) "Join request sent!" else "Joined group!",
+                                        android.widget.Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        delay(3000)
+                                        ChatService.groups.refreshMyGroups()
+                                    }
+                                    if (!needsApproval) onJoinGroup?.invoke(groupId)
+                                } else {
+                                    android.widget.Toast.makeText(context, error ?: "Failed to join", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+
             // Empty state
-            if (localMatches.isEmpty() && onChainNew.isEmpty() && !searching) {
+            if (localMatches.isEmpty() && onChainNew.isEmpty() && groupResults.isEmpty() && !searching) {
                 item {
                     Text(
                         if (query.isNotEmpty()) "No handles found for \"$query\""
@@ -227,6 +280,68 @@ private fun ContactRow(contact: ContactEntity, tag: String? = null, onClick: () 
                 }
                 if (!contact.displayName.isNullOrEmpty()) {
                     Text("@${contact.handle}", color = C.textSecondary, fontSize = 13.sp)
+                }
+            }
+        }
+        HorizontalDivider(
+            color = C.border.copy(alpha = 0.5f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 74.dp),
+        )
+    }
+}
+
+@Composable
+private fun GroupSearchRow(
+    name: String,
+    creator: String,
+    memberCount: Int,
+    needsApproval: Boolean,
+    onJoin: () -> Unit,
+) {
+    var joining by remember { mutableStateOf(false) }
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Group icon
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF5C6BC0)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "$memberCount members · by @$creator",
+                    color = C.textSecondary, fontSize = 13.sp,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    joining = true
+                    onJoin()
+                },
+                enabled = !joining,
+                colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                modifier = Modifier.height(34.dp),
+            ) {
+                if (joining) {
+                    CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text(
+                        if (needsApproval) "Request" else "Join",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }

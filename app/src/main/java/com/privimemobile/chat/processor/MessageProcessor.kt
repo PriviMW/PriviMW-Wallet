@@ -115,6 +115,10 @@ class MessageProcessor(
             "profile_update" -> handleProfileUpdate(payload, from)
             "avatar_request" -> handleAvatarRequest(from, senderWalletId)
             "avatar_response" -> handleAvatarResponse(payload, from)
+            "group_msg" -> handleGroupMessage(payload, raw, ts, from, sent, myHandle)
+            "group_service" -> handleGroupService(payload, from)
+            "group_info_update" -> handleGroupInfoUpdate(payload, from)
+            "group_delete" -> handleGroupDelete(payload, from)
             else -> {
                 // Clear typing indicator when a real message arrives from this person
                 if (!sent) ChatService.clearTyping(convKey)
@@ -610,5 +614,147 @@ class MessageProcessor(
     private fun sanitizeFilename(name: String): String {
         val clean = name.replace(Regex("[^a-zA-Z0-9._\\- ]"), "")
         return if (clean.length > 80) clean.take(80) else clean.ifEmpty { "file" }
+    }
+
+    // ========================================================================
+    // Group message handlers
+    // ========================================================================
+
+    /** Handle group_msg — regular group chat message. */
+    private suspend fun handleGroupMessage(
+        payload: Map<String, Any?>,
+        raw: Map<*, *>,
+        ts: Long,
+        from: String,
+        sent: Boolean,
+        myHandle: String,
+    ) {
+        val groupId = payload["group_id"] as? String ?: return
+        val text = payload["msg"] as? String
+        val displayName = Helpers.fixBvmUtf8(payload["dn"] as? String)
+
+        // Verify group exists in our DB
+        val group = db.groupDao().findByGroupId(groupId)
+        if (group == null) {
+            Log.w(TAG, "DROP group_msg: unknown group $groupId")
+            return
+        }
+
+        // Use group convKey format: "g_<groupId_first16>"
+        val convKey = "g_${groupId.take(16)}"
+
+        // Dedup key includes group context
+        val dedupKey = "$ts:${text.hashCode().toString(16)}:$from:$groupId".hashCode().toString(16)
+
+        // Build message entity
+        val entity = MessageEntity(
+            conversationId = group.id,
+            timestamp = ts,
+            senderHandle = from,
+            text = text,
+            type = "group_msg",
+            sent = sent,
+            sbbsDedupKey = dedupKey,
+        )
+
+        val insertedId = db.messageDao().insert(entity)
+        if (insertedId == -1L) return // Dedup — already exists
+
+        // Update group last message + unread
+        val senderLabel = if (sent) "You" else (displayName ?: "@$from")
+        val preview = "$senderLabel: ${text?.take(40) ?: "message"}"
+        db.groupDao().updateLastMessage(groupId, ts, preview)
+
+        if (!sent) {
+            db.groupDao().incrementUnread(groupId)
+
+            // Notification (if not muted)
+            if (!group.muted) {
+                com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
+                    convKey = convKey,
+                    convId = group.id,
+                    senderName = "${group.name}: $senderLabel",
+                    text = text ?: "sent a message",
+                    type = "group_msg",
+                    isMuted = false,
+                    totalUnread = 0,
+                )
+            }
+        }
+
+        // Update member display name if provided
+        if (displayName != null && from.isNotEmpty()) {
+            db.groupDao().updateMemberDisplayName(groupId, from, displayName)
+        }
+
+        Log.d(TAG, "Group msg in $groupId from @$from: ${text?.take(20)}")
+    }
+
+    /** Handle group_service — member join/leave/kick/ban/promote notifications. */
+    private suspend fun handleGroupService(payload: Map<String, Any?>, from: String) {
+        val groupId = payload["group_id"] as? String ?: return
+        val action = payload["action"] as? String ?: return
+        val target = payload["target"] as? String
+
+        val group = db.groupDao().findByGroupId(groupId) ?: return
+
+        val serviceText = when (action) {
+            "joined" -> "@${target ?: from} joined the group"
+            "left" -> "@$from left the group"
+            "kicked" -> "@$target was removed by @$from"
+            "banned" -> "@$target was banned by @$from"
+            "promoted" -> "@$target was promoted to admin by @$from"
+            "demoted" -> "@$target was demoted by @$from"
+            "ownership_transferred" -> "@$from transferred ownership to @$target"
+            else -> "$action by @$from"
+        }
+
+        // Insert as a service message
+        val entity = MessageEntity(
+            conversationId = group.id,
+            timestamp = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000),
+            senderHandle = from,
+            text = serviceText,
+            type = "group_service",
+            sent = false,
+            sbbsDedupKey = "${System.nanoTime()}:svc:$action:${target ?: from}".hashCode().toString(16),
+        )
+        db.messageDao().insert(entity)
+
+        // Update preview
+        db.groupDao().updateLastMessage(groupId, entity.timestamp, serviceText)
+
+        // Refresh member list after service events
+        scope.launch {
+            kotlinx.coroutines.delay(2000)
+            ChatService.groups.refreshGroupMembers(groupId)
+        }
+    }
+
+    /** Handle group_info_update — group name/settings changed. */
+    private suspend fun handleGroupInfoUpdate(payload: Map<String, Any?>, from: String) {
+        val groupId = payload["group_id"] as? String ?: return
+
+        // Refresh group info from contract
+        scope.launch {
+            kotlinx.coroutines.delay(2000)
+            ChatService.groups.refreshGroupInfo(groupId)
+        }
+
+        val changeText = payload["change"] as? String ?: "updated group info"
+        val group = db.groupDao().findByGroupId(groupId) ?: return
+        db.groupDao().updateLastMessage(groupId, System.currentTimeMillis() / 1000, "@$from $changeText")
+    }
+
+    /** Handle group_delete — admin deleted a message for everyone. */
+    private suspend fun handleGroupDelete(payload: Map<String, Any?>, from: String) {
+        val groupId = payload["group_id"] as? String ?: return
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val senderHandle = payload["msg_sender"] as? String ?: return
+
+        val group = db.groupDao().findByGroupId(groupId) ?: return
+
+        // Soft-delete the message
+        db.messageDao().markDeleted(group.id, msgTs, senderHandle)
     }
 }

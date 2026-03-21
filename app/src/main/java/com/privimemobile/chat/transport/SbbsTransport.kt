@@ -215,6 +215,11 @@ class SbbsTransport(
         }
     }
 
+    /** Send a single SBBS message with no retry (for group messages). */
+    fun sendOnce(toWalletId: String, message: Map<String, Any?>) {
+        sendSbbsMessage(toWalletId, message)
+    }
+
     /** Low-level SBBS send — message must be a Map (serialized as JSON object by WalletApi). */
     private fun sendSbbsMessage(toWalletId: String, message: Map<String, Any?>) {
         Log.d(TAG, "Sending SBBS to ${toWalletId.take(16)}...: ${message["msg"] ?: message["t"]}")

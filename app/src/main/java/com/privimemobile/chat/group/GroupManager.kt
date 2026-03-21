@@ -467,6 +467,105 @@ class GroupManager(
         }
     }
 
+    // ========================================================================
+    // Group SBBS messaging
+    // ========================================================================
+
+    /**
+     * Send a message to all group members via SBBS.
+     * Each member gets an individual SBBS send (200ms spacing).
+     * The message includes group_id so the receiver routes it correctly.
+     */
+    suspend fun sendGroupMessage(groupId: String, text: String) {
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+        val myDisplayName = state.myDisplayName
+
+        val group = db.groupDao().findByGroupId(groupId) ?: return
+
+        // Get all member wallet_ids (exclude self)
+        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            .filterNotNull()
+            .filter { it.isNotEmpty() }
+
+        if (memberWalletIds.isEmpty()) {
+            Log.w(TAG, "No member wallet_ids for group $groupId — need to refresh members")
+            refreshGroupMembers(groupId)
+            return
+        }
+
+        val ts = System.currentTimeMillis() / 1000
+
+        // Build SBBS payload
+        val payload = mutableMapOf<String, Any?>(
+            "v" to 1,
+            "t" to "group_msg",
+            "ts" to ts,
+            "from" to myHandle,
+            "group_id" to groupId,
+            "msg" to text,
+        )
+        if (!myDisplayName.isNullOrEmpty()) payload["dn"] = myDisplayName
+
+        // Insert own message into DB immediately (optimistic)
+        val entity = com.privimemobile.chat.db.entities.MessageEntity(
+            conversationId = group.id,
+            timestamp = ts,
+            senderHandle = myHandle,
+            text = text,
+            type = "group_msg",
+            sent = true,
+            sbbsDedupKey = "$ts:${text.hashCode().toString(16)}:$myHandle:$groupId".hashCode().toString(16),
+        )
+        db.messageDao().insert(entity)
+
+        // Update group preview
+        db.groupDao().updateLastMessage(groupId, ts, "You: ${text.take(40)}")
+
+        // Send to each member with 200ms spacing
+        for (walletId in memberWalletIds) {
+            try {
+                ChatService.sbbs.sendOnce(walletId, payload)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send group msg to $walletId: ${e.message}")
+            }
+            delay(200)
+        }
+
+        Log.d(TAG, "Sent group msg to ${memberWalletIds.size} members in $groupId")
+    }
+
+    /**
+     * Send a group service notification to all members.
+     */
+    suspend fun sendGroupService(groupId: String, action: String, target: String? = null) {
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+
+        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            .filterNotNull()
+            .filter { it.isNotEmpty() }
+
+        val payload = mutableMapOf<String, Any?>(
+            "v" to 1,
+            "t" to "group_service",
+            "ts" to System.currentTimeMillis() / 1000,
+            "from" to myHandle,
+            "group_id" to groupId,
+            "action" to action,
+        )
+        if (target != null) payload["target"] = target
+
+        for (walletId in memberWalletIds) {
+            try {
+                ChatService.sbbs.sendOnce(walletId, payload)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send group service to $walletId: ${e.message}")
+            }
+            delay(200)
+        }
+    }
+
     /**
      * Search public groups by name prefix.
      */

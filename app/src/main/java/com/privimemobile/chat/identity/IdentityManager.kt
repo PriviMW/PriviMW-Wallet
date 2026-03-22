@@ -39,13 +39,13 @@ class IdentityManager(
      * Refresh identity from contract.
      * Called on startup and on ev_system_state events.
      */
-    suspend fun refreshIdentity() {
+    suspend fun refreshIdentity(forceRefresh: Boolean = false) {
         if (refreshing) return
         refreshing = true
         try {
             // Check current state
             val state = db.chatStateDao().get() ?: db.chatStateDao().ensureInitialized()
-            if (state.myHandle != null && state.myRegisteredHeight > 0) {
+            if (!forceRefresh && state.myHandle != null && state.myRegisteredHeight > 0) {
                 // Already registered — verify SBBS address still belongs to us (detects restored wallet)
                 if (state.myWalletId?.isNotEmpty() == true) {
                     verifySbbsAddress(state.myWalletId)
@@ -103,7 +103,7 @@ class IdentityManager(
     }
 
     /** Refresh registration fee from contract. */
-    private suspend fun refreshRegistrationFee() {
+    suspend fun refreshRegistrationFee() {
         try {
             val result = ShaderInvoker.invokeAsync("manager", "view_pool")
             val pool = result["pool"] as? Map<*, *>
@@ -204,9 +204,13 @@ class IdentityManager(
                 callback(null, error)
                 return@invoke
             }
-            // Handle exists — check if it's registered
-            val registered = (result["registered"] as? Number)?.toInt() ?: 0
-            callback(registered == 0, null)
+            // No error + data returned = handle exists = taken
+            val walletId = result["wallet_id"] as? String
+            if (!walletId.isNullOrEmpty()) {
+                callback(false, null) // taken
+            } else {
+                callback(true, null) // no wallet_id = not fully registered
+            }
         }
     }
 
@@ -240,7 +244,7 @@ class IdentityManager(
                                 )
                             }
                         }
-                        scope.launch { db.chatStateDao().update(state.copy(myDisplayName = newDisplayName)) }
+                        // Don't update locally — wait for TX confirmation (PendingTxManager → refreshIdentity)
                         onResult?.invoke(true, null)
                     }
                 }
@@ -281,10 +285,13 @@ class IdentityManager(
                                 com.privimemobile.chat.ChatService.pendingTxs.trackTx(
                                     txId,
                                     com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_UPDATE_PROFILE,
-                                    state.myHandle ?: ""
+                                    state.myHandle ?: "",
+                                    "addr:${state.myWalletId}" // store old address for revert on failure
                                 )
                             }
                         }
+                        // Update locally immediately — wallet needs to listen on new SBBS address
+                        // Will be reverted by PendingTxManager.onTxFailed if TX fails
                         scope.launch {
                             db.chatStateDao().update(state.copy(
                                 myWalletId = newAddress,
@@ -318,7 +325,7 @@ class IdentityManager(
                             )
                         }
                     }
-                    scope.launch { db.chatStateDao().clearIdentity() }
+                    // Do NOT clear identity here — wait for TX confirmation in PendingTxManager
                     onResult?.invoke(true, null)
                 }
             }

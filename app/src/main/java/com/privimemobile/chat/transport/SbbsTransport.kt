@@ -187,6 +187,54 @@ class SbbsTransport(
         }
     }
 
+    /**
+     * Send group read receipts — sends ack to each sender individually with group_id.
+     * Groups messages by senderHandle, resolves wallet IDs, sends one ack per sender.
+     */
+    fun sendGroupReadReceipts(groupId: String, groupConvId: Long) {
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            if (state.myHandle == null) return@launch
+
+            // Get all received (non-self) messages grouped by sender
+            val allReceived = db.messageDao().getAllReceivedWithSender(groupConvId) ?: return@launch
+            if (allReceived.isEmpty()) return@launch
+
+            // Group timestamps by sender handle
+            val bySender = mutableMapOf<String, MutableList<Long>>()
+            for (msg in allReceived) {
+                val sender = msg.senderHandle ?: continue
+                if (sender == state.myHandle) continue
+                bySender.getOrPut(sender) { mutableListOf() }.add(msg.timestamp)
+            }
+
+            Log.d(TAG, "sendGroupReadReceipts($groupId): ${bySender.size} senders, ${allReceived.size} msgs")
+
+            for ((senderHandle, timestamps) in bySender) {
+                // Resolve sender's wallet ID from group members or contacts
+                val walletId = db.groupDao().getMemberWalletId(groupId, senderHandle)
+                    ?: db.contactDao().findByHandle(senderHandle)?.walletId
+                if (walletId.isNullOrEmpty()) {
+                    Log.w(TAG, "sendGroupReadReceipts: no walletId for @$senderHandle")
+                    continue
+                }
+
+                val payload = mapOf(
+                    "v" to 1,
+                    "t" to "ack",
+                    "from" to state.myHandle,
+                    "group_id" to groupId,
+                    "read" to timestamps,
+                )
+                sendOnce(walletId, payload)
+                delay(100) // small spacing between sends
+            }
+
+            // Mark local messages as acked
+            db.messageDao().markAcked(groupConvId, allReceived.map { it.timestamp })
+        }
+    }
+
     // Typing throttle — max one typing indicator per conversation per 3s
     private val lastTypingSent = mutableMapOf<String, Long>()
 

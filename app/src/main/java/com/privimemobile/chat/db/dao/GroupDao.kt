@@ -23,6 +23,9 @@ interface GroupDao {
     @Query("SELECT * FROM groups WHERE group_id LIKE :prefix || '%' LIMIT 1")
     suspend fun findByConvKey(prefix: String): GroupEntity?
 
+    @Query("SELECT * FROM groups")
+    suspend fun getAllGroups(): List<GroupEntity>
+
     @Query("SELECT * FROM groups ORDER BY last_message_ts DESC")
     fun observeAll(): Flow<List<GroupEntity>>
 
@@ -84,6 +87,9 @@ interface GroupDao {
     @Query("SELECT COUNT(*) FROM group_members WHERE group_id = :groupId AND role != 3")
     suspend fun countActiveMembers(groupId: String): Int
 
+    @Query("SELECT * FROM group_members WHERE group_id = :groupId AND role = 3 ORDER BY handle ASC")
+    fun observeBannedMembers(groupId: String): Flow<List<GroupMemberEntity>>
+
     @Query("UPDATE group_members SET role = :role, permissions = :permissions WHERE group_id = :groupId AND handle = :handle")
     suspend fun updateMemberRole(groupId: String, handle: String, role: Int, permissions: Int)
 
@@ -92,6 +98,9 @@ interface GroupDao {
 
     @Query("UPDATE group_members SET wallet_id = :walletId WHERE group_id = :groupId AND handle = :handle")
     suspend fun updateMemberWalletId(groupId: String, handle: String, walletId: String?)
+
+    @Query("SELECT wallet_id FROM group_members WHERE group_id = :groupId AND handle = :handle LIMIT 1")
+    suspend fun getMemberWalletId(groupId: String, handle: String): String?
 
     @Query("DELETE FROM group_members WHERE group_id = :groupId AND handle = :handle")
     suspend fun removeMember(groupId: String, handle: String)

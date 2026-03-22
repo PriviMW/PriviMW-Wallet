@@ -36,9 +36,9 @@ object WalletEventBus {
     private val _transactions = kotlinx.coroutines.flow.MutableStateFlow("[]")
     val transactions: kotlinx.coroutines.flow.StateFlow<String> = _transactions
 
-    // Sync progress
-    private val _syncProgress = MutableSharedFlow<SyncProgressEvent>(extraBufferCapacity = 1)
-    val syncProgress: SharedFlow<SyncProgressEvent> = _syncProgress.asSharedFlow()
+    // Sync progress — StateFlow so UI always gets current value
+    private val _syncProgress = kotlinx.coroutines.flow.MutableStateFlow(SyncProgressEvent(0, 0))
+    val syncProgress: kotlinx.coroutines.flow.StateFlow<SyncProgressEvent> = _syncProgress
 
     // Node connection state — uses StateFlow so UI always has current value
     private val _nodeConnection = kotlinx.coroutines.flow.MutableStateFlow(NodeConnectionEvent(connected = false))
@@ -98,7 +98,7 @@ object WalletEventBus {
         }
     }
     fun emitTransactions(json: String) { _transactions.value = json }
-    fun emitSyncProgress(event: SyncProgressEvent) { _syncProgress.tryEmit(event) }
+    fun emitSyncProgress(event: SyncProgressEvent) { _syncProgress.value = event }
     fun emitNodeConnection(event: NodeConnectionEvent) { _nodeConnection.value = event }
     fun emitApiResult(json: String) { _apiResult.tryEmit(json) }
     fun emitContractConsent(event: ContractConsentEvent) { _contractConsent.tryEmit(event) }

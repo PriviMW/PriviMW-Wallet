@@ -7,7 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,6 +83,7 @@ fun ChatsScreen(
     onCreateGroup: () -> Unit = {},
     onOpenGroup: (String) -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     // Wait for ChatService to initialize
     val isInitialized by ChatService.initialized.collectAsState()
     if (!isInitialized) {
@@ -271,6 +275,29 @@ fun ChatsScreen(
                     // Observe typing state for all conversations
                     val typingVer by ChatService.typingVersion.collectAsState()
 
+                    // Pull-to-refresh
+                    var refreshing by remember { mutableStateOf(false) }
+                    val onRefresh: () -> Unit = {
+                        refreshing = true
+                        scope.launch {
+                            // Re-resolve all contact display names from contract
+                            val contacts = ChatService.db?.contactDao()?.getAll() ?: emptyList()
+                            for (c in contacts) {
+                                try {
+                                    val resolved = ChatService.contacts.resolveHandle(c.handle)
+                                    if (resolved?.displayName != null && resolved.displayName != c.displayName) {
+                                        ChatService.db?.contactDao()?.updateDisplayName(c.handle, resolved.displayName)
+                                        ChatService.db?.conversationDao()?.updateDisplayName("@${c.handle}", resolved.displayName)
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                            // Refresh groups
+                            ChatService.groups.refreshMyGroups()
+                            delay(500)
+                            refreshing = false
+                        }
+                    }
+
                     // Unified list: conversations + groups sorted by last message time
                     val unifiedList = remember(filteredConversations, filteredGroups) {
                         data class ChatListItem(val isGroup: Boolean, val sortTs: Long, val pinned: Boolean, val conv: ConversationEntity? = null, val group: com.privimemobile.chat.db.entities.GroupEntity? = null)
@@ -286,6 +313,7 @@ fun ChatsScreen(
                         items.sortedWith(compareByDescending<ChatListItem> { it.pinned }.thenByDescending { it.sortTs })
                     }
 
+                    PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) {
                     LazyColumn {
                         items(unifiedList.size, key = { i ->
                             val item = unifiedList[i]
@@ -302,6 +330,7 @@ fun ChatsScreen(
                             }
                         }
                     }
+                    } // close PullToRefreshBox
                 }
             }
 
@@ -429,8 +458,27 @@ fun ChatsScreen(
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
                 ChatListMenuItem("Delete", color = C.error) {
                     scope.launch {
-                        ChatService.db?.messageDao()?.softDeleteByConversation(target.id)
-                        ChatService.db?.conversationDao()?.softDelete(target.id)
+                        val db = ChatService.db ?: return@launch
+                        // Delete attachment files from disk
+                        val attachments = db.attachmentDao().getAllByConversation(target.id)
+                        for (att in attachments) {
+                            if (att.localPath != null) {
+                                try { java.io.File(att.localPath).delete() } catch (_: Exception) {}
+                            }
+                        }
+                        // Delete attachment DB records
+                        db.attachmentDao().deleteByConversation(target.id)
+                        // Delete wallpaper file + prefs
+                        val handle = target.convKey.removePrefix("@")
+                        try { java.io.File(context.filesDir, "wallpaper_$handle.jpg").delete() } catch (_: Exception) {}
+                        context.getSharedPreferences("privime_prefs", 0).edit()
+                            .remove("wallpaper_${target.convKey}").apply()
+                        // Clear draft
+                        db.conversationDao().setDraft(target.id, null)
+                        // Soft-delete messages (keep dedup keys to prevent SBBS re-delivery)
+                        db.messageDao().softDeleteByConversation(target.id)
+                        // Soft-delete conversation
+                        db.conversationDao().softDelete(target.id)
                     }; menuTarget = null
                 }
             }
@@ -474,6 +522,31 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
     var newAddress by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
+    // Check for existing pending update_profile TX (survives navigation)
+    val pendingTxs by ChatService.db?.pendingTxDao()?.observePending()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val existingPendingUpdate = pendingTxs.firstOrNull {
+        it.action == com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_UPDATE_PROFILE
+    }
+    LaunchedEffect(existingPendingUpdate) {
+        if (existingPendingUpdate != null && !updating) {
+            updating = true
+            txStatus = "pending"
+        }
+        if (existingPendingUpdate == null && updating && txStatus == "pending") {
+            // TX processed — check if SBBS update flag is clear
+            if (!ChatService.identity.sbbsNeedsUpdate.value) {
+                txStatus = "confirmed"
+                ChatService.identity.refreshIdentity(forceRefresh = true)
+            }
+        }
+    }
+
+    // Block back navigation while TX is pending
+    if (updating && txStatus == "pending") {
+        androidx.activity.compose.BackHandler {}
+    }
+
     // Poll to detect TX confirmation — check if SBBS address is now ours
     if (updating && txStatus == "pending" && newAddress.isNotEmpty()) {
         LaunchedEffect(newAddress) {
@@ -493,7 +566,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                     if (onChainWalletId == newAddress) {
                         txStatus = "confirmed"
                         ChatService.identity.clearSbbsNeedsUpdate()
-                        ChatService.identity.refreshIdentity()
+                        ChatService.identity.refreshIdentity(forceRefresh = true)
                         break
                     }
                 } catch (_: Exception) {}
@@ -549,7 +622,12 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(C.bg)
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

@@ -183,6 +183,7 @@ class GroupManager(
         groupId: String,
         targetHandle: String,
         ban: Boolean = false,
+        isUnban: Boolean = false,
         onResult: ((success: Boolean, error: String?) -> Unit)? = null,
     ) {
         ShaderInvoker.tx("user", "remove_member",
@@ -198,7 +199,11 @@ class GroupManager(
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
                         scope.launch {
-                            val extra = if (ban) "ban:$targetHandle" else targetHandle
+                            val extra = when {
+                                ban -> "ban:$targetHandle"
+                                isUnban -> "unban:$targetHandle"
+                                else -> targetHandle
+                            }
                             ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_REMOVE_MEMBER, groupId, extra)
                         }
                     }
@@ -270,12 +275,10 @@ class GroupManager(
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
                         scope.launch {
-                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_UPDATE_GROUP_INFO, groupId)
+                            // Store name in extraData so onTxConfirmed can broadcast it
+                            val extra = if (name != null) "name:$name" else null
+                            ChatService.pendingTxs.trackTx(txId, PendingTxEntity.ACTION_UPDATE_GROUP_INFO, groupId, extra)
                         }
-                    }
-                    scope.launch {
-                        delay(3000)
-                        refreshGroupInfo(groupId)
                     }
                     onResult?.invoke(true, null)
                 }
@@ -359,13 +362,31 @@ class GroupManager(
 
                 val existing = db.groupDao().findByGroupId(groupId)
                 if (existing != null) {
-                    db.groupDao().updateGroup(existing.copy(
-                        name = name,
-                        memberCount = memberCount,
-                        myRole = role,
-                        isPublic = isPublic == 1,
-                    ))
+                    // Only update if something actually changed (avoid unnecessary Room Flow emissions)
+                    if (existing.name != name || existing.memberCount != memberCount ||
+                        existing.myRole != role || existing.isPublic != (isPublic == 1)) {
+                        db.groupDao().updateGroup(existing.copy(
+                            name = name,
+                            memberCount = memberCount,
+                            myRole = role,
+                            isPublic = isPublic == 1,
+                        ))
+                    }
                 } else {
+                    // Check if conversation exists with messages (reinstall case)
+                    val convKey = "g_${groupId.take(16)}"
+                    val existingConv = db.conversationDao().findByKey(convKey)
+                    var lastPreview: String? = null
+                    var lastTs: Long = 0
+                    if (existingConv != null) {
+                        // Restore preview from latest message
+                        val lastMsg = db.messageDao().getLatestMessage(existingConv.id)
+                        if (lastMsg != null) {
+                            lastPreview = lastMsg.text?.take(60)
+                            lastTs = lastMsg.timestamp
+                        }
+                    }
+
                     db.groupDao().insertGroup(GroupEntity(
                         groupId = groupId,
                         name = name,
@@ -373,6 +394,8 @@ class GroupManager(
                         memberCount = memberCount,
                         myRole = role,
                         isPublic = isPublic == 1,
+                        lastMessagePreview = lastPreview,
+                        lastMessageTs = lastTs,
                     ))
                     // Fetch full details for new group
                     refreshGroupInfo(groupId)
@@ -380,6 +403,20 @@ class GroupManager(
                 }
                 // Ensure a ConversationEntity exists for this group's messages
                 getOrCreateGroupConversation(groupId, name)
+            }
+
+            // Clean up local groups that no longer exist on-chain
+            // Only run cleanup if we got a non-empty response (empty could mean shader still loading)
+            if (groups.isNotEmpty()) {
+                val onChainIds = groups.mapNotNull { (it as? Map<*, *>)?.get("group_id") as? String }.toSet()
+                val localGroups = db.groupDao().getAllGroups()
+                for (local in localGroups) {
+                    if (local.groupId !in onChainIds) {
+                        Log.d(TAG, "Removing orphaned local group: ${local.groupId}")
+                        db.groupDao().deleteByGroupId(local.groupId)
+                        db.groupDao().removeAllMembers(local.groupId)
+                    }
+                }
             }
 
             Log.d(TAG, "Refreshed ${groups.size} groups")
@@ -461,10 +498,7 @@ class GroupManager(
                 val permissions = (m["permissions"] as? Number)?.toInt() ?: 0
                 val joinedHeight = (m["joined_height"] as? Number)?.toLong() ?: 0
 
-                // Skip banned members
-                if (role == 3) continue
-
-                // Resolve wallet_id from contact DB or contract
+                // Resolve wallet_id from contact DB or contract (include banned for admin visibility)
                 val contact = db.contactDao().findByHandle(handle)
                 val walletId = contact?.walletId
 
@@ -484,15 +518,16 @@ class GroupManager(
                 }
             }
 
-            // Resolve wallet_ids for members without one
+            // Resolve/refresh wallet_ids for ALL members (catches address changes after wallet restore)
             scope.launch {
-                val membersNeedingResolve = db.groupDao().getActiveMembers(groupId)
-                    .filter { it.walletId.isNullOrEmpty() }
-                for (member in membersNeedingResolve) {
+                val allMembers = db.groupDao().getActiveMembers(groupId)
+                for (member in allMembers) {
+                    if (member.handle == myHandle) continue // skip self
                     try {
                         val resolved = ChatService.contacts.resolveHandle(member.handle)
-                        if (resolved?.walletId != null) {
+                        if (resolved?.walletId != null && resolved.walletId != member.walletId) {
                             db.groupDao().updateMemberWalletId(groupId, member.handle, resolved.walletId)
+                            Log.d(TAG, "Updated wallet_id for @${member.handle} in group $groupId")
                         }
                     } catch (_: Exception) {}
                     delay(200)
@@ -519,6 +554,8 @@ class GroupManager(
         text: String,
         replyText: String? = null,
         ttl: Int = 0,
+        fwdFrom: String? = null,
+        fwdTs: Long = 0,
     ) {
         val state = db.chatStateDao().get() ?: return
         val myHandle = state.myHandle ?: return
@@ -552,6 +589,8 @@ class GroupManager(
         if (!myDisplayName.isNullOrEmpty()) payload["dn"] = myDisplayName
         if (replyText != null) payload["reply"] = replyText
         if (ttl > 0) payload["ttl"] = ttl
+        if (fwdFrom != null) payload["fwd_from"] = fwdFrom
+        if (fwdTs > 0) payload["fwd_ts"] = fwdTs
 
         val expiresAt = if (ttl > 0) ts + ttl else 0L
 
@@ -563,6 +602,8 @@ class GroupManager(
             text = text,
             type = "group_msg",
             sent = true,
+            fwdFrom = fwdFrom,
+            fwdTs = fwdTs,
             sbbsDedupKey = "$ts:${text.hashCode().toString(16)}:$myHandle:$groupId".hashCode().toString(16),
             replyText = replyText,
             expiresAt = expiresAt,
@@ -612,6 +653,62 @@ class GroupManager(
             delay(200)
         }
         Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberWalletIds.size} members in $groupId")
+    }
+
+    // Group typing throttle — max one per group per 5 seconds
+    private val lastGroupTypingSent = mutableMapOf<String, Long>()
+
+    /** Send typing indicator to all group members (throttled). */
+    fun sendGroupTyping(groupId: String) {
+        val now = System.currentTimeMillis()
+        val last = lastGroupTypingSent[groupId] ?: 0
+        if (now - last < 5000) return // 5s throttle
+        lastGroupTypingSent[groupId] = now
+
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            val myHandle = state.myHandle ?: return@launch
+            val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+                .filterNotNull().filter { it.isNotEmpty() }
+
+            val payload = mapOf(
+                "v" to 1, "t" to "typing",
+                "from" to myHandle,
+                "group_id" to groupId,
+                "ts" to (now / 1000),
+            )
+            for (walletId in memberWalletIds) {
+                try { ChatService.sbbs.sendOnce(walletId, payload) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    /**
+     * Request avatars for group members whose profile pictures are missing locally.
+     * Sends avatar_request to each member without a cached avatar file.
+     */
+    suspend fun requestMemberAvatars(groupId: String) {
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
+        val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+        val members = db.groupDao().getActiveMembers(groupId)
+
+        for (member in members) {
+            if (member.handle == myHandle) continue
+            val avatarFile = java.io.File(filesDir, "avatars/${member.handle}.webp")
+            if (avatarFile.exists()) continue // already have it
+            val walletId = member.walletId ?: continue
+
+            val payload = mapOf(
+                "v" to 1, "t" to "avatar_request",
+                "from" to myHandle,
+            )
+            try {
+                ChatService.sbbs.sendOnce(walletId, payload)
+                Log.d(TAG, "Requested avatar for @${member.handle} in group $groupId")
+            } catch (_: Exception) {}
+            delay(200)
+        }
     }
 
     /**
@@ -677,13 +774,15 @@ class GroupManager(
                 "left" -> "You left the group"
                 "kicked" -> "You removed @$target"
                 "banned" -> "You banned @$target"
+                "unbanned" -> "You unbanned @$target"
                 "promoted" -> "You promoted @$target to admin"
                 "demoted" -> "You demoted @$target to member"
                 "ownership_transferred" -> "You transferred ownership to @$target"
                 "group_deleted" -> "You deleted the group"
                 else -> "You $action" + if (target != null) " @$target" else ""
             }
-            val dedupKey = "svc:$action:${target ?: myHandle}:$groupId".hashCode().toString(16)
+            val dedupEpoch = ts / 120 // 2-minute window — prevents spam but allows repeated actions over time
+            val dedupKey = "svc:$action:${target ?: myHandle}:$groupId:$dedupEpoch".hashCode().toString(16)
             val entity = com.privimemobile.chat.db.entities.MessageEntity(
                 conversationId = convId,
                 timestamp = ts,
@@ -727,7 +826,9 @@ class GroupManager(
         // Update local member list AFTER SBBS sent (so kicked/banned user received the message)
         if (target != null && group != null) {
             when (action) {
-                "kicked", "banned" -> db.groupDao().removeMember(groupId, target)
+                "kicked" -> db.groupDao().removeMember(groupId, target)
+                "banned" -> db.groupDao().updateMemberRole(groupId, target, 3, 0) // role 3 = Banned
+                "unbanned" -> db.groupDao().removeMember(groupId, target) // ban lifted, user can rejoin
                 "promoted" -> db.groupDao().updateMemberRole(groupId, target, 1, 0)
                 "demoted" -> db.groupDao().updateMemberRole(groupId, target, 0, 0)
             }

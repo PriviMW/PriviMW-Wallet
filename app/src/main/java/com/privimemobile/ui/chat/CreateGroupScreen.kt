@@ -92,21 +92,6 @@ fun CreateGroupScreen(
                 ),
             )
 
-            // Description (optional)
-            OutlinedTextField(
-                value = description,
-                onValueChange = { if (it.length <= 200) description = it },
-                label = { Text("Description (optional)") },
-                maxLines = 3,
-                modifier = Modifier.fillMaxWidth(),
-                supportingText = { Text("${description.length}/200", color = C.textMuted) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = C.accent, unfocusedBorderColor = C.textSecondary,
-                    focusedLabelColor = C.accent, unfocusedLabelColor = C.textSecondary,
-                    cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                ),
-            )
-
             HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
             // Group type selector — card-style
@@ -182,6 +167,12 @@ fun CreateGroupScreen(
                     creating = true
                     val password = if (!isPublic) java.util.UUID.randomUUID().toString().replace("-", "") else null
                     val desc = description.trim().ifEmpty { null }
+                    // Check if wallet is syncing — warn user TX may be slow
+                    val syncState = com.privimemobile.wallet.WalletEventBus.syncProgress.value
+                    val isSyncing = syncState.total > 0 && syncState.done < syncState.total
+                    if (isSyncing) {
+                        Toast.makeText(context, "Wallet is syncing — transaction may take longer to process", Toast.LENGTH_LONG).show()
+                    }
                     ChatService.groups.createGroup(
                         name = groupName.trim(),
                         isPublic = isPublic,

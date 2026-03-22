@@ -14,7 +14,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -68,7 +71,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
     val nodeConn by WalletEventBus.nodeConnection.collectAsState(initial = NodeConnectionEvent(false))
-    val syncProgress by WalletEventBus.syncProgress.collectAsState(initial = SyncProgressEvent(0, 0))
+    val syncProgress by WalletEventBus.syncProgress.collectAsState()
     val walletStatus by WalletEventBus.beamStatus.collectAsState()
 
     // Lib info
@@ -281,8 +284,9 @@ fun SettingsScreen(
                     var updating by remember { mutableStateOf(false) }
                     OutlinedTextField(
                         value = newDisplayName,
-                        onValueChange = { newDisplayName = it },
+                        onValueChange = { if (it.toByteArray(Charsets.UTF_8).size <= 64) newDisplayName = it },
                         label = { Text("Display Name") },
+                        supportingText = { Text("${newDisplayName.toByteArray(Charsets.UTF_8).size}/64 bytes", color = C.textMuted, fontSize = 11.sp) },
                         singleLine = true,
                         enabled = !updating,
                         modifier = Modifier.fillMaxWidth(),
@@ -298,7 +302,7 @@ fun SettingsScreen(
                             com.privimemobile.chat.ChatService.identity.updateDisplayName(newDisplayName.trim()) { success, err ->
                                 updating = false
                                 if (success) {
-                                    toast("Display name updated")
+                                    toast("TX submitted. Display name will update when confirmed.")
                                     showEditName = false
                                 } else toast(err ?: "Failed to update display name")
                             }
@@ -373,7 +377,7 @@ fun SettingsScreen(
                                     if (addr != null) {
                                         val normalized = Helpers.normalizeWalletId(addr) ?: addr
                                         com.privimemobile.chat.ChatService.identity.updateMessagingAddress(normalized) { success, err ->
-                                            if (success) toast("Messaging address updated") else toast(err ?: "Failed")
+                                            if (success) toast("TX submitted. Address will update when confirmed.") else toast(err ?: "Failed")
                                         }
                                     }
                                 }
@@ -420,11 +424,21 @@ fun SettingsScreen(
                             Button(
                                 onClick = {
                                     removing = true
-                                    com.privimemobile.chat.ChatService.identity.releaseHandle { success, err ->
-                                        removing = false
-                                        showRemoveConfirm = false
-                                        if (success) toast("Handle removed")
-                                        else toast(err ?: "Failed to remove handle")
+                                    // Check if user is a group creator — contract will block deletion
+                                    scope.launch {
+                                        val createdGroups = com.privimemobile.chat.ChatService.db?.groupDao()?.getAllGroups()
+                                            ?.filter { it.myRole == 2 } ?: emptyList()
+                                        if (createdGroups.isNotEmpty()) {
+                                            removing = false
+                                            toast("You must transfer ownership or delete ${createdGroups.size} group(s) first")
+                                            return@launch
+                                        }
+                                        com.privimemobile.chat.ChatService.identity.releaseHandle { success, err ->
+                                            removing = false
+                                            showRemoveConfirm = false
+                                            if (success) toast("TX submitted. Handle will be removed when confirmed.")
+                                            else toast(err ?: "Failed to remove handle")
+                                        }
                                     }
                                 },
                                 enabled = !removing,
@@ -486,41 +500,182 @@ fun SettingsScreen(
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
             Text("Connection Mode", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
+            var showMobileNodeDisclaimer by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .border(1.dp, C.border, RoundedCornerShape(8.dp)),
             ) {
-                listOf("random" to "Random Node", "own" to "Own Node").forEach { (mode, label) ->
+                listOf("random" to "Random", "mobile" to "Mobile", "own" to "Own Node").forEach { (mode, label) ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .background(if (nodeMode == mode) C.accent else C.card)
                             .clickable {
-                                nodeMode = mode
-                                if (mode == "random") {
-                                    showNodeInput = false
-                                    SecureStorage.putString("node_mode", "random")
-                                    // Shuffle and try nodes (EU + US) like RN MAINNET_NODES
-                                    val nodes = Config.MAINNET_NODES.shuffled()
-                                    val wallet = WalletManager.walletInstance
-                                    val selectedNode = nodes.firstOrNull() ?: Config.DEFAULT_NODE
-                                    wallet?.changeNodeAddress(selectedNode)
-                                    SecureStorage.storeNodeAddress(selectedNode)
-                                    toast("Connected to $selectedNode")
-                                } else {
-                                    showNodeInput = true
+                                when (mode) {
+                                    "random" -> {
+                                        nodeMode = "random"
+                                        showNodeInput = false
+                                        SecureStorage.putString("node_mode", "random")
+                                        val nodes = Config.MAINNET_NODES.shuffled()
+                                        val wallet = WalletManager.walletInstance
+                                        val selectedNode = nodes.firstOrNull() ?: Config.DEFAULT_NODE
+                                        wallet?.changeNodeAddress(selectedNode)
+                                        wallet?.enableBodyRequests(false)
+                                        SecureStorage.storeNodeAddress(selectedNode)
+                                        toast("Connected to $selectedNode")
+                                    }
+                                    "mobile" -> {
+                                        showNodeInput = false
+                                        if (nodeMode != "mobile") {
+                                            showMobileNodeDisclaimer = true
+                                        }
+                                    }
+                                    "own" -> {
+                                        nodeMode = "own"
+                                        showNodeInput = true
+                                    }
                                 }
                             }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(label, color = if (nodeMode == mode) C.textDark else C.textSecondary,
-                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
+
+            // Mobile node status indicator with sync progress
+            if (nodeMode == "mobile") {
+                Spacer(Modifier.height(8.dp))
+                val syncProgress by com.privimemobile.wallet.WalletEventBus.syncProgress.collectAsState()
+                val isSyncing = syncProgress.total > 0 && syncProgress.done < syncProgress.total
+                val syncPercent = if (syncProgress.total > 0) (syncProgress.done * 100 / syncProgress.total) else 0
+                val isSynced = walletStatus.height > 0 && !isSyncing
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSynced) Color(0x1A66BB6A) else Color(0x1AFFA726),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(8.dp).background(
+                                    if (isSynced) Color(0xFF66BB6A) else Color(0xFFFFA726),
+                                    CircleShape,
+                                )
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (isSynced) "Mobile Node Active"
+                                else if (isSyncing) "Mobile Node Syncing..."
+                                else "Mobile Node Connecting...",
+                                color = if (isSynced) Color(0xFF66BB6A) else Color(0xFFFFA726),
+                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        if (isSyncing) {
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { syncProgress.done.toFloat() / syncProgress.total.toFloat() },
+                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                color = C.accent,
+                                trackColor = C.border,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${syncPercent}%", color = C.textSecondary, fontSize = 11.sp)
+                                Text("${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks", color = C.textMuted, fontSize = 11.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (isSynced) "Verifying blockchain independently via FlyClient"
+                            else "App usable via remote node while syncing",
+                            color = C.textMuted, fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+
+            // Mobile node disclaimer dialog
+            if (showMobileNodeDisclaimer) {
+                AlertDialog(
+                    onDismissRequest = { showMobileNodeDisclaimer = false },
+                    containerColor = C.card,
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Security, null, tint = C.accent, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Enable Mobile Node", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                "Mobile Node runs a lightweight FlyClient node on your device for maximum privacy. Your wallet verifies the blockchain independently without trusting any remote server.",
+                                color = C.text, fontSize = 14.sp, lineHeight = 20.sp,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text("Trade-offs:", color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            listOf(
+                                "First sync may take several minutes",
+                                "Uses more battery and mobile data",
+                                "Send/receive and messaging work during sync",
+                                "DApp and contract features are limited until sync completes",
+                            ).forEach { point ->
+                                Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                                    Text("\u2022 ", color = C.textSecondary, fontSize = 13.sp)
+                                    Text(point, color = C.textSecondary, fontSize = 13.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0x1A66BB6A),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    "Your wallet stays connected to a remote node while the mobile node syncs. Once synced, all traffic switches to your local node automatically.",
+                                    color = Color(0xFF66BB6A), fontSize = 12.sp, lineHeight = 17.sp,
+                                    modifier = Modifier.padding(10.dp),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showMobileNodeDisclaimer = false
+                                nodeMode = "mobile"
+                                SecureStorage.putString("node_mode", "mobile")
+                                // Enable mobile protocol — FlyClient + on-demand body requests
+                                val wallet = WalletManager.walletInstance
+                                // Keep connected to random node while mobile node syncs
+                                val nodes = Config.MAINNET_NODES.shuffled()
+                                val selectedNode = nodes.firstOrNull() ?: Config.DEFAULT_NODE
+                                wallet?.changeNodeAddress(selectedNode)
+                                SecureStorage.storeNodeAddress(selectedNode)
+                                // Enable body requests (FlyClient mobile protocol)
+                                wallet?.enableBodyRequests(true)
+                                toast("Mobile node enabled — syncing in background")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                            shape = RoundedCornerShape(8.dp),
+                        ) { Text("Enable", color = C.textDark, fontWeight = FontWeight.Bold) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showMobileNodeDisclaimer = false }) {
+                            Text("Cancel", color = C.textSecondary)
+                        }
+                    },
+                )
+            }
+
             if (showNodeInput) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -535,20 +690,20 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { showNodeInput = false }, shape = RoundedCornerShape(8.dp)) {
+                    OutlinedButton(onClick = { showNodeInput = false; nodeMode = SecureStorage.getString("node_mode") ?: "random" }, shape = RoundedCornerShape(8.dp)) {
                         Text("Cancel", color = C.textSecondary)
                     }
                     Button(
                         onClick = {
                             val addr = nodeInput.trim()
                             if (addr.isNotEmpty()) {
-                                // Validate format: hostname:port
                                 val parts = addr.split(":")
                                 if (parts.size != 2) {
                                     toast("Invalid format. Use hostname:port")
                                     return@Button
                                 }
                                 WalletManager.walletInstance?.changeNodeAddress(addr)
+                                WalletManager.walletInstance?.enableBodyRequests(false)
                                 SecureStorage.putString("node_mode", "own")
                                 SecureStorage.putString("own_node_address", addr)
                                 SecureStorage.storeNodeAddress(addr)

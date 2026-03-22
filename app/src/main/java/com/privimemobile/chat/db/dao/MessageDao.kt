@@ -43,6 +43,10 @@ interface MessageDao {
     @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0")
     suspend fun getAllReceivedTimestamps(convId: Long): List<Long>
 
+    /** Get ALL received messages with sender info — for group read receipts (grouped by sender). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND sent = 0 AND acked = 0 AND sender_handle IS NOT NULL")
+    suspend fun getAllReceivedWithSender(convId: Long): List<com.privimemobile.chat.db.entities.MessageEntity>?
+
     /** Mark as deleted (delete for everyone) — by timestamp+sender (for SBBS protocol). */
     @Query("UPDATE messages SET deleted = 1 WHERE conversation_id = :convId AND timestamp = :ts AND sender_handle = :senderHandle")
     suspend fun markDeleted(convId: Long, ts: Long, senderHandle: String)

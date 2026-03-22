@@ -56,4 +56,12 @@ interface AttachmentDao {
     /** Count image attachments in a conversation (for contact info). */
     @Query("SELECT COUNT(*) FROM attachments WHERE conversation_id = :convId AND mime_type LIKE 'image/%'")
     suspend fun countImagesByConversation(convId: Long): Int
+
+    /** Get all attachments in a conversation (for cleanup on delete). */
+    @Query("SELECT * FROM attachments WHERE conversation_id = :convId")
+    suspend fun getAllByConversation(convId: Long): List<AttachmentEntity>
+
+    /** Delete all attachments in a conversation. */
+    @Query("DELETE FROM attachments WHERE conversation_id = :convId")
+    suspend fun deleteByConversation(convId: Long)
 }

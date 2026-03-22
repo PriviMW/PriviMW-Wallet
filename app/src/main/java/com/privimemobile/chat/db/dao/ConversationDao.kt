@@ -121,6 +121,10 @@ interface ConversationDao {
     @Query("SELECT deleted_at_ts FROM conversations WHERE conv_key = :convKey LIMIT 1")
     suspend fun getDeletedTs(convKey: String): Long?
 
+    /** Update display name for a conversation (by convKey). */
+    @Query("UPDATE conversations SET display_name = :displayName WHERE conv_key = :convKey")
+    suspend fun updateDisplayName(convKey: String, displayName: String?)
+
     /** Save draft text for a conversation (null to clear). */
     @Query("UPDATE conversations SET draft_text = :text WHERE id = :convId")
     suspend fun setDraft(convId: Long, text: String?)

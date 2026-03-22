@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -49,6 +50,8 @@ fun GroupSettingsScreen(
 
     val members by ChatService.db?.groupDao()?.observeMembers(groupId)
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val bannedMembers by ChatService.db?.groupDao()?.observeBannedMembers(groupId)
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
     val state by ChatService.observeState().collectAsState(initial = null)
     val myHandle = state?.myHandle
@@ -73,6 +76,7 @@ fun GroupSettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
+                windowInsets = WindowInsets(0),
             )
         },
         containerColor = C.bg,
@@ -154,12 +158,64 @@ fun GroupSettingsScreen(
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = group?.name ?: "",
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    var showNameDialog by remember { mutableStateOf(false) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = group?.name ?: "",
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (isAdmin) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                Icons.Default.Edit, null, tint = C.textMuted,
+                                modifier = Modifier.size(16.dp).clickable { showNameDialog = true },
+                            )
+                        }
+                    }
+                    if (showNameDialog) {
+                        var newName by remember { mutableStateOf(group?.name ?: "") }
+                        AlertDialog(
+                            onDismissRequest = { showNameDialog = false },
+                            containerColor = C.card,
+                            title = { Text("Edit Group Name", color = Color.White) },
+                            text = {
+                                Column {
+                                    OutlinedTextField(
+                                        value = newName,
+                                        onValueChange = { if (it.length <= 32) newName = it },
+                                        placeholder = { Text("Group name", color = C.textMuted) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                                            cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                        ),
+                                    )
+                                    Text("${newName.length}/32", color = C.textMuted, fontSize = 12.sp, modifier = Modifier.align(Alignment.End))
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val trimmed = newName.trim()
+                                    if (trimmed.isNotEmpty() && trimmed != group?.name) {
+                                        // Submit on-chain TX — SBBS broadcast + local update happens after TX confirms
+                                        ChatService.groups.updateGroupInfo(groupId, name = trimmed) { success, _ ->
+                                            if (success) {
+                                                android.widget.Toast.makeText(context, "TX submitted. Name will update when confirmed.", android.widget.Toast.LENGTH_LONG).show()
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Failed to update name", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                    showNameDialog = false
+                                }) { Text("Save", color = C.accent) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showNameDialog = false }) { Text("Cancel", color = C.textSecondary) }
+                            },
+                        )
+                    }
                     Text(
                         text = "${members.size} members",
                         color = C.textSecondary,
@@ -410,6 +466,37 @@ fun GroupSettingsScreen(
                 )
             }
 
+            // Banned members section (admin/creator only)
+            if (isAdmin && bannedMembers.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Banned Users (${bannedMembers.size})",
+                        color = Color(0xFFEF5350), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                items(bannedMembers, key = { "banned_${it.id}" }) { member ->
+                    MemberRow(
+                        member = member,
+                        isMe = false,
+                        callerIsCreator = isCreator,
+                        callerIsAdmin = isAdmin,
+                        onPromote = {},
+                        onDemote = {},
+                        onRemove = {},
+                        onBan = {},
+                        onUnban = {
+                            ChatService.groups.removeMember(groupId, member.handle, ban = false, isUnban = true) { s, e ->
+                                if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be unbanned when confirmed.", Toast.LENGTH_LONG).show()
+                                else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onTap = {},
+                    )
+                }
+            }
+
             // Divider
             item { Spacer(Modifier.height(16.dp)); HorizontalDivider(color = C.card) }
 
@@ -543,6 +630,7 @@ private fun MemberRow(
     onDemote: () -> Unit,
     onRemove: () -> Unit,
     onBan: () -> Unit,
+    onUnban: () -> Unit = {},
     onTap: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -561,8 +649,8 @@ private fun MemberRow(
             .fillMaxWidth()
             .combinedClickable(
                 onClick = {
-                    if (!isMe && !actionPending && (callerIsAdmin || callerIsCreator)) showMenu = true
-                    else if (!isMe) onTap()
+                    if (!isMe && !actionPending && (callerIsAdmin || callerIsCreator) && member.role != 2) showMenu = true
+                    else if (!isMe && member.role != 3) onTap()
                 },
                 onLongClick = {
                     if (!isMe) onTap() // long press → contact info for admin/creator too
@@ -603,19 +691,23 @@ private fun MemberRow(
         val roleText = when (member.role) {
             2 -> "Creator"
             1 -> "Admin"
+            3 -> "Banned"
             else -> null
         }
         if (roleText != null) {
+            val badgeColor = when (member.role) {
+                2 -> C.accent
+                1 -> Color(0xFF66BB6A)
+                3 -> Color(0xFFEF5350)
+                else -> C.textMuted
+            }
             Text(
                 text = roleText,
-                color = if (member.role == 2) C.accent else Color(0xFF66BB6A),
+                color = badgeColor,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .background(
-                        if (member.role == 2) C.accent.copy(alpha = 0.15f) else Color(0xFF66BB6A).copy(alpha = 0.15f),
-                        RoundedCornerShape(4.dp)
-                    )
+                    .background(badgeColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
@@ -643,7 +735,13 @@ private fun MemberRow(
                 }
             }
             if (callerIsAdmin || callerIsCreator) {
-                if (member.role < 2) {
+                if (member.role == 3) {
+                    // Banned member — show unban
+                    DropdownMenuItem(
+                        text = { Text("Unban", color = Color(0xFF66BB6A)) },
+                        onClick = { showMenu = false; actionPending = true; onUnban() },
+                    )
+                } else if (member.role < 2) {
                     DropdownMenuItem(
                         text = { Text("Remove") },
                         onClick = { showMenu = false; actionPending = true; onRemove() },

@@ -36,7 +36,8 @@ fun MediaGalleryScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val convKey = "@$handle"
+    val isGroup = handle.length == 64 && handle.all { it.isLetterOrDigit() }
+    val convKey = if (isGroup) "g_${handle.take(16)}" else "@$handle"
 
     // Find conversation
     val conversations by ChatService.db?.conversationDao()?.observeAll()

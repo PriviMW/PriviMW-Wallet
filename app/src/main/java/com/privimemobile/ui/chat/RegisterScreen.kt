@@ -2,6 +2,8 @@ package com.privimemobile.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,13 +33,37 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
     var handleStatus by remember { mutableStateOf("idle") }
     val scope = rememberCoroutineScope()
 
-    // Registration fee from ChatService
+    // Registration fee from ChatService — trigger refresh on screen load
     val registrationFee by ChatService.identity.registrationFee.collectAsState()
+    LaunchedEffect(Unit) {
+        if (registrationFee == 0L) ChatService.identity.refreshRegistrationFee()
+    }
 
-    // TX tracking
+    // TX tracking — check DB for pending registration TX (survives navigation)
     var txSubmitted by remember { mutableStateOf(false) }
     var txStatus by remember { mutableStateOf("pending") }
     var submittedHandle by remember { mutableStateOf("") }
+
+    // On mount, check if there's already a pending registration TX
+    val pendingRegTx by ChatService.db?.pendingTxDao()?.observePending()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val existingPendingReg = pendingRegTx.firstOrNull {
+        it.action == com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_REGISTER_HANDLE
+    }
+    LaunchedEffect(existingPendingReg) {
+        if (existingPendingReg != null && !txSubmitted) {
+            txSubmitted = true
+            submittedHandle = existingPendingReg.targetId
+            txStatus = "pending"
+        }
+        if (existingPendingReg == null && txSubmitted && txStatus == "pending") {
+            // TX was processed (confirmed or failed) — check identity
+            val state = ChatService.db?.chatStateDao()?.get()
+            if (state?.myHandle != null && state.myRegisteredHeight > 0) {
+                txStatus = "confirmed"
+            }
+        }
+    }
 
     // Monitor TX completion — poll identity via ChatService
     if (txSubmitted && txStatus == "pending") {
@@ -47,7 +73,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 val result = ChatService.contacts.resolveHandle(submittedHandle)
                 if (result != null && !result.walletId.isNullOrEmpty()) {
                     txStatus = "confirmed"
-                    ChatService.identity.refreshIdentity()
+                    ChatService.identity.refreshIdentity(forceRefresh = true)
                     break
                 }
             }
@@ -56,14 +82,17 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
 
     LaunchedEffect(txStatus) {
         if (txStatus == "confirmed") {
-            // Save avatar locally if one was selected during registration (no TX needed)
-            if (avatarResult != null) {
-                try {
-                    java.io.File(context.filesDir, "my_avatar.webp").writeBytes(avatarResult!!.bytes)
-                    ChatService.db?.chatStateDao()?.updateAvatarHash(avatarResult!!.hashHex)
-                } catch (_: Exception) {}
+            // Wait for refreshIdentity to complete (ensure myRegisteredHeight > 0)
+            ChatService.identity.refreshIdentity(forceRefresh = true)
+            // Poll until identity is fully set (height > 0) before navigating
+            var attempts = 0
+            while (attempts < 10) {
+                val state = ChatService.db?.chatStateDao()?.get()
+                if (state?.myRegisteredHeight != null && state.myRegisteredHeight > 0) break
+                delay(1000)
+                attempts++
             }
-            delay(1500)
+            delay(500)
             onRegistered()
         }
     }
@@ -81,6 +110,11 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 else -> "error"
             }
         }
+    }
+
+    // Block back navigation while TX is pending
+    if (txSubmitted && txStatus == "pending") {
+        androidx.activity.compose.BackHandler {}
     }
 
     // TX submitted — show progress
@@ -123,7 +157,13 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(C.bg).padding(24.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .background(C.bg)
+        .imePadding()
+        .verticalScroll(rememberScrollState())
+        .padding(24.dp)
+    ) {
         TextButton(onClick = onBack) { Text("< Back", color = C.textSecondary) }
         Spacer(Modifier.height(16.dp))
         Text("Register Handle", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -169,27 +209,6 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 focusedLabelColor = C.accent, cursorColor = C.accent,
             ),
         )
-
-        // Profile Picture (optional)
-        Spacer(Modifier.height(16.dp))
-        Text("Profile Picture (optional)", color = C.textSecondary, fontSize = 13.sp)
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AvatarPicker(
-                initialLetter = displayName.ifEmpty { handle }.take(1).ifEmpty { "?" },
-                size = 72.dp,
-            ) { result -> avatarResult = result }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                if (avatarResult != null) {
-                    Text("Picture selected", color = C.accent, fontSize = 13.sp)
-                    Text("Will be set after registration", color = C.textMuted, fontSize = 11.sp)
-                } else {
-                    Text("Tap to add a photo", color = C.textSecondary, fontSize = 13.sp)
-                    Text("You can add one later too", color = C.textMuted, fontSize = 11.sp)
-                }
-            }
-        }
 
         Spacer(Modifier.height(16.dp))
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = C.card), modifier = Modifier.fillMaxWidth()) {

@@ -26,6 +26,7 @@ import java.util.*
 @Composable
 fun SearchScreen(
     onOpenChat: (handle: String, scrollToTs: Long) -> Unit,
+    onOpenGroupChat: (groupId: String) -> Unit = {},
     onBack: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -106,11 +107,24 @@ fun SearchScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(results, key = { it.id }) { msg ->
                 val convKey = convMap[msg.conversationId] ?: ""
-                val handle = convKey.removePrefix("@")
+                val isGroupResult = convKey.startsWith("g_")
+                val handle = if (isGroupResult) msg.senderHandle ?: "group" else convKey.removePrefix("@")
                 SearchResultCard(
                     msg = msg,
                     handle = handle,
-                    onClick = { if (handle.isNotEmpty()) onOpenChat(handle, msg.timestamp) },
+                    isGroup = isGroupResult,
+                    onClick = {
+                        if (isGroupResult) {
+                            // Find group_id from convKey prefix and navigate to group chat
+                            scope.launch {
+                                val groupIdPrefix = convKey.removePrefix("g_")
+                                val group = ChatService.db?.groupDao()?.findByConvKey(groupIdPrefix)
+                                if (group != null) onOpenGroupChat(group.groupId)
+                            }
+                        } else if (handle.isNotEmpty()) {
+                            onOpenChat(handle, msg.timestamp)
+                        }
+                    },
                 )
             }
         }
@@ -118,7 +132,7 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchResultCard(msg: MessageEntity, handle: String, onClick: () -> Unit) {
+private fun SearchResultCard(msg: MessageEntity, handle: String, isGroup: Boolean = false, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(10.dp),
@@ -130,7 +144,7 @@ private fun SearchResultCard(msg: MessageEntity, handle: String, onClick: () -> 
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    if (handle.isNotEmpty()) "@$handle" else "Unknown",
+                    if (isGroup) "\uD83D\uDC65 @$handle" else if (handle.isNotEmpty()) "@$handle" else "Unknown",
                     color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 )
                 Text(

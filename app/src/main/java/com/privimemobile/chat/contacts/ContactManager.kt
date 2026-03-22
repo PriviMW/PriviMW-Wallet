@@ -82,14 +82,11 @@ class ContactManager(
             // Also update conversation display info
             db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarHash)
 
-            // Request avatar if hash exists but no cached file
-            if (!avatarHash.isNullOrEmpty() && avatarHash != "0000000000000000000000000000000000000000000000000000000000000000") {
-                val avatarFile = java.io.File(
-                    com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return db.contactDao().findByHandle(handle),
-                    "avatars/$handle.webp"
-                )
+            // Request avatar if no cached file exists (avatar is SBBS-only, no on-chain hash)
+            val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
+            if (filesDir != null) {
+                val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
                 if (!avatarFile.exists()) {
-                    // Request avatar from contact
                     requestAvatar(handle, walletId)
                 }
             }

@@ -81,13 +81,14 @@ fun SendScreen(
     var sendOffline by remember { mutableStateOf(false) }
     var validateReqId by remember { mutableIntStateOf(0) }
 
-    // Own node detection — matches RN isConnectionTrusted()
+    // Own node / mobile protocol detection
     var ownNode by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         try {
             val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
-            ownNode = trusted
-            if (trusted) sendOffline = true // default offline for own node
+            val mobileProtocol = com.privimemobile.protocol.SecureStorage.getString("node_mode") == "mobile"
+            ownNode = trusted || mobileProtocol
+            if (ownNode) sendOffline = true // default offline for own/mobile node
         } catch (_: Exception) {}
     }
 

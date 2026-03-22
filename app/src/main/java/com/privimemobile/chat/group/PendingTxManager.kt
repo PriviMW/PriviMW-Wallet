@@ -107,12 +107,30 @@ class PendingTxManager(
     private suspend fun onTxConfirmed(tx: PendingTxEntity) {
         when (tx.action) {
             PendingTxEntity.ACTION_REGISTER_HANDLE -> {
-                // Refresh identity from contract
-                ChatService.identity.refreshIdentity()
+                // Refresh identity from contract (force — need to get real height)
+                ChatService.identity.refreshIdentity(forceRefresh = true)
             }
             PendingTxEntity.ACTION_UPDATE_PROFILE -> {
-                // Refresh identity to confirm profile update
-                ChatService.identity.refreshIdentity()
+                // Refresh identity to get updated display name / wallet_id from contract
+                ChatService.identity.refreshIdentity(forceRefresh = true)
+                // Broadcast profile update to all contacts so they see the new display name
+                scope.launch {
+                    delay(1000) // wait for refreshIdentity to complete
+                    val state = db.chatStateDao().get() ?: return@launch
+                    if (state.myHandle != null) {
+                        val contacts = db.contactDao().getAll()
+                        for (contact in contacts) {
+                            if (contact.walletId.isNullOrEmpty()) continue
+                            val payload = mapOf(
+                                "v" to 1, "t" to "profile_update",
+                                "from" to state.myHandle,
+                                "display_name" to (state.myDisplayName ?: ""),
+                            )
+                            try { ChatService.sbbs.sendOnce(contact.walletId, payload) } catch (_: Exception) {}
+                            delay(100)
+                        }
+                    }
+                }
             }
             PendingTxEntity.ACTION_CREATE_GROUP -> {
                 // Refresh groups to get the new group
@@ -159,11 +177,20 @@ class PendingTxManager(
             PendingTxEntity.ACTION_REMOVE_MEMBER -> {
                 ChatService.groups.refreshGroupMembers(tx.targetId)
                 ChatService.groups.refreshGroupInfo(tx.targetId)
-                // tx.extraData = "ban:handle" or just "handle"
+                // tx.extraData = "ban:handle", "unban:handle", or just "handle"
                 if (tx.extraData != null) {
                     val isBan = tx.extraData.startsWith("ban:")
-                    val targetHandle = if (isBan) tx.extraData.removePrefix("ban:") else tx.extraData
-                    val action = if (isBan) "banned" else "kicked"
+                    val isUnban = tx.extraData.startsWith("unban:")
+                    val targetHandle = when {
+                        isBan -> tx.extraData.removePrefix("ban:")
+                        isUnban -> tx.extraData.removePrefix("unban:")
+                        else -> tx.extraData
+                    }
+                    val action = when {
+                        isBan -> "banned"
+                        isUnban -> "unbanned"
+                        else -> "kicked"
+                    }
                     scope.launch { ChatService.groups.sendGroupService(tx.targetId, action, targetHandle) }
                 }
             }
@@ -186,9 +213,39 @@ class PendingTxManager(
             }
             PendingTxEntity.ACTION_UPDATE_GROUP_INFO -> {
                 ChatService.groups.refreshGroupInfo(tx.targetId)
+                // Broadcast name change to members if name was updated
+                if (tx.extraData?.startsWith("name:") == true) {
+                    val newName = tx.extraData.removePrefix("name:")
+                    val state = db.chatStateDao().get()
+                    val myHandle = state?.myHandle ?: "admin"
+                    // Update local DB
+                    val group = db.groupDao().findByGroupId(tx.targetId)
+                    if (group != null) {
+                        db.groupDao().updateGroup(group.copy(name = newName))
+                    }
+                    // Insert local service message
+                    val ts = System.currentTimeMillis() / 1000
+                    val convId = ChatService.groups.getOrCreateGroupConversation(tx.targetId, newName)
+                    val dedupKey = "$ts:info_update:name:${tx.targetId}".hashCode().toString(16)
+                    db.messageDao().insert(com.privimemobile.chat.db.entities.MessageEntity(
+                        conversationId = convId, timestamp = ts,
+                        senderHandle = myHandle, text = "You changed the group name to \"$newName\"",
+                        type = "group_service", sent = true, sbbsDedupKey = dedupKey,
+                    ))
+                    db.groupDao().updateLastMessage(tx.targetId, ts, "Group name changed to \"$newName\"")
+                    // Broadcast to members
+                    scope.launch {
+                        ChatService.groups.sendGroupPayload(tx.targetId, mapOf(
+                            "v" to 1, "t" to "group_info_update",
+                            "ts" to ts, "name" to newName,
+                        ))
+                    }
+                }
             }
             PendingTxEntity.ACTION_RELEASE_HANDLE -> {
-                ChatService.identity.refreshIdentity()
+                // Handle was deleted on-chain — clear local identity
+                db.chatStateDao().clearIdentity()
+                Log.d(TAG, "Handle released — cleared local identity")
             }
             PendingTxEntity.ACTION_DELETE_GROUP -> {
                 // Notify all members before deleting
@@ -218,6 +275,23 @@ class PendingTxManager(
                 // Admin-add failed (extraData = target handle) — don't touch the group,
                 // just refresh to get correct member list
                 ChatService.groups.refreshGroupMembers(tx.targetId)
+            }
+            PendingTxEntity.ACTION_UPDATE_PROFILE -> {
+                // Revert optimistic wallet_id update if we stored the old address
+                if (tx.extraData?.startsWith("addr:") == true) {
+                    val oldAddr = tx.extraData.removePrefix("addr:")
+                    val state = db.chatStateDao().get()
+                    if (state != null) {
+                        db.chatStateDao().update(state.copy(myWalletId = oldAddr))
+                        Log.d(TAG, "Reverted messaging address to $oldAddr")
+                    }
+                }
+                // Refresh identity from contract to get correct state
+                ChatService.identity.refreshIdentity(forceRefresh = true)
+            }
+            PendingTxEntity.ACTION_RELEASE_HANDLE -> {
+                // TX failed — identity was NOT cleared (we wait for confirm now), nothing to revert
+                Log.d(TAG, "Release handle TX failed — identity unchanged")
             }
             // Other failures: just refresh to get correct state
             else -> {

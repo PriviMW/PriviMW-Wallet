@@ -339,6 +339,10 @@ fun AppNavigation() {
                         navController.popBackStack()
                         navController.navigate("chat/$handle?scrollToTs=$scrollToTs")
                     },
+                    onOpenGroupChat = { groupId ->
+                        navController.popBackStack()
+                        navController.navigate("group_chat/$groupId")
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -378,6 +382,7 @@ fun AppNavigation() {
                     handle = "",
                     groupId = groupId,
                     onBack = { navController.popBackStack() },
+                    onMediaGallery = { navController.navigate("media_gallery/$groupId") },
                     onGroupSettings = { navController.navigate("group_settings/$groupId") },
                     onViewContact = { h -> navController.navigate("contact_info/$h") },
                 )

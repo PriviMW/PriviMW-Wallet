@@ -97,9 +97,7 @@ fun WalletScreen(
     onAssetDetail: (Int) -> Unit = {},
 ) {
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
-    val syncProgress by WalletEventBus.syncProgress.collectAsState(
-        initial = SyncProgressEvent(0, 0)
-    )
+    val syncProgress by WalletEventBus.syncProgress.collectAsState()
     val nodeConnection by WalletEventBus.nodeConnection.collectAsState(
         initial = NodeConnectionEvent(connected = false)
     )
@@ -232,12 +230,17 @@ fun WalletScreen(
     else 0
     val isConnected = nodeConnection.connected
 
-    val nodeLabel = SecureStorage.getString("node_mode")?.let {
-        if (it == "own") "Own Node" else "Random Node"
-    } ?: "Random Node"
+    val nodeLabel = when (SecureStorage.getString("node_mode")) {
+        "own" -> "Own Node"
+        "mobile" -> "Mobile Node"
+        else -> "Random Node"
+    }
 
+    val isMobileMode = nodeLabel == "Mobile Node"
     val statusText = when {
         !isConnected -> "Connecting to node..."
+        isMobileMode && isSyncing && syncProgress.total > 0 ->
+            "Mobile syncing ${syncPercent}% \u00B7 Online via remote node"
         isSyncing && syncProgress.total > 0 ->
             "Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks)"
         isSyncing -> "Syncing..."

@@ -84,6 +84,32 @@ object ChatService {
         }
     }
 
+    // Group typing: convKey → (handle → expiryMs)
+    private val groupTypingMap = mutableMapOf<String, MutableMap<String, Long>>()
+
+    /** Called when a group typing indicator arrives. */
+    fun onGroupTypingReceived(groupConvKey: String, handle: String) {
+        val now = System.currentTimeMillis()
+        val map = groupTypingMap.getOrPut(groupConvKey) { mutableMapOf() }
+        map[handle] = now + 5_000
+        _typingVersion.value++
+        scope.launch {
+            delay(5_100)
+            val m = groupTypingMap[groupConvKey]
+            if (m != null && (m[handle] ?: 0) <= System.currentTimeMillis()) {
+                m.remove(handle)
+                _typingVersion.value++
+            }
+        }
+    }
+
+    /** Get list of handles currently typing in a group. */
+    fun getGroupTyping(groupConvKey: String): List<String> {
+        val now = System.currentTimeMillis()
+        val map = groupTypingMap[groupConvKey] ?: return emptyList()
+        return map.filter { it.value > now }.keys.toList()
+    }
+
     // Initialization state
     private val _initialized = MutableStateFlow(false)
     val initialized: StateFlow<Boolean> = _initialized.asStateFlow()
@@ -226,19 +252,34 @@ object ChatService {
     /** Set the currently active chat (suppress unread/notifications). */
     fun setActiveChat(convKey: String?) {
         _activeChat.value = convKey
+        Log.d(TAG, "setActiveChat: $convKey")
         if (convKey != null) {
             // Cancel notification for this conversation
             ChatNotificationManager.cancelForConversation(convKey)
             scope.launch {
-                val conv = db?.conversationDao()?.findByKey(convKey) ?: return@launch
+                val conv = db?.conversationDao()?.findByKey(convKey) ?: run {
+                    Log.w(TAG, "setActiveChat: conv not found for $convKey")
+                    return@launch
+                }
                 // Clear unread badge
                 if (conv.unreadCount > 0) {
                     db?.conversationDao()?.clearUnread(conv.id)
                 }
-                // Send read receipts for ALL received messages (catch-all — covers any
-                // previously lost acks). This ensures sender gets blue ticks even if
-                // individual per-message acks were lost by SBBS.
-                sendAllAcksForConv(convKey, conv.id)
+
+                if (convKey.startsWith("g_")) {
+                    // Group chat — send acks to each sender individually
+                    val groupIdPrefix = convKey.removePrefix("g_")
+                    val groupId = db?.groupDao()?.findByConvKey(groupIdPrefix)?.groupId
+                    Log.d(TAG, "setActiveChat group: prefix=$groupIdPrefix groupId=$groupId convId=${conv.id}")
+                    if (groupId != null) {
+                        sbbs.sendGroupReadReceipts(groupId, conv.id)
+                        // Also clear group unread
+                        db?.groupDao()?.clearUnread(groupId)
+                    }
+                } else {
+                    // DM — send read receipts for ALL received messages (catch-all)
+                    sendAllAcksForConv(convKey, conv.id)
+                }
             }
         }
     }

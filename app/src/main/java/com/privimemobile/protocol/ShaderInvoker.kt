@@ -102,14 +102,26 @@ object ShaderInvoker {
         }
     }
 
+    // Keys whose values should be hex-encoded (they may contain spaces/commas that break BVM arg parser)
+    private val HEX_ENCODE_KEYS = setOf("name", "display_name", "description", "join_password")
+
     private fun buildArgs(role: String, action: String, extra: Map<String, Any?>): String {
         val parts = mutableListOf("role=$role", "action=$action")
         extra.forEach { (k, v) ->
             if (v != null && v.toString().isNotEmpty()) {
-                parts.add("$k=$v")
+                val str = v.toString()
+                if (k in HEX_ENCODE_KEYS && str.any { it.code > 127 || it == ' ' || it == ',' }) {
+                    // Hex-encode values with spaces/emoji/commas
+                    val hex = str.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+                    parts.add("${k}_hex=$hex")
+                } else {
+                    parts.add("$k=$str")
+                }
             }
         }
         parts.add("cid=${Config.PRIVIME_CID}")
-        return parts.joinToString(",")
+        val result = parts.joinToString(",")
+        Log.d(TAG, "buildArgs: $result")
+        return result
     }
 }

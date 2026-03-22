@@ -101,6 +101,9 @@ class MessageProcessor(
                 "group_info_request" -> handleGroupInfoRequest(payload, from, groupId)
                 "group_info_response" -> handleGroupInfoResponse(payload, groupId)
                 "group_delete" -> handleGroupDelete(payload, from)
+                "ack" -> handleAck(payload, "@$from") // group_id is in payload, handleAck will use it
+                "delivered" -> handleDelivered(payload, "@$from")
+                "typing" -> handleGroupTyping(from, ts, groupId)
                 else -> handleGroupGenericPayload(payload, raw, type, ts, from, sent, myHandle, groupId)
             }
             return
@@ -317,9 +320,25 @@ class MessageProcessor(
             (it as? Number)?.toLong()
         } ?: run { Log.w(TAG, "handleAck: no 'read' timestamps in payload"); return }
 
-        val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "handleAck: conv not found for $convKey"); return }
+        // Check if this is a group ack — look up group conversation instead of DM
+        val groupId = payload["group_id"] as? String
+        val targetConvKey = if (groupId != null) {
+            "g_${groupId.take(16)}"
+        } else {
+            convKey
+        }
+
+        val conv = db.conversationDao().findByKey(targetConvKey) ?: run { Log.w(TAG, "handleAck: conv not found for $targetConvKey"); return }
         db.messageDao().markRead(conv.id, readTimestamps)
-        Log.d(TAG, "Marked ${readTimestamps.size} messages as read in $convKey (convId=${conv.id})")
+        Log.d(TAG, "Marked ${readTimestamps.size} messages as read in $targetConvKey (convId=${conv.id})${if (groupId != null) " (group ack)" else ""}")
+    }
+
+    /** Handle group typing indicator — show "@user is typing..." in group header. */
+    private fun handleGroupTyping(from: String, ts: Long, groupId: String) {
+        val now = System.currentTimeMillis() / 1000
+        if (now - ts > 10) return // ignore stale
+        val groupConvKey = "g_${groupId.take(16)}"
+        ChatService.onGroupTypingReceived(groupConvKey, from)
     }
 
     /** Handle delivery ack — recipient confirmed they received our message. */
@@ -328,9 +347,13 @@ class MessageProcessor(
             (it as? Number)?.toLong()
         } ?: run { Log.w(TAG, "handleDelivered: no 'delivered' timestamps in payload"); return }
 
-        val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "handleDelivered: conv not found for $convKey"); return }
+        // Check if this is a group delivery ack
+        val groupId = payload["group_id"] as? String
+        val targetConvKey = if (groupId != null) "g_${groupId.take(16)}" else convKey
+
+        val conv = db.conversationDao().findByKey(targetConvKey) ?: run { Log.w(TAG, "handleDelivered: conv not found for $targetConvKey"); return }
         db.messageDao().markDelivered(conv.id, deliveredTimestamps)
-        Log.d(TAG, "Marked ${deliveredTimestamps.size} messages as delivered in $convKey")
+        Log.d(TAG, "Marked ${deliveredTimestamps.size} messages as delivered in $targetConvKey${if (groupId != null) " (group)" else ""}")
     }
 
     /** Handle typing indicator (ephemeral, no DB storage). */
@@ -519,14 +542,25 @@ class MessageProcessor(
 
     /** Handle profile_update: receive avatar image from contact (with hash verification). */
     private suspend fun handleProfileUpdate(payload: Map<String, Any?>, from: String) {
-        val avatarHash = payload["avatar_hash"] as? String ?: return
+        val avatarHash = payload["avatar_hash"] as? String
         val avatarData = payload["avatar_data"] as? String
-        val displayName = com.privimemobile.protocol.Helpers.fixBvmUtf8(payload["dn"] as? String)
+        val displayName = com.privimemobile.protocol.Helpers.fixBvmUtf8(
+            payload["dn"] as? String ?: payload["display_name"] as? String
+        )
 
         // Update display name if provided
         if (displayName != null) {
             db.contactDao().updateDisplayName(from, displayName)
+            // Also update conversation display name (chat list)
+            db.conversationDao().updateDisplayName("@$from", displayName)
+            // Also update in group member lists
+            val groups = db.groupDao().getAllGroups()
+            for (group in groups) {
+                db.groupDao().updateMemberDisplayName(group.groupId, from, displayName)
+            }
         }
+
+        if (avatarHash == null && avatarData == null) return // display-name-only update, done
 
         // Save avatar image locally if data provided (with hash verification)
         if (avatarData != null) {
@@ -747,11 +781,41 @@ class MessageProcessor(
         db.groupDao().updateLastMessage(groupId, ts, preview)
 
         if (!sent) {
-            db.groupDao().incrementUnread(groupId)
+            val groupConvKey = "g_${groupId.take(16)}"
+            val isActive = ChatService.activeChat.value == groupConvKey
 
-            // Notification (if not muted)
-            if (!group.muted) {
-                val groupConvKey = "g_${groupId.take(16)}"
+            // Only increment unread if user is NOT viewing this group chat
+            if (!isActive) {
+                db.groupDao().incrementUnread(groupId)
+            }
+
+            // Resolve sender's wallet ID for receipts
+            val senderWalletId = db.groupDao().getMemberWalletId(groupId, from)
+                ?: db.contactDao().findByHandle(from)?.walletId
+            val state = db.chatStateDao().get()
+
+            if (isActive && senderWalletId != null && state?.myHandle != null) {
+                // Chat is open — send read receipt directly (✓✓ blue)
+                val ackPayload = mapOf(
+                    "v" to 1, "t" to "ack",
+                    "from" to state.myHandle,
+                    "group_id" to groupId,
+                    "read" to listOf(ts),
+                )
+                ChatService.sbbs.sendOnce(senderWalletId, ackPayload)
+            } else if (senderWalletId != null && state?.myHandle != null) {
+                // Chat is NOT open — send delivery receipt (✓✓ grey)
+                val deliveredPayload = mapOf(
+                    "v" to 1, "t" to "delivered",
+                    "from" to state.myHandle,
+                    "group_id" to groupId,
+                    "delivered" to listOf(ts),
+                )
+                ChatService.sbbs.sendOnce(senderWalletId, deliveredPayload)
+            }
+
+            // Notification (only if not active and not muted)
+            if (!isActive && !group.muted) {
                 com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                     convKey = groupConvKey,
                     convId = convId,
@@ -888,8 +952,32 @@ class MessageProcessor(
                 db.groupDao().updateLastMessage(groupId, ts, preview)
 
                 if (!sent) {
-                    db.groupDao().incrementUnread(groupId)
-                    if (!group.muted) {
+                    val isActive = ChatService.activeChat.value == groupConvKey
+                    if (!isActive) {
+                        db.groupDao().incrementUnread(groupId)
+                    }
+
+                    // Send delivery/read receipt
+                    val senderWalletId2 = db.groupDao().getMemberWalletId(groupId, from)
+                        ?: db.contactDao().findByHandle(from)?.walletId
+                    val state2 = db.chatStateDao().get()
+                    if (senderWalletId2 != null && state2?.myHandle != null) {
+                        if (isActive) {
+                            // Chat open → read receipt (✓✓ blue)
+                            ChatService.sbbs.sendOnce(senderWalletId2, mapOf(
+                                "v" to 1, "t" to "ack", "from" to state2.myHandle,
+                                "group_id" to groupId, "read" to listOf(ts),
+                            ))
+                        } else {
+                            // Chat closed → delivery receipt (✓✓ grey)
+                            ChatService.sbbs.sendOnce(senderWalletId2, mapOf(
+                                "v" to 1, "t" to "delivered", "from" to state2.myHandle,
+                                "group_id" to groupId, "delivered" to listOf(ts),
+                            ))
+                        }
+                    }
+
+                    if (!isActive && !group.muted) {
                         com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                             convKey = groupConvKey,
                             convId = convId,
@@ -928,6 +1016,7 @@ class MessageProcessor(
             "left" -> "@$from left the group"
             "kicked" -> "@$target was removed by @$from"
             "banned" -> "@$target was banned by @$from"
+            "unbanned" -> "@$target was unbanned by @$from"
             "promoted" -> "@$target was promoted to admin by @$from"
             "demoted" -> "@$target was demoted by @$from"
             "ownership_transferred" -> "@$from transferred ownership to @$target"
@@ -952,7 +1041,8 @@ class MessageProcessor(
 
         // Insert as a service message — dedup uses action+target (no timestamp, prevents spam from multiple clicks)
         val svcTs = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000)
-        val dedupKey = "svc:$action:${target ?: from}:$groupId".hashCode().toString(16)
+        val dedupEpoch = svcTs / 120 // 2-minute window — prevents spam but allows repeated actions over time
+        val dedupKey = "svc:$action:${target ?: from}:$groupId:$dedupEpoch".hashCode().toString(16)
         val entity = MessageEntity(
             conversationId = convId,
             timestamp = svcTs,
@@ -980,7 +1070,8 @@ class MessageProcessor(
             }
             "left" -> db.groupDao().removeMember(groupId, from)
             "kicked" -> if (target != null) db.groupDao().removeMember(groupId, target)
-            "banned" -> if (target != null) db.groupDao().removeMember(groupId, target)
+            "banned" -> if (target != null) db.groupDao().updateMemberRole(groupId, target, 3, 0)
+            "unbanned" -> if (target != null) db.groupDao().removeMember(groupId, target) // ban lifted, user can rejoin
             "promoted" -> if (target != null) db.groupDao().updateMemberRole(groupId, target, 1, 0)
             "demoted" -> if (target != null) db.groupDao().updateMemberRole(groupId, target, 0, 0)
             "ownership_transferred" -> if (target != null) {
@@ -1002,6 +1093,15 @@ class MessageProcessor(
     /** Handle group_info_update — group name/settings/avatar/description changed. */
     private suspend fun handleGroupInfoUpdate(payload: Map<String, Any?>, from: String) {
         val groupId = payload["group_id"] as? String ?: return
+
+        // Update name if provided
+        val newName = payload["name"] as? String
+        if (newName != null) {
+            val existingGroup = db.groupDao().findByGroupId(groupId)
+            if (existingGroup != null) {
+                db.groupDao().updateGroup(existingGroup.copy(name = newName))
+            }
+        }
 
         // Update description if provided
         val description = payload["description"] as? String
@@ -1034,15 +1134,13 @@ class MessageProcessor(
             }
         }
 
-        // Refresh group info from contract
-        scope.launch {
-            kotlinx.coroutines.delay(2000)
-            ChatService.groups.refreshGroupInfo(groupId)
-        }
+        // Don't refreshGroupInfo here — it would overwrite the SBBS update with stale contract data
+        // Contract will sync on next natural refresh (startup, pull-to-refresh, etc.)
 
         // Insert service message in chat
         val changeText = payload["change"] as? String
-            ?: if (avatarBase64 != null) "updated group picture"
+            ?: if (newName != null) "changed the group name to \"$newName\""
+            else if (avatarBase64 != null) "updated group picture"
             else if (description != null) "updated group description"
             else "updated group info"
         val group2 = db.groupDao().findByGroupId(groupId) ?: return

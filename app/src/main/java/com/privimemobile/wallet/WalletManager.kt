@@ -114,11 +114,16 @@ object WalletManager {
         // Clean stale WAL/SHM lock files from previous crashes to prevent "database is locked"
         cleanStaleLocks()
         return try {
-            val result = Api.openWallet(APP_VERSION, nodeAddr, getDbPath(), password, enableBodyRequests = false)
+            val isMobileNode = com.privimemobile.protocol.SecureStorage.getString("node_mode") == "mobile"
+            val result = Api.openWallet(APP_VERSION, nodeAddr, getDbPath(), password, enableBodyRequests = isMobileNode)
             if (result != null) {
                 walletInstance = result
                 try { result.launchApp("PriviMe", "") } catch (_: Exception) {}
-                Log.d(TAG, "Wallet opened successfully")
+                if (isMobileNode) {
+                    Log.d(TAG, "Wallet opened with mobile node (FlyClient) enabled")
+                } else {
+                    Log.d(TAG, "Wallet opened successfully")
+                }
                 true
             } else {
                 Log.e(TAG, "Wallet open failed — wrong password or corrupt DB")

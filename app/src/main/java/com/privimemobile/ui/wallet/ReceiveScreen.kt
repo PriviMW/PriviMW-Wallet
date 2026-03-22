@@ -183,12 +183,13 @@ fun ReceiveScreen(onBack: () -> Unit) {
         }
     }
 
-    // Detect own node vs remote on mount — then generate initial address
+    // Detect own node / mobile protocol vs remote — then generate initial address
     LaunchedEffect(Unit) {
         try {
             val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
-            ownNode = trusted
-            if (trusted) {
+            val mobileProtocol = com.privimemobile.protocol.SecureStorage.getString("node_mode") == "mobile"
+            ownNode = trusted || mobileProtocol
+            if (ownNode) {
                 addressType = "offline"
                 generateAddress("offline")
             } else {

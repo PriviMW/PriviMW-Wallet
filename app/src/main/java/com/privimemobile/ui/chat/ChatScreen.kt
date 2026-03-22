@@ -631,21 +631,28 @@ fun ChatScreen(
         // /tip command — send BEAM or any asset
         // DM:    /tip <amount> [asset_id] [message]
         // Group: /tip @handle <amount> [asset_id] [message]
+        // Group with reply: /tip <amount> [asset_id] [message] (tips the quoted message sender)
         if (trimmed.startsWith("/tip ", ignoreCase = true)) {
             val parts = trimmed.removePrefix("/tip ").trimStart()
             val tokens = parts.split("\\s+".toRegex(), limit = 5)
 
-            // In group mode: first token must be @handle
+            // In group mode: first token is @handle, OR use quoted reply sender
             val tipTargetHandle: String
             val tipTokens: List<String>
             if (isGroupMode) {
                 val firstToken = tokens.getOrNull(0) ?: ""
-                if (!firstToken.startsWith("@") || firstToken.length < 2) {
-                    Toast.makeText(context, "Usage: /tip @handle <amount> [asset_id] [message]", Toast.LENGTH_LONG).show()
+                if (firstToken.startsWith("@") && firstToken.length >= 2) {
+                    // Explicit @handle
+                    tipTargetHandle = firstToken.removePrefix("@")
+                    tipTokens = tokens.drop(1)
+                } else if (replyingTo != null && !replyingTo!!.from.isNullOrEmpty() && !replyingTo!!.sent) {
+                    // Quoted reply — tip the sender of the quoted message
+                    tipTargetHandle = replyingTo!!.from
+                    tipTokens = tokens // all tokens are amount/asset/msg
+                } else {
+                    Toast.makeText(context, "Reply to a message or use: /tip @handle <amount>", Toast.LENGTH_LONG).show()
                     setInputText(""); return
                 }
-                tipTargetHandle = firstToken.removePrefix("@")
-                tipTokens = tokens.drop(1)
             } else {
                 tipTargetHandle = handle
                 tipTokens = tokens
@@ -775,6 +782,7 @@ fun ChatScreen(
                 }
             }
             setInputText("")
+            replyingTo = null
             return
         }
 
@@ -2851,8 +2859,8 @@ fun ChatScreen(
                     Text("Commands", color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                     listOf(
                         Triple("/tip",
-                            if (isGroupMode) "@handle <amount> [asset_id] [message]" else "<amount> [asset_id] [message]",
-                            if (isGroupMode) "Tip a group member" else "Send BEAM (default) or any asset"),
+                            if (isGroupMode) "<amount> [asset_id] [msg] (reply to tip)" else "<amount> [asset_id] [message]",
+                            if (isGroupMode) "Reply to a message, or /tip @handle amount" else "Send BEAM (default) or any asset"),
                         Triple("/poll", "Question | Option 1 | Option 2", "Create a poll"),
                     ).forEach { (cmd, args, desc) ->
                         Row(

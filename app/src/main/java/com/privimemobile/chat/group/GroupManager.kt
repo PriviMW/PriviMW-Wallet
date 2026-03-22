@@ -562,6 +562,14 @@ class GroupManager(
         val myDisplayName = state.myDisplayName
 
         val group = db.groupDao().findByGroupId(groupId) ?: return
+
+        // Block sending if banned
+        val myMember = db.groupDao().findMember(groupId, myHandle)
+        if (myMember?.role == 3) {
+            Log.w(TAG, "Cannot send — banned from group $groupId")
+            return
+        }
+
         val convId = getOrCreateGroupConversation(groupId, group.name)
 
         // Get all member wallet_ids (exclude self)
@@ -634,6 +642,10 @@ class GroupManager(
     suspend fun sendGroupPayload(groupId: String, payload: Map<String, Any?>) {
         val state = db.chatStateDao().get() ?: return
         val myHandle = state.myHandle ?: return
+
+        // Block sending if banned
+        val myMember = db.groupDao().findMember(groupId, myHandle)
+        if (myMember?.role == 3) { Log.w(TAG, "Cannot send — banned from group $groupId"); return }
 
         val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
             .filterNotNull()
@@ -799,10 +811,20 @@ class GroupManager(
 
         }
 
-        // Send SBBS FIRST (before removing member, so their wallet ID is still in the list)
+        // Get all active member wallet IDs (excludes banned)
         val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
             .filterNotNull()
             .filter { it.isNotEmpty() }
+            .toMutableList()
+
+        // For kick/ban: explicitly include the target's wallet ID (they need to receive the notification)
+        if ((action == "kicked" || action == "banned") && target != null) {
+            val targetWalletId = db.groupDao().getMemberWalletId(groupId, target)
+                ?: db.contactDao().findByHandle(target)?.walletId
+            if (targetWalletId != null && targetWalletId !in memberWalletIds) {
+                memberWalletIds.add(0, targetWalletId) // send to target first
+            }
+        }
 
         val payload = mutableMapOf<String, Any?>(
             "v" to 1,

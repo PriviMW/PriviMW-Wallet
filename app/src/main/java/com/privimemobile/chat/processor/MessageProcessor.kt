@@ -227,14 +227,15 @@ class MessageProcessor(
         }
 
         // Update conversation
-        val preview = when (type) {
-            "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
-            "sticker" -> "${stickerEmoji ?: "\uD83C\uDFAD"} Sticker"
-            "sticker_pack" -> "\uD83D\uDCE6 Sticker pack: ${stickerPackName ?: "Stickers"}"
-            "file" -> {
-                val fileName = (payload["file"] as? Map<*, *>)?.get("name") as? String
-                "\uD83D\uDCCE ${fileName ?: "File"}"  // 📎
-            }
+        val fileMime = (payload["file"] as? Map<*, *>)?.get("mime") as? String
+        val isDmImage = type == "file" && fileMime?.startsWith("image/") == true
+        val preview = when {
+            type == "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
+            type == "sticker" -> "\uD83C\uDF1F Sticker"
+            type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack: ${stickerPackName ?: "Stickers"}"
+            type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
+            isDmImage -> "\uD83D\uDDBC\uFE0F Image"
+            type == "file" -> "\uD83D\uDCCE ${(payload["file"] as? Map<*, *>)?.get("name") ?: "File"}"
             else -> text?.take(100)
         }
         db.conversationDao().updateLastMessage(conv.id, ts, preview)
@@ -246,9 +247,14 @@ class MessageProcessor(
             val isMuted = db.conversationDao().isMuted(conv.id) ?: false
             val totalUnread = db.conversationDao().getTotalUnread()
             val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { "Unknown" }
-            val notifText = when (type) {
-                "tip" -> preview ?: "Sent a tip"
-                "file" -> preview ?: "Sent a file"
+            val isImage = type == "file" && ((payload["file"] as? Map<*, *>)?.get("mime") as? String)?.startsWith("image/") == true
+            val notifText = when {
+                type == "tip" -> preview ?: "Sent a tip"
+                type == "sticker" -> "\uD83C\uDF1F Sticker"
+                type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack"
+                type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
+                isImage -> "\uD83D\uDDBC\uFE0F Image"
+                type == "file" -> "\uD83D\uDCCE File: ${(payload["file"] as? Map<*, *>)?.get("name") ?: "file"}"
                 else -> text?.take(200) ?: ""
             }
             com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
@@ -868,6 +874,14 @@ class MessageProcessor(
             "poll_unvote" -> handlePollVote(payload, groupConvKey, from, true)
             "group_pin" -> {
                 // Pin/unpin a message by timestamp in the group conversation
+                // Only process if the pin action happened recently (within 1 hour)
+                // Prevents stale SBBS re-delivery from re-pinning after reinstall
+                val pinTs = (payload["ts"] as? Number)?.toLong() ?: 0
+                val now = System.currentTimeMillis() / 1000
+                if (now - pinTs > 3600) {
+                    Log.d(TAG, "DROP stale group_pin: age=${now - pinTs}s")
+                    return
+                }
                 val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
                 val isPinning = payload["pin"] == true
                 if (isPinning) {
@@ -941,12 +955,14 @@ class MessageProcessor(
 
                 // Update group preview + unread
                 val senderLabel = if (sent) "You" else (displayName ?: "@$from")
-                val preview = when (type) {
-                    "tip" -> "$senderLabel: Tip"
-                    "file" -> "$senderLabel: \uD83D\uDCCE File"
-                    "sticker" -> "$senderLabel: Sticker"
-                    "sticker_pack" -> "$senderLabel: \uD83D\uDCE6 Sticker pack"
-                    "poll" -> "$senderLabel: \uD83D\uDCCA ${text ?: "Poll"}"
+                val isGroupImage = type == "file" && (fileData?.get("mime") as? String)?.startsWith("image/") == true
+                val preview = when {
+                    type == "tip" -> "$senderLabel: Tip"
+                    isGroupImage -> "$senderLabel: \uD83D\uDDBC\uFE0F Image"
+                    type == "file" -> "$senderLabel: \uD83D\uDCCE ${fileData?.get("name") ?: "File"}"
+                    type == "sticker" -> "$senderLabel: \uD83C\uDF1F Sticker"
+                    type == "sticker_pack" -> "$senderLabel: \uD83D\uDCE6 Sticker Pack"
+                    type == "poll" -> "$senderLabel: \uD83D\uDCCA ${text ?: "Poll"}"
                     else -> "$senderLabel: ${text?.take(40) ?: type}"
                 }
                 db.groupDao().updateLastMessage(groupId, ts, preview)

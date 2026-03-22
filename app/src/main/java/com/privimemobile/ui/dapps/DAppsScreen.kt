@@ -2,9 +2,13 @@ package com.privimemobile.ui.dapps
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,7 +47,7 @@ import java.io.File
  * - Uninstall confirmation dialog
  * - Launch via DAppActivity Intent
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DAppsScreen(
     onBrowseStore: () -> Unit = {},
@@ -55,6 +59,18 @@ fun DAppsScreen(
 
     var dapps by remember { mutableStateOf(DAppManager.getInstalled(context)) }
     var refreshing by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
+
+    // Persisted order — load from prefs
+    val prefs = context.getSharedPreferences("dapp_order", 0)
+    var orderedDapps by remember(dapps) {
+        val savedOrder = prefs.getString("order", null)?.split(",") ?: emptyList()
+        val ordered = if (savedOrder.isNotEmpty()) {
+            val orderMap = savedOrder.withIndex().associate { (i, guid) -> guid to i }
+            dapps.sortedBy { orderMap[it.guid] ?: Int.MAX_VALUE }
+        } else dapps
+        mutableStateOf(ordered)
+    }
 
     // Uninstall confirmation dialog state
     var uninstallTarget by remember { mutableStateOf<DApp?>(null) }
@@ -151,7 +167,12 @@ fun DAppsScreen(
                 }
             }
         } else {
-            // DApp list
+            // Exit edit mode on back press
+            if (editMode) {
+                androidx.activity.compose.BackHandler { editMode = false }
+            }
+
+            // DApp list with long-press edit mode
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
@@ -160,12 +181,97 @@ fun DAppsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(dapps, key = { it.guid }) { dapp ->
-                    DAppCard(
-                        dapp = dapp,
-                        onOpen = { handleLaunch(dapp) },
-                        onUninstall = { uninstallTarget = dapp },
-                    )
+                if (editMode) {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Arrange DApps", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { editMode = false }) {
+                                Text("Done", color = C.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                items(orderedDapps.size, key = { orderedDapps[it].guid }) { index ->
+                    val dapp = orderedDapps[index]
+                    if (editMode) {
+                        // Edit mode — jiggle + move up/down buttons
+                        val infiniteTransition = rememberInfiniteTransition(label = "jiggle${dapp.guid}")
+                        val rotation by infiniteTransition.animateFloat(
+                            initialValue = -1f, targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(150, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse,
+                            ), label = "rot${dapp.guid}",
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer(rotationZ = rotation),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Move buttons
+                            Column {
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            val list = orderedDapps.toMutableList()
+                                            val temp = list[index]
+                                            list[index] = list[index - 1]
+                                            list[index - 1] = temp
+                                            orderedDapps = list
+                                            prefs.edit().putString("order", list.joinToString(",") { it.guid }).apply()
+                                        }
+                                    },
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Text("\u25B2", color = if (index > 0) C.accent else C.textMuted, fontSize = 14.sp)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (index < orderedDapps.size - 1) {
+                                            val list = orderedDapps.toMutableList()
+                                            val temp = list[index]
+                                            list[index] = list[index + 1]
+                                            list[index + 1] = temp
+                                            orderedDapps = list
+                                            prefs.edit().putString("order", list.joinToString(",") { it.guid }).apply()
+                                        }
+                                    },
+                                    enabled = index < orderedDapps.size - 1,
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Text("\u25BC", color = if (index < orderedDapps.size - 1) C.accent else C.textMuted, fontSize = 14.sp)
+                                }
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Box(Modifier.weight(1f)) {
+                                DAppCard(
+                                    dapp = dapp,
+                                    onOpen = {},
+                                    onUninstall = { uninstallTarget = dapp },
+                                )
+                            }
+                        }
+                    } else {
+                        // Normal mode — tap to open, long press to edit
+                        Box(
+                            modifier = Modifier.combinedClickable(
+                                onClick = { handleLaunch(dapp) },
+                                onLongClick = { editMode = true },
+                            ),
+                        ) {
+                            DAppCard(
+                                dapp = dapp,
+                                onOpen = { handleLaunch(dapp) },
+                                onUninstall = { uninstallTarget = dapp },
+                            )
+                        }
+                    }
                 }
             }
 

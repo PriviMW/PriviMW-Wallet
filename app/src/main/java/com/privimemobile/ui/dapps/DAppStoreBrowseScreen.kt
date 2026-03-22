@@ -231,8 +231,15 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
                     }
                 }
 
-                // DApp list
-                items(available, key = { it.guid }) { dapp ->
+                // DApp list — sorted: bundled first, then PriviBets, then with icon (alpha), then without (alpha)
+                items(available.sortedWith(compareBy<AvailableDApp> { dapp ->
+                    when {
+                        dapp.bundledAsset.isNotEmpty() -> 0       // Bundled first
+                        dapp.name.contains("PriviBets", ignoreCase = true) -> 1  // PriviBets second
+                        dapp.icon.isNotBlank() -> 2               // Has icon
+                        else -> 3                                  // No icon last
+                    }
+                }.thenBy { it.name.lowercase() }), key = { it.guid }) { dapp ->
                     DAppStoreCard(
                         dapp = dapp,
                         installing = installing == dapp.guid,

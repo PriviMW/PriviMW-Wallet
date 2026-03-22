@@ -71,4 +71,4 @@ The PriviMe smart contract source is in [privimw-dapps](https://github.com/Privi
 
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+Apache License 2.0 — see [LICENSE](LICENSE)

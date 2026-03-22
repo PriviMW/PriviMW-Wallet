@@ -7,8 +7,15 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -172,104 +179,153 @@ fun DAppsScreen(
                 androidx.activity.compose.BackHandler { editMode = false }
             }
 
-            // DApp list with long-press edit mode
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 16.dp, end = 16.dp,
-                    top = 16.dp, bottom = 80.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (editMode) {
-                    item {
+            if (editMode) {
+                // ── Edit mode: live reorder with haptic feedback ──
+                var dragIndex by remember { mutableStateOf(-1) }
+                var dragOffset by remember { mutableFloatStateOf(0f) }
+                val itemHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { 86.dp.toPx() }
+                val hapticView = androidx.compose.ui.platform.LocalView.current
+                fun hapticTick() {
+                    hapticView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                }
+
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Arrange DApps", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        TextButton(onClick = { editMode = false }) {
+                            Text("Done", color = C.accent, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    orderedDapps.forEachIndexed { index, dapp ->
+                        val isDragging = dragIndex == index
+                        val infiniteTransition = rememberInfiniteTransition(label = "jiggle$index")
+                        val rotation by infiniteTransition.animateFloat(
+                            initialValue = -0.7f, targetValue = 0.7f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(100 + (index % 3) * 30, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse,
+                            ), label = "rot$index",
+                        )
+
                         Row(
-                            Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer(
+                                    rotationZ = if (isDragging) 0f else rotation,
+                                    translationY = if (isDragging) dragOffset else 0f,
+                                    scaleX = if (isDragging) 1.05f else 1f,
+                                    scaleY = if (isDragging) 1.05f else 1f,
+                                    shadowElevation = if (isDragging) 20f else 0f,
+                                )
+                                .zIndex(if (isDragging) 10f else 0f),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("Arrange DApps", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            TextButton(onClick = { editMode = false }) {
-                                Text("Done", color = C.accent, fontWeight = FontWeight.Bold)
+                            Box(Modifier.weight(1f)) {
+                                DAppCard(dapp = dapp, onOpen = {}, onUninstall = { uninstallTarget = dapp })
+                            }
+                            // Drag handle ≡
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isDragging) C.accent.copy(alpha = 0.2f) else C.card)
+                                    .pointerInput(Unit) {
+                                        detectVerticalDragGestures(
+                                            onDragStart = {
+                                                dragIndex = index
+                                                dragOffset = 0f
+                                                hapticTick()
+                                            },
+                                            onDragEnd = {
+                                                // Save final order
+                                                prefs.edit().putString("order", orderedDapps.joinToString(",") { it.guid }).apply()
+                                                dragIndex = -1
+                                                dragOffset = 0f
+                                            },
+                                            onDragCancel = { dragIndex = -1; dragOffset = 0f },
+                                            onVerticalDrag = { change, amount ->
+                                                change.consume()
+                                                dragOffset += amount
+
+                                                // Live swap: when dragged past half an item height, swap immediately
+                                                if (dragIndex >= 0) {
+                                                    val threshold = itemHeightPx * 0.5f
+                                                    if (dragOffset > threshold && dragIndex < orderedDapps.size - 1) {
+                                                        // Swap down
+                                                        val list = orderedDapps.toMutableList()
+                                                        val temp = list[dragIndex]
+                                                        list[dragIndex] = list[dragIndex + 1]
+                                                        list[dragIndex + 1] = temp
+                                                        orderedDapps = list
+                                                        dragIndex = dragIndex + 1
+                                                        dragOffset -= itemHeightPx
+                                                        hapticTick()
+                                                    } else if (dragOffset < -threshold && dragIndex > 0) {
+                                                        // Swap up
+                                                        val list = orderedDapps.toMutableList()
+                                                        val temp = list[dragIndex]
+                                                        list[dragIndex] = list[dragIndex - 1]
+                                                        list[dragIndex - 1] = temp
+                                                        orderedDapps = list
+                                                        dragIndex = dragIndex - 1
+                                                        dragOffset += itemHeightPx
+                                                        hapticTick()
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    repeat(3) {
+                                        Box(
+                                            Modifier
+                                                .width(18.dp)
+                                                .height(2.dp)
+                                                .background(
+                                                    if (isDragging) C.accent else C.textSecondary,
+                                                    RoundedCornerShape(1.dp),
+                                                )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                items(orderedDapps.size, key = { orderedDapps[it].guid }) { index ->
-                    val dapp = orderedDapps[index]
-                    if (editMode) {
-                        // Edit mode — jiggle + move up/down buttons
-                        val infiniteTransition = rememberInfiniteTransition(label = "jiggle${dapp.guid}")
-                        val rotation by infiniteTransition.animateFloat(
-                            initialValue = -1f, targetValue = 1f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(150, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse,
-                            ), label = "rot${dapp.guid}",
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .graphicsLayer(rotationZ = rotation),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // Move buttons
-                            Column {
-                                IconButton(
-                                    onClick = {
-                                        if (index > 0) {
-                                            val list = orderedDapps.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index - 1]
-                                            list[index - 1] = temp
-                                            orderedDapps = list
-                                            prefs.edit().putString("order", list.joinToString(",") { it.guid }).apply()
-                                        }
-                                    },
-                                    enabled = index > 0,
-                                    modifier = Modifier.size(28.dp),
-                                ) {
-                                    Text("\u25B2", color = if (index > 0) C.accent else C.textMuted, fontSize = 14.sp)
-                                }
-                                IconButton(
-                                    onClick = {
-                                        if (index < orderedDapps.size - 1) {
-                                            val list = orderedDapps.toMutableList()
-                                            val temp = list[index]
-                                            list[index] = list[index + 1]
-                                            list[index + 1] = temp
-                                            orderedDapps = list
-                                            prefs.edit().putString("order", list.joinToString(",") { it.guid }).apply()
-                                        }
-                                    },
-                                    enabled = index < orderedDapps.size - 1,
-                                    modifier = Modifier.size(28.dp),
-                                ) {
-                                    Text("\u25BC", color = if (index < orderedDapps.size - 1) C.accent else C.textMuted, fontSize = 14.sp)
-                                }
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            Box(Modifier.weight(1f)) {
-                                DAppCard(
-                                    dapp = dapp,
-                                    onOpen = {},
-                                    onUninstall = { uninstallTarget = dapp },
-                                )
-                            }
-                        }
-                    } else {
-                        // Normal mode — tap to open, long press to edit
+            } else {
+                // ── Normal mode: LazyColumn with long-press to enter edit ──
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp,
+                        top = 16.dp, bottom = 80.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(orderedDapps.size, key = { orderedDapps[it].guid }) { index ->
+                        val dapp = orderedDapps[index]
                         Box(
                             modifier = Modifier.combinedClickable(
                                 onClick = { handleLaunch(dapp) },
                                 onLongClick = { editMode = true },
                             ),
                         ) {
-                            DAppCard(
-                                dapp = dapp,
-                                onOpen = { handleLaunch(dapp) },
-                                onUninstall = { uninstallTarget = dapp },
-                            )
+                            DAppCard(dapp = dapp, onOpen = {}, onUninstall = { uninstallTarget = dapp })
                         }
                     }
                 }
@@ -342,8 +398,7 @@ private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpen() },
+            .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = C.card),
     ) {

@@ -36,7 +36,7 @@ object ChatNotificationManager {
 
     // Notification IDs: use convId hash to group per conversation
     private const val SUMMARY_ID = 8000
-    private const val MAX_MESSAGES_PER_CONV = 3
+    private const val MAX_MESSAGES_PER_CONV = 8
 
     private var initialized = false
     private lateinit var appContext: Context
@@ -114,15 +114,79 @@ object ChatNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Build MessagingStyle with last 3 messages
-        val sender = Person.Builder().setName(senderName).build()
-        val messagingStyle = NotificationCompat.MessagingStyle(
-            Person.Builder().setName("Me").build()
-        ).setConversationTitle(senderName)
+        // Load avatar for notification icon
+        val avatarIcon: androidx.core.graphics.drawable.IconCompat? = try {
+            val avatarFile = if (convKey.startsWith("g_")) {
+                // Group avatar — scan group_avatars dir for file matching prefix
+                val prefix = convKey.removePrefix("g_")
+                val dir = java.io.File(appContext.filesDir, "group_avatars")
+                dir.listFiles()?.firstOrNull { it.name.startsWith(prefix) && it.name.endsWith(".webp") }
+            } else {
+                val handle = convKey.removePrefix("@")
+                java.io.File(appContext.filesDir, "avatars/$handle.webp")
+            }
+            if (avatarFile != null && avatarFile.exists()) {
+                val bmp = android.graphics.BitmapFactory.decodeFile(avatarFile.absolutePath)
+                if (bmp != null) {
+                    // Crop to circle for notification
+                    val size = minOf(bmp.width, bmp.height)
+                    val cropped = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(cropped)
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+                    paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                    canvas.drawBitmap(bmp, -(bmp.width - size) / 2f, -(bmp.height - size) / 2f, paint)
+                    androidx.core.graphics.drawable.IconCompat.createWithBitmap(cropped)
+                } else null
+            } else null
+        } catch (_: Exception) { null }
 
-        for (msg in history) {
-            val person = Person.Builder().setName(msg.senderName).build()
-            messagingStyle.addMessage(msg.text, msg.timestamp, person)
+        // Build MessagingStyle
+        val isGroup = convKey.startsWith("g_")
+        val mePerson = Person.Builder().setName("Me").build()
+        val messagingStyle = NotificationCompat.MessagingStyle(mePerson)
+
+        if (isGroup) {
+            // Group: title = group name only, each message shows sender with their avatar
+            val groupName = senderName.substringBefore(": ").ifEmpty { senderName }
+            messagingStyle.setConversationTitle(groupName)
+            messagingStyle.isGroupConversation = true
+            for (msg in history) {
+                val msgSender = msg.senderName.substringAfter(": ", msg.senderName)
+                // Try to load sender's avatar
+                val handle = msgSender.removePrefix("@").replace(Regex("[^a-zA-Z0-9_]"), "")
+                val senderIcon: androidx.core.graphics.drawable.IconCompat? = try {
+                    val f = java.io.File(appContext.filesDir, "avatars/$handle.webp")
+                    if (f.exists()) {
+                        val bmp = android.graphics.BitmapFactory.decodeFile(f.absolutePath)
+                        if (bmp != null) {
+                            val sz = minOf(bmp.width, bmp.height)
+                            val c = android.graphics.Bitmap.createBitmap(sz, sz, android.graphics.Bitmap.Config.ARGB_8888)
+                            val cv = android.graphics.Canvas(c)
+                            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                            cv.drawCircle(sz / 2f, sz / 2f, sz / 2f, p)
+                            p.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                            cv.drawBitmap(bmp, -(bmp.width - sz) / 2f, -(bmp.height - sz) / 2f, p)
+                            androidx.core.graphics.drawable.IconCompat.createWithBitmap(c)
+                        } else null
+                    } else null
+                } catch (_: Exception) { null }
+                val person = Person.Builder().setName(msgSender).apply {
+                    if (senderIcon != null) setIcon(senderIcon)
+                }.build()
+                messagingStyle.addMessage(msg.text, msg.timestamp, person)
+            }
+        } else {
+            // DM: title = sender name, avatar on person
+            val senderPerson = Person.Builder().setName(senderName).apply {
+                if (avatarIcon != null) setIcon(avatarIcon)
+            }.build()
+            messagingStyle.setConversationTitle(senderName)
+            for (msg in history) {
+                val person = if (msg.senderName == senderName) senderPerson
+                    else Person.Builder().setName(msg.senderName).build()
+                messagingStyle.addMessage(msg.text, msg.timestamp, person)
+            }
         }
 
         // Per-chat notification channel (Android O+) for custom sound
@@ -167,6 +231,7 @@ object ChatNotificationManager {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+            .apply { if (avatarIcon != null) setLargeIcon(avatarIcon.toIcon(appContext)) }
             .build()
 
         nm.notify(notifId, notification)

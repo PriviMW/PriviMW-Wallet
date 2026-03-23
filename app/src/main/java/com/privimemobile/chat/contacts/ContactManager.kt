@@ -66,6 +66,13 @@ class ContactManager(
             val result = ShaderInvoker.invokeAsync("user", "resolve_handle", mapOf("handle" to handle))
             if (result.containsKey("error")) {
                 Log.w(TAG, "resolve_handle($handle) error: ${result["error"]}")
+                // Check if this is a known contact — if so, their handle was deleted
+                val existing = db.contactDao().findByHandle(handle)
+                if (existing != null && !existing.isDeleted) {
+                    db.contactDao().markDeleted(handle)
+                    db.conversationDao().updateDisplayName("@$handle", "Deleted Account")
+                    Log.d(TAG, "Marked @$handle as deleted account")
+                }
                 return null
             }
 

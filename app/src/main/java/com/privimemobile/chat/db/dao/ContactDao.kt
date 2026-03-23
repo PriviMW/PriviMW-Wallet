@@ -74,6 +74,10 @@ interface ContactDao {
     @Query("UPDATE contacts SET display_name = :displayName WHERE handle = :handle")
     suspend fun updateDisplayName(handle: String, displayName: String?)
 
+    /** Mark a contact as deleted (handle no longer exists on-chain). */
+    @Query("UPDATE contacts SET is_deleted = 1, display_name = 'Deleted Account' WHERE handle = :handle")
+    suspend fun markDeleted(handle: String)
+
     /** Get contacts that need resolution (no wallet_id or stale). */
     @Query("SELECT * FROM contacts WHERE wallet_id IS NULL OR last_resolved_at < :staleThreshold")
     suspend fun getUnresolved(staleThreshold: Long): List<ContactEntity>

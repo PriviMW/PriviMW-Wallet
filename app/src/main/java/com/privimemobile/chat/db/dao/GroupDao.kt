@@ -23,6 +23,10 @@ interface GroupDao {
     @Query("SELECT * FROM groups WHERE group_id LIKE :prefix || '%' LIMIT 1")
     suspend fun findByConvKey(prefix: String): GroupEntity?
 
+    /** Non-suspend version for notification context. */
+    @Query("SELECT * FROM groups WHERE group_id LIKE :prefix || '%' LIMIT 1")
+    fun findByConvKeySync(prefix: String): GroupEntity?
+
     @Query("SELECT * FROM groups")
     suspend fun getAllGroups(): List<GroupEntity>
 

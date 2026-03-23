@@ -267,6 +267,51 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
+                // Profile Picture (above display name)
+                Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 8.dp))
+                var avatarUploading by remember { mutableStateOf(false) }
+                var avatarVersion by remember { mutableStateOf(0) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val myAvatarPath = remember(avatarVersion) { java.io.File(context.filesDir, "my_avatar.webp").let { if (it.exists()) it.absolutePath else null } }
+                    com.privimemobile.ui.components.AvatarPicker(
+                        currentAvatarPath = myAvatarPath,
+                        initialLetter = chatState?.myDisplayName?.take(1) ?: chatState?.myHandle?.take(1) ?: "?",
+                        size = 80.dp,
+                        cacheVersion = avatarVersion,
+                    ) { result ->
+                        java.io.File(context.filesDir, "my_avatar.webp").writeBytes(result.bytes)
+                        avatarVersion++
+                        toast("Profile picture updated")
+                        scope.launch {
+                            com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(result.hashHex)
+                            distributeAvatarToContacts(context, result.bytes, result.hashHex)
+                        }
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text("Tap to change", color = C.textSecondary, fontSize = 13.sp)
+                        if (avatarUploading) {
+                            Spacer(Modifier.height(4.dp))
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
+                        }
+                        if (chatState?.myAvatarCid != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("Remove", color = C.error, fontSize = 13.sp,
+                                modifier = Modifier.clickable {
+                                    java.io.File(context.filesDir, "my_avatar.webp").delete()
+                                    avatarVersion++
+                                    scope.launch { com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(null) }
+                                    toast("Profile picture removed")
+                                })
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
                 // Edit Display Name
                 var showEditName by remember { mutableStateOf(false) }
                 var newDisplayName by remember { mutableStateOf(chatState?.myDisplayName ?: "") }
@@ -316,54 +361,6 @@ fun SettingsScreen(
                         else Text("Update", color = C.textDark, fontWeight = FontWeight.Bold)
                     }
                 }
-
-                // Profile Picture
-                Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp))
-                var avatarUploading by remember { mutableStateOf(false) }
-                var avatarVersion by remember { mutableStateOf(0) }  // triggers recomposition on change
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val myAvatarPath = remember(avatarVersion) { java.io.File(context.filesDir, "my_avatar.webp").let { if (it.exists()) it.absolutePath else null } }
-                    com.privimemobile.ui.components.AvatarPicker(
-                        currentAvatarPath = myAvatarPath,
-                        initialLetter = chatState?.myDisplayName?.take(1) ?: chatState?.myHandle?.take(1) ?: "?",
-                        size = 80.dp,
-                        cacheVersion = avatarVersion,
-                    ) { result ->
-                        // Save locally + distribute via SBBS (no on-chain TX needed for 1-on-1)
-                        java.io.File(context.filesDir, "my_avatar.webp").writeBytes(result.bytes)
-                        avatarVersion++
-                        toast("Profile picture updated")
-                        scope.launch {
-                            // Store hash in local DB
-                            com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(result.hashHex)
-                            // Distribute to all contacts via SBBS
-                            distributeAvatarToContacts(context, result.bytes, result.hashHex)
-                        }
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text("Tap to change", color = C.textSecondary, fontSize = 13.sp)
-                        if (avatarUploading) {
-                            Spacer(Modifier.height(4.dp))
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
-                        }
-                        if (chatState?.myAvatarCid != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Text("Remove", color = C.error, fontSize = 13.sp,
-                                modifier = Modifier.clickable {
-                                    java.io.File(context.filesDir, "my_avatar.webp").delete()
-                                    avatarVersion++
-                                    scope.launch { com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(null) }
-                                    toast("Profile picture removed")
-                                })
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
 
                 // Update Messaging Address
                 Row(
@@ -1045,7 +1042,10 @@ fun SettingsScreen(
                 valueColor = if (ipfsPeers > 0) Color(0xFF4CAF50) else if (ipfsPeers == 0) C.error else C.textSecondary)
             SettingsRow("Contract", Helpers.truncateKey(Config.PRIVIME_CID))
             SettingsRow("Lib Version", libVersion)
-            SettingsRow("App", "PriviMW v2.0.0")
+            val appVersion = try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            } catch (_: Exception) { "1.0.0" }
+            SettingsRow("App", "PriviMW v$appVersion")
         }
 
         // ========== REMOVE WALLET ==========

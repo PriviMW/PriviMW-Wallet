@@ -7,9 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,16 +66,32 @@ fun AvatarDisplay(
         } catch (_: Exception) { null }
     }
 
+    val isDeletedAccount = displayName == "Deleted Account"
+
     Box(
         modifier = Modifier.size(size).clip(CircleShape)
-            .background(if (avatarBitmap != null) Color.Transparent else avatarColors[abs(handle.hashCode()) % avatarColors.size]),
+            .background(
+                if (isDeletedAccount) Color(0xFF555555)
+                else if (avatarBitmap != null) Color.Transparent
+                else avatarColors[abs(handle.hashCode()) % avatarColors.size]
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        if (avatarBitmap != null) {
+        if (isDeletedAccount) {
+            // Grey ghost icon for deleted accounts
+            Text("\uD83D\uDEAB", fontSize = (size.value * 0.4f).sp) // 🚫
+        } else if (avatarBitmap != null) {
+            var appeared by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { appeared = true }
+            val alpha by animateFloatAsState(
+                targetValue = if (appeared) 1f else 0f,
+                animationSpec = tween(300),
+                label = "avatarFade",
+            )
             Image(
                 bitmap = avatarBitmap.asImageBitmap(),
                 contentDescription = "Avatar",
-                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                modifier = Modifier.fillMaxSize().clip(CircleShape).graphicsLayer { this.alpha = alpha },
                 contentScale = ContentScale.Crop,
             )
         } else {

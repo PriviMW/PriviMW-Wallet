@@ -36,4 +36,8 @@ interface PendingTxDao {
 
     @Query("DELETE FROM pending_txs WHERE created_at < :before")
     suspend fun deleteOlderThan(before: Long)
+
+    /** Non-suspend check for pending TX by action (for UI gating). */
+    @Query("SELECT COUNT(*) > 0 FROM pending_txs WHERE status = 0 AND action = :action")
+    fun isPendingSync(action: String): Boolean
 }

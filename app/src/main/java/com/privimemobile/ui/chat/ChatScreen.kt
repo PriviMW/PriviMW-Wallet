@@ -4,6 +4,7 @@ import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -375,6 +376,28 @@ fun ChatScreen(
     }
     var showSchedulePicker by remember { mutableStateOf(false) }
     var showCreateStickerPack by remember { mutableStateOf(false) }
+    // Group notification sound (same system as ContactInfoScreen)
+    val chatPrefs = context.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE)
+    var groupNotifSoundName by remember { mutableStateOf(chatPrefs.getString("notif_sound_name_$convKey", "Default") ?: "Default") }
+    val groupSoundPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.getParcelableExtra<android.net.Uri>(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        val ver = chatPrefs.getInt("notif_channel_ver_$convKey", 0) + 1
+        if (uri != null) {
+            val ringtone = android.media.RingtoneManager.getRingtone(context, uri)
+            val name = ringtone?.getTitle(context) ?: "Custom"
+            chatPrefs.edit().putString("notif_sound_$convKey", uri.toString())
+                .putString("notif_sound_name_$convKey", name)
+                .putInt("notif_channel_ver_$convKey", ver).apply()
+            groupNotifSoundName = name
+        } else {
+            chatPrefs.edit().putString("notif_sound_$convKey", "silent")
+                .putString("notif_sound_name_$convKey", "Silent")
+                .putInt("notif_channel_ver_$convKey", ver).apply()
+            groupNotifSoundName = "Silent"
+        }
+    }
     var emojiMainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -1354,6 +1377,20 @@ fun ChatScreen(
                         OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
                         if (isGroupMode) {
                             OverflowItem("\u2699\uFE0F", "Group info") { showOverflowMenu = false; onGroupSettings() }
+                            OverflowItem("\uD83D\uDD14", "Sound: $groupNotifSoundName") {
+                                showOverflowMenu = false
+                                val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Notification Sound")
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    val current = chatPrefs.getString("notif_sound_$convKey", null)
+                                    if (current != null && current != "silent") {
+                                        putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(current))
+                                    }
+                                }
+                                groupSoundPicker.launch(intent)
+                            }
                         } else {
                             OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
                         }
@@ -1805,21 +1842,29 @@ fun ChatScreen(
             reverseLayout = true,
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(vertical = 8.dp),
+            flingBehavior = remember { TelegramFlingBehavior() },
         ) {
             items(reversedMessages, key = { it.id }) { msg ->
                 // Skip non-first album images (rendered as grid in the first item)
                 if (msg.id in albumSkipIds) return@items
-                // Message appear animation
+                // Telegram-style message appear animation
                 var appeared by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { appeared = true }
-                val alpha by animateFloatAsState(
+                val easeOutQuint = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+                val msgAlpha by animateFloatAsState(
                     targetValue = if (appeared) 1f else 0f,
-                    animationSpec = tween(200),
+                    animationSpec = tween(400, easing = easeOutQuint),
                     label = "msgAlpha",
                 )
-                val offsetY by animateFloatAsState(
-                    targetValue = if (appeared) 0f else 20f,
-                    animationSpec = tween(200),
+                val msgScale by animateFloatAsState(
+                    targetValue = if (appeared) 1f else if (msg.sent) 0.6f else 0.85f,
+                    animationSpec = if (msg.sent) spring(dampingRatio = 0.6f, stiffness = 400f)
+                        else tween(400, easing = easeOutQuint),
+                    label = "msgScale",
+                )
+                val msgOffsetY by animateFloatAsState(
+                    targetValue = if (appeared) 0f else if (msg.sent) 40f else 15f,
+                    animationSpec = tween(if (msg.sent) 500 else 350, easing = easeOutQuint),
                     label = "msgOffset",
                 )
 
@@ -1830,10 +1875,21 @@ fun ChatScreen(
 
                 Column(
                     modifier = Modifier
-                        .animateItem()
+                        .animateItem(
+                            fadeInSpec = tween(300, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)),
+                            fadeOutSpec = tween(300, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)),
+                            placementSpec = spring(dampingRatio = 0.8f, stiffness = 400f),
+                        )
                         .graphicsLayer {
-                            this.alpha = alpha
-                            translationY = offsetY
+                            this.alpha = msgAlpha
+                            scaleX = msgScale
+                            scaleY = msgScale
+                            translationY = msgOffsetY
+                            // Sent messages scale from bottom-right, received from bottom-left
+                            transformOrigin = if (msg.sent)
+                                androidx.compose.ui.graphics.TransformOrigin(1f, 1f)
+                            else
+                                androidx.compose.ui.graphics.TransformOrigin(0f, 1f)
                         },
                 ) {
                     if (showDateSep) {
@@ -2184,6 +2240,41 @@ fun ChatScreen(
                     Icons.Default.KeyboardArrowDown,
                     contentDescription = "Scroll to bottom",
                     modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        // Sticky date header — floats at top when scrolling
+        val stickyDateText = remember(listState.firstVisibleItemIndex, reversedMessages) {
+            val idx = listState.firstVisibleItemIndex
+            if (idx in reversedMessages.indices) {
+                formatDateSeparator(reversedMessages[idx].timestamp)
+            } else null
+        }
+        val isScrolling = listState.isScrollInProgress
+        var stickyVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(isScrolling) {
+            if (isScrolling) stickyVisible = true
+            else { kotlinx.coroutines.delay(1500); stickyVisible = false }
+        }
+        val stickyAlpha by animateFloatAsState(
+            targetValue = if (stickyVisible && stickyDateText != null) 1f else 0f,
+            animationSpec = tween(if (stickyVisible) 200 else 400),
+            label = "stickyAlpha",
+        )
+        if (stickyAlpha > 0f) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = C.card.copy(alpha = 0.9f),
+                shadowElevation = 4.dp,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp)
+                    .graphicsLayer { alpha = stickyAlpha },
+            ) {
+                Text(
+                    stickyDateText ?: "",
+                    color = C.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
         }
@@ -3002,7 +3093,9 @@ fun ChatScreen(
         Surface(
             color = C.card,
             shadowElevation = 2.dp,
-            modifier = Modifier.then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
+            modifier = Modifier
+                .animateContentSize(animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f))
+                .then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
         ) {
             Row(
                 modifier = Modifier
@@ -3719,6 +3812,9 @@ fun ChatScreen(
                         )
                         val quickEmojis = allEmojis.take(7)
                         var emojiExpanded by remember { mutableStateOf(false) }
+                        // Staggered bounce-in for quick emojis
+                        val emojiAppeared = remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { emojiAppeared.value = true }
 
                         fun sendReaction(emoji: String) {
                             scope.launch {
@@ -3762,10 +3858,21 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth().padding(bottom = if (emojiExpanded) 4.dp else 12.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            quickEmojis.forEach { emoji ->
+                            quickEmojis.forEachIndexed { eidx, emoji ->
+                                val emojiScale by animateFloatAsState(
+                                    targetValue = if (emojiAppeared.value) 1f else 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.5f, stiffness = 600f,
+                                        visibilityThreshold = 0.01f,
+                                    ),
+                                    label = "emojiScale$eidx",
+                                )
                                 Text(
                                     emoji, fontSize = 28.sp,
-                                    modifier = Modifier.clickable { sendReaction(emoji) }.padding(4.dp),
+                                    modifier = Modifier
+                                        .graphicsLayer { scaleX = emojiScale; scaleY = emojiScale }
+                                        .clickable { sendReaction(emoji) }
+                                        .padding(4.dp),
                                 )
                             }
                             // Expand/collapse button
@@ -4907,15 +5014,9 @@ private fun MessageBubble(
                     lines.drop(1).joinToString("\n").trim() // skip "→@handle" line, show caption only
                 } else msg.text
                 if (displayText.isNotEmpty()) {
-                    val annotated = parseMarkdown(displayText)
-                    androidx.compose.foundation.text.ClickableText(
-                        text = annotated,
-                        style = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 15.sp, lineHeight = 20.sp),
-                        onClick = { offset ->
-                            annotated.getStringAnnotations("mention", offset, offset).firstOrNull()?.let { ann ->
-                                onSenderTap(ann.item)
-                            }
-                        },
+                    Text(
+                        text = parseMarkdown(displayText),
+                        color = C.text, fontSize = 15.sp, lineHeight = 20.sp,
                     )
                 }
                 }
@@ -5821,4 +5922,30 @@ internal fun formatTimerLabel(seconds: Int): String = when {
     seconds < 3600 -> "${seconds / 60}m"
     seconds < 86400 -> "${seconds / 3600}h"
     else -> "${seconds / 86400}d"
+}
+
+/** Telegram-style fling: reduce initial velocity for heavier, more controlled scroll feel. */
+private class TelegramFlingBehavior : androidx.compose.foundation.gestures.FlingBehavior {
+    override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float {
+        // Dampen velocity by 20% for a heavier feel
+        val dampened = initialVelocity * 0.80f
+        if (kotlin.math.abs(dampened) < 50f) return dampened
+        var velocityLeft = dampened
+        var lastValue = 0f
+        androidx.compose.animation.core.AnimationState(
+            initialValue = 0f,
+            initialVelocity = dampened,
+        ).animateDecay(
+            androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 1.2f)
+        ) {
+            val delta = value - lastValue
+            lastValue = value
+            val consumed = scrollBy(delta)
+            if (kotlin.math.abs(consumed) < kotlin.math.abs(delta) * 0.5f) {
+                cancelAnimation()
+            }
+            velocityLeft = velocity
+        }
+        return velocityLeft
+    }
 }

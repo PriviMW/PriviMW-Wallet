@@ -162,7 +162,7 @@ class IdentityManager(
             onReady = onTxReady,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    val error = result["error"]?.toString() ?: "Unknown error"
+                    val error = com.privimemobile.protocol.Helpers.extractError(result) ?: "Unknown error"
                     Log.e(TAG, "Register failed: $error")
                     onResult?.invoke(false, error)
                 } else {
@@ -194,7 +194,7 @@ class IdentityManager(
      */
     fun checkAvailability(handle: String, callback: (available: Boolean?, error: String?) -> Unit) {
         ShaderInvoker.invoke("user", "resolve_handle", mapOf("handle" to handle)) { result ->
-            val error = result["error"]?.toString() ?: ""
+            val error = com.privimemobile.protocol.Helpers.extractError(result) ?: ""
             if (error.contains("handle not found", ignoreCase = true)) {
                 // "handle not found" means it's available
                 callback(true, null)
@@ -232,7 +232,7 @@ class IdentityManager(
                 ),
                 callback = { result ->
                     if (result.containsKey("error")) {
-                        onResult?.invoke(false, result["error"]?.toString())
+                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                     } else {
                         val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                         if (txId != null) {
@@ -277,7 +277,7 @@ class IdentityManager(
             ShaderInvoker.tx("user", "update_profile", extra,
                 callback = { result ->
                     if (result.containsKey("error")) {
-                        onResult?.invoke(false, result["error"]?.toString())
+                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                     } else {
                         val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                         if (txId != null) {
@@ -315,7 +315,7 @@ class IdentityManager(
         ShaderInvoker.tx("user", "release_handle", emptyMap(),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {

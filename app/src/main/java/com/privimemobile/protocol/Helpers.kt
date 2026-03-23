@@ -22,9 +22,14 @@ object Helpers {
         if (r == null) return "Unknown error"
         val error = r["error"]
         if (error is Map<*, *>) {
+            val code = (error["code"] as? Number)?.toInt()
+            if (code == -32021) return "Transaction cancelled"
             return (error["message"] as? String) ?: error.toString()
         }
-        if (error is String) return error
+        if (error is String) {
+            if (error.contains("-32021") || error.contains("rejected by user")) return "Transaction cancelled"
+            return error
+        }
         return (r["message"] as? String) ?: "Unknown error"
     }
 

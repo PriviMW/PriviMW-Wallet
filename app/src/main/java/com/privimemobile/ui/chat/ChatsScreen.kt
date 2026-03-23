@@ -3,6 +3,7 @@ package com.privimemobile.ui.chat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -39,6 +41,24 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,14 +118,43 @@ fun ChatsScreen(
     val isRegistered = chatState?.myHandle != null
     val sbbsNeedsUpdate by ChatService.identity.sbbsNeedsUpdate.collectAsState()
 
-    // Landing page 1: Not registered
+    // Observe pending TXs for landing page gating
+    val allPendingTxs by ChatService.db?.pendingTxDao()?.observePending()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+
+    // Landing page 1: Not registered (or pending registration TX)
     if (!isRegistered) {
-        NotRegisteredLanding(onRegister)
+        val pendingRegTx = allPendingTxs.any {
+            it.action == com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_REGISTER_HANDLE
+        }
+        if (pendingRegTx) {
+            // Show pending screen instead of registration form
+            Column(
+                modifier = Modifier.fillMaxSize().background(C.bg).padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                Spacer(Modifier.height(24.dp))
+                Text("Registering Handle", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.",
+                    color = C.textSecondary, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
+                )
+            }
+        } else {
+            NotRegisteredLanding(onRegister)
+        }
         return
     }
 
-    // Landing page 2: SBBS needs re-registration (restored wallet)
-    if (sbbsNeedsUpdate) {
+    // Landing page 2: SBBS needs re-registration (restored wallet) or pending update TX
+    val pendingUpdateTx = allPendingTxs.any {
+        it.action == com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_UPDATE_PROFILE
+    }
+    if (sbbsNeedsUpdate || pendingUpdateTx) {
         ReRegisterLanding(chatState!!)
         return
     }
@@ -175,6 +224,7 @@ fun ChatsScreen(
         },
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
+        val chatListState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ── Top bar ──
@@ -196,7 +246,14 @@ fun ChatsScreen(
                             }
                         }
 
-                        // Search/filter bar
+                        // Search/filter bar — collapses when scrolled past first item
+                        val searchBarVisible = chatListState.firstVisibleItemIndex == 0 || searchQuery.isNotEmpty()
+                        AnimatedVisibility(
+                            visible = searchBarVisible,
+                            enter = expandVertically(tween(250)) + fadeIn(tween(200)),
+                            exit = shrinkVertically(tween(250)) + fadeOut(tween(200)),
+                        ) {
+                        Column {
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = searchQuery,
@@ -220,19 +277,18 @@ fun ChatsScreen(
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                         )
                     }
+                    } // close AnimatedVisibility
+                    }
                 }
 
                 // ── Tab bar (All / Unread / Archived) ──
                 val tabLabels = listOf("All", "Unread", "Archived")
                 val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 } + groups.count { !it.archived && it.unreadCount > 0 }
                 val archivedTotal = conversations.count { it.archived } + groups.count { it.archived }
-                ScrollableTabRow(
-                    selectedTabIndex = activeTab,
-                    containerColor = Color.Transparent,
-                    contentColor = C.accent,
-                    edgePadding = 12.dp,
-                    divider = {},
-                    indicator = {},
+                // Telegram-style tab selector with animated pill indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     tabLabels.forEachIndexed { idx, label ->
                         val badge = when (idx) {
@@ -240,18 +296,35 @@ fun ChatsScreen(
                             2 -> if (archivedTotal > 0) " ($archivedTotal)" else ""
                             else -> ""
                         }
-                        Tab(
-                            selected = activeTab == idx,
-                            onClick = { activeTab = idx },
-                            text = {
-                                Text(
-                                    "$label$badge",
-                                    color = if (activeTab == idx) C.accent else C.textSecondary,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (activeTab == idx) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                            },
+                        val selected = activeTab == idx
+                        val bgColor by animateColorAsState(
+                            if (selected) C.accent.copy(alpha = 0.15f) else Color.Transparent,
+                            animationSpec = tween(250), label = "tabBg$idx",
                         )
+                        val textColor by animateColorAsState(
+                            if (selected) C.accent else C.textSecondary,
+                            animationSpec = tween(250), label = "tabTxt$idx",
+                        )
+                        val tabScale by animateFloatAsState(
+                            targetValue = if (selected) 1f else 0.95f,
+                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
+                            label = "tabScale$idx",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .graphicsLayer { scaleX = tabScale; scaleY = tabScale }
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(bgColor)
+                                .clickable { activeTab = idx }
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                        ) {
+                            Text(
+                                "$label$badge",
+                                color = textColor,
+                                fontSize = 13.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
                     }
                 }
 
@@ -314,13 +387,101 @@ fun ChatsScreen(
                     }
 
                     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) {
-                    LazyColumn {
+                    LazyColumn(state = chatListState) {
                         items(unifiedList.size, key = { i ->
                             val item = unifiedList[i]
                             if (item.isGroup) "g_${item.group!!.groupId}" else "c_${item.conv!!.id}"
                         }) { i ->
                             val item = unifiedList[i]
-                            Box(modifier = Modifier.animateItem()) {
+                            var showDeleteConfirmItem by remember { mutableStateOf(false) }
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    when (value) {
+                                        SwipeToDismissBoxValue.EndToStart -> {
+                                            // Swipe left → show confirmation
+                                            showDeleteConfirmItem = true
+                                            false // don't dismiss yet
+                                        }
+                                        SwipeToDismissBoxValue.StartToEnd -> {
+                                            // Swipe right → Archive
+                                            scope.launch {
+                                                if (item.isGroup) {
+                                                    ChatService.db?.groupDao()?.setArchived(item.group!!.groupId, !item.group.archived)
+                                                } else {
+                                                    ChatService.db?.conversationDao()?.setArchived(item.conv!!.id, !(item.conv.archived))
+                                                }
+                                            }
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                },
+                                positionalThreshold = { it * 0.35f },
+                            )
+                            if (showDeleteConfirmItem) {
+                                val name = if (item.isGroup) item.group!!.name else "@${item.conv!!.convKey.removePrefix("@")}"
+                                val isGrp = item.isGroup
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteConfirmItem = false },
+                                    containerColor = C.card,
+                                    title = { Text(if (isGrp) "Leave Group?" else "Delete Chat?", color = C.text, fontWeight = FontWeight.SemiBold) },
+                                    text = { Text(if (isGrp) "Leave \"$name\"? You'll need an invite to rejoin." else "Delete all messages with $name?", color = C.textSecondary) },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            showDeleteConfirmItem = false
+                                            scope.launch {
+                                                if (isGrp) {
+                                                    ChatService.groups.leaveGroup(item.group!!.groupId)
+                                                } else {
+                                                    val cid = item.conv!!.id
+                                                    ChatService.db?.messageDao()?.softDeleteByConversation(cid)
+                                                    ChatService.db?.conversationDao()?.softDelete(cid)
+                                                }
+                                            }
+                                        }) { Text(if (isGrp) "Leave" else "Delete", color = C.error, fontWeight = FontWeight.Bold) }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showDeleteConfirmItem = false }) {
+                                            Text("Cancel", color = C.textSecondary)
+                                        }
+                                    },
+                                )
+                            }
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                modifier = Modifier.animateItem(),
+                                backgroundContent = {
+                                    val progress = dismissState.progress
+                                    val direction = dismissState.dismissDirection
+                                    // Show color immediately as user starts swiping
+                                    val bgColor = when (direction) {
+                                        SwipeToDismissBoxValue.EndToStart -> C.error.copy(alpha = (progress * 2.5f).coerceIn(0f, 1f))
+                                        SwipeToDismissBoxValue.StartToEnd -> C.accent.copy(alpha = (progress * 2.5f).coerceIn(0f, 1f))
+                                        else -> Color.Transparent
+                                    }
+                                    val iconAlpha = (progress * 3f).coerceIn(0f, 1f)
+                                    val iconAlignment = when (direction) {
+                                        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                                        else -> Alignment.CenterEnd
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(bgColor)
+                                            .padding(horizontal = 24.dp),
+                                        contentAlignment = iconAlignment,
+                                    ) {
+                                        if (direction == SwipeToDismissBoxValue.EndToStart) {
+                                            Icon(Icons.Default.Delete, "Delete", tint = Color.White.copy(alpha = iconAlpha))
+                                        } else if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                                            Icon(Icons.Default.Archive, "Archive", tint = Color.White.copy(alpha = iconAlpha))
+                                        }
+                                    }
+                                },
+                                enableDismissFromStartToEnd = true,
+                                enableDismissFromEndToStart = true,
+                            ) {
+                                Surface(color = C.bg) {
                                 if (item.isGroup) {
                                     val gConvKey = "g_${item.group!!.groupId.take(16)}"
                                     val gTypingHandles = if (typingVer >= 0) ChatService.getGroupTyping(gConvKey) else emptyList()
@@ -331,6 +492,7 @@ fun ChatsScreen(
                                     val peerTyping = typingVer >= 0 && ChatService.isTyping(item.conv!!.convKey)
                                     ConversationRow(conv = item.conv!!, onClick = { onOpenChat(item.conv!!.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
                                 }
+                                }
                             }
                         }
                     }
@@ -338,9 +500,34 @@ fun ChatsScreen(
                 }
             }
 
-            // FABs - New Chat + Create Group
+            // FABs - New Chat + Create Group (hide on scroll down, show on scroll up)
+            val fabVisible = remember { mutableStateOf(true) }
+            val prevFirstVisible = remember { mutableIntStateOf(0) }
+            val prevScrollOffset = remember { mutableIntStateOf(0) }
+            LaunchedEffect(chatListState.firstVisibleItemIndex, chatListState.firstVisibleItemScrollOffset) {
+                val currentFirst = chatListState.firstVisibleItemIndex
+                val currentOffset = chatListState.firstVisibleItemScrollOffset
+                if (currentFirst > prevFirstVisible.intValue || (currentFirst == prevFirstVisible.intValue && currentOffset > prevScrollOffset.intValue + 20)) {
+                    fabVisible.value = false // scrolling down
+                } else if (currentFirst < prevFirstVisible.intValue || (currentFirst == prevFirstVisible.intValue && currentOffset < prevScrollOffset.intValue - 20)) {
+                    fabVisible.value = true // scrolling up
+                }
+                prevFirstVisible.intValue = currentFirst
+                prevScrollOffset.intValue = currentOffset
+            }
+            val fabScale by animateFloatAsState(
+                targetValue = if (fabVisible.value) 1f else 0f,
+                animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
+                label = "fabScale",
+            )
+            val fabAlpha by animateFloatAsState(
+                targetValue = if (fabVisible.value) 1f else 0f,
+                animationSpec = tween(200),
+                label = "fabAlpha",
+            )
             Column(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                    .graphicsLayer { scaleX = fabScale; scaleY = fabScale; alpha = fabAlpha },
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End,
             ) {
@@ -383,8 +570,23 @@ fun ChatsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(target.groupId)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    val grpAvatarBmp = remember(target.groupId, target.avatarHash) {
+                        try {
+                            val f = java.io.File(context.filesDir, "group_avatars/${target.groupId}.webp")
+                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+                        } catch (_: Exception) { null }
+                    }
+                    if (grpAvatarBmp != null) {
+                        Image(
+                            bitmap = grpAvatarBmp.asImageBitmap(),
+                            contentDescription = "Group",
+                            modifier = Modifier.size(40.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(target.groupId)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
@@ -446,9 +648,24 @@ fun ChatsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val avatarKey = target.handle ?: target.convKey
-                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(avatarKey)), contentAlignment = Alignment.Center) {
-                        val initial = (target.displayName ?: target.handle ?: target.convKey).removePrefix("@").firstOrNull()?.uppercase() ?: "?"
-                        Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    val dmAvatarBmp = remember(avatarKey) {
+                        try {
+                            val f = java.io.File(context.filesDir, "avatars/${avatarKey.removePrefix("@")}.webp")
+                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+                        } catch (_: Exception) { null }
+                    }
+                    if (dmAvatarBmp != null) {
+                        Image(
+                            bitmap = dmAvatarBmp.asImageBitmap(),
+                            contentDescription = "Avatar",
+                            modifier = Modifier.size(40.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(avatarKey)), contentAlignment = Alignment.Center) {
+                            val initial = (target.displayName ?: target.handle ?: target.convKey).removePrefix("@").firstOrNull()?.uppercase() ?: "?"
+                            Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
@@ -783,11 +1000,19 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
     val initial = (conv.displayName ?: conv.handle ?: conv.convKey)
         .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
 
-    Column(modifier = Modifier.background(C.bg)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 1000f),
+        label = "convPressScale",
+    )
+
+    Column(modifier = Modifier.background(C.bg).graphicsLayer { scaleX = pressScale; scaleY = pressScale }) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+                .combinedClickable(onClick = onClick, onLongClick = onLongPress, interactionSource = interactionSource, indication = LocalIndication.current)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -968,10 +1193,18 @@ private fun GroupRow(
     typingHandles: List<String> = emptyList(),
     draftText: String? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 1000f),
+        label = "grpPressScale",
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+            .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress, interactionSource = interactionSource, indication = LocalIndication.current)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

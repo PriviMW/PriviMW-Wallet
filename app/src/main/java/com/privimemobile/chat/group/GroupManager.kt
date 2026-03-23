@@ -73,7 +73,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "create_group", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, null, result["error"]?.toString())
+                    onResult?.invoke(false, null, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     Log.d(TAG, "Create group TX submitted: $name txId=$txId")
@@ -105,7 +105,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "join_group", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -165,7 +165,7 @@ class GroupManager(
             mapOf("group_id" to groupId),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -194,7 +194,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -233,7 +233,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -270,7 +270,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "update_group_info", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -298,7 +298,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -325,7 +325,7 @@ class GroupManager(
             mapOf("group_id" to groupId),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, result["error"]?.toString())
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {

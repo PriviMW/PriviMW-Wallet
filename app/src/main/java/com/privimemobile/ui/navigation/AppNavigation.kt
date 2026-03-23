@@ -1,6 +1,7 @@
 package com.privimemobile.ui.navigation
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
@@ -104,15 +105,9 @@ fun AppNavigation() {
         activity?.consumeDeepLink()
     }
 
-    // Hide bottom bar on certain screens
+    // Hide bottom bar on certain screens (chat screens only — wallet sub-screens keep nav bar)
     val hideBottomBar = currentDestination?.route?.let { route ->
         route.startsWith("chat/") ||
-                route == "send" ||
-                route.startsWith("send_confirm") ||
-                route == "receive" ||
-                route == "qr_scanner" ||
-                route.startsWith("tx_detail") ||
-                route.startsWith("asset_detail") ||
                 route == "new_chat" ||
                 route == "search_messages" ||
                 route.startsWith("media_gallery/") ||
@@ -167,10 +162,23 @@ fun AppNavigation() {
             navController = navController,
             startDestination = Tab.WALLET.route,
             modifier = Modifier.padding(innerPadding),
-            enterTransition = { slideInHorizontally(tween(250)) { it } + fadeIn(tween(200)) },
-            exitTransition = { slideOutHorizontally(tween(250)) { -it / 4 } + fadeOut(tween(150)) },
-            popEnterTransition = { slideInHorizontally(tween(250)) { -it / 4 } + fadeIn(tween(200)) },
-            popExitTransition = { slideOutHorizontally(tween(250)) { it } + fadeOut(tween(150)) },
+            // Telegram-style: 400ms forward, 500ms back, cubic ease-out
+            enterTransition = {
+                slideInHorizontally(tween(400, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) { it } +
+                    fadeIn(tween(300, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)))
+            },
+            exitTransition = {
+                slideOutHorizontally(tween(400, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) { -it / 3 } +
+                    fadeOut(tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { -it / 3 } +
+                    fadeIn(tween(350))
+            },
+            popExitTransition = {
+                slideOutHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { it } +
+                    fadeOut(tween(300))
+            },
         ) {
             // Tab screens: instant fade (no slide — lateral navigation)
             composable(

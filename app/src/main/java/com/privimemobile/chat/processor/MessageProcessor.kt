@@ -614,6 +614,21 @@ class MessageProcessor(
         if (conv.lastMessageTs == msgTs) {
             updateConversationPreview(conv.id)
         }
+        // Also update group preview if this is a group conversation
+        if (convKey.startsWith("g_")) {
+            val groupPrefix = convKey.removePrefix("g_")
+            val group = db.groupDao().findByConvKey(groupPrefix)
+            if (group != null && group.lastMessageTs == msgTs) {
+                val latest = db.messageDao().getLatestMessage(conv.id)
+                if (latest != null) {
+                    val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
+                    val preview = "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                    db.groupDao().updateLastMessage(group.groupId, latest.timestamp, preview)
+                } else {
+                    db.groupDao().updateLastMessage(group.groupId, 0, null)
+                }
+            }
+        }
         Log.d(TAG, "Delete for everyone from @$from, ts=$msgTs")
     }
 
@@ -820,13 +835,17 @@ class MessageProcessor(
                 ChatService.sbbs.sendOnce(senderWalletId, deliveredPayload)
             }
 
-            // Notification (only if not active and not muted)
-            if (!isActive && !group.muted) {
+            // Notification — bypass mute if @mentioned
+            val isMentioned = text != null &&
+                Regex("@${Regex.escape(myHandle)}\\b").containsMatchIn(text)
+            if (!isActive && (!group.muted || isMentioned)) {
+                val notifText = if (isMentioned && group.muted) "mentioned you: ${text ?: ""}"
+                    else text ?: "sent a message"
                 com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                     convKey = groupConvKey,
                     convId = convId,
                     senderName = "${group.name}: $senderLabel",
-                    text = text ?: "sent a message",
+                    text = notifText,
                     type = "group_msg",
                     isMuted = false,
                     totalUnread = 0,
@@ -873,13 +892,12 @@ class MessageProcessor(
             "poll_vote" -> handlePollVote(payload, groupConvKey, from, false)
             "poll_unvote" -> handlePollVote(payload, groupConvKey, from, true)
             "group_pin" -> {
-                // Pin/unpin a message by timestamp in the group conversation
-                // Only process if the pin action happened recently (within 1 hour)
+                // Only process pins that were sent AFTER this app session started
                 // Prevents stale SBBS re-delivery from re-pinning after reinstall
                 val pinTs = (payload["ts"] as? Number)?.toLong() ?: 0
-                val now = System.currentTimeMillis() / 1000
-                if (now - pinTs > 3600) {
-                    Log.d(TAG, "DROP stale group_pin: age=${now - pinTs}s")
+                val sessionStart = ChatService.sessionStartTs
+                if (pinTs < sessionStart) {
+                    Log.d(TAG, "DROP pre-session group_pin: pinTs=$pinTs sessionStart=$sessionStart")
                     return
                 }
                 val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
@@ -1041,18 +1059,27 @@ class MessageProcessor(
         }
 
         // Check if I'm being removed or group is deleted — clean up locally
+        // Only process destructive actions from THIS session (prevents stale SBBS re-delivery)
+        val svcMsgTs = (payload["ts"] as? Number)?.toLong() ?: 0
         val myHandle = db.chatStateDao().get()?.myHandle
-        if (action == "group_deleted") {
+        if (action == "group_deleted" && svcMsgTs >= ChatService.sessionStartTs) {
             db.groupDao().deleteByGroupId(groupId)
             db.groupDao().removeAllMembers(groupId)
             Log.d(TAG, "Group $groupId deleted by @$from — removed locally")
             return
+        } else if (action == "group_deleted") {
+            Log.d(TAG, "DROP stale group_deleted for $groupId (ts=$svcMsgTs < session=${ChatService.sessionStartTs})")
         }
         if ((action == "kicked" || action == "banned") && target == myHandle) {
-            db.groupDao().deleteByGroupId(groupId)
-            db.groupDao().removeAllMembers(groupId)
-            Log.d(TAG, "I was $action from group $groupId — removed locally")
-            return
+            if (svcMsgTs >= ChatService.sessionStartTs) {
+                db.groupDao().deleteByGroupId(groupId)
+                db.groupDao().removeAllMembers(groupId)
+                Log.d(TAG, "I was $action from group $groupId — removed locally")
+                return
+            } else {
+                // Stale kick/ban — verify with contract instead of blindly deleting
+                Log.d(TAG, "DROP stale $action for group $groupId (ts=$svcMsgTs < session=${ChatService.sessionStartTs})")
+            }
         }
 
         // Insert as a service message — dedup uses action+target (no timestamp, prevents spam from multiple clicks)

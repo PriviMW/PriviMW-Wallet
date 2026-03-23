@@ -307,7 +307,7 @@ fun ChatsScreen(
                             items.add(ChatListItem(false, c.lastMessageTs, c.pinned, conv = c))
                         }
                         for (g in filteredGroups) {
-                            items.add(ChatListItem(true, g.lastMessageTs, false, group = g))
+                            items.add(ChatListItem(true, g.lastMessageTs, g.pinned, group = g))
                         }
                         // Pinned items first, then by timestamp descending
                         items.sortedWith(compareByDescending<ChatListItem> { it.pinned }.thenByDescending { it.sortTs })
@@ -322,7 +322,11 @@ fun ChatsScreen(
                             val item = unifiedList[i]
                             Box(modifier = Modifier.animateItem()) {
                                 if (item.isGroup) {
-                                    GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) }, onLongPress = { menuTargetGroup = item.group })
+                                    val gConvKey = "g_${item.group!!.groupId.take(16)}"
+                                    val gTypingHandles = if (typingVer >= 0) ChatService.getGroupTyping(gConvKey) else emptyList()
+                                    val gConv = conversations.firstOrNull { it.convKey == gConvKey }
+                                    val gDraft = gConv?.draftText
+                                    GroupRow(group = item.group!!, onClick = { onOpenGroup(item.group.groupId) }, onLongPress = { menuTargetGroup = item.group }, typingHandles = gTypingHandles, draftText = gDraft)
                                 } else {
                                     val peerTyping = typingVer >= 0 && ChatService.isTyping(item.conv!!.convKey)
                                     ConversationRow(conv = item.conv!!, onClick = { onOpenChat(item.conv!!.convKey.removePrefix("@")) }, onLongPress = { menuTarget = item.conv }, isTyping = peerTyping)
@@ -390,8 +394,22 @@ fun ChatsScreen(
                 }
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
+                ChatListMenuItem(if (target.pinned) "Unpin" else "Pin") {
+                    val gid = target.groupId; val newVal = !target.pinned
+                    scope.launch {
+                        ChatService.db?.groupDao()?.setPinned(gid, newVal)
+                        val check = ChatService.db?.groupDao()?.findByGroupId(gid)
+                        android.util.Log.d("ChatsScreen", "setPinned($gid, $newVal) → DB now: pinned=${check?.pinned}")
+                    }
+                    menuTargetGroup = null
+                }
                 ChatListMenuItem(if (target.muted) "Unmute" else "Mute") {
-                    scope.launch { ChatService.db?.groupDao()?.setMuted(target.groupId, !target.muted) }
+                    val gid = target.groupId; val newVal = !target.muted
+                    scope.launch {
+                        ChatService.db?.groupDao()?.setMuted(gid, newVal)
+                        val check = ChatService.db?.groupDao()?.findByGroupId(gid)
+                        android.util.Log.d("ChatsScreen", "setMuted($gid, $newVal) → DB now: muted=${check?.muted}")
+                    }
                     menuTargetGroup = null
                 }
                 ChatListMenuItem(if (target.archived) "Unarchive" else "Archive") {
@@ -947,6 +965,8 @@ private fun GroupRow(
     group: com.privimemobile.chat.db.entities.GroupEntity,
     onClick: () -> Unit,
     onLongPress: () -> Unit = {},
+    typingHandles: List<String> = emptyList(),
+    draftText: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -996,6 +1016,14 @@ private fun GroupRow(
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (group.pinned) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = "Pinned",
+                        tint = C.textSecondary,
+                        modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                    )
+                }
                 if (group.muted) {
                     Icon(
                         Icons.Default.NotificationsOff,
@@ -1010,13 +1038,42 @@ private fun GroupRow(
                     color = C.textSecondary, fontSize = 12.sp,
                 )
             }
-            if (group.lastMessagePreview != null) {
+            // Preview: typing > draft > last message
+            val hasDraft = !draftText.isNullOrEmpty()
+            if (typingHandles.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val label = if (typingHandles.size == 1) "@${typingHandles[0]} typing"
+                        else "${typingHandles.size} people typing"
+                    Text(label, color = C.accent, fontSize = 14.sp)
+                    val infiniteTransition = rememberInfiniteTransition(label = "gTyping")
+                    repeat(3) { i ->
+                        val offsetY by infiniteTransition.animateFloat(
+                            initialValue = 0f, targetValue = -3f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(400, easing = FastOutSlowInEasing, delayMillis = i * 120),
+                                repeatMode = RepeatMode.Reverse,
+                            ), label = "gDot$i",
+                        )
+                        Text(".", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.offset(y = offsetY.dp))
+                    }
+                }
+            } else if (hasDraft) {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = C.error, fontWeight = FontWeight.Medium)) { append("Draft: ") }
+                        withStyle(SpanStyle(color = C.textSecondary)) { append(draftText!!) }
+                    },
+                    fontSize = 14.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else if (group.lastMessagePreview != null) {
                 Text(
                     text = group.lastMessagePreview!!,
                     color = C.textSecondary,
                     fontSize = 14.sp,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    overflow = TextOverflow.Ellipsis,
                 )
             } else {
                 Text(
@@ -1027,19 +1084,31 @@ private fun GroupRow(
             }
         }
 
-        // Unread badge
+        // Unread badge (same style as DM)
         if (group.unreadCount > 0) {
+            Spacer(Modifier.width(8.dp))
+            val infiniteTransition = rememberInfiniteTransition(label = "gBadgePulse")
+            val badgeScale by infiniteTransition.animateFloat(
+                initialValue = 1f, targetValue = 1.12f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ), label = "gBadgeScale",
+            )
             Box(
                 modifier = Modifier
-                    .size(22.dp)
-                    .background(C.accent, CircleShape),
+                    .graphicsLayer(scaleX = badgeScale, scaleY = badgeScale)
+                    .defaultMinSize(minWidth = 22.dp)
+                    .clip(CircleShape)
+                    .background(C.accent)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (group.unreadCount > 99) "99+" else group.unreadCount.toString(),
-                    color = Color.White,
+                    if (group.unreadCount > 99) "99+" else group.unreadCount.toString(),
+                    color = C.textDark,
                     fontSize = 11.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }

@@ -360,8 +360,12 @@ class GroupManager(
                 val role = (g["role"] as? Number)?.toInt() ?: 0
                 val isPublic = (g["is_public"] as? Number)?.toInt() ?: 0
 
+                val allGroups = db.groupDao().getAllGroups()
+                Log.d(TAG, "DB has ${allGroups.size} groups: ${allGroups.map { "${it.groupId.take(8)}...(pinned=${it.pinned},muted=${it.muted})" }}")
                 val existing = db.groupDao().findByGroupId(groupId)
+                Log.d(TAG, "Group ${groupId.take(8)}... findByGroupId: existing=${existing != null}, queryId='$groupId' len=${groupId.length}")
                 if (existing != null) {
+                    Log.d(TAG, "Group $groupId existing: pinned=${existing.pinned} muted=${existing.muted}")
                     // Only update if something actually changed (avoid unnecessary Room Flow emissions)
                     if (existing.name != name || existing.memberCount != memberCount ||
                         existing.myRole != role || existing.isPublic != (isPublic == 1)) {
@@ -406,18 +410,9 @@ class GroupManager(
             }
 
             // Clean up local groups that no longer exist on-chain
-            // Only run cleanup if we got a non-empty response (empty could mean shader still loading)
-            if (groups.isNotEmpty()) {
-                val onChainIds = groups.mapNotNull { (it as? Map<*, *>)?.get("group_id") as? String }.toSet()
-                val localGroups = db.groupDao().getAllGroups()
-                for (local in localGroups) {
-                    if (local.groupId !in onChainIds) {
-                        Log.d(TAG, "Removing orphaned local group: ${local.groupId}")
-                        db.groupDao().deleteByGroupId(local.groupId)
-                        db.groupDao().removeAllMembers(local.groupId)
-                    }
-                }
-            }
+            // Only run cleanup if we got at least 2 groups (protects against partial shader results)
+            // No orphan cleanup — partial shader results can cause false positives
+            // Deleted groups are handled by group_deleted SBBS + PendingTxManager
 
             Log.d(TAG, "Refreshed ${groups.size} groups")
         } catch (e: Exception) {

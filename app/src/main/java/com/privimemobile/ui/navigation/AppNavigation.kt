@@ -308,8 +308,14 @@ fun AppNavigation() {
                     onMediaGallery = { navController.navigate("media_gallery/$handle") },
                     onContactInfo = { navController.navigate("contact_info/$handle") },
                     onNavigateToChat = { toHandle ->
-                        navController.popBackStack()
-                        navController.navigate("chat/$toHandle")
+                        if (toHandle.startsWith("group:")) {
+                            val gid = toHandle.removePrefix("group:")
+                            navController.popBackStack("chats", false)
+                            navController.navigate("group_chat/$gid")
+                        } else {
+                            navController.popBackStack("chats", false)
+                            navController.navigate("chat/$toHandle")
+                        }
                     },
                     scrollToTimestamp = scrollToTs,
                 )
@@ -385,6 +391,16 @@ fun AppNavigation() {
                     onMediaGallery = { navController.navigate("media_gallery/$groupId") },
                     onGroupSettings = { navController.navigate("group_settings/$groupId") },
                     onViewContact = { h -> navController.navigate("contact_info/$h") },
+                    onNavigateToChat = { toHandle ->
+                        if (toHandle.startsWith("group:")) {
+                            val gid = toHandle.removePrefix("group:")
+                            navController.popBackStack("chats", false)
+                            navController.navigate("group_chat/$gid")
+                        } else {
+                            navController.popBackStack("chats", false)
+                            navController.navigate("chat/$toHandle")
+                        }
+                    },
                 )
             }
             composable(

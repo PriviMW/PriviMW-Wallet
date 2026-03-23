@@ -10,7 +10,7 @@ interface GroupDao {
 
     // --- Group CRUD ---
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertGroup(group: GroupEntity): Long
 
     @Update
@@ -57,6 +57,9 @@ interface GroupDao {
 
     @Query("UPDATE groups SET muted = :muted WHERE group_id = :groupId")
     suspend fun setMuted(groupId: String, muted: Boolean)
+
+    @Query("UPDATE groups SET pinned = :pinned WHERE group_id = :groupId")
+    suspend fun setPinned(groupId: String, pinned: Boolean)
 
     @Query("UPDATE groups SET archived = :archived WHERE group_id = :groupId")
     suspend fun setArchived(groupId: String, archived: Boolean)

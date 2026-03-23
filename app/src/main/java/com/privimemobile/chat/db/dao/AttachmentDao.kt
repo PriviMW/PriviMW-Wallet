@@ -15,11 +15,14 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachments WHERE message_id = :messageId LIMIT 1")
     fun observeByMessageId(messageId: Long): Flow<AttachmentEntity?>
 
-    /** Media gallery: all image attachments in a conversation. */
+    /** Media gallery: all image attachments in a conversation (excludes stickers and deleted). */
     @Query("""
-        SELECT * FROM attachments
-        WHERE conversation_id = :convId AND mime_type LIKE 'image/%'
-        ORDER BY rowid DESC
+        SELECT a.* FROM attachments a
+        LEFT JOIN messages m ON a.message_id = m.id
+        WHERE a.conversation_id = :convId AND a.mime_type LIKE 'image/%'
+        AND (m.type IS NULL OR m.type NOT IN ('sticker', 'sticker_pack'))
+        AND (m.deleted IS NULL OR m.deleted = 0)
+        ORDER BY a.rowid DESC
     """)
     fun observeImages(convId: Long): Flow<List<AttachmentEntity>>
 
@@ -50,12 +53,36 @@ interface AttachmentDao {
     suspend fun getOldestCached(): AttachmentEntity?
 
     /** Count all attachments in a conversation (for contact info). */
-    @Query("SELECT COUNT(*) FROM attachments WHERE conversation_id = :convId")
+    /** Count non-sticker, non-deleted attachments in a conversation. */
+    @Query("""
+        SELECT COUNT(*) FROM attachments a
+        LEFT JOIN messages m ON a.message_id = m.id
+        WHERE a.conversation_id = :convId
+        AND (m.type IS NULL OR m.type NOT IN ('sticker', 'sticker_pack'))
+        AND (m.deleted IS NULL OR m.deleted = 0)
+    """)
     suspend fun countByConversation(convId: Long): Int
 
-    /** Count image attachments in a conversation (for contact info). */
-    @Query("SELECT COUNT(*) FROM attachments WHERE conversation_id = :convId AND mime_type LIKE 'image/%'")
+    /** Count image attachments in a conversation (excludes stickers and deleted). */
+    @Query("""
+        SELECT COUNT(*) FROM attachments a
+        LEFT JOIN messages m ON a.message_id = m.id
+        WHERE a.conversation_id = :convId AND a.mime_type LIKE 'image/%'
+        AND (m.type IS NULL OR m.type NOT IN ('sticker', 'sticker_pack'))
+        AND (m.deleted IS NULL OR m.deleted = 0)
+    """)
     suspend fun countImagesByConversation(convId: Long): Int
+
+    /** Observe non-image file attachments (excludes stickers and deleted). */
+    @Query("""
+        SELECT a.* FROM attachments a
+        LEFT JOIN messages m ON a.message_id = m.id
+        WHERE a.conversation_id = :convId AND a.mime_type NOT LIKE 'image/%'
+        AND (m.type IS NULL OR m.type NOT IN ('sticker', 'sticker_pack'))
+        AND (m.deleted IS NULL OR m.deleted = 0)
+        ORDER BY a.rowid DESC
+    """)
+    fun observeFiles(convId: Long): kotlinx.coroutines.flow.Flow<List<AttachmentEntity>>
 
     /** Get all attachments in a conversation (for cleanup on delete). */
     @Query("SELECT * FROM attachments WHERE conversation_id = :convId")

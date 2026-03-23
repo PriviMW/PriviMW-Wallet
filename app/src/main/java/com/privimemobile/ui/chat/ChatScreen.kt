@@ -361,6 +361,18 @@ fun ChatScreen(
         }
     }
     var showCommandMenu by remember { mutableStateOf(false) }
+    // @mention autocomplete state
+    var showMentionMenu by remember { mutableStateOf(false) }
+    var mentionFilter by remember { mutableStateOf("") }
+    var mentionStartIdx by remember { mutableStateOf(-1) } // cursor position of '@'
+    val filteredMembers = remember(groupMembers, mentionFilter, myHandle) {
+        if (!isGroupMode) emptyList()
+        else groupMembers.filter { m ->
+            m.handle != myHandle && (mentionFilter.isEmpty() ||
+                m.handle.contains(mentionFilter, ignoreCase = true) ||
+                m.displayName?.contains(mentionFilter, ignoreCase = true) == true)
+        }.take(5)
+    }
     var showSchedulePicker by remember { mutableStateOf(false) }
     var showCreateStickerPack by remember { mutableStateOf(false) }
     var emojiMainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
@@ -382,7 +394,8 @@ fun ChatScreen(
     var attachPickerTab by remember { mutableStateOf(0) } // 0 = Gallery, 1 = Files
 
     // Fullscreen image viewer
-    var fullscreenImage by remember { mutableStateOf<Pair<String, String>?>(null) } // (filePath, fileName)
+    data class FullscreenImageData(val filePath: String, val fileName: String, val msgId: Long = 0, val msgTs: Long = 0, val isMine: Boolean = false)
+    var fullscreenImage by remember { mutableStateOf<FullscreenImageData?>(null) }
 
     val listState = rememberLazyListState()
 
@@ -1048,6 +1061,19 @@ fun ChatScreen(
         } else {
             com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(cid, 0, null)
         }
+        // Also update group preview if this is a group conversation
+        if (isGroupMode && groupId != null) {
+            val group = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId!!)
+            if (group != null) {
+                if (latest != null) {
+                    val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
+                    val grpPreview = "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                    com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, latest.timestamp, grpPreview)
+                } else {
+                    com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, 0, null)
+                }
+            }
+        }
     }
 
     // Download a file via IpfsTransport
@@ -1325,9 +1351,7 @@ fun ChatScreen(
                             if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
                             showOverflowMenu = false
                         }
-                        if (!isGroupMode) {
-                            OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
-                        }
+                        OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
                         if (isGroupMode) {
                             OverflowItem("\u2699\uFE0F", "Group info") { showOverflowMenu = false; onGroupSettings() }
                         } else {
@@ -1390,40 +1414,56 @@ fun ChatScreen(
         }
         } // close else (normal header vs selection header)
 
-        // In-chat search bar
-        if (showSearch) {
+        // In-chat search bar (Telegram-style: back arrow + field + X to clear)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSearch,
+            enter = androidx.compose.animation.expandVertically(tween(200)) + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(200)),
+        ) {
             Surface(color = C.card) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Back arrow — closes search
+                    IconButton(onClick = {
+                        showSearch = false; searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close search", tint = C.textSecondary)
+                    }
                     OutlinedTextField(
                         value = searchQuery,
-                        onValueChange = { query ->
+                        onValueChange = { query: String ->
                             searchQuery = query
                             searchJob?.cancel()
                             if (query.isBlank()) {
                                 searchResults = emptyList()
                                 searchHighlightTs = null
-                                return@OutlinedTextField
-                            }
-                            searchJob = scope.launch {
-                                delay(300) // debounce
-                                val results = com.privimemobile.chat.ChatService.db?.messageDao()
-                                    ?.searchInConversation(convId, "%${query.trim()}%") ?: emptyList()
-                                searchResults = results
+                            } else {
+                                searchJob = scope.launch {
+                                    delay(300) // debounce
+                                    val results = com.privimemobile.chat.ChatService.db?.messageDao()
+                                        ?.searchInConversation(convId, "%${query.trim()}%") ?: emptyList()
+                                    searchResults = results
+                                }
                             }
                         },
-                        placeholder = { Text("Search in chat...", color = C.textMuted) },
+                        placeholder = { Text("Search in chat...", color = C.textMuted, fontSize = 14.sp) },
                         singleLine = true,
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        trailingIcon = if (searchQuery.isNotEmpty()) { {
+                            IconButton(onClick = {
+                                searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null
+                            }) {
+                                Text("✕", color = C.textSecondary, fontSize = 18.sp)
+                            }
+                        } } else null,
+                        modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(24.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
                             focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
                             cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                         ),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                     )
                     if (searchResults.isNotEmpty()) {
                         Text(
@@ -1882,7 +1922,7 @@ fun ChatScreen(
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .clickable {
-                                                        if (fp != null) fullscreenImage = Pair(fp, albumMsg.file?.name ?: "Image")
+                                                        if (fp != null) fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: "Image", albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
                                                     },
                                             ) {
                                                 if (fp != null) {
@@ -1977,7 +2017,7 @@ fun ChatScreen(
                         },
                         onFullscreenImage = {
                             val fp = filePaths[msg.file?.cid ?: ""]
-                            if (fp != null) fullscreenImage = Pair(fp, msg.file?.name ?: "Image")
+                            if (fp != null) fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: "Image", msg.id.toLong(), msg.timestamp, msg.sent)
                         },
                         isSelected = selectionMode && msg.id in selectedIds,
                         onPollVote = { optIdx ->
@@ -2847,6 +2887,72 @@ fun ChatScreen(
             }
         }
 
+        // @mention autocomplete popup (group mode)
+        if (showMentionMenu && filteredMembers.isNotEmpty()) {
+            Surface(
+                color = C.card,
+                shadowElevation = 4.dp,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    filteredMembers.forEach { member ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    // Replace @filter with @handle + space
+                                    val text = inputText.text
+                                    val before = text.substring(0, mentionStartIdx)
+                                    val after = if (inputText.selection.start < text.length) text.substring(inputText.selection.start) else ""
+                                    val newText = "$before@${member.handle} $after"
+                                    inputText = androidx.compose.ui.text.input.TextFieldValue(
+                                        text = newText,
+                                        selection = androidx.compose.ui.text.TextRange(before.length + member.handle.length + 2),
+                                    )
+                                    showMentionMenu = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Small avatar
+                            val avatarFile = java.io.File(context.filesDir, "avatars/${member.handle}.webp")
+                            if (avatarFile.exists()) {
+                                val bmp = remember(member.handle) { android.graphics.BitmapFactory.decodeFile(avatarFile.absolutePath) }
+                                if (bmp != null) {
+                                    Image(
+                                        bitmap = bmp.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(32.dp).clip(CircleShape),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                } else {
+                                    Box(Modifier.size(32.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
+                                        Text(member.handle.first().uppercase(), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Box(Modifier.size(32.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
+                                    Text(member.handle.first().uppercase(), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    member.displayName ?: member.handle,
+                                    color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                                )
+                                if (!member.displayName.isNullOrEmpty()) {
+                                    Text("@${member.handle}", color = C.textMuted, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Command menu popup (Telegram-style)
         if (showCommandMenu) {
             Surface(
@@ -2937,15 +3043,32 @@ fun ChatScreen(
                     onValueChange = { newValue ->
                         inputText = newValue
                         val text = newValue.text
+                        val cursor = newValue.selection.start
                         if (text == "/") showCommandMenu = true
                         else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
+                        // @mention autocomplete detection (group mode only)
+                        if (isGroupMode && cursor > 0) {
+                            // Find the '@' before the cursor
+                            var atIdx = -1
+                            for (k in cursor - 1 downTo 0) {
+                                val c = text[k]
+                                if (c == '@') { atIdx = k; break }
+                                if (c == ' ' || c == '\n') break
+                            }
+                            if (atIdx >= 0 && (atIdx == 0 || text[atIdx - 1] == ' ' || text[atIdx - 1] == '\n' ||
+                                        text.substring(0, atIdx).trimEnd().endsWith("/tip"))) {
+                                mentionStartIdx = atIdx
+                                mentionFilter = text.substring(atIdx + 1, cursor)
+                                showMentionMenu = true
+                            } else {
+                                showMentionMenu = false
+                            }
+                        } else {
+                            showMentionMenu = false
+                        }
                         if (text.isNotEmpty()) {
                             if (isGroupMode) com.privimemobile.chat.ChatService.groups.sendGroupTyping(groupId!!)
                             else com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
-                        }
-                        // Close emoji picker when user starts typing via keyboard
-                        if (showEmojiPicker && text.length > inputText.text.length) {
-                            // Only if keyboard added chars (not emoji picker)
                         }
                     },
                     placeholder = {
@@ -3965,47 +4088,33 @@ fun ChatScreen(
                             Text("No contacts or groups", color = C.textSecondary, fontSize = 14.sp)
                         } else {
                             LazyColumn {
-                                // Groups section
-                                if (forwardGroups.isNotEmpty()) {
+                                // Groups section (hidden for multi-forward — SBBS reliability)
+                                if (forwardGroups.isNotEmpty() && allFwdMsgs.size <= 1) {
                                     item { Text("Groups", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp)) }
                                     items(forwardGroups, key = { "g_${it.groupId}" }) { grp ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
+                                                    val targetGid = grp.groupId
+                                                    val targetName = grp.name
+                                                    val msgs = allFwdMsgs.toList()
                                                     com.privimemobile.chat.ChatService.scope.launch {
                                                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                                         if (state?.myHandle != null) {
-                                                            for ((i, m) in allFwdMsgs.withIndex()) {
-                                                                val ts = System.currentTimeMillis() / 1000 + i
-                                                                val fwdFrom = if (m.sent) state.myHandle!! else m.from
-                                                                val isFile = m.file != null
-                                                                val msgType = if (isFile) "file" else "dm"
-                                                                val payload = mutableMapOf<String, Any?>(
-                                                                    "v" to 1, "t" to msgType, "ts" to ts,
-                                                                    "from" to state.myHandle!!,
-                                                                    "dn" to (state.myDisplayName ?: ""),
-                                                                    "fwd_from" to fwdFrom, "fwd_ts" to m.timestamp,
-                                                                )
-                                                                if (m.text.isNotEmpty()) payload["msg"] = m.text
-                                                                if (isFile) {
-                                                                    val f = m.file!!
-                                                                    val fileMap = mutableMapOf<String, Any?>(
-                                                                        "name" to f.name, "size" to f.size,
-                                                                        "mime" to f.mime, "key" to f.key, "iv" to f.iv,
-                                                                    )
-                                                                    if (f.cid.isNotEmpty() && !f.cid.startsWith("inline-")) fileMap["cid"] = f.cid
-                                                                    if (f.data != null) fileMap["data"] = f.data
-                                                                    payload["file"] = fileMap
-                                                                }
-                                                                com.privimemobile.chat.ChatService.groups.sendGroupMessage(grp.groupId, m.text, fwdFrom = fwdFrom, fwdTs = m.timestamp)
-                                                                if (i < allFwdMsgs.size - 1) delay(1000)
+                                                            val m = msgs.first()
+                                                            val fwdFrom = if (m.sent) state.myHandle!! else m.from
+                                                            Log.d("ChatScreen", "Forward to group $targetGid: text=${m.text.take(20)}")
+                                                            com.privimemobile.chat.ChatService.groups.sendGroupMessage(targetGid, m.text, fwdFrom = fwdFrom, fwdTs = m.timestamp)
+                                                            withContext(Dispatchers.Main) {
+                                                                Toast.makeText(context, "Forwarded to $targetName", Toast.LENGTH_SHORT).show()
                                                             }
-                                                            val count = allFwdMsgs.size
-                                                            Toast.makeText(context, "Forwarded $count message${if (count > 1) "s" else ""} to ${grp.name}", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            Log.w("ChatScreen", "Forward failed: myHandle is null")
                                                         }
                                                     }
                                                     forwardingMsg = null; forwardingMsgs = emptyList()
+                                                    onNavigateToChat("group:$targetGid")
                                                 }
                                                 .padding(vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -4181,19 +4290,52 @@ fun ChatScreen(
 
     // Fullscreen image viewer
     if (fullscreenImage != null) {
+        val fImg = fullscreenImage!!
         FullscreenImageViewer(
-            filePath = fullscreenImage!!.first,
-            fileName = fullscreenImage!!.second,
+            filePath = fImg.filePath,
+            fileName = fImg.fileName,
+            isMine = fImg.isMine,
             onDismiss = { fullscreenImage = null },
             onSave = {
                 val mime = when {
-                    fullscreenImage!!.second.endsWith(".png", true) -> "image/png"
-                    fullscreenImage!!.second.endsWith(".gif", true) -> "image/gif"
-                    fullscreenImage!!.second.endsWith(".webp", true) -> "image/webp"
+                    fImg.fileName.endsWith(".png", true) -> "image/png"
+                    fImg.fileName.endsWith(".gif", true) -> "image/gif"
+                    fImg.fileName.endsWith(".webp", true) -> "image/webp"
                     else -> "image/jpeg"
                 }
-                saveFileToDownloads(context, fullscreenImage!!.first, fullscreenImage!!.second, mime)
+                saveFileToDownloads(context, fImg.filePath, fImg.fileName, mime)
             },
+            onDeleteForMe = {
+                scope.launch {
+                    com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
+                    refreshConversationPreview(convId)
+                }
+                fullscreenImage = null
+            },
+            onDeleteForEveryone = if (fImg.isMine) { {
+                scope.launch {
+                    val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                    if (state?.myHandle != null) {
+                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
+                        val delPayload = mapOf(
+                            "v" to 1, "t" to "delete",
+                            "ts" to System.currentTimeMillis() / 1000,
+                            "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
+                            "msg_ts" to fImg.msgTs,
+                        )
+                        if (isGroupMode && groupId != null) {
+                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
+                        } else {
+                            val walletId = resolvedWalletId
+                            if (!walletId.isNullOrEmpty()) {
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
+                            }
+                        }
+                        refreshConversationPreview(convId)
+                    }
+                }
+                fullscreenImage = null
+            } } else null,
         )
     }
     } // end Box
@@ -4765,9 +4907,15 @@ private fun MessageBubble(
                     lines.drop(1).joinToString("\n").trim() // skip "→@handle" line, show caption only
                 } else msg.text
                 if (displayText.isNotEmpty()) {
-                    Text(
-                        text = parseMarkdown(displayText),
-                        color = C.text, fontSize = 15.sp, lineHeight = 20.sp,
+                    val annotated = parseMarkdown(displayText)
+                    androidx.compose.foundation.text.ClickableText(
+                        text = annotated,
+                        style = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 15.sp, lineHeight = 20.sp),
+                        onClick = { offset ->
+                            annotated.getStringAnnotations("mention", offset, offset).firstOrNull()?.let { ann ->
+                                onSenderTap(ann.item)
+                            }
+                        },
                     )
                 }
                 }
@@ -5069,9 +5217,20 @@ private fun saveFileToDownloads(context: Context, srcPath: String, fileName: Str
 private fun FullscreenImageViewer(
     filePath: String,
     fileName: String,
+    isMine: Boolean = false,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    onDeleteForMe: (() -> Unit)? = null,
+    onDeleteForEveryone: (() -> Unit)? = null,
 ) {
+    // Full-screen dialog that covers everything including the chat header
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
     var showBars by remember { mutableStateOf(true) }
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -5146,12 +5305,37 @@ private fun FullscreenImageViewer(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            if (onDeleteForMe != null) {
+                var showDeleteMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showDeleteMenu = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = C.error)
+                    }
+                    DropdownMenu(
+                        expanded = showDeleteMenu,
+                        onDismissRequest = { showDeleteMenu = false },
+                        containerColor = C.card,
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete for me", color = C.error) },
+                            onClick = { showDeleteMenu = false; onDeleteForMe() },
+                        )
+                        if (onDeleteForEveryone != null) {
+                            DropdownMenuItem(
+                                text = { Text("Delete for everyone", color = C.error) },
+                                onClick = { showDeleteMenu = false; onDeleteForEveryone() },
+                            )
+                        }
+                    }
+                }
+            }
             IconButton(onClick = onSave) {
                 Icon(Icons.Default.Download, contentDescription = "Save", tint = Color.White)
             }
         }
         } // end AnimatedVisibility
     }
+    } // end Dialog
 }
 
 // ── Attachment picker bottom sheet (Telegram-style Gallery/Files tabs) ──
@@ -5593,14 +5777,17 @@ private fun parseMarkdown(text: String): androidx.compose.ui.text.AnnotatedStrin
                         i = end + 1
                     } else { append(text[i]); i++ }
                 }
-                // @mention highlighting
+                // @mention highlighting (tappable)
                 text[i] == '@' && (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') -> {
                     var j = i + 1
                     while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '_')) j++
                     if (j > i + 1) {
+                        val handle = text.substring(i + 1, j)
+                        pushStringAnnotation(tag = "mention", annotation = handle)
                         withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.SemiBold)) {
                             append(text.substring(i, j))
                         }
+                        pop()
                         i = j
                     } else { append(text[i]); i++ }
                 }

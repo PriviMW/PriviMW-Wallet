@@ -28,6 +28,7 @@ data class GroupEntity(
     @ColumnInfo(name = "last_message_preview") val lastMessagePreview: String? = null,
     @ColumnInfo(name = "unread_count") val unreadCount: Int = 0,
     @ColumnInfo(name = "muted") val muted: Boolean = false,
+    @ColumnInfo(name = "pinned") val pinned: Boolean = false,
     @ColumnInfo(name = "archived") val archived: Boolean = false,
     @ColumnInfo(name = "join_password") val joinPassword: String? = null, // Raw password for private groups (creator only)
 )

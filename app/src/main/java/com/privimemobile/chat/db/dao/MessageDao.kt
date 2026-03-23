@@ -107,6 +107,10 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND deleted = 0 ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLatestMessage(convId: Long): MessageEntity?
 
+    /** Find a message by its Room ID. */
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): MessageEntity?
+
     /** Pin a message (sets pinned_at to current time for ordering). */
     @Query("UPDATE messages SET pinned = 1, pinned_at = :pinnedAt WHERE id = :messageId")
     suspend fun pinMessage(messageId: Long, pinnedAt: Long = System.currentTimeMillis() / 1000)

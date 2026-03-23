@@ -78,7 +78,29 @@ fun AvatarPicker(
                 val bmp = BitmapFactory.decodeStream(input)
                 input?.close()
                 if (bmp != null) {
-                    rawBitmap = bmp
+                    // Apply EXIF rotation
+                    val rotated = try {
+                        val exifInput = context.contentResolver.openInputStream(uri)
+                        val exif = android.media.ExifInterface(exifInput!!)
+                        exifInput.close()
+                        val orientation = exif.getAttributeInt(
+                            android.media.ExifInterface.TAG_ORIENTATION,
+                            android.media.ExifInterface.ORIENTATION_NORMAL
+                        )
+                        val matrix = android.graphics.Matrix()
+                        when (orientation) {
+                            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                            android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+                            android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+                            else -> null
+                        }
+                        if (matrix != null) {
+                            Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+                        } else bmp
+                    } catch (_: Exception) { bmp }
+                    rawBitmap = rotated
                     showCropScreen = true
                 }
             } catch (_: Exception) {}
@@ -196,16 +218,11 @@ private fun AvatarCropDialog(
     var offsetY by remember { mutableFloatStateOf(0f) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // Calculate initial scale to fill the circle
-    LaunchedEffect(bitmap, containerSize) {
-        if (containerSize.width > 0 && containerSize.height > 0) {
-            val circleD = minOf(containerSize.width, containerSize.height) * 0.9f
-            val bmpW = bitmap.width.toFloat()
-            val bmpH = bitmap.height.toFloat()
-            // Scale so the smaller dimension fills the circle
-            val fitScale = circleD / minOf(bmpW, bmpH)
-            scale = fitScale.coerceAtLeast(0.5f)
-        }
+    // Reset on new image
+    LaunchedEffect(bitmap) {
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
     }
 
     Dialog(
@@ -248,7 +265,7 @@ private fun AvatarCropDialog(
                             .clipToBounds()
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(0.3f, 8f)
+                                    scale = (scale * zoom).coerceIn(1f, 8f)
                                     offsetX += pan.x
                                     offsetY += pan.y
                                 }
@@ -259,13 +276,14 @@ private fun AvatarCropDialog(
                             bitmap = bitmap.asImageBitmap(),
                             contentDescription = "Crop",
                             modifier = Modifier
+                                .fillMaxSize()
                                 .graphicsLayer(
                                     scaleX = scale,
                                     scaleY = scale,
                                     translationX = offsetX,
                                     translationY = offsetY,
                                 ),
-                            contentScale = ContentScale.None,
+                            contentScale = ContentScale.Fit,
                         )
                     }
 
@@ -306,20 +324,22 @@ private fun AvatarCropDialog(
                             val cx = containerSize.width / 2f
                             val cy = containerSize.height / 2f
 
-                            // The image is rendered at its native pixel size * scale, centered, with offset
-                            // Image center on screen = (containerW/2 + offsetX, containerH/2 + offsetY)
-                            // Bitmap pixel at screen (sx, sy) = (sx - imgScreenCenterX) / scale + bmpW/2
-
                             val bmpW = bitmap.width.toFloat()
                             val bmpH = bitmap.height.toFloat()
+                            // ContentScale.Fit: scale to fit (use min)
+                            val fitScaleX = containerSize.width / bmpW
+                            val fitScaleY = containerSize.height / bmpH
+                            val fitScale = minOf(fitScaleX, fitScaleY)
+                            // Total scale = fitScale * user zoom
+                            val totalScale = fitScale * scale
                             val imgCenterX = cx + offsetX
                             val imgCenterY = cy + offsetY
 
                             // Circle bounds in bitmap coordinates
-                            val bmpLeft = ((cx - circleR - imgCenterX) / scale + bmpW / 2).toInt().coerceIn(0, bitmap.width)
-                            val bmpTop = ((cy - circleR - imgCenterY) / scale + bmpH / 2).toInt().coerceIn(0, bitmap.height)
-                            val bmpRight = ((cx + circleR - imgCenterX) / scale + bmpW / 2).toInt().coerceIn(0, bitmap.width)
-                            val bmpBottom = ((cy + circleR - imgCenterY) / scale + bmpH / 2).toInt().coerceIn(0, bitmap.height)
+                            val bmpLeft = ((cx - circleR - imgCenterX) / totalScale + bmpW / 2).toInt().coerceIn(0, bitmap.width)
+                            val bmpTop = ((cy - circleR - imgCenterY) / totalScale + bmpH / 2).toInt().coerceIn(0, bitmap.height)
+                            val bmpRight = ((cx + circleR - imgCenterX) / totalScale + bmpW / 2).toInt().coerceIn(0, bitmap.width)
+                            val bmpBottom = ((cy + circleR - imgCenterY) / totalScale + bmpH / 2).toInt().coerceIn(0, bitmap.height)
 
                             val cropW = (bmpRight - bmpLeft).coerceAtLeast(1)
                             val cropH = (bmpBottom - bmpTop).coerceAtLeast(1)

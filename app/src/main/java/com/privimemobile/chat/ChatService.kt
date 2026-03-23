@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.*
 object ChatService {
     private const val TAG = "ChatService"
 
+    // Timestamp (epoch seconds) when this app session started — used to filter stale SBBS
+    val sessionStartTs: Long = System.currentTimeMillis() / 1000
+
     // Scope — never tied to Activity. Cancelled only on wallet deletion.
     private val serviceJob = SupervisorJob()
     val scope = CoroutineScope(Dispatchers.Main + serviceJob)
@@ -132,7 +135,13 @@ object ChatService {
         val passphrase = getOrCreateDbPassphrase(context)
 
         // Open encrypted database
+        Log.d(TAG, "DB passphrase hash: ${passphrase.contentHashCode()}")
         db = ChatDatabase.getInstance(context, passphrase)
+        // Check group count immediately after DB open
+        scope.launch {
+            val groups = db?.groupDao()?.getAllGroups()
+            Log.d(TAG, "DB opened — groups in DB: ${groups?.size}, ids: ${groups?.map { it.groupId.take(8) + "(p=${it.pinned},m=${it.muted})" }}")
+        }
 
         // Initialize components
         IpfsTransport.init(context)
@@ -217,32 +226,62 @@ object ChatService {
     private suspend fun sendScheduledMessages() {
         val now = System.currentTimeMillis() / 1000
         val ready = db?.messageDao()?.getReadyScheduledMessages(now) ?: return
+        if (ready.isNotEmpty()) Log.d(TAG, "sendScheduledMessages: ${ready.size} ready (now=$now)")
         if (ready.isEmpty()) return
         val state = db?.chatStateDao()?.get() ?: return
         val myHandle = state.myHandle ?: return
 
         for (msg in ready) {
             try {
-                val conv = db?.conversationDao()?.findById(msg.conversationId) ?: continue
-                val contactHandle = conv.convKey.removePrefix("@")
-                val contact = db?.contactDao()?.findByHandle(contactHandle)
-                val walletId = contact?.walletId ?: continue
-
+                val conv = db?.conversationDao()?.findById(msg.conversationId)
+                if (conv == null) {
+                    Log.w(TAG, "Scheduled msg ${msg.id}: conv not found for conversationId=${msg.conversationId}")
+                    continue
+                }
                 val ts = System.currentTimeMillis() / 1000
-                val payload = mutableMapOf<String, Any?>(
-                    "v" to 1, "t" to "dm", "ts" to ts,
-                    "from" to myHandle, "to" to contactHandle,
-                    "dn" to (state.myDisplayName ?: ""),
-                    "msg" to (msg.text ?: ""),
-                )
-                sbbs.sendWithRetry(walletId, payload)
+                Log.d(TAG, "Scheduled msg ${msg.id}: convKey=${conv.convKey} text=${msg.text?.take(20)}")
+
+                if (conv.convKey.startsWith("g_")) {
+                    // Group scheduled message — broadcast only (message already in DB)
+                    val groupPrefix = conv.convKey.removePrefix("g_")
+                    val group = db?.groupDao()?.findByConvKey(groupPrefix)
+                    if (group == null) {
+                        Log.w(TAG, "Scheduled msg ${msg.id}: group not found for convKey=${conv.convKey}")
+                        continue
+                    }
+                    val memberWalletIds = db?.groupDao()?.getMemberWalletIds(group.groupId, myHandle)
+                        ?.filterNotNull()?.filter { it.isNotEmpty() } ?: continue
+                    val payload = mutableMapOf<String, Any?>(
+                        "v" to 1, "t" to "group_msg", "ts" to ts,
+                        "from" to myHandle, "group_id" to group.groupId,
+                        "msg" to (msg.text ?: ""),
+                    )
+                    if (!state.myDisplayName.isNullOrEmpty()) payload["dn"] = state.myDisplayName
+                    for (walletId in memberWalletIds) {
+                        try { sbbs.sendOnce(walletId, payload) } catch (_: Exception) {}
+                        kotlinx.coroutines.delay(200)
+                    }
+                    db?.groupDao()?.updateLastMessage(group.groupId, ts, "You: ${msg.text?.take(40) ?: "message"}")
+                } else {
+                    // DM scheduled message
+                    val contactHandle = conv.convKey.removePrefix("@")
+                    val contact = db?.contactDao()?.findByHandle(contactHandle)
+                    val walletId = contact?.walletId ?: continue
+                    val payload = mutableMapOf<String, Any?>(
+                        "v" to 1, "t" to "dm", "ts" to ts,
+                        "from" to myHandle, "to" to contactHandle,
+                        "dn" to (state.myDisplayName ?: ""),
+                        "msg" to (msg.text ?: ""),
+                    )
+                    sbbs.sendWithRetry(walletId, payload)
+                }
                 // Update message: clear scheduled_at + move timestamp to actual send time
                 db?.messageDao()?.clearScheduled(msg.id)
                 db?.messageDao()?.updateTimestamp(msg.id, ts)
                 // Update conversation preview
                 val preview = msg.text?.take(100)
                 db?.conversationDao()?.updateLastMessage(msg.conversationId, ts, preview)
-                Log.d(TAG, "Sent scheduled message id=${msg.id} to @$contactHandle at ts=$ts")
+                Log.d(TAG, "Sent scheduled message id=${msg.id} convKey=${conv.convKey} at ts=$ts")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to send scheduled msg id=${msg.id}: ${e.message}")
             }

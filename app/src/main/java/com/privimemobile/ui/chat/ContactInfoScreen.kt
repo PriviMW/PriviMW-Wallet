@@ -117,7 +117,7 @@ fun ContactInfoScreen(
             .fillMaxSize()
             .background(C.bg)
     ) {
-        // Top bar
+        // Top bar — flush with status bar
         TopAppBar(
             title = { Text("Contact Info", color = C.text) },
             navigationIcon = {
@@ -125,7 +125,8 @@ fun ContactInfoScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text)
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = C.bg),
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
+            windowInsets = WindowInsets(0),
         )
 
         Column(

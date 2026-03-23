@@ -27,6 +27,8 @@ data class MessageEntity(
     val delivered: Boolean = false,    // recipient confirmed delivery (for sent messages)
     val acked: Boolean = false,        // we sent ack for this (for received messages)
     @ColumnInfo(name = "reply_text") val replyText: String? = null,
+    @ColumnInfo(name = "reply_sender") val replySender: String? = null, // handle of quoted msg sender
+    @ColumnInfo(name = "reply_ts") val replyTs: Long = 0, // timestamp of quoted msg (for scroll-to)
     @ColumnInfo(name = "tip_amount") val tipAmount: Long = 0,  // groths
     @ColumnInfo(name = "tip_asset_id", defaultValue = "0") val tipAssetId: Int = 0,
     @ColumnInfo(name = "fwd_from") val fwdFrom: String? = null,

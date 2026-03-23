@@ -177,7 +177,7 @@ object ChatService {
             }
         }
 
-        // Periodic cleanup of expired messages + send scheduled messages (immediate + every 15s)
+        // Periodic cleanup of expired messages + send scheduled messages + check pending TXs (every 15s)
         scope.launch {
             try { cleanupExpiredMessages() } catch (_: Exception) {}
             try { sendScheduledMessages() } catch (_: Exception) {}
@@ -189,6 +189,17 @@ object ChatService {
                 try { sendScheduledMessages() } catch (e: Exception) {
                     Log.w(TAG, "Scheduled send error: ${e.message}")
                 }
+                try { pendingTxs.checkPendingTxs() } catch (_: Exception) {}
+            }
+        }
+
+        // Periodic avatar + group info re-request (every 30 min until all resolved)
+        scope.launch {
+            delay(10_000) // wait for initial setup
+            while (true) {
+                try { requestMissingAvatars() } catch (_: Exception) {}
+                try { requestMissingGroupInfo() } catch (_: Exception) {}
+                delay(30 * 60 * 1000L) // 30 minutes
             }
         }
 
@@ -286,6 +297,58 @@ object ChatService {
                 Log.w(TAG, "Failed to send scheduled msg id=${msg.id}: ${e.message}")
             }
         }
+    }
+
+    /** Re-request missing contact avatars. Runs periodically until all resolved. */
+    private suspend fun requestMissingAvatars() {
+        val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+        val allContacts = db?.contactDao()?.getAll() ?: return
+        var requested = 0
+        for (c in allContacts) {
+            if (c.walletId.isNullOrEmpty() || c.isDeleted) continue
+            val avatarFile = java.io.File(filesDir, "avatars/${c.handle}.webp")
+            if (!avatarFile.exists()) {
+                try {
+                    contacts.requestAvatar(c.handle, c.walletId!!)
+                    requested++
+                    kotlinx.coroutines.delay(500)
+                } catch (_: Exception) {}
+            }
+        }
+        if (requested > 0) Log.d(TAG, "Requested $requested missing contact avatars")
+    }
+
+    /** Re-request missing group avatars + descriptions. */
+    private suspend fun requestMissingGroupInfo() {
+        val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+        val state = db?.chatStateDao()?.get() ?: return
+        val myHandle = state.myHandle ?: return
+        val groups = db?.groupDao()?.getAllGroups() ?: return
+        var requested = 0
+        for (group in groups) {
+            val avatarFile = java.io.File(filesDir, "group_avatars/${group.groupId}.webp")
+            val needsAvatar = group.avatarHash != null && !avatarFile.exists()
+            val needsDesc = group.description.isNullOrEmpty()
+            if (needsAvatar || needsDesc) {
+                // Send request to first member with a wallet_id
+                val memberWids = db?.groupDao()?.getMemberWalletIds(group.groupId, myHandle)
+                    ?.filterNotNull()?.filter { it.isNotEmpty() } ?: continue
+                val targetWid = memberWids.firstOrNull() ?: continue
+                val reqPayload = mapOf(
+                    "v" to 1, "t" to "group_info_request",
+                    "from" to myHandle,
+                    "group_id" to group.groupId,
+                    "requester_wallet_id" to (state.myWalletId ?: ""),
+                    "ts" to (System.currentTimeMillis() / 1000),
+                )
+                try {
+                    sbbs.sendOnce(targetWid, reqPayload)
+                    requested++
+                    kotlinx.coroutines.delay(500)
+                } catch (_: Exception) {}
+            }
+        }
+        if (requested > 0) Log.d(TAG, "Requested info for $requested groups with missing avatar/description")
     }
 
     /** Set the currently active chat (suppress unread/notifications). */

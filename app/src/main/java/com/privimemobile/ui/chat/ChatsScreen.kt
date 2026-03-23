@@ -167,9 +167,11 @@ fun ChatsScreen(
     val groups by ChatService.db?.groupDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
-    // Refresh groups on mount
-    LaunchedEffect(Unit) {
-        ChatService.groups.refreshMyGroups()
+    // Refresh groups on mount and when identity becomes available
+    LaunchedEffect(isRegistered) {
+        if (isRegistered) {
+            ChatService.groups.refreshMyGroups()
+        }
     }
 
     var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
@@ -364,8 +366,10 @@ fun ChatsScreen(
                                     }
                                 } catch (_: Exception) {}
                             }
-                            // Refresh groups
+                            // Refresh groups + cleanup deleted
                             ChatService.groups.refreshMyGroups()
+                            ChatService.groups.cleanupDeletedGroups()
+                            ChatService.identity.refreshIdentity(forceRefresh = true)
                             delay(500)
                             refreshing = false
                         }

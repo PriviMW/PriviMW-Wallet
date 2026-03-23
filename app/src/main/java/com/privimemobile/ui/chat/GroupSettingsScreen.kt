@@ -659,7 +659,7 @@ private fun MemberRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarDisplay(handle = member.handle, size = 44.dp, isMe = isMe)
+        AvatarDisplay(handle = member.handle, displayName = member.displayName, size = 44.dp, isMe = isMe)
 
         Spacer(Modifier.width(12.dp))
 

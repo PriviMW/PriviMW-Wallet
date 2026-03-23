@@ -42,6 +42,8 @@ data class ChatMessage(
     val tipAmount: Long = 0,         // tip amount in groth
     val tipAssetId: Int = 0,         // tip asset ID (0 = BEAM)
     val reply: String? = null,       // quoted message text (for replies)
+    val replySender: String? = null, // handle of quoted message sender
+    val replyTs: Long = 0,          // timestamp of quoted message (for scroll-to)
     val fwdFrom: String? = null,     // forwarded from handle
     val file: FileAttachment? = null, // file attachment
     val type: String = "dm",         // "dm", "file", "tip", "system"

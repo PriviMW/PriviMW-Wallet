@@ -48,6 +48,7 @@ object ChatNotificationManager {
         val senderName: String,
         val text: String,
         val timestamp: Long,
+        val senderHandle: String? = null,
     )
 
     fun init(context: Context) {
@@ -68,6 +69,7 @@ object ChatNotificationManager {
         type: String,
         isMuted: Boolean,
         totalUnread: Int,
+        senderHandle: String? = null,
     ) {
         if (!initialized) return
 
@@ -99,7 +101,7 @@ object ChatNotificationManager {
 
         // Add to message history buffer (keep last 3)
         val history = messageHistory.getOrPut(convKey) { mutableListOf() }
-        history.add(NotifMessage(senderName, contentText, System.currentTimeMillis()))
+        history.add(NotifMessage(senderName, contentText, System.currentTimeMillis(), senderHandle))
         if (history.size > MAX_MESSAGES_PER_CONV) {
             history.removeAt(0)
         }
@@ -153,8 +155,8 @@ object ChatNotificationManager {
             messagingStyle.isGroupConversation = true
             for (msg in history) {
                 val msgSender = msg.senderName.substringAfter(": ", msg.senderName)
-                // Try to load sender's avatar
-                val handle = msgSender.removePrefix("@").replace(Regex("[^a-zA-Z0-9_]"), "")
+                // Use actual handle for avatar lookup (not display name)
+                val handle = msg.senderHandle ?: msgSender.removePrefix("@").replace(Regex("[^a-zA-Z0-9_]"), "")
                 val senderIcon: androidx.core.graphics.drawable.IconCompat? = try {
                     val f = java.io.File(appContext.filesDir, "avatars/$handle.webp")
                     if (f.exists()) {

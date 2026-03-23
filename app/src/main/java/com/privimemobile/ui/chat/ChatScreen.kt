@@ -5,6 +5,8 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -235,6 +237,8 @@ fun ChatScreen(
             tipAmount = entity.tipAmount,
             tipAssetId = entity.tipAssetId,
             reply = entity.replyText,
+            replySender = entity.replySender,
+            replyTs = entity.replyTs,
             fwdFrom = entity.fwdFrom,
             edited = entity.edited,
             expiresAt = entity.expiresAt,
@@ -269,6 +273,7 @@ fun ChatScreen(
         displayName.ifEmpty { contact?.displayName?.ifEmpty { null } ?: "@$handle" }
     }
     val resolvedWalletId = contact?.walletId
+    val isDeletedAccount = contact?.isDeleted == true
 
     // Input state — use TextFieldValue for cursor control
     var inputText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
@@ -411,6 +416,7 @@ fun ChatScreen(
     var searchResults by remember { mutableStateOf<List<com.privimemobile.chat.db.entities.MessageEntity>>(emptyList()) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var searchHighlightTs by remember { mutableStateOf<Long?>(null) }
+    var replyHighlightTs by remember { mutableStateOf<Long?>(null) }
 
     // Attachment picker
     var showAttachPicker by remember { mutableStateOf(false) }
@@ -1000,10 +1006,14 @@ fun ChatScreen(
         // Group mode — send via GroupManager
         if (isGroupMode && groupId != null) {
             val grpReplyText = replyingTo?.text?.take(200)?.ifEmpty { null }
+            val grpReplySender = replyingTo?.from
+            val grpReplyTs = replyingTo?.timestamp ?: 0L
             val grpTimer = oneShotTimer
             scope.launch {
                 com.privimemobile.chat.ChatService.groups.sendGroupMessage(
-                    groupId, trimmed, replyText = grpReplyText, ttl = grpTimer,
+                    groupId, trimmed, replyText = grpReplyText,
+                    replySender = grpReplySender, replyMsgTs = grpReplyTs,
+                    ttl = grpTimer,
                 )
             }
             setInputText("")
@@ -1021,6 +1031,8 @@ fun ChatScreen(
 
         // Capture state BEFORE coroutine (state may be cleared by main thread before coroutine runs)
         val replyText = replyingTo?.text?.take(200)?.ifEmpty { null }
+        val replySenderHandle = replyingTo?.from
+        val replyMsgTs = replyingTo?.timestamp ?: 0L
         val capturedTimer = oneShotTimer
 
         // Send via new chat system
@@ -1037,7 +1049,11 @@ fun ChatScreen(
                     "dn" to (state.myDisplayName ?: ""),
                     "msg" to trimmed,
                 )
-                if (replyText != null) payload["reply"] = replyText
+                if (replyText != null) {
+                    payload["reply"] = replyText
+                    if (replySenderHandle != null) payload["reply_from"] = replySenderHandle
+                    if (replyMsgTs > 0) payload["reply_ts"] = replyMsgTs
+                }
                 // Disappearing message TTL — per-message one-shot takes priority over conversation-level
                 if (capturedTimer > 0) payload["ttl"] = capturedTimer
                 val expiresAt = if (capturedTimer > 0) ts + capturedTimer else 0L
@@ -1056,6 +1072,8 @@ fun ChatScreen(
                     senderHandle = state.myHandle,
                     sbbsDedupKey = dedupKey,
                     replyText = replyText,
+                    replySender = replySenderHandle,
+                    replyTs = replyMsgTs,
                     expiresAt = expiresAt,
                 )
                 com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
@@ -1869,9 +1887,24 @@ fun ChatScreen(
                 )
 
                 val index = reversedMessages.indexOf(msg)
-                val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null
+                val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null // older
+                val nextMsg = if (index > 0) reversedMessages[index - 1] else null // newer
                 val showDateSep = prevMsg == null ||
                         formatDateSeparator(msg.timestamp) != formatDateSeparator(prevMsg.timestamp)
+
+                // Bubble grouping: consecutive messages from same sender within 60s
+                val sameAsPrev = prevMsg != null && prevMsg.sent == msg.sent &&
+                        prevMsg.from == msg.from && !showDateSep &&
+                        kotlin.math.abs(msg.timestamp - prevMsg.timestamp) < 60
+                val sameAsNext = nextMsg != null && nextMsg.sent == msg.sent &&
+                        nextMsg.from == msg.from &&
+                        formatDateSeparator(msg.timestamp) == formatDateSeparator(nextMsg.timestamp) &&
+                        kotlin.math.abs(msg.timestamp - nextMsg.timestamp) < 60
+                // Position in cluster: first (top), middle, last (bottom), alone
+                val isFirstInCluster = !sameAsPrev
+                val isLastInCluster = !sameAsNext
+                // Hide timestamp for non-last messages in a cluster
+                val showTimestamp = isLastInCluster
 
                 Column(
                     modifier = Modifier
@@ -2041,7 +2074,10 @@ fun ChatScreen(
                     MessageBubble(
                         msg = msg,
                         filePath = filePaths[msg.file?.cid ?: ""],
-                        downloadStatus = downloadStatuses[msg.file?.cid ?: ""] ?: "idle",
+                        downloadStatus = downloadStatuses[msg.file?.cid ?: ""],
+                        isFirstInCluster = isFirstInCluster,
+                        isLastInCluster = isLastInCluster,
+                        showTimestamp = showTimestamp,
                         onDownload = { cid, key, iv, mime, data ->
                             handleDownload(cid, key, iv, mime, data)
                         },
@@ -2177,12 +2213,23 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp,
+                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
                         isGroupMode = isGroupMode,
                         onSenderTap = { senderHandle ->
                             if (senderHandle.isNotEmpty()) onViewContact(senderHandle)
                         },
                         groupMemberNames = groupMemberNames,
+                        onScrollToReply = { replyTs ->
+                            val targetIdx = reversedMessages.indexOfFirst { it.timestamp == replyTs }
+                            if (targetIdx >= 0) {
+                                scope.launch {
+                                    listState.animateScrollToItem(targetIdx)
+                                    replyHighlightTs = replyTs
+                                    kotlinx.coroutines.delay(2000)
+                                    replyHighlightTs = null
+                                }
+                            }
+                        },
                     )
                     } // close Row (selection mode wrapper)
                 }
@@ -2220,27 +2267,53 @@ fun ChatScreen(
             }
         }
 
-        // Scroll-to-bottom FAB
+        // Scroll-to-bottom FAB with unread count
         val showScrollButton by remember {
             derivedStateOf { listState.firstVisibleItemIndex > 3 }
         }
-        if (showScrollButton) {
-            SmallFloatingActionButton(
-                onClick = {
-                    scope.launch { listState.animateScrollToItem(0) }
-                },
-                containerColor = C.card,
-                contentColor = C.text,
-                shape = CircleShape,
+        val unreadBelow by remember {
+            derivedStateOf {
+                val firstVisible = listState.firstVisibleItemIndex
+                reversedMessages.take(firstVisible).count { !it.sent && !it.read }
+            }
+        }
+        val scrollBtnScale by animateFloatAsState(
+            targetValue = if (showScrollButton) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
+            label = "scrollBtnScale",
+        )
+        if (scrollBtnScale > 0f) {
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 12.dp),
+                    .padding(end = 12.dp, bottom = 12.dp)
+                    .graphicsLayer { scaleX = scrollBtnScale; scaleY = scrollBtnScale },
             ) {
-                Icon(
-                    Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Scroll to bottom",
-                    modifier = Modifier.size(24.dp),
-                )
+                SmallFloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = C.card,
+                    contentColor = C.text,
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, "Scroll to bottom", modifier = Modifier.size(24.dp))
+                }
+                if (unreadBelow > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .defaultMinSize(minWidth = 18.dp)
+                            .clip(CircleShape)
+                            .background(C.accent)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (unreadBelow > 99) "99+" else "$unreadBelow",
+                            color = C.textDark, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
             }
         }
         // Sticky date header — floats at top when scrolling
@@ -3168,6 +3241,7 @@ fun ChatScreen(
                         Text(
                             when {
                                 pendingFile != null -> "Add a caption..."
+                                isDeletedAccount -> "This account has been deleted"
                                 !isGroupMode && resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
                                 else -> "Message"
                             },
@@ -3183,15 +3257,17 @@ fun ChatScreen(
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                     maxLines = 4,
-                    enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading,
+                    enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading && !isDeletedAccount,
                 )
 
-                // Right side: animated swap icons ↔ send (180ms, scale to 62.5% like Telegram)
+                // Right side: animated morph icons ↔ send (Telegram-style 180ms with rotation)
                 AnimatedContent(
                     targetState = hasText || uploading,
                     transitionSpec = {
-                        (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.625f))
-                            .togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.625f))
+                        (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.4f) +
+                            slideInVertically(tween(180)) { it / 4 })
+                            .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.4f) +
+                                slideOutVertically(tween(150)) { -it / 4 })
                     },
                     label = "rightIcons",
                 ) { showSend ->
@@ -4146,7 +4222,7 @@ fun ChatScreen(
             val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
             val myHandle = chatState?.myHandle
             val forwardContacts = remember(allContacts, myHandle) {
-                allContacts.filter { it.handle != myHandle && !it.walletId.isNullOrEmpty() }
+                allContacts.filter { it.handle != myHandle && !it.walletId.isNullOrEmpty() && !it.isDeleted }
             }
             val forwardGroups by com.privimemobile.chat.ChatService.db?.groupDao()?.observeAll()
                 ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
@@ -4465,7 +4541,7 @@ private fun TickIndicator(read: Boolean, delivered: Boolean) {
 private fun MessageBubble(
     msg: ChatMessage,
     filePath: String?,
-    downloadStatus: String,
+    downloadStatus: String?,
     onDownload: (cid: String, key: String, iv: String, mime: String, inlineData: String?) -> Unit,
     onReply: () -> Unit = {},
     onTap: () -> Unit = {},
@@ -4480,6 +4556,10 @@ private fun MessageBubble(
     isGroupMode: Boolean = false,
     onSenderTap: (String) -> Unit = {},
     groupMemberNames: Map<String, String> = emptyMap(),
+    isFirstInCluster: Boolean = true,
+    isLastInCluster: Boolean = true,
+    showTimestamp: Boolean = true,
+    onScrollToReply: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
@@ -4670,13 +4750,17 @@ private fun MessageBubble(
                 .offset(x = (offsetX / 3f).dp),
             horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         ) {
-            // Group mode: show sender avatar for non-self messages (tap → contact info)
+            // Group mode: show sender avatar for first in cluster, spacer for others (keeps alignment)
             if (isGroupMode && !isMine) {
-                Box(modifier = Modifier.clickable { onSenderTap(msg.from) }) {
-                    com.privimemobile.ui.components.AvatarDisplay(
-                        handle = msg.from,
-                        size = 32.dp,
-                    )
+                if (isFirstInCluster) {
+                    Box(modifier = Modifier.clickable { onSenderTap(msg.from) }) {
+                        com.privimemobile.ui.components.AvatarDisplay(
+                            handle = msg.from,
+                            size = 32.dp,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(32.dp)) // same width as avatar
                 }
                 Spacer(Modifier.width(6.dp))
             }
@@ -4685,8 +4769,8 @@ private fun MessageBubble(
                 horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
                 modifier = Modifier.widthIn(max = 300.dp),
             ) {
-            // Group mode: sender name (display name or @handle, colored, tap → contact info)
-            if (isGroupMode && !isMine && msg.from.isNotEmpty()) {
+            // Group mode: sender name only for first message in cluster
+            if (isGroupMode && !isMine && msg.from.isNotEmpty() && isFirstInCluster) {
                 val senderColors = listOf(
                     Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
                     Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
@@ -4845,14 +4929,22 @@ private fun MessageBubble(
                         }
                     }
                 }
-            } else
+            } else {
+            // Telegram-style bubble corners: grouped messages get small inner corners
+            val bigR = 16.dp; val smallR = 4.dp
+            val bubbleShape = if (isMine) RoundedCornerShape(
+                topStart = bigR,
+                topEnd = if (isFirstInCluster) bigR else smallR,
+                bottomStart = bigR,
+                bottomEnd = if (isLastInCluster) bigR else smallR,
+            ) else RoundedCornerShape(
+                topStart = if (isFirstInCluster) bigR else smallR,
+                topEnd = bigR,
+                bottomStart = if (isLastInCluster) bigR else smallR,
+                bottomEnd = bigR,
+            )
             Card(
-                shape = RoundedCornerShape(
-                    topStart = 12.dp,
-                    topEnd = 12.dp,
-                    bottomStart = if (isMine) 12.dp else 4.dp,
-                    bottomEnd = if (isMine) 4.dp else 12.dp,
-                ),
+                shape = bubbleShape,
                 colors = CardDefaults.cardColors(
                     containerColor = androidx.compose.animation.animateColorAsState(
                         targetValue = when {
@@ -4896,32 +4988,49 @@ private fun MessageBubble(
                     )
                 }
 
-                // Reply display
+                // Reply display (Telegram-style: accent line + sender name + quoted text, tappable)
                 if (msg.reply != null) {
+                    val senderColors = listOf(
+                        Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+                        Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+                    )
+                    val quoteSender = msg.replySender
+                    val quoteColor = if (quoteSender != null) senderColors[kotlin.math.abs(quoteSender.hashCode()) % senderColors.size] else C.accent
                     Surface(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        modifier = Modifier
+                            .padding(bottom = 4.dp)
+                            .clickable { if (msg.replyTs > 0) onScrollToReply(msg.replyTs) },
                         shape = RoundedCornerShape(6.dp),
                         color = C.bg.copy(alpha = 0.5f),
                     ) {
                         Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .height(IntrinsicSize.Min),
+                            modifier = Modifier.padding(8.dp).height(IntrinsicSize.Min),
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .width(3.dp)
-                                    .fillMaxHeight()
-                                    .background(C.accent)
+                                modifier = Modifier.width(2.5.dp).fillMaxHeight()
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(quoteColor)
                             )
-                            Text(
-                                msg.reply,
-                                color = C.textSecondary,
-                                fontSize = 12.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                if (quoteSender != null) {
+                                    val senderName = if (quoteSender == myHandle) "You"
+                                        else groupMemberNames[quoteSender] ?: "@$quoteSender"
+                                    Text(
+                                        senderName,
+                                        color = quoteColor,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Text(
+                                    msg.reply,
+                                    color = C.textSecondary,
+                                    fontSize = 12.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -5021,52 +5130,47 @@ private fun MessageBubble(
                 }
                 }
 
-                // Meta row (time + read status)
+                // Meta row — time hidden for non-last in cluster, ticks always shown for sent
+                if (showTimestamp || isMine) {
                 Spacer(Modifier.height(2.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (msg.pinned) {
-                        Text("\uD83D\uDCCC", fontSize = 10.sp)  // 📌
-                        Spacer(Modifier.width(3.dp))
+                    if (showTimestamp) {
+                        if (msg.pinned) {
+                            Text("\uD83D\uDCCC", fontSize = 10.sp)
+                            Spacer(Modifier.width(3.dp))
+                        }
+                        if (msg.expiresAt > 0) {
+                            Text("\u23F3", fontSize = 10.sp)
+                            Spacer(Modifier.width(3.dp))
+                        }
+                        if (msg.edited) {
+                            Text("edited", color = C.textMuted, fontSize = 10.sp)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
                     }
-                    if (msg.expiresAt > 0) {
-                        Text("\u23F3", fontSize = 10.sp)  // ⏳
-                        Spacer(Modifier.width(3.dp))
-                    }
-                    if (msg.edited) {
-                        Text(
-                            "edited",
-                            color = C.textMuted,
-                            fontSize = 10.sp,
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
-                    Text(
-                        formatMessageTime(msg.timestamp),
-                        color = C.textSecondary,
-                        fontSize = 10.sp,
-                    )
-                    // Status ticks or schedule indicator
+                    // Ticks ALWAYS shown for sent messages (user needs delivery status)
                     if (isMine) {
                         Spacer(Modifier.width(6.dp))
                         if (msg.scheduledAt > 0) {
                             val sdf = remember { java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()) }
                             Text(
                                 "\uD83D\uDD52 ${sdf.format(java.util.Date(msg.scheduledAt * 1000))}",
-                                color = C.accent,
-                                fontSize = 9.sp,
+                                color = C.accent, fontSize = 9.sp,
                             )
                         } else {
                             TickIndicator(read = msg.read, delivered = msg.delivered)
                         }
                     }
                 }
+                } // end if (showTimestamp || isMine)
             }
 
         }
+        } // close else (bubble Card block)
         }  // close group sender name/bubble wrapper Column
         }  // close Card Row
     }  // close Box (swipe container)
@@ -5117,7 +5221,7 @@ private fun FileContent(
     fileName: String,
     fileSize: Long,
     filePath: String?,
-    downloadStatus: String,
+    downloadStatus: String?,
     isImage: Boolean,
     onDownload: () -> Unit,
     onSave: () -> Unit,
@@ -5138,27 +5242,30 @@ private fun FileContent(
                 contentScale = ContentScale.Crop,
             )
         } else if (isImage && (downloadStatus == "downloading" || downloadStatus == "decrypting")) {
-            // Loading placeholder
-            Surface(
+            // Shimmer loading placeholder (Telegram-style)
+            val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
+            val shimmerOffset by shimmerTransition.animateFloat(
+                initialValue = -1f, targetValue = 2f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ), label = "shimmerOff",
+            )
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = C.border,
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(C.border, C.border.copy(alpha = 0.3f), C.border),
+                            start = Offset(shimmerOffset * 300f, 0f),
+                            end = Offset(shimmerOffset * 300f + 300f, 160f),
+                        )
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CircularProgressIndicator(color = C.accent, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        if (downloadStatus == "downloading") "Downloading..." else "Decrypting...",
-                        color = C.textSecondary,
-                        fontSize = 11.sp,
-                    )
-                }
+                CircularProgressIndicator(color = C.accent.copy(alpha = 0.5f), modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
         } else if (isImage && downloadStatus == "error") {
             // Error — tap to retry
@@ -5928,7 +6035,7 @@ internal fun formatTimerLabel(seconds: Int): String = when {
 private class TelegramFlingBehavior : androidx.compose.foundation.gestures.FlingBehavior {
     override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float {
         // Dampen velocity by 20% for a heavier feel
-        val dampened = initialVelocity * 0.80f
+        val dampened = initialVelocity * 0.90f
         if (kotlin.math.abs(dampened) < 50f) return dampened
         var velocityLeft = dampened
         var lastValue = 0f
@@ -5936,7 +6043,7 @@ private class TelegramFlingBehavior : androidx.compose.foundation.gestures.Fling
             initialValue = 0f,
             initialVelocity = dampened,
         ).animateDecay(
-            androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 1.2f)
+            androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 1.05f)
         ) {
             val delta = value - lastValue
             lastValue = value

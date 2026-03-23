@@ -65,6 +65,7 @@ class PendingTxManager(
                 val result = WalletApi.callAsync("tx_status", mapOf("txId" to tx.txId))
                 val status = (result["status"] as? Number)?.toInt()
                 val statusString = result["status_string"] as? String ?: ""
+                Log.d(TAG, "TX ${tx.txId.take(8)}... action=${tx.action} status=$status ($statusString)")
 
                 when {
                     // Completed (status 3 in Beam = Completed)
@@ -118,16 +119,30 @@ class PendingTxManager(
                     delay(1000) // wait for refreshIdentity to complete
                     val state = db.chatStateDao().get() ?: return@launch
                     if (state.myHandle != null) {
+                        val payload = mapOf(
+                            "v" to 1, "t" to "profile_update",
+                            "from" to state.myHandle,
+                            "display_name" to (state.myDisplayName ?: ""),
+                        )
+                        // Send to all DM contacts
                         val contacts = db.contactDao().getAll()
+                        val sentWalletIds = mutableSetOf<String>()
                         for (contact in contacts) {
                             if (contact.walletId.isNullOrEmpty()) continue
-                            val payload = mapOf(
-                                "v" to 1, "t" to "profile_update",
-                                "from" to state.myHandle,
-                                "display_name" to (state.myDisplayName ?: ""),
-                            )
                             try { ChatService.sbbs.sendOnce(contact.walletId, payload) } catch (_: Exception) {}
+                            sentWalletIds.add(contact.walletId)
                             delay(100)
+                        }
+                        // Also send to all group members (so they update cached wallet_id)
+                        val groups = db.groupDao().getAllGroups()
+                        for (group in groups) {
+                            val members = db.groupDao().getMemberWalletIds(group.groupId, state.myHandle)
+                            for (wid in members) {
+                                if (wid.isNullOrEmpty() || wid in sentWalletIds) continue
+                                try { ChatService.sbbs.sendOnce(wid, payload) } catch (_: Exception) {}
+                                sentWalletIds.add(wid)
+                                delay(100)
+                            }
                         }
                     }
                 }
@@ -244,8 +259,11 @@ class PendingTxManager(
             }
             PendingTxEntity.ACTION_RELEASE_HANDLE -> {
                 // Handle was deleted on-chain — clear local identity
+                Log.d(TAG, "ACTION_RELEASE_HANDLE confirmed — clearing identity...")
                 db.chatStateDao().clearIdentity()
-                Log.d(TAG, "Handle released — cleared local identity")
+                // Also clear SBBS flag so we don't show re-register landing
+                ChatService.identity.clearSbbsNeedsUpdate()
+                Log.d(TAG, "Handle released — identity cleared, UI should show 'Not Registered'")
             }
             PendingTxEntity.ACTION_DELETE_GROUP -> {
                 // Notify all members before deleting

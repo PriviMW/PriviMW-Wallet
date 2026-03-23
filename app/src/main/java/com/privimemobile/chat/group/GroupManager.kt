@@ -409,14 +409,36 @@ class GroupManager(
                 getOrCreateGroupConversation(groupId, name)
             }
 
-            // Clean up local groups that no longer exist on-chain
-            // Only run cleanup if we got at least 2 groups (protects against partial shader results)
-            // No orphan cleanup — partial shader results can cause false positives
-            // Deleted groups are handled by group_deleted SBBS + PendingTxManager
-
             Log.d(TAG, "Refreshed ${groups.size} groups")
+
+            // Return on-chain IDs for cleanup
+            return@refreshMyGroups
         } catch (e: Exception) {
             Log.e(TAG, "refreshMyGroups error: ${e.message}")
+        }
+    }
+
+    /**
+     * Check local groups against on-chain state and mark deleted ones.
+     * Only call from explicit user action (pull-to-refresh), NOT on startup.
+     */
+    suspend fun cleanupDeletedGroups() {
+        try {
+            val result = ShaderInvoker.invokeAsync("user", "list_my_groups")
+            val groups = result["groups"] as? List<*> ?: return
+            val onChainIds = groups.mapNotNull { (it as? Map<*, *>)?.get("group_id") as? String }.toSet()
+            val localGroups = db.groupDao().getAllGroups()
+
+            for (local in localGroups) {
+                if (local.groupId !in onChainIds) {
+                    // Group no longer on-chain — remove locally
+                    Log.d(TAG, "Group ${local.groupId.take(8)} no longer on-chain — removing")
+                    db.groupDao().deleteByGroupId(local.groupId)
+                    db.groupDao().removeAllMembers(local.groupId)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "cleanupDeletedGroups error: ${e.message}")
         }
     }
 
@@ -493,14 +515,24 @@ class GroupManager(
                 val permissions = (m["permissions"] as? Number)?.toInt() ?: 0
                 val joinedHeight = (m["joined_height"] as? Number)?.toLong() ?: 0
 
-                // Resolve wallet_id from contact DB or contract (include banned for admin visibility)
-                val contact = db.contactDao().findByHandle(handle)
-                val walletId = contact?.walletId
+                // Resolve wallet_id: self from state, others from contact DB or contract
+                val walletId = if (handle == myHandle) {
+                    state?.myWalletId
+                } else {
+                    var contact = db.contactDao().findByHandle(handle)
+                    if (contact?.walletId.isNullOrEmpty()) {
+                        try { contact = ChatService.contacts.resolveHandle(handle) } catch (_: Exception) {}
+                    }
+                    contact?.walletId
+                }
 
+                val memberDisplayName = if (handle == myHandle) state?.myDisplayName
+                    else db.contactDao().findByHandle(handle)?.displayName
+                Log.d(TAG, "insertMember: handle=$handle walletId=${walletId?.take(12)}")
                 db.groupDao().insertMember(GroupMemberEntity(
                     groupId = groupId,
                     handle = handle,
-                    displayName = contact?.displayName,
+                    displayName = memberDisplayName,
                     role = role,
                     permissions = permissions,
                     walletId = walletId,
@@ -548,6 +580,8 @@ class GroupManager(
         groupId: String,
         text: String,
         replyText: String? = null,
+        replySender: String? = null,
+        replyMsgTs: Long = 0,
         ttl: Int = 0,
         fwdFrom: String? = null,
         fwdTs: Long = 0,
@@ -567,15 +601,21 @@ class GroupManager(
 
         val convId = getOrCreateGroupConversation(groupId, group.name)
 
-        // Get all member wallet_ids (exclude self)
-        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+        // Get all member wallet_ids (exclude self) — retry after refresh if empty
+        var memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
             .filterNotNull()
             .filter { it.isNotEmpty() }
 
         if (memberWalletIds.isEmpty()) {
-            Log.w(TAG, "No member wallet_ids for group $groupId — need to refresh members")
+            Log.w(TAG, "No member wallet_ids for group $groupId — refreshing members")
             refreshGroupMembers(groupId)
-            return
+            memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+                .filterNotNull()
+                .filter { it.isNotEmpty() }
+            if (memberWalletIds.isEmpty()) {
+                Log.e(TAG, "Still no wallet_ids after refresh — cannot send")
+                return
+            }
         }
 
         val ts = System.currentTimeMillis() / 1000
@@ -590,7 +630,11 @@ class GroupManager(
             "msg" to text,
         )
         if (!myDisplayName.isNullOrEmpty()) payload["dn"] = myDisplayName
-        if (replyText != null) payload["reply"] = replyText
+        if (replyText != null) {
+            payload["reply"] = replyText
+            if (replySender != null) payload["reply_from"] = replySender
+            if (replyMsgTs > 0) payload["reply_ts"] = replyMsgTs
+        }
         if (ttl > 0) payload["ttl"] = ttl
         if (fwdFrom != null) payload["fwd_from"] = fwdFrom
         if (fwdTs > 0) payload["fwd_ts"] = fwdTs
@@ -609,6 +653,8 @@ class GroupManager(
             fwdTs = fwdTs,
             sbbsDedupKey = "$ts:${text.hashCode().toString(16)}:$myHandle:$groupId".hashCode().toString(16),
             replyText = replyText,
+            replySender = replySender,
+            replyTs = replyMsgTs,
             expiresAt = expiresAt,
         )
         db.messageDao().insert(entity)

@@ -192,6 +192,8 @@ class MessageProcessor(
             sent = sent,
             type = type,
             replyText = payload["reply"] as? String,
+            replySender = payload["reply_from"] as? String ?: from.ifEmpty { null },
+            replyTs = (payload["reply_ts"] as? Number)?.toLong() ?: 0,
             tipAmount = (payload["amount"] as? Number)?.toLong() ?: 0,
             tipAssetId = (payload["asset_id"] as? Number)?.toInt() ?: 0,
             fwdFrom = payload["fwd_from"] as? String,
@@ -265,6 +267,7 @@ class MessageProcessor(
                 type = type,
                 isMuted = isMuted,
                 totalUnread = totalUnread,
+                senderHandle = from,
             )
         }
 
@@ -586,6 +589,18 @@ class MessageProcessor(
             }
         }
 
+        // Re-resolve sender's wallet_id from contract (catches SBBS address changes after re-registration)
+        try {
+            val resolved = ChatService.contacts.resolveHandle(from)
+            if (resolved != null && !resolved.walletId.isNullOrEmpty()) {
+                // Update wallet_id in all group member records
+                val groups = db.groupDao().getAllGroups()
+                for (group in groups) {
+                    db.groupDao().updateMemberWalletId(group.groupId, from, resolved.walletId)
+                }
+            }
+        } catch (_: Exception) {}
+
         if (avatarHash == null && avatarData == null) return // display-name-only update, done
 
         // Save avatar image locally if data provided (with hash verification)
@@ -795,11 +810,26 @@ class MessageProcessor(
             return
         }
 
+        // Auto-update sender's wallet_id if it changed (catches re-registration)
+        if (!sent && from.isNotEmpty()) {
+            val senderWalletId = raw["sender"] as? String
+            if (!senderWalletId.isNullOrEmpty()) {
+                val cachedMember = db.groupDao().findMember(groupId, from)
+                if (cachedMember != null && cachedMember.walletId != senderWalletId) {
+                    db.groupDao().updateMemberWalletId(groupId, from, senderWalletId)
+                    db.contactDao().updateResolved(from, senderWalletId, null, null, 0)
+                    Log.d(TAG, "Auto-updated wallet_id for @$from in group $groupId")
+                }
+            }
+        }
+
         // Get or create conversation for this group
         val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         // Parse ALL payload fields (same as DM handler)
         val replyText = payload["reply"] as? String
+        val replySender = payload["reply_from"] as? String
+        val replyMsgTs = (payload["reply_ts"] as? Number)?.toLong() ?: 0
         val ttl = (payload["ttl"] as? Number)?.toLong() ?: 0
         val expiresAt = if (ttl > 0) (System.currentTimeMillis() / 1000) + ttl else 0L
         val fwdFrom = payload["fwd_from"] as? String
@@ -818,6 +848,8 @@ class MessageProcessor(
             sent = sent,
             sbbsDedupKey = dedupKey,
             replyText = replyText,
+            replySender = replySender ?: from,
+            replyTs = replyMsgTs,
             expiresAt = expiresAt,
             fwdFrom = fwdFrom,
             fwdTs = fwdTs,
@@ -879,6 +911,7 @@ class MessageProcessor(
                     type = "group_msg",
                     isMuted = false,
                     totalUnread = 0,
+                    senderHandle = from,
                 )
             }
         }
@@ -1050,6 +1083,7 @@ class MessageProcessor(
                             type = type,
                             isMuted = false,
                             totalUnread = 0,
+                            senderHandle = from,
                         )
                     }
                 }

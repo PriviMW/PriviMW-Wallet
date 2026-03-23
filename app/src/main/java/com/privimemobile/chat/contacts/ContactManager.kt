@@ -72,6 +72,12 @@ class ContactManager(
                     db.contactDao().markDeleted(handle)
                     db.conversationDao().updateDisplayName("@$handle", "Deleted Account")
                     Log.d(TAG, "Marked @$handle as deleted account")
+                } else if (existing == null) {
+                    // Contact never existed locally — insert as deleted
+                    db.contactDao().insert(ContactEntity(
+                        handle = handle, displayName = "Deleted Account", isDeleted = true,
+                    ))
+                    Log.d(TAG, "Inserted @$handle as deleted account (never existed locally)")
                 }
                 return null
             }
@@ -83,8 +89,20 @@ class ContactManager(
 
             if (walletId == null) return null
 
-            // Update contact in DB
-            db.contactDao().updateResolved(handle, walletId, displayName, avatarHash, height)
+            // Upsert contact in DB (insert if not exists, update if exists)
+            val existing = db.contactDao().findByHandle(handle)
+            if (existing != null) {
+                db.contactDao().updateResolved(handle, walletId, displayName, avatarHash, height)
+            } else {
+                db.contactDao().insert(ContactEntity(
+                    handle = handle,
+                    walletId = walletId,
+                    displayName = displayName,
+                    avatarCid = avatarHash,
+                    registeredHeight = height,
+                    lastResolvedAt = System.currentTimeMillis() / 1000,
+                ))
+            }
 
             // Also update conversation display info
             db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarHash)
@@ -203,7 +221,7 @@ class ContactManager(
     }
 
     /** Send avatar_request to a contact. */
-    private suspend fun requestAvatar(handle: String, walletId: String) {
+    suspend fun requestAvatar(handle: String, walletId: String) {
         try {
             val state = db.chatStateDao().get() ?: return
             val myHandle = state.myHandle ?: return

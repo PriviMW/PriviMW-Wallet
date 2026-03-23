@@ -64,7 +64,7 @@ fun NewChatScreen(
     // Filter local contacts by input
     val query = input.trim().removePrefix("@").lowercase()
     val localMatches = remember(query, allContacts, myHandle) {
-        val contacts = allContacts.filter { it.handle != myHandle && !it.walletId.isNullOrEmpty() }
+        val contacts = allContacts.filter { it.handle != myHandle && !it.walletId.isNullOrEmpty() && !it.isDeleted }
         if (query.isEmpty()) contacts
         else contacts.filter { c ->
             c.handle.contains(query) || (c.displayName ?: "").lowercase().contains(query)

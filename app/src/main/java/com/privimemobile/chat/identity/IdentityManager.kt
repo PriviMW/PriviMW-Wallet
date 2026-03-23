@@ -54,10 +54,25 @@ class IdentityManager(
                 return
             }
 
-            // Query contract for our handle
-            val result = ShaderInvoker.invokeAsync("user", "my_handle")
+            // Query contract for our handle (retry if shader not ready)
+            var result: Map<String, Any?> = emptyMap()
+            var retries = 0
+            while (retries < 5) {
+                result = ShaderInvoker.invokeAsync("user", "my_handle")
+                if (!result.containsKey("error")) break
+                val errStr = result["error"]?.toString() ?: ""
+                // Shader compilation or wallet not ready — retry
+                if (errStr.contains("compile") || errStr.contains("not ready") || errStr.contains("timeout") || retries == 0) {
+                    retries++
+                    Log.w(TAG, "my_handle query attempt $retries failed: $errStr — retrying in ${retries * 3}s")
+                    kotlinx.coroutines.delay(retries * 3000L)
+                } else {
+                    Log.w(TAG, "my_handle query error: $errStr")
+                    return
+                }
+            }
             if (result.containsKey("error")) {
-                Log.w(TAG, "my_handle query error: ${result["error"]}")
+                Log.w(TAG, "my_handle query failed after $retries retries")
                 return
             }
 
@@ -194,17 +209,16 @@ class IdentityManager(
      */
     fun checkAvailability(handle: String, callback: (available: Boolean?, error: String?) -> Unit) {
         ShaderInvoker.invoke("user", "resolve_handle", mapOf("handle" to handle)) { result ->
-            val error = com.privimemobile.protocol.Helpers.extractError(result) ?: ""
-            if (error.contains("handle not found", ignoreCase = true)) {
-                // "handle not found" means it's available
-                callback(true, null)
+            if (result.containsKey("error")) {
+                val errorStr = result["error"]?.toString() ?: ""
+                if (errorStr.contains("not found", ignoreCase = true) || errorStr.contains("no such", ignoreCase = true)) {
+                    callback(true, null) // handle not found = available
+                } else {
+                    callback(null, com.privimemobile.protocol.Helpers.extractError(result))
+                }
                 return@invoke
             }
-            if (error.isNotEmpty()) {
-                callback(null, error)
-                return@invoke
-            }
-            // No error + data returned = handle exists = taken
+            // No error = handle exists = taken
             val walletId = result["wallet_id"] as? String
             if (!walletId.isNullOrEmpty()) {
                 callback(false, null) // taken

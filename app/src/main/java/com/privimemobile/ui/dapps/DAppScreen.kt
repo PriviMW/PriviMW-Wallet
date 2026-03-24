@@ -116,6 +116,25 @@ fun DAppScreen(
     val context = LocalContext.current
     val activity = context as? android.app.Activity
 
+    // Pause WebView + restore PriviMe context when navigating away, resume on return
+    DisposableEffect(Unit) {
+        // Resuming — restore DApp context
+        val wallet = WalletManager.walletInstance
+        if (wallet != null && Api.isWalletRunning()) {
+            try { wallet.launchApp(dappName, "") } catch (_: Exception) {}
+        }
+        DAppWebViewHolder.activeWebView?.onResume()
+
+        onDispose {
+            // Navigating away — pause WebView + restore PriviMe context
+            DAppWebViewHolder.activeWebView?.onPause()
+            val w = WalletManager.walletInstance
+            if (w != null && Api.isWalletRunning()) {
+                try { w.launchApp("PriviMe", "") } catch (_: Exception) {}
+            }
+        }
+    }
+
     // Bottom panel state
     var panelExpanded by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Balance, 1 = Transactions

@@ -315,11 +315,19 @@ fun WalletScreen(
 
                         Text("Available", color = C.textSecondary, fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
+                        val balanceText = "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM"
+                        val balanceFontSize = when {
+                            balanceText.length > 20 -> 22.sp
+                            balanceText.length > 16 -> 26.sp
+                            balanceText.length > 12 -> 30.sp
+                            else -> 36.sp
+                        }
                         Text(
-                            text = "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM",
+                            text = balanceText,
                             color = C.text,
-                            fontSize = 36.sp,
+                            fontSize = balanceFontSize,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
                         )
 
                         // Pending amounts — wrapping FlowRow like RN flexWrap

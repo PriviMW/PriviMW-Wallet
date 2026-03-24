@@ -237,7 +237,11 @@ fun ChatsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("Chats", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Chats", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(8.dp))
+                                Text("End-to-end encrypted via SBBS", color = C.textSecondary, fontSize = 10.sp)
+                            }
                             IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     Icons.Default.Search,
@@ -737,6 +741,12 @@ private fun NotRegisteredLanding(onRegister: () -> Unit) {
         Text(
             "Register a @handle to start sending and receiving encrypted messages on Beam.",
             color = C.textSecondary, fontSize = 14.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "End-to-end encrypted via SBBS",
+            color = C.textSecondary.copy(alpha = 0.6f), fontSize = 11.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))

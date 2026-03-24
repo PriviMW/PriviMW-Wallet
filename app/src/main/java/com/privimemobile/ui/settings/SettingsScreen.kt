@@ -463,7 +463,7 @@ fun SettingsScreen(
         // ========== NOTIFICATIONS ==========
         SectionTitle("NOTIFICATIONS")
         SettingsCard {
-            SettingsToggle("Wallet updates", "Notify when a new app version is available (coming soon)", walletUpdatesNotif) {
+            SettingsToggle("Wallet updates", "Notify when a new app version is available", walletUpdatesNotif) {
                 walletUpdatesNotif = it
                 SecureStorage.putBoolean("wallet_updates_notif", it)
             }
@@ -1046,6 +1046,65 @@ fun SettingsScreen(
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
             } catch (_: Exception) { "1.0.0" }
             SettingsRow("App", "PriviMW v$appVersion")
+            HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
+            var checkingUpdate by remember { mutableStateOf(false) }
+            var showUpdateDialog by remember { mutableStateOf<com.privimemobile.wallet.UpdateChecker.UpdateInfo?>(null) }
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (!checkingUpdate) {
+                            checkingUpdate = true
+                            scope.launch {
+                                val info = com.privimemobile.wallet.UpdateChecker.checkForUpdate(context, force = true)
+                                checkingUpdate = false
+                                if (info != null) {
+                                    showUpdateDialog = info
+                                } else {
+                                    toast("You're on the latest version")
+                                }
+                            }
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                color = Color.Transparent,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Check for Updates", color = C.accent, fontSize = 15.sp)
+                    if (checkingUpdate) {
+                        Spacer(Modifier.width(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
+                    }
+                }
+            }
+            if (showUpdateDialog != null) {
+                AlertDialog(
+                    onDismissRequest = { showUpdateDialog = null },
+                    containerColor = C.card,
+                    title = { Text("Update Available", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column {
+                            Text("Version ${showUpdateDialog!!.latestVersion} is available", color = C.text, fontSize = 16.sp)
+                            Spacer(Modifier.height(4.dp))
+                            Text("Current: ${showUpdateDialog!!.currentVersion}", color = C.textSecondary, fontSize = 13.sp)
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(showUpdateDialog!!.releaseUrl))
+                            context.startActivity(intent)
+                            showUpdateDialog = null
+                        }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
+                            Text("View Release", color = C.bg)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showUpdateDialog = null }) {
+                            Text("Later", color = C.textSecondary)
+                        }
+                    },
+                )
+            }
         }
 
         // ========== REMOVE WALLET ==========

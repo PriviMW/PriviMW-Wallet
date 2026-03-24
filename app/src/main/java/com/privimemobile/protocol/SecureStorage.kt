@@ -59,6 +59,11 @@ object SecureStorage {
         prefs?.edit()?.putInt(key, value)?.apply()
     }
 
+    fun getLong(key: String, default: Long = 0L): Long = prefs?.getLong(key, default) ?: default
+    fun putLong(key: String, value: Long) {
+        prefs?.edit()?.putLong(key, value)?.apply()
+    }
+
     fun remove(key: String) {
         prefs?.edit()?.remove(key)?.apply()
     }

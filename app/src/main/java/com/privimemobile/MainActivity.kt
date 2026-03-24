@@ -12,11 +12,23 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.privimemobile.ui.theme.C
 import androidx.lifecycle.lifecycleScope
 import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.protocol.SecureStorage
@@ -26,6 +38,7 @@ import com.privimemobile.ui.auth.OnboardingScreen
 import com.privimemobile.ui.navigation.AppNavigation
 import com.privimemobile.ui.theme.PriviMWTheme
 import com.privimemobile.wallet.BackgroundService
+import com.privimemobile.wallet.UpdateChecker
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,7 +104,25 @@ class MainActivity : FragmentActivity() {
                             }
                         },
                     )
-                    else -> AppNavigation()
+                    else -> {
+                        AppNavigation()
+                        // Update check on app open
+                        var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+                        LaunchedEffect(Unit) {
+                            updateInfo = UpdateChecker.checkForUpdate(this@MainActivity)
+                        }
+                        if (updateInfo != null) {
+                            UpdateDialog(
+                                info = updateInfo!!,
+                                onDismiss = { updateInfo = null },
+                                onViewRelease = {
+                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo!!.releaseUrl))
+                                    startActivity(intent)
+                                    updateInfo = null
+                                }
+                            )
+                        }
+                    }
                 }
                 } // Box imePadding
             }
@@ -194,4 +225,39 @@ class MainActivity : FragmentActivity() {
         // If BackgroundService is running, keep wallet alive for TXs/messages
         super.onDestroy()
     }
+}
+
+@Composable
+private fun UpdateDialog(
+    info: UpdateChecker.UpdateInfo,
+    onDismiss: () -> Unit,
+    onViewRelease: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = C.card,
+        title = {
+            Text("Update Available", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column {
+                Text("Version ${info.latestVersion} is available", color = C.text, fontSize = 16.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("Current: ${info.currentVersion}", color = C.textSecondary, fontSize = 13.sp)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onViewRelease,
+                colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+            ) {
+                Text("View Release", color = C.bg)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Later", color = C.textSecondary)
+            }
+        },
+    )
 }

@@ -27,13 +27,35 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../privimw-release.jks")
+            storePassword = "${STORE_PASSWORD}"
+            keyAlias = "privimw"
+            keyPassword = "${STORE_PASSWORD}"
+        }
+    }
+
     buildTypes {
+        debug {
+            buildConfigField("String", "PRIVIME_CID", "\"97db059a347227d2d71fd0cb7fb5d993343ab1540d2eaf40fe48d131b611635f\"")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "PRIVIME_CID", "\"32c6e5836eb5d2d428acce7ca4e262c8bf9f615c142811f7cf4ee4717f8747a9\"")
+        }
+    }
+
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "PriviMW-v${variant.versionName}-${variant.buildType.name}.apk"
         }
     }
 

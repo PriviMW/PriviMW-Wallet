@@ -152,7 +152,18 @@ class SbbsTransport(
             if (state.myHandle == null) return@launch
 
             val conv = db.conversationDao().findByKey(convKey) ?: return@launch
-            val toWalletId = conv.walletId ?: return@launch
+            var toWalletId = conv.walletId
+            if (toWalletId.isNullOrEmpty()) {
+                val handle = convKey.removePrefix("@")
+                toWalletId = db.contactDao().findByHandle(handle)?.walletId
+                if (toWalletId.isNullOrEmpty()) {
+                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
+                    toWalletId = resolved?.walletId
+                }
+                if (!toWalletId.isNullOrEmpty()) {
+                    db.conversationDao().updateContactInfo(convKey, null, toWalletId, null)
+                } else return@launch
+            }
 
             val payload = mapOf(
                 "v" to 1,
@@ -172,7 +183,22 @@ class SbbsTransport(
             if (state.myHandle == null) { Log.w(TAG, "sendReadReceipts: no myHandle"); return@launch }
 
             val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "sendReadReceipts: conv not found for $convKey"); return@launch }
-            val toWalletId = conv.walletId ?: run { Log.w(TAG, "sendReadReceipts: no walletId for $convKey"); return@launch }
+            var toWalletId = conv.walletId
+            if (toWalletId.isNullOrEmpty()) {
+                // Resolve wallet_id from contact DB or on-chain
+                val handle = convKey.removePrefix("@")
+                toWalletId = db.contactDao().findByHandle(handle)?.walletId
+                if (toWalletId.isNullOrEmpty()) {
+                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
+                    toWalletId = resolved?.walletId
+                }
+                if (!toWalletId.isNullOrEmpty()) {
+                    db.conversationDao().updateContactInfo(convKey, null, toWalletId, null)
+                } else {
+                    Log.w(TAG, "sendReadReceipts: no walletId for $convKey after resolve")
+                    return@launch
+                }
+            }
 
             val payload = mapOf(
                 "v" to 1,

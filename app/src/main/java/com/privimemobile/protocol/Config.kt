@@ -13,10 +13,8 @@ object Config {
     /** Default node (first in pool) */
     val DEFAULT_NODE = MAINNET_NODES[0]
 
-    /** PriviMe contract CID — staging for testing, switch to production when ready */
-    // Staging: 97db059a347227d2d71fd0cb7fb5d993343ab1540d2eaf40fe48d131b611635f
-    // Production: 32c6e5836eb5d2d428acce7ca4e262c8bf9f615c142811f7cf4ee4717f8747a9
-    const val PRIVIME_CID = "97db059a347227d2d71fd0cb7fb5d993343ab1540d2eaf40fe48d131b611635f"
+    /** PriviMe contract CID — auto-set per build type (debug=staging, release=production) */
+    val PRIVIME_CID: String = com.privimemobile.BuildConfig.PRIVIME_CID
 
     /** Unit conversion */
     const val GROTH_PER_BEAM = 100_000_000L

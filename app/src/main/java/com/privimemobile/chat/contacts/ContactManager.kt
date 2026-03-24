@@ -31,28 +31,48 @@ class ContactManager(
     fun ensureContact(handle: String, displayName: String?, walletId: String?) {
         scope.launch {
             val existing = db.contactDao().findByHandle(handle)
+            val effectiveWalletId: String?
             if (existing != null) {
                 // Update display name if we have a newer one
                 if (displayName != null && displayName != existing.displayName) {
                     db.contactDao().update(existing.copy(displayName = displayName))
+                    // Also update conversation display info
+                    db.conversationDao().updateContactInfo("@$handle", displayName, null, null)
                 }
                 // Re-resolve if wallet_id is missing
                 if (existing.walletId == null && walletId != null) {
-                    db.contactDao().update(existing.copy(walletId = Helpers.normalizeWalletId(walletId)))
+                    val normalized = Helpers.normalizeWalletId(walletId)
+                    db.contactDao().update(existing.copy(walletId = normalized))
+                    effectiveWalletId = normalized
+                } else {
+                    effectiveWalletId = existing.walletId
                 }
-                return@launch
+            } else {
+                // Insert new contact
+                val normalized = Helpers.normalizeWalletId(walletId ?: "")
+                db.contactDao().insert(ContactEntity(
+                    handle = handle,
+                    walletId = normalized,
+                    displayName = displayName,
+                ))
+                effectiveWalletId = normalized
+
+                // If no wallet_id, resolve from contract (gets wallet_id + triggers avatar request)
+                if (walletId == null) {
+                    resolveHandle(handle)
+                    return@launch // resolveHandle handles avatar request
+                }
             }
 
-            // Insert new contact
-            db.contactDao().insert(ContactEntity(
-                handle = handle,
-                walletId = Helpers.normalizeWalletId(walletId ?: ""),
-                displayName = displayName,
-            ))
-
-            // If no wallet_id, resolve from contract
-            if (walletId == null) {
-                resolveHandle(handle)
+            // Request avatar if no cached file exists
+            if (!effectiveWalletId.isNullOrEmpty()) {
+                val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
+                if (filesDir != null) {
+                    val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
+                    if (!avatarFile.exists()) {
+                        requestAvatar(handle, effectiveWalletId)
+                    }
+                }
             }
         }
     }
@@ -130,6 +150,17 @@ class ContactManager(
     fun reResolveOnChatOpen(handle: String) {
         scope.launch {
             val contact = db.contactDao().findByHandle(handle) ?: return@launch
+
+            // Always check for missing avatar on chat open (no cooldown)
+            val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
+            if (filesDir != null && !contact.walletId.isNullOrEmpty()) {
+                val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
+                if (!avatarFile.exists()) {
+                    requestAvatar(handle, contact.walletId!!)
+                }
+            }
+
+            // Resolve handle (with cooldown) to refresh wallet_id/display name
             val now = System.currentTimeMillis() / 1000
             if (now - contact.lastResolvedAt < RESOLVE_COOLDOWN_MS / 1000) return@launch
             resolveHandle(handle)

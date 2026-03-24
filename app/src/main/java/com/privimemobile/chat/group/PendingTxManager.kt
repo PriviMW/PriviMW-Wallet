@@ -71,8 +71,15 @@ class PendingTxManager(
                     // Completed (status 3 in Beam = Completed)
                     status == 3 || statusString.contains("completed", ignoreCase = true) -> {
                         Log.d(TAG, "TX confirmed: ${tx.txId} action=${tx.action}")
-                        db.pendingTxDao().deleteByTxId(tx.txId) // delete FIRST to prevent double-processing
-                        onTxConfirmed(tx)
+                        // For registration: wait for refreshIdentity before deleting pending TX
+                        // so ChatsScreen doesn't flash the registration form
+                        if (tx.action == PendingTxEntity.ACTION_REGISTER_HANDLE) {
+                            onTxConfirmed(tx) // refreshIdentity completes first
+                            db.pendingTxDao().deleteByTxId(tx.txId)
+                        } else {
+                            db.pendingTxDao().deleteByTxId(tx.txId) // delete FIRST to prevent double-processing
+                            onTxConfirmed(tx)
+                        }
                     }
                     // Failed (status 4)
                     status == 4 || statusString.contains("failed", ignoreCase = true) -> {

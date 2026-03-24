@@ -201,7 +201,7 @@ object ChatService {
             while (true) {
                 try { requestMissingAvatars() } catch (_: Exception) {}
                 try { requestMissingGroupInfo() } catch (_: Exception) {}
-                delay(30 * 60 * 1000L) // 30 minutes
+                delay(10 * 60 * 1000L) // 10 minutes
             }
         }
 

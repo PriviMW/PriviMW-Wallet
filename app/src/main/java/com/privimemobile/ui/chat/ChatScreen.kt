@@ -978,6 +978,14 @@ fun ChatScreen(
                             } else {
                                 "\uD83D\uDCCE ${fileMeta["name"]}"
                             }
+
+                            // Clear UI state BEFORE SBBS send (message already in DB and visible)
+                            uploading = false
+                            pendingFile = null
+                            pendingStickerMeta = null
+                            setInputText("")
+                            replyingTo = null
+
                             if (isGroupMode && groupId != null) {
                                 com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
                                 com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)

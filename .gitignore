@@ -10,3 +10,8 @@
 local.properties
 /app/build
 *.hprof
+
+# Release signing key — NEVER commit
+*.jks
+*.keystore
+keystore.properties

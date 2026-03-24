@@ -3,6 +3,7 @@ package com.privimemobile.ui.chat
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.geometry.Offset
@@ -730,7 +731,7 @@ fun ChatScreen(
                 val secondIsAssetId = secondToken?.toIntOrNull() != null
                 val assetId = if (secondIsAssetId) secondToken!!.toInt() else 0
                 val caption = if (secondIsAssetId) {
-                    tipTokens.getOrNull(2)?.trim() ?: ""
+                    tipTokens.drop(2).joinToString(" ").trim()
                 } else {
                     tipTokens.drop(1).joinToString(" ").trim()
                 }
@@ -2324,6 +2325,7 @@ fun ChatScreen(
             } else null
         }
         val isScrolling = listState.isScrollInProgress
+
         var stickyVisible by remember { mutableStateOf(false) }
         LaunchedEffect(isScrolling) {
             if (isScrolling) stickyVisible = true
@@ -5130,13 +5132,17 @@ private fun MessageBubble(
                 }
                 }
 
-                // Meta row — time hidden for non-last in cluster, ticks always shown for sent
-                if (showTimestamp || isMine) {
+                // Meta row — time hidden for non-last in cluster, ticks always shown for sent, edited always shown
+                if (showTimestamp || isMine || msg.edited) {
                 Spacer(Modifier.height(2.dp))
                 Row(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (msg.edited) {
+                        Text("edited", color = C.textMuted, fontSize = 10.sp)
+                        Spacer(Modifier.width(4.dp))
+                    }
                     if (showTimestamp) {
                         if (msg.pinned) {
                             Text("\uD83D\uDCCC", fontSize = 10.sp)
@@ -5145,10 +5151,6 @@ private fun MessageBubble(
                         if (msg.expiresAt > 0) {
                             Text("\u23F3", fontSize = 10.sp)
                             Spacer(Modifier.width(3.dp))
-                        }
-                        if (msg.edited) {
-                            Text("edited", color = C.textMuted, fontSize = 10.sp)
-                            Spacer(Modifier.width(4.dp))
                         }
                         Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
                     }
@@ -5166,7 +5168,7 @@ private fun MessageBubble(
                         }
                     }
                 }
-                } // end if (showTimestamp || isMine)
+                } // end if (showTimestamp || isMine || msg.edited)
             }
 
         }
@@ -5180,7 +5182,7 @@ private fun MessageBubble(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp, start = if (isMine) 0.dp else 4.dp, end = if (isMine) 4.dp else 0.dp),
+                .padding(top = 2.dp, start = if (isMine) 0.dp else if (isGroupMode && !isMine) 44.dp else 4.dp, end = if (isMine) 4.dp else 0.dp),
             horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

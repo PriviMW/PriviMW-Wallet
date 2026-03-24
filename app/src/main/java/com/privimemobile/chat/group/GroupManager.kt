@@ -662,7 +662,7 @@ class GroupManager(
         // Update group preview
         db.groupDao().updateLastMessage(groupId, ts, "You: ${text.take(40)}")
 
-        // Send to each member with 200ms spacing
+        // Send to each member with 200ms spacing (first pass)
         for (walletId in memberWalletIds) {
             try {
                 ChatService.sbbs.sendOnce(walletId, payload)
@@ -671,8 +671,17 @@ class GroupManager(
             }
             delay(200)
         }
-
         Log.d(TAG, "Sent group msg to ${memberWalletIds.size} members in $groupId")
+
+        // Retry send after 5s for reliability (receiver dedup prevents duplicates)
+        delay(5000)
+        for (walletId in memberWalletIds) {
+            try {
+                ChatService.sbbs.sendOnce(walletId, payload)
+            } catch (_: Exception) {}
+            delay(200)
+        }
+        Log.d(TAG, "Retry sent group msg to ${memberWalletIds.size} members in $groupId")
     }
 
     /**
@@ -706,6 +715,15 @@ class GroupManager(
             delay(200)
         }
         Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberWalletIds.size} members in $groupId")
+
+        // Retry after 5s for reliability (receiver dedup prevents duplicates)
+        delay(5000)
+        for (walletId in memberWalletIds) {
+            try {
+                ChatService.sbbs.sendOnce(walletId, fullPayload)
+            } catch (_: Exception) {}
+            delay(200)
+        }
     }
 
     // Group typing throttle — max one per group per 5 seconds

@@ -84,7 +84,7 @@ class BeamDAppWebView(context: Context) : WebView(context) {
             allowFileAccess = true  // Required for file:// DApp loading
             // Security: disable cross-origin file access. Each DApp can only access
             // its own files via shouldInterceptRequest (which enforces path containment).
-            allowFileAccessFromFileURLs = true   // Needed for XHR to load app.wasm from same dir
+            allowFileAccessFromFileURLs = false  // Security: all file access goes through shouldInterceptRequest
             allowUniversalAccessFromFileURLs = false  // Block cross-origin requests from file:// URLs
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             setSupportMultipleWindows(false)

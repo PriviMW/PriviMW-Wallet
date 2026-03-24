@@ -51,8 +51,8 @@ object NativeTxApprovalDialog {
         // Prefer DAppActivity (if running), otherwise fall back to main activity
         val activity = dappActivity ?: WalletManager.currentActivity
         if (activity == null) {
-            Log.w(TAG, "No activity — auto-approving")
-            approve(request)
+            Log.w(TAG, "No activity — rejecting TX for safety")
+            reject(request)
             return
         }
 

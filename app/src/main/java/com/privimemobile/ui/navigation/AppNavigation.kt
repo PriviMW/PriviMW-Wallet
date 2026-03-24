@@ -2,9 +2,18 @@ package com.privimemobile.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Apps
@@ -74,6 +83,17 @@ enum class Tab(
 
 @Composable
 fun AppNavigation() {
+    // 1-pixel keepalive: tricks LTPO displays into staying at 120Hz by continuously
+    // animating an invisible pixel. The alpha oscillates between 0.001 and 0.002 every
+    // 16ms (60fps minimum frame request). LTPO controller sees continuous invalidation → 120Hz.
+    val fpsTransition = rememberInfiniteTransition(label = "fps-keepalive")
+    val fpsAlpha by fpsTransition.animateFloat(
+        initialValue = 0.001f, targetValue = 0.002f,
+        animationSpec = infiniteRepeatable(tween(16, easing = LinearEasing), RepeatMode.Reverse),
+        label = "fps-alpha",
+    )
+    Box(Modifier.size(1.dp).alpha(fpsAlpha))
+
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -158,6 +178,7 @@ fun AppNavigation() {
             }
         },
     ) { innerPadding ->
+        Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
         NavHost(
             navController = navController,
             startDestination = Tab.WALLET.route,

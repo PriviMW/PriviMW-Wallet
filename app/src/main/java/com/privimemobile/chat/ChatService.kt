@@ -63,6 +63,7 @@ object ChatService {
     fun onTypingReceived(convKey: String) {
         Log.d(TAG, "onTypingReceived: $convKey")
         val now = System.currentTimeMillis()
+        if (typingExpiry.size > 100) typingExpiry.entries.removeAll { it.value <= now } // cap size
         typingExpiry[convKey] = now + 5_000
         _typingVersion.value++ // force recomposition
         // Auto-clear after 5s
@@ -93,7 +94,9 @@ object ChatService {
     /** Called when a group typing indicator arrives. */
     fun onGroupTypingReceived(groupConvKey: String, handle: String) {
         val now = System.currentTimeMillis()
+        if (groupTypingMap.size > 50) groupTypingMap.entries.removeAll { e -> e.value.all { it.value <= now } } // cap size
         val map = groupTypingMap.getOrPut(groupConvKey) { mutableMapOf() }
+        if (map.size > 50) map.entries.removeAll { it.value <= now }
         map[handle] = now + 5_000
         _typingVersion.value++
         scope.launch {

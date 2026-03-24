@@ -89,9 +89,13 @@ class MessageProcessor(
         // Determine if this is sent by us
         val sent = from == myHandle
 
+        // NOTE: SBBS envelope "sender" wallet_id is NOT the same as the on-chain registered
+        // wallet_id. Beam uses different SBBS channel addresses per conversation. Therefore
+        // we cannot verify sender identity via raw["sender"]. SBBS messages are encrypted
+        // per-recipient, so only the intended recipient can decrypt — this provides the
+        // primary authentication guarantee.
+
         // ── Group payloads: route FIRST, before DM convKey/blocked/tombstone checks ──
-        // Group payloads have "to" = target handle (for tips) or groupId, NOT a DM recipient.
-        // Running DM convKey logic on group payloads causes wrong routing/drops.
         val groupId = payload["group_id"] as? String
         if (groupId != null && groupId.isNotEmpty()) {
             when (type) {
@@ -101,7 +105,7 @@ class MessageProcessor(
                 "group_info_request" -> handleGroupInfoRequest(payload, from, groupId)
                 "group_info_response" -> handleGroupInfoResponse(payload, groupId)
                 "group_delete" -> handleGroupDelete(payload, from)
-                "ack" -> handleAck(payload, "@$from") // group_id is in payload, handleAck will use it
+                "ack" -> handleAck(payload, "@$from")
                 "delivered" -> handleDelivered(payload, "@$from")
                 "typing" -> handleGroupTyping(from, ts, groupId)
                 else -> handleGroupGenericPayload(payload, raw, type, ts, from, sent, myHandle, groupId)
@@ -529,7 +533,9 @@ class MessageProcessor(
 
         // Verify SHA-256 of received data matches claimed hash
         try {
+            if (avatarData.length > 200_000) { Log.w(TAG, "Avatar too large from @$from: ${avatarData.length} chars"); return }
             val bytes = android.util.Base64.decode(avatarData, android.util.Base64.NO_WRAP)
+            if (bytes.size > 150_000) { Log.w(TAG, "Avatar decoded too large from @$from: ${bytes.size} bytes"); return }
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             val computedHash = digest.digest(bytes).joinToString("") { "%02x".format(it) }
             if (computedHash != claimedHash) {
@@ -606,7 +612,9 @@ class MessageProcessor(
         // Save avatar image locally if data provided (with hash verification)
         if (avatarData != null) {
             try {
+                if (avatarData.length > 200_000) { Log.w(TAG, "profile_update avatar too large from @$from"); return }
                 val bytes = android.util.Base64.decode(avatarData, android.util.Base64.NO_WRAP)
+                if (bytes.size > 150_000) { Log.w(TAG, "profile_update avatar decoded too large from @$from"); return }
 
                 // Verify SHA-256 hash matches claimed hash
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -784,6 +792,36 @@ class MessageProcessor(
     private fun sanitizeFilename(name: String): String {
         val clean = name.replace(Regex("[^a-zA-Z0-9._\\- ]"), "")
         return if (clean.length > 80) clean.take(80) else clean.ifEmpty { "file" }
+    }
+
+    /** Sanitize groupId for file paths: hex chars only. */
+    private fun sanitizeGroupId(gid: String): String {
+        return gid.replace(Regex("[^a-fA-F0-9]"), "").take(64)
+    }
+
+    /**
+     * Verify SBBS sender authenticity.
+     * Compares the SBBS envelope sender (raw["sender"], set by Beam core, not spoofable)
+     * against the stored wallet_id for the claimed "from" handle.
+     *
+     * Returns:
+     *   true  — sender is verified (wallet_id matches) or is unknown (new contact)
+     *   false — sender wallet_id DOES NOT match stored wallet_id (spoofed)
+     *
+     * For state-changing actions (edit, delete, service messages), reject on false.
+     * For new messages, allow unknown senders (first contact scenario).
+     */
+    private suspend fun verifySender(from: String, senderWalletId: String?): Boolean {
+        if (from.isEmpty() || senderWalletId.isNullOrEmpty()) return false
+        val normalizedSender = Helpers.normalizeWalletId(senderWalletId) ?: return false
+        val contact = db.contactDao().findByHandle(from) ?: return true // unknown contact = allow
+        val storedWalletId = contact.walletId ?: return true // no stored wallet_id = allow
+        val normalizedStored = Helpers.normalizeWalletId(storedWalletId) ?: return true
+        val match = normalizedSender == normalizedStored
+        if (!match) {
+            Log.w(TAG, "verifySender MISMATCH for @$from: sender=${senderWalletId.take(16)}... stored=${storedWalletId.take(16)}... normSender=${normalizedSender.take(16)}... normStored=${normalizedStored.take(16)}...")
+        }
+        return match
     }
 
     // ========================================================================
@@ -1024,7 +1062,7 @@ class MessageProcessor(
                                 ipfsCid = cid,
                                 encryptionKey = fileData["key"] as? String ?: "",
                                 encryptionIv = fileData["iv"] as? String ?: "",
-                                fileName = fileData["name"] as? String ?: "file",
+                                fileName = sanitizeFilename(fileData["name"] as? String ?: "file"),
                                 fileSize = (fileData["size"] as? Number)?.toLong() ?: 0,
                                 mimeType = fileData["mime"] as? String ?: "",
                                 inlineData = fileData["data"] as? String,
@@ -1221,22 +1259,24 @@ class MessageProcessor(
         val avatarHash = payload["avatar_hash"] as? String
         if (avatarBase64 != null) {
             try {
+                if (avatarBase64.length > 200_000) { Log.w(TAG, "Group avatar too large for $groupId"); return }
                 val bytes = android.util.Base64.decode(avatarBase64, android.util.Base64.NO_WRAP)
-                // Verify hash if provided
+                if (bytes.size > 150_000) { Log.w(TAG, "Group avatar decoded too large for $groupId"); return }
+                // Verify hash — REQUIRE hash for security (reject without it)
                 val valid = if (avatarHash != null) {
                     val digest = java.security.MessageDigest.getInstance("SHA-256")
                     val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
                     computed == avatarHash
-                } else true
+                } else false // reject avatar without hash verification
                 if (valid) {
                     val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
                     val existingHash = db.groupDao().findByGroupId(groupId)?.avatarHash
-                    val existFile = java.io.File(filesDir, "group_avatars/$groupId.webp")
+                    val existFile = java.io.File(filesDir, "group_avatars/${sanitizeGroupId(groupId)}.webp")
                     if (existingHash == avatarHash && existFile.exists()) {
                         Log.d(TAG, "Group avatar for $groupId already up-to-date — skip")
                     } else {
                         val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
-                        java.io.File(dir, "$groupId.webp").writeBytes(bytes)
+                        java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
                         db.groupDao().updateAvatarHash(groupId, avatarHash)
                         Log.d(TAG, "Group avatar updated for $groupId (${bytes.size} bytes)")
                     }
@@ -1284,7 +1324,7 @@ class MessageProcessor(
         val senderWalletId = payload["requester_wallet_id"] as? String ?: return
 
         val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
-        val avatarFile = if (filesDir != null) java.io.File(filesDir, "group_avatars/$groupId.webp") else null
+        val avatarFile = if (filesDir != null) java.io.File(filesDir, "group_avatars/${sanitizeGroupId(groupId)}.webp") else null
         val hasAvatar = avatarFile?.exists() == true
         val hasDesc = !group.description.isNullOrEmpty()
 
@@ -1336,22 +1376,24 @@ class MessageProcessor(
         val avatarHash = payload["avatar_hash"] as? String
         if (avatarBase64 != null) {
             try {
+                if (avatarBase64.length > 200_000) { Log.w(TAG, "Group info response avatar too large for $groupId"); return }
                 val bytes = android.util.Base64.decode(avatarBase64, android.util.Base64.NO_WRAP)
+                if (bytes.size > 150_000) { Log.w(TAG, "Group info response avatar decoded too large for $groupId"); return }
                 val valid = if (avatarHash != null) {
                     val digest = java.security.MessageDigest.getInstance("SHA-256")
                     val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
                     computed == avatarHash
-                } else true
+                } else false // reject avatar without hash verification
                 if (valid) {
                     // Only save if different from what we have (prevent stale SBBS overwrites)
                     val existHash = group.avatarHash
                     val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
-                    val existFile = java.io.File(filesDir, "group_avatars/$groupId.webp")
+                    val existFile = java.io.File(filesDir, "group_avatars/${sanitizeGroupId(groupId)}.webp")
                     if (existHash == avatarHash && existFile.exists()) {
                         Log.d(TAG, "Group avatar response for $groupId already up-to-date — skip")
                     } else {
                         val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
-                        java.io.File(dir, "$groupId.webp").writeBytes(bytes)
+                        java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
                         db.groupDao().updateAvatarHash(groupId, avatarHash)
                         Log.d(TAG, "Received group avatar for $groupId (${bytes.size} bytes)")
                     }

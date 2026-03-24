@@ -62,6 +62,45 @@ class MainActivity : FragmentActivity() {
         WalletManager.init(this)
         window.navigationBarColor = Color.parseColor("#0a0e27")
 
+        // Force max refresh rate (120Hz)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val disp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else @Suppress("DEPRECATION") windowManager.defaultDisplay
+            if (disp != null) {
+                val currentMode = disp.mode
+                val bestMode = disp.supportedModes
+                    .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+                    .maxByOrNull { it.refreshRate }
+                if (bestMode != null) {
+                    window.attributes = window.attributes.apply {
+                        preferredDisplayModeId = bestMode.modeId
+                        preferredRefreshRate = bestMode.refreshRate
+                    }
+                }
+            }
+        }
+
+        // API 35+ (Android 15): Disable LTPO power-saving frame rate drops
+        try {
+            val cls = window.javaClass
+            // isFrameRatePowerSavingsBalanced = false → prevents LTPO from dropping refresh rate
+            val method = cls.getMethod("setFrameRatePowerSavingsBalanced", Boolean::class.java)
+            method.invoke(window, false)
+            Log.d("MainActivity", "Disabled frame rate power savings (LTPO locked to max)")
+        } catch (e: Exception) {
+            Log.d("MainActivity", "Frame rate power savings API not available: ${e.message}")
+        }
+
+        // API 35+: Set requested frame rate on the root view
+        try {
+            window.decorView.post {
+                try {
+                    val method = android.view.View::class.java.getMethod("setRequestedFrameRate", Float::class.java)
+                    method.invoke(window.decorView, 120f)
+                    Log.d("MainActivity", "Set decorView requestedFrameRate=120")
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+
         // Request notification permission (Android 13+) — needed for badge count
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)

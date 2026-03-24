@@ -87,11 +87,9 @@ class DAppActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // Do NOT call webView.destroy() — it blocks the shared UI thread for 20+ seconds
-        // on heavy DApps (AMM React+webpack). The UI thread is shared across all Activities
-        // in the same process, so this freezes the main RN Activity too.
-        // loadUrl("about:blank") in onBackPressed already released JS/DOM state.
-        // GC will clean up the native WebView resources asynchronously.
+        // Restore PriviMe context if not already done (e.g., swipe-away without back press)
+        webView?.cleanup()
+        restorePriviMeContext()
         webView = null
         super.onDestroy()
     }

@@ -93,7 +93,7 @@ fun SendConfirmScreen(
     // Check if auth is required — matches RN: ONLY askPasswordOnSend triggers auth
     val askPasswordOnSend = remember {
         com.privimemobile.protocol.SecureStorage.getBoolean(
-            com.privimemobile.protocol.SecureStorage.KEY_ASK_PASSWORD_ON_SEND
+            com.privimemobile.protocol.SecureStorage.KEY_ASK_PASSWORD_ON_SEND, true
         )
     }
     val biometricsEnabled = remember {

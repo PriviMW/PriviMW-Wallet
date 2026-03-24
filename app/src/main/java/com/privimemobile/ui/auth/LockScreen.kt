@@ -53,13 +53,28 @@ fun LockScreen(onUnlocked: () -> Unit) {
     val canUseBiometric = biometricEnabled && biometricAvailable
 
     fun openWallet(pass: String) {
-        // Validate password BEFORE calling native Api.openWallet — wrong password crashes the C++ core
-        val storedPass = SecureStorage.getWalletPassword()
-        if (storedPass != null && pass != storedPass) {
-            error = "Wrong password"
+        // Brute-force protection: check lockout
+        val lockoutSecs = SecureStorage.getLockoutRemaining()
+        if (lockoutSecs > 0) {
+            error = "Too many attempts. Try again in ${lockoutSecs}s"
             password = ""
             return
         }
+
+        // Validate password BEFORE calling native Api.openWallet — wrong password crashes the C++ core
+        val storedPass = SecureStorage.getWalletPassword()
+        if (storedPass != null && pass != storedPass) {
+            SecureStorage.recordFailedAttempt()
+            val attempts = SecureStorage.getFailedAttempts()
+            val newLockout = SecureStorage.getLockoutRemaining()
+            error = if (newLockout > 0) "Wrong password. Locked for ${newLockout}s ($attempts attempts)"
+                    else "Wrong password ($attempts/10 attempts)"
+            password = ""
+            return
+        }
+
+        // Password correct — clear failed attempts
+        SecureStorage.clearFailedAttempts()
 
         // If wallet is already open (BackgroundService kept it alive after swipe-away),
         // skip Api.openWallet() — calling it again causes "database is locked" native crash.

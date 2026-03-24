@@ -23,6 +23,8 @@ object SecureStorage {
     const val KEY_HAS_WALLET = "has_wallet"
     const val KEY_ASK_PASSWORD_ON_SEND = "ask_password_on_send"
     const val KEY_FINGERPRINT_ENABLED = "fingerprint_enabled"
+    const val KEY_FAILED_ATTEMPTS = "failed_unlock_attempts"
+    const val KEY_LOCKOUT_UNTIL = "lockout_until_ts"
 
     private var prefs: SharedPreferences? = null
 
@@ -41,6 +43,35 @@ object SecureStorage {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init encrypted prefs: ${e.message}")
         }
+    }
+
+    // ── Brute-force protection ──
+    fun recordFailedAttempt() {
+        val attempts = getInt(KEY_FAILED_ATTEMPTS, 0) + 1
+        putInt(KEY_FAILED_ATTEMPTS, attempts)
+        // Exponential lockout: 1→0s, 3→30s, 5→60s, 7→5min, 10→15min
+        val lockoutMs = when {
+            attempts >= 10 -> 15 * 60 * 1000L
+            attempts >= 7 -> 5 * 60 * 1000L
+            attempts >= 5 -> 60 * 1000L
+            attempts >= 3 -> 30 * 1000L
+            else -> 0L
+        }
+        if (lockoutMs > 0) putLong(KEY_LOCKOUT_UNTIL, System.currentTimeMillis() + lockoutMs)
+    }
+
+    fun clearFailedAttempts() {
+        putInt(KEY_FAILED_ATTEMPTS, 0)
+        putLong(KEY_LOCKOUT_UNTIL, 0)
+    }
+
+    fun getFailedAttempts(): Int = getInt(KEY_FAILED_ATTEMPTS, 0)
+
+    /** Returns remaining lockout seconds, or 0 if not locked out. */
+    fun getLockoutRemaining(): Long {
+        val until = getLong(KEY_LOCKOUT_UNTIL, 0)
+        val remaining = until - System.currentTimeMillis()
+        return if (remaining > 0) remaining / 1000 else 0
     }
 
     fun getString(key: String, default: String? = null): String? = prefs?.getString(key, default)

@@ -138,7 +138,6 @@ object ChatService {
         val passphrase = getOrCreateDbPassphrase(context)
 
         // Open encrypted database
-        Log.d(TAG, "DB passphrase hash: ${passphrase.contentHashCode()}")
         db = ChatDatabase.getInstance(context, passphrase)
         // Check group count immediately after DB open
         scope.launch {

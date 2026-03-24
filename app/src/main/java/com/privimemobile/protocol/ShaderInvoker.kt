@@ -17,6 +17,7 @@ object ShaderInvoker {
     /** Check if shader bytes have been loaded. */
     fun hasShaderBytes(): Boolean = shaderBytes != null
 
+
     /** Load PriviMe app.wasm shader bytes from bundled assets. */
     fun loadShader(context: Context) {
         if (shaderBytes != null) return

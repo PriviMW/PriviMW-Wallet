@@ -81,7 +81,7 @@ fun SettingsScreen(
 
     // Settings state
     var confirmationsOffset by remember { mutableIntStateOf(0) }
-    var askPasswordOnSend by remember { mutableStateOf(SecureStorage.getBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND)) }
+    var askPasswordOnSend by remember { mutableStateOf(SecureStorage.getBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND, true)) }
     var biometricsEnabled by remember { mutableStateOf(SecureStorage.getBoolean(SecureStorage.KEY_FINGERPRINT_ENABLED)) }
     var bgServiceEnabled by remember { mutableStateOf(SecureStorage.getBoolean("bg_service_enabled", true)) }
     var walletUpdatesNotif by remember { mutableStateOf(SecureStorage.getBoolean("wallet_updates_notif", true)) }
@@ -720,10 +720,57 @@ fun SettingsScreen(
         // ========== PRIVACY ==========
         SectionTitle("PRIVACY")
         SettingsCard {
+            var showAuthForAskPass by remember { mutableStateOf(false) }
             SettingsToggle("Ask for password on every Send",
                 "Require password confirmation for each transaction", askPasswordOnSend) {
-                askPasswordOnSend = it
-                SecureStorage.putBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND, it)
+                if (!it) {
+                    // Disabling security — require auth first
+                    showAuthForAskPass = true
+                } else {
+                    askPasswordOnSend = true
+                    SecureStorage.putBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND, true)
+                }
+            }
+            if (showAuthForAskPass) {
+                var authPass by remember { mutableStateOf("") }
+                AlertDialog(
+                    onDismissRequest = { showAuthForAskPass = false },
+                    containerColor = C.card,
+                    title = { Text("Confirm Password", color = C.text) },
+                    text = {
+                        Column {
+                            Text("Enter your wallet password to disable this security setting.", color = C.textSecondary, fontSize = 13.sp)
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = authPass,
+                                onValueChange = { authPass = it },
+                                label = { Text("Password") },
+                                visualTransformation = PasswordVisualTransformation(),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = C.accent,
+                                    unfocusedBorderColor = C.border,
+                                    focusedTextColor = C.text,
+                                    unfocusedTextColor = C.text,
+                                ),
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            if (authPass == SecureStorage.getWalletPassword()) {
+                                askPasswordOnSend = false
+                                SecureStorage.putBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND, false)
+                                showAuthForAskPass = false
+                            } else { toast("Wrong password") }
+                        }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
+                            Text("Confirm", color = C.bg)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAuthForAskPass = false }) { Text("Cancel", color = C.textSecondary) }
+                    },
+                )
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             // Check biometric hardware availability

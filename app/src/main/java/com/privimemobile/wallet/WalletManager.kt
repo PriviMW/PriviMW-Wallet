@@ -190,7 +190,7 @@ object WalletManager {
 
         try {
             val recoveryUrl = "https://mobile-restore.beam.mw/mainnet/mainnet_recovery.bin"
-            val file = java.io.File(ctx.getExternalFilesDir(null), "recovery.bin")
+            val file = java.io.File(ctx.cacheDir, "recovery.bin")
 
             if (file.exists()) file.delete()
 

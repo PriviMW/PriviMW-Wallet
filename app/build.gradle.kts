@@ -29,10 +29,13 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../privimw-release.jks")
-            storePassword = "${STORE_PASSWORD}"
-            keyAlias = "privimw"
-            keyPassword = "${STORE_PASSWORD}"
+            val props = java.util.Properties()
+            val propsFile = rootProject.file("keystore.properties")
+            if (propsFile.exists()) props.load(propsFile.inputStream())
+            storeFile = file(props.getProperty("storeFile", "../privimw-release.jks"))
+            storePassword = props.getProperty("storePassword", "")
+            keyAlias = props.getProperty("keyAlias", "privimw")
+            keyPassword = props.getProperty("keyPassword", "")
         }
     }
 

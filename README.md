@@ -96,6 +96,17 @@ app/src/main/java/com/privimemobile/
 └── MainActivity.kt
 ```
 
+## Native Libraries
+
+The pre-compiled native libraries are built from our open-source Beam forks:
+
+| Library | Source | Description |
+|---------|--------|-------------|
+| `libwallet-jni.so` | [PriviMW/beam](https://github.com/PriviMW/beam) | Beam C++ wallet core (MimbleWimble, SBBS, BVM) |
+| `libipfs-bindings.so` | [PriviMW/asio-ipfs](https://github.com/PriviMW/asio-ipfs) | IPFS transport bindings |
+
+Forked from the official [BeamMW/beam](https://github.com/BeamMW/beam) with minimal changes for mobile compatibility.
+
 ## Smart Contracts
 
 The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https://github.com/PriviMW/privimw-dapps). The compiled `app.wasm` shader is bundled in `app/src/main/assets/`.
@@ -106,6 +117,8 @@ The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https
 - [Beam Explorer](https://explorer.beam.mw) — Block explorer
 - [Beam Documentation](https://documentation.beam.mw) — Developer docs
 - [PriviMW DApps](https://github.com/PriviMW/privimw-dapps) — Smart contracts
+- [PriviMW Beam Fork](https://github.com/PriviMW/beam) — C++ wallet core source
+- [PriviMW IPFS Fork](https://github.com/PriviMW/asio-ipfs) — IPFS bindings source
 
 ## Donate
 

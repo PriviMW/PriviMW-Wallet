@@ -118,12 +118,28 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
                         ?: throw IllegalStateException("Cannot read file")
                 }
 
-                // Generate a GUID from the file name or use a hash
-                val guid = fileName?.removeSuffix(".dapp")
-                    ?.lowercase()
-                    ?.replace(Regex("[^a-z0-9]"), "")
-                    ?.padEnd(32, '0')
-                    ?.take(32) ?: "sideloaded00000000000000000000"
+                // Extract GUID from manifest.json inside the ZIP
+                val guid = withContext(Dispatchers.IO) {
+                    var manifestGuid: String? = null
+                    try {
+                        java.util.zip.ZipInputStream(zipData.inputStream()).use { zis ->
+                            var entry = zis.nextEntry
+                            while (entry != null) {
+                                if (entry.name == "manifest.json") {
+                                    val json = org.json.JSONObject(zis.readBytes().toString(Charsets.UTF_8))
+                                    manifestGuid = json.optString("guid").ifEmpty { null }
+                                    break
+                                }
+                                entry = zis.nextEntry
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    manifestGuid ?: fileName?.removeSuffix(".dapp")
+                        ?.lowercase()
+                        ?.replace(Regex("[^a-f0-9]"), "")
+                        ?.padEnd(32, '0')
+                        ?.take(32) ?: "sideloaded00000000000000000000"
+                }
 
                 withContext(Dispatchers.IO) {
                     DAppManager.installFromZip(

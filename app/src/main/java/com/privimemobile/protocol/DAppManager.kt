@@ -18,7 +18,7 @@ object DAppManager {
     private const val TAG = "DAppManager"
     private const val PREFS_NAME = "privimw_dapps"
     private const val KEY_INSTALLED = "installed_dapps"
-    private val GUID_REGEX = Regex("^[a-f0-9]{32}$")
+    private val GUID_REGEX = Regex("^[a-fA-F0-9]{32,64}$")
 
     private fun dappsDir(ctx: Context): File = File(ctx.filesDir, "dapps")
 

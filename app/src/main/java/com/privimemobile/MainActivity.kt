@@ -148,6 +148,7 @@ class MainActivity : FragmentActivity() {
                         // Update check on app open
                         var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
                         LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(3000) // Wait for UI to settle after unlock
                             updateInfo = UpdateChecker.checkForUpdate(this@MainActivity)
                         }
                         if (updateInfo != null) {

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.chat.ChatService
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
@@ -30,6 +31,7 @@ import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
 import com.privimemobile.wallet.assetTicker
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -73,6 +75,13 @@ fun SendScreen(
     var amount by remember { mutableStateOf("") }
     var comment by remember { mutableStateOf("") }
     var commentExpanded by remember { mutableStateOf(false) }
+
+    // @handle search state
+    var handleQuery by remember { mutableStateOf("") }
+    var handleResults by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) } // handle, displayName
+    var showHandleDropdown by remember { mutableStateOf(false) }
+    var resolvingHandle by remember { mutableStateOf(false) }
+    var resolvedHandle by remember { mutableStateOf<String?>(null) } // the @handle that was resolved
 
     // Address validation state
     var validatingAddr by remember { mutableStateOf(false) }
@@ -128,6 +137,24 @@ fun SendScreen(
     val ticker = selectedAsset.ticker
     val assetAvailable = selectedAsset.available
     val beamAvailable = (assetBalanceMap[0]?.let { it.available + it.shielded }) ?: (beamStatus.available + beamStatus.shielded)
+
+    // Debounced @handle search
+    LaunchedEffect(handleQuery) {
+        if (handleQuery.length < 1) {
+            handleResults = emptyList()
+            showHandleDropdown = false
+            return@LaunchedEffect
+        }
+        delay(300)
+        try {
+            val results = ChatService.contacts.searchOnChain(handleQuery)
+            handleResults = results.map { it.handle to it.displayName }
+            showHandleDropdown = handleResults.isNotEmpty()
+        } catch (_: Exception) {
+            handleResults = emptyList()
+            showHandleDropdown = false
+        }
+    }
 
     // Listen for scanned address from QR scanner
     LaunchedEffect(scannedAddress) {
@@ -234,7 +261,24 @@ fun SendScreen(
                     value = address,
                     onValueChange = { text ->
                         address = text
+                        resolvedHandle = null
                         val trimmed = text.trim()
+
+                        // Detect @handle mode
+                        if (trimmed.startsWith("@")) {
+                            val query = trimmed.removePrefix("@")
+                            handleQuery = query
+                            addrType = null
+                            addressValid = null
+                            validatingAddr = false
+                            return@OutlinedTextField
+                        }
+
+                        // Normal address mode
+                        handleQuery = ""
+                        showHandleDropdown = false
+                        handleResults = emptyList()
+
                         if (trimmed.length < 20) {
                             addrType = null
                             addressValid = null
@@ -247,7 +291,7 @@ fun SendScreen(
                         validateAddress(trimmed) { validateReqId = it }
                     },
                     placeholder = {
-                        Text("Paste address or token", color = C.textMuted)
+                        Text("Paste address or @handle", color = C.textMuted)
                     },
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -268,6 +312,107 @@ fun SendScreen(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
                     Text("\u2399", color = C.accent, fontSize = 22.sp)
+                }
+            }
+
+            // @handle dropdown
+            if (showHandleDropdown && handleResults.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = C.card),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(C.border)
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        handleResults.take(5).forEach { (handle, displayName) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // Resolve handle to wallet address
+                                        resolvingHandle = true
+                                        showHandleDropdown = false
+                                        handleResults = emptyList()
+                                        handleQuery = ""
+                                        scope.launch {
+                                            try {
+                                                val contact = ChatService.contacts.resolveHandle(handle)
+                                                val walletId = contact?.walletId
+                                                if (walletId != null) {
+                                                    val normalized = Helpers.normalizeWalletId(walletId) ?: walletId
+                                                    address = normalized
+                                                    resolvedHandle = "@$handle"
+                                                    // Trigger address validation
+                                                    validatingAddr = true
+                                                    addressValid = null
+                                                    addrType = null
+                                                    validateAddress(normalized) { validateReqId = it }
+                                                } else {
+                                                    address = "@$handle"
+                                                    addressValid = false
+                                                }
+                                            } catch (_: Exception) {
+                                                address = "@$handle"
+                                                addressValid = false
+                                            }
+                                            resolvingHandle = false
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "@$handle",
+                                    color = C.accent,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                if (displayName != null) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        displayName,
+                                        color = C.textMuted,
+                                        fontSize = 13.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Resolved handle indicator
+            if (resolvedHandle != null && addressValid == true) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    Text(
+                        "Sending to $resolvedHandle",
+                        color = C.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+
+            // Resolving handle spinner
+            if (resolvingHandle) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = C.accent,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Resolving handle...", color = C.textSecondary, fontSize = 12.sp)
                 }
             }
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +74,9 @@ fun SendScreen(
 
     var address by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
+    var isUsdMode by remember { mutableStateOf(false) }
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
+    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
     var comment by remember { mutableStateOf("") }
     var commentExpanded by remember { mutableStateOf(false) }
 
@@ -201,7 +205,10 @@ fun SendScreen(
         else -> FEE_REGULAR
     }
 
-    val amountGroth = Helpers.parseBeamToGroth(amount)
+    val amountGroth = if (isUsdMode && beamUsdRate > 0) {
+        val usdVal = amount.toDoubleOrNull() ?: 0.0
+        (usdVal / beamUsdRate * 100_000_000).toLong()
+    } else Helpers.parseBeamToGroth(amount)
 
     // Validation — matches RN's 3-part check
     val assetInsufficient = amountGroth > 0 && amountGroth > assetAvailable
@@ -561,13 +568,45 @@ fun SendScreen(
                     ),
                     singleLine = true,
                 )
-                Text(
-                    ticker,
-                    color = C.textSecondary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
+                if (selectedAssetId == 0 && beamUsdRate > 0) {
+                    // Toggle BEAM/USD
+                    Text(
+                        if (isUsdMode) "USD" else "BEAM",
+                        color = C.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .clickable { isUsdMode = !isUsdMode; amount = "" },
+                    )
+                } else {
+                    Text(
+                        ticker,
+                        color = C.textSecondary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+            }
+
+            // Conversion display
+            if (selectedAssetId == 0 && beamUsdRate > 0 && amount.isNotEmpty()) {
+                val displayVal = amount.toDoubleOrNull() ?: 0.0
+                if (displayVal > 0) {
+                    val convText = if (isUsdMode) {
+                        "≈ ${Helpers.formatBeam(amountGroth)} BEAM"
+                    } else {
+                        val usd = displayVal * beamUsdRate
+                        "≈ $${String.format("%.2f", usd)} USD"
+                    }
+                    Text(
+                        convText,
+                        color = C.textSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
 
             // Available + Send All — matches RN layout

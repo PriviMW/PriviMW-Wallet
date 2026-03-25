@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import com.privimemobile.wallet.WalletEventBus
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,6 +59,8 @@ fun SendConfirmScreen(
     var passwordError by remember { mutableStateOf("") }
 
     val ticker = assetTicker(assetId)
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
+    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
 
     // TX type passed from SendScreen — matches RN: "regular" = SBBS online, "offline" = offline
     val isOffline = txType == "offline"
@@ -231,34 +235,52 @@ fun SendConfirmScreen(
 
                 // Amount
                 ConfirmRow("Amount") {
-                    Text(
-                        "${Helpers.formatBeam(amountGroth)} $ticker",
-                        color = C.outgoing,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${Helpers.formatBeam(amountGroth)} $ticker",
+                            color = C.outgoing,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (assetId == 0 && beamUsdRate > 0) {
+                            val usd = formatUsd(amountGroth, beamUsdRate)
+                            if (usd != null) Text("≈ $usd USD", color = C.textSecondary, fontSize = 12.sp)
+                        }
+                    }
                 }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Fee
                 ConfirmRow("Transaction fee") {
-                    Text(
-                        "${Helpers.formatBeam(fee)} BEAM",
-                        color = C.textSecondary,
-                        fontSize = 14.sp,
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${Helpers.formatBeam(fee)} BEAM",
+                            color = C.textSecondary,
+                            fontSize = 14.sp,
+                        )
+                        if (beamUsdRate > 0) {
+                            val feeUsd = formatUsd(fee, beamUsdRate)
+                            if (feeUsd != null) Text("≈ $feeUsd USD", color = C.textSecondary, fontSize = 11.sp)
+                        }
+                    }
                 }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Total — for BEAM: amount + fee. For other assets: show both separately
                 ConfirmRow("Total") {
                     if (assetId == 0) {
-                        Text(
-                            "${Helpers.formatBeam(amountGroth + fee)} BEAM",
-                            color = C.text,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "${Helpers.formatBeam(amountGroth + fee)} BEAM",
+                                color = C.text,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (beamUsdRate > 0) {
+                                val totalUsd = formatUsd(amountGroth + fee, beamUsdRate)
+                                if (totalUsd != null) Text("≈ $totalUsd USD", color = C.textSecondary, fontSize = 12.sp)
+                            }
+                        }
                     } else {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(

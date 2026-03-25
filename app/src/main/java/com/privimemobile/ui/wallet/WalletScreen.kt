@@ -13,6 +13,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +66,7 @@ internal data class TxItem(
     val appID: String? = null,
     val contractCids: String? = null,
     val contractAssets: List<ContractAsset> = emptyList(),
+    val usdRate: Double = 0.0,
 )
 
 /** Per-asset spend/receive entry for contract TXs (like beam-ui's _contractSpend). */
@@ -88,6 +90,36 @@ private data class AssetBalance(
     val name: String,
 )
 
+/** Store/load USD rate per TX at creation time. */
+object TxRateStore {
+    private const val PREFS = "tx_usd_rates"
+    private var prefs: android.content.SharedPreferences? = null
+    fun init(ctx: android.content.Context) {
+        if (prefs == null) prefs = ctx.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+    }
+    fun save(txId: String, rate: Double) {
+        if (rate > 0) prefs?.edit()?.putFloat(txId, rate.toFloat())?.apply()
+    }
+    fun get(txId: String): Double = prefs?.getFloat(txId, 0f)?.toDouble() ?: 0.0
+    /** Save current rate for any new TXs that don't have a stored rate. */
+    fun backfillNewTxs(txIds: List<String>, currentRate: Double) {
+        if (currentRate <= 0) return
+        val editor = prefs?.edit() ?: return
+        for (id in txIds) {
+            if (prefs?.contains(id) == false) editor.putFloat(id, currentRate.toFloat())
+        }
+        editor.apply()
+    }
+}
+
+/** Format USD value for display. */
+internal fun formatUsd(groth: Long, rate: Double): String? {
+    if (rate <= 0) return null
+    val beam = groth.toDouble() / 100_000_000.0
+    val usd = beam * rate
+    return if (usd < 0.01 && usd > 0) "< $0.01" else "$${String.format("%.2f", usd)}"
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletScreen(
@@ -96,7 +128,11 @@ fun WalletScreen(
     onTxDetail: (String) -> Unit = {},
     onAssetDetail: (Int) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    TxRateStore.init(context)
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
+    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
     val syncProgress by WalletEventBus.syncProgress.collectAsState()
     val nodeConnection by WalletEventBus.nodeConnection.collectAsState(
         initial = NodeConnectionEvent(connected = false)
@@ -176,8 +212,13 @@ fun WalletScreen(
                             )
                         }
                     } ?: emptyList(),
+                    usdRate = TxRateStore.get(obj.optString("txId")),
                 )
-            }.sortedByDescending { it.createTime }
+            }.sortedByDescending { it.createTime }.also { txList ->
+                // Backfill USD rate for new TXs that don't have a stored rate
+                val currentRate = WalletEventBus.exchangeRates.value["beam_usd"] ?: 0.0
+                TxRateStore.backfillNewTxs(txList.map { it.txId }, currentRate)
+            }
         } catch (_: Exception) {
             emptyList()
         }
@@ -330,6 +371,18 @@ fun WalletScreen(
                             maxLines = 1,
                         )
 
+                        // USD equivalent
+                        if (beamUsdRate > 0) {
+                            val totalBeam = (beamStatus.available + beamStatus.shielded).toDouble() / 100_000_000.0
+                            val usdValue = totalBeam * beamUsdRate
+                            Text(
+                                text = "≈ $${String.format("%.2f", usdValue)} USD",
+                                color = C.textSecondary,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+
                         // Pending amounts — wrapping FlowRow like RN flexWrap
                         if (hasPending) {
                             Spacer(Modifier.height(8.dp))
@@ -434,13 +487,22 @@ fun WalletScreen(
                                 )
                             }
                         }
-                        Text(
-                            Helpers.formatBeam(beamStatus.available + beamStatus.shielded),
-                            color = C.text,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
+                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
+                            Text(
+                                Helpers.formatBeam(beamStatus.available + beamStatus.shielded),
+                                color = C.text,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            val cardUsd = formatUsd(beamStatus.available + beamStatus.shielded, beamUsdRate)
+                            if (cardUsd != null) {
+                                Text(
+                                    "≈ $cardUsd",
+                                    color = C.textSecondary,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -695,6 +757,18 @@ private fun TxCard(
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
+                }
+                // USD value at TX time (BEAM only)
+                if (tx.assetId == 0 && tx.usdRate > 0) {
+                    val usdStr = formatUsd(tx.amount, tx.usdRate)
+                    if (usdStr != null) {
+                        Text(
+                            "≈ $usdStr USD",
+                            color = C.textSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 1.dp),
+                        )
+                    }
                 }
                 Text(
                     "$statusText ${formatDate(tx.createTime)}",

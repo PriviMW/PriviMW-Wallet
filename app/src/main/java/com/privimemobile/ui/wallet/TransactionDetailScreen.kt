@@ -294,6 +294,19 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                 )
+                // USD at TX time
+                if (tx.assetId == 0) {
+                    val txRate = TxRateStore.get(tx.txId)
+                    val txUsd = formatUsd(tx.amount, txRate)
+                    if (txUsd != null) {
+                        Text(
+                            "≈ $txUsd USD at time of transaction",
+                            color = C.textSecondary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(10.dp))

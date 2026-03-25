@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -157,12 +158,36 @@ fun AssetDetailScreen(
                     }
                 }
 
+                val totalBalance = assetStatus.available + assetStatus.shielded
+                val exchRates by WalletEventBus.exchangeRates.collectAsState()
+                val usdRate = exchRates["beam_usd"] ?: 0.0
+
                 // Divider
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 12.dp))
 
                 // Balance breakdown — available + shielded are separate fields from C++ core
-                val totalAvailable = assetStatus.available + assetStatus.shielded
-                BalanceRow("Available", "${Helpers.formatBeam(totalAvailable)} $assetName", primary = true)
+                val totalAvailable = totalBalance
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Available", color = C.textSecondary, fontSize = 13.sp)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${Helpers.formatBeam(totalAvailable)} $assetName",
+                            color = C.text,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (assetId == 0 && usdRate > 0) {
+                            val usd = formatUsd(totalAvailable, usdRate)
+                            if (usd != null) {
+                                Text("≈ $usd USD", color = C.textSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
 
                 if (assetStatus.available > 0 && assetStatus.shielded > 0) {
                     BalanceRow("  Regular", "${Helpers.formatBeam(assetStatus.available)} $assetName")
@@ -318,6 +343,14 @@ fun AssetDetailScreen(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
+                            }
+                            // USD at TX time
+                            if (assetId == 0) {
+                                val txRate = TxRateStore.get(tx.txId)
+                                val txUsd = formatUsd(tx.amount, txRate)
+                                if (txUsd != null) {
+                                    Text("≈ $txUsd USD", color = C.textSecondary, fontSize = 10.sp)
+                                }
                             }
                             Text(
                                 if (isFailed) {

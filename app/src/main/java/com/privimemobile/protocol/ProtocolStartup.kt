@@ -62,6 +62,37 @@ object ProtocolStartup {
         }
 
         refreshWalletData()
+
+        // Fetch BEAM price from CoinGecko (repeat every 10 min)
+        scope.launch {
+            while (true) {
+                try {
+                    val price = withContext(Dispatchers.IO) {
+                        val url = java.net.URL("https://api.coingecko.com/api/v3/simple/price?ids=beam&vs_currencies=usd,btc,eth")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 10_000
+                        conn.readTimeout = 10_000
+                        try {
+                            val json = conn.inputStream.bufferedReader().readText()
+                            org.json.JSONObject(json).optJSONObject("beam")
+                        } finally {
+                            conn.disconnect()
+                        }
+                    }
+                    if (price != null) {
+                        val rates = mutableMapOf<String, Double>()
+                        if (price.has("usd")) rates["beam_usd"] = price.getDouble("usd")
+                        if (price.has("btc")) rates["beam_btc"] = price.getDouble("btc")
+                        if (price.has("eth")) rates["beam_eth"] = price.getDouble("eth")
+                        WalletEventBus.emitExchangeRates(rates)
+                        Log.d(TAG, "Exchange rates: $rates")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exchange rate fetch failed: ${e.message}")
+                }
+                delay(10 * 60 * 1000L) // 10 minutes
+            }
+        }
     }
 
     fun shutdown() {

@@ -80,6 +80,10 @@ object WalletEventBus {
     private val _coinSelection = MutableSharedFlow<CoinSelectionEvent>(extraBufferCapacity = 1)
     val coinSelection: SharedFlow<CoinSelectionEvent> = _coinSelection.asSharedFlow()
 
+    // Exchange rates (BEAM → USD, BTC, ETH)
+    private val _exchangeRates = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Double>>(emptyMap())
+    val exchangeRates: kotlinx.coroutines.flow.StateFlow<Map<String, Double>> = _exchangeRates
+
     // Generic wallet events (import results, errors)
     private val _walletEvent = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val walletEvent: SharedFlow<String> = _walletEvent.asSharedFlow()
@@ -114,6 +118,7 @@ object WalletEventBus {
     fun emitExportData(json: String) { _exportData.tryEmit(ExportDataEvent("json", json)) }
     fun emitExportCsv(csv: String) { _exportData.tryEmit(ExportDataEvent("csv", csv)) }
     fun emitCoinSelection(event: CoinSelectionEvent) { _coinSelection.tryEmit(event) }
+    fun emitExchangeRates(rates: Map<String, Double>) { _exchangeRates.value = rates }
     fun emitWalletEvent(event: String) { _walletEvent.tryEmit(event) }
 }
 

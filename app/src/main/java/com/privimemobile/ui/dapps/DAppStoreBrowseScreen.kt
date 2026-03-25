@@ -64,11 +64,11 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
     var message by remember { mutableStateOf<String?>(null) }
 
     // Load available DApps
+    var installedMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     fun loadAvailable() {
         DAppStore.queryAvailableDApps(context) { dapps ->
-            // Filter out already-installed DApps
-            val installed = DAppManager.getInstalled(context).map { it.guid }.toSet()
-            available = dapps.filter { it.guid !in installed }
+            installedMap = DAppManager.getInstalled(context).associate { it.guid to it.version }
+            available = dapps
             loading = false
         }
     }
@@ -256,10 +256,15 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
                         else -> 3                                  // No icon last
                     }
                 }.thenBy { it.name.lowercase() }), key = { it.guid }) { dapp ->
+                    val localVer = installedMap[dapp.guid]
+                    val isInstalled = localVer != null
+                    val hasUpdate = isInstalled && localVer != dapp.version
                     DAppStoreCard(
                         dapp = dapp,
                         installing = installing == dapp.guid,
-                        onInstall = {
+                        isInstalled = isInstalled,
+                        hasUpdate = hasUpdate,
+                        onAction = {
                             if (installing != null) return@DAppStoreCard
                             installing = dapp.guid
                             scope.launch {
@@ -417,7 +422,9 @@ private fun SideloadCard(installing: Boolean, onClick: () -> Unit) {
 private fun DAppStoreCard(
     dapp: AvailableDApp,
     installing: Boolean,
-    onInstall: () -> Unit,
+    isInstalled: Boolean = false,
+    hasUpdate: Boolean = false,
+    onAction: () -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -510,14 +517,14 @@ private fun DAppStoreCard(
                 )
             }
 
-            // Install button
+            // Action button
             Button(
-                onClick = onInstall,
-                enabled = !installing,
+                onClick = onAction,
+                enabled = !installing && (!isInstalled || hasUpdate),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = C.accent,
-                    disabledContainerColor = C.accent.copy(alpha = 0.5f),
+                    containerColor = if (hasUpdate) Color(0xFFFF9800) else if (isInstalled) C.border else C.accent,
+                    disabledContainerColor = if (isInstalled && !hasUpdate) C.border else C.accent.copy(alpha = 0.5f),
                 ),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 modifier = Modifier.widthIn(min = 70.dp),
@@ -530,8 +537,12 @@ private fun DAppStoreCard(
                     )
                 } else {
                     Text(
-                        "Install",
-                        color = C.textDark,
+                        when {
+                            hasUpdate -> "Update"
+                            isInstalled -> "Installed"
+                            else -> "Install"
+                        },
+                        color = if (isInstalled && !hasUpdate) C.textSecondary else C.textDark,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                     )

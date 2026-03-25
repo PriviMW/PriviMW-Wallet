@@ -365,7 +365,17 @@ object WalletListener {
         uiHandler.post { WalletEventBus.emitExportData(data) }
     }
 
-    @JvmStatic fun onExchangeRates(rates: Array<ExchangeRateDTO>?) { }
+    @JvmStatic fun onExchangeRates(rates: Array<ExchangeRateDTO>?) {
+        if (rates == null || rates.isEmpty()) return
+        val rateMap = mutableMapOf<String, Double>()
+        for (r in rates) {
+            // rate is in groth (1 BEAM = 100_000_000 groth), convert to decimal
+            val key = "${r.fromName}_${r.toName}"
+            rateMap[key] = r.rate.toDouble() / 100_000_000.0
+        }
+        Log.d(TAG, "onExchangeRates: ${rateMap.size} pairs")
+        uiHandler.post { WalletEventBus.emitExchangeRates(rateMap) }
+    }
 
     @JvmStatic fun onNewVersionNotification(action: Int, notificationInfo: NotificationDTO, content: VersionInfoDTO) { }
     @JvmStatic fun onAddressChangedNotification(action: Int, notificationInfo: NotificationDTO, content: WalletAddressDTO) { }

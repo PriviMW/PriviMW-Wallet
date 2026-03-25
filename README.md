@@ -9,7 +9,7 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 - **Wallet** — Send/receive BEAM and Confidential Assets (offline, online, max privacy)
 - **PriviMe Messaging** — End-to-end encrypted chat via SBBS (no servers, no intermediaries)
 - **Group Chats** — On-chain groups with admin roles, bans, invites, password-protected private groups
-- **DApp Store** — Browse and install Beam DApps (PriviBets included)
+- **DApp Store** — Browse and install Beam DApps
 - **Mobile Node** — Optional FlyClient lightweight verification for trustless operation
 - **Profile Pictures** — Peer-to-peer avatar exchange via SBBS
 - **Stickers** — Custom packs with animated TGS/Lottie support
@@ -106,6 +106,14 @@ The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https
 - [Beam Explorer](https://explorer.beam.mw) — Block explorer
 - [Beam Documentation](https://documentation.beam.mw) — Developer docs
 - [PriviMW DApps](https://github.com/PriviMW/privimw-dapps) — Smart contracts
+
+## Donate
+
+Support PriviMW development (BEAM):
+
+```
+1f80a21cf2b4baed9f88ede28bb05aa6a6032987cc3cc3934bb9e06d4d9fdc4feb3
+```
 
 ## License
 

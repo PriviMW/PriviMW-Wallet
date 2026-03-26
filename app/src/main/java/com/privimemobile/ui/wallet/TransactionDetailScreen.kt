@@ -224,7 +224,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
         else -> C.incoming
     }
 
+    // Detect swap TX by: message contains "Assets Swap" OR contractAssets has both send+receive
+    val isSwapTx = tx.message.contains("Assets Swap", ignoreCase = true) ||
+            tx.appName?.contains("Assets Swap", ignoreCase = true) == true ||
+            (tx.contractAssets.size >= 2 && tx.contractAssets.any { it.sending > 0 } && tx.contractAssets.any { it.receiving > 0 })
+
     val addressTypeLabel = when {
+        isSwapTx -> "Assets Swap"
         tx.isPublicOffline -> "Public Offline"
         tx.isMaxPrivacy -> "Max Privacy"
         tx.isOffline -> "Offline"
@@ -427,16 +433,39 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DetailRow("Date", fullTimestamp(tx.createTime))
-                    if (!tx.isDapps) {
-                        DetailRow("Address type", addressTypeLabel, valueColor = C.accent)
-                    }
+                    DetailRow("Address type", addressTypeLabel, valueColor = C.accent)
                     if (tx.message.isNotEmpty()) {
                         DetailRow(
-                            if (tx.isDapps) "Description" else "Comment",
+                            if (isSwapTx) "Comment" else if (tx.isDapps) "Description" else "Comment",
                             tx.message,
                         )
                     }
-                    if (tx.isDapps) {
+                    if (isSwapTx) {
+                        // Asset Swap TX — show addresses, fee, asset IDs
+                        if (tx.senderAddress.isNotEmpty()) {
+                            DetailRow(
+                                "Sending address",
+                                tx.senderAddress,
+                                mono = true,
+                                onCopy = { copyToClipboard("Sending address", tx.senderAddress) },
+                            )
+                        }
+                        if (tx.receiverAddress.isNotEmpty()) {
+                            DetailRow(
+                                "Receiving address",
+                                tx.receiverAddress,
+                                mono = true,
+                                onCopy = { copyToClipboard("Receiving address", tx.receiverAddress) },
+                            )
+                        }
+                        DetailRow("Transaction fee", "${Helpers.formatBeam(tx.fee)} BEAM")
+                        // Show asset IDs for each swapped asset
+                        tx.contractAssets.forEach { ca ->
+                            if (ca.assetId != 0) {
+                                DetailRow("Confidential asset ID", "${ca.assetId}")
+                            }
+                        }
+                    } else if (tx.isDapps) {
                         // DApp TX — show DApp name and contract CIDs instead of addresses
                         DetailRow("DApp Name", tx.appName ?: "Unknown DApp")
                         if (!tx.contractCids.isNullOrEmpty()) {

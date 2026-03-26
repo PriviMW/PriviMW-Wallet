@@ -7,6 +7,7 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 ## Features
 
 - **Wallet** — Send/receive BEAM and Confidential Assets (offline, online, max privacy)
+- **Assets Swap (DEX)** — Peer-to-peer asset trading with no intermediaries. Create offers, accept swaps, fully private atomic settlement on-chain
 - **PriviMe Messaging** — End-to-end encrypted chat via SBBS (no servers, no intermediaries)
 - **Group Chats** — On-chain groups with admin roles, bans, invites, password-protected private groups
 - **DApp Store** — Browse and install Beam DApps

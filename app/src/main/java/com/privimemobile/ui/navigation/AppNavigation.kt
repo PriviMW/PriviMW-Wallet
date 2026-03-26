@@ -19,10 +19,12 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +80,7 @@ enum class Tab(
     WALLET("wallet", "Wallet", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet),
     CHATS("chats", "Chats", Icons.Filled.Chat, Icons.Outlined.Chat),
     DAPPS("dapps", "DApps", Icons.Filled.Apps, Icons.Outlined.Apps),
+    SWAP("swap_tab", "Swap", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
     SETTINGS("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
 
@@ -295,6 +298,18 @@ fun AppNavigation() {
             composable("addresses") {
                 AddressesScreen(onBack = { navController.popBackStack() })
             }
+            composable("swap") {
+                com.privimemobile.ui.wallet.SwapScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreateOffer = { navController.navigate("create_offer") },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                )
+            }
+            composable("create_offer") {
+                com.privimemobile.ui.wallet.CreateOfferScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable("qr_scanner") {
                 QRScannerScreen(
                     onScanned = { address ->
@@ -484,6 +499,19 @@ fun AppNavigation() {
             }
             composable("dapp_store") {
                 DAppStoreBrowseScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                Tab.SWAP.route,
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { fadeIn(tween(150)) },
+                popExitTransition = { fadeOut(tween(150)) },
+            ) {
+                com.privimemobile.ui.wallet.SwapScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreateOffer = { navController.navigate("create_offer") },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                )
             }
             composable(
                 Tab.SETTINGS.route,

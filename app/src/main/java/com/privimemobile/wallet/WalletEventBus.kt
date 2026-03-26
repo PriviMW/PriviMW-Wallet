@@ -120,6 +120,46 @@ object WalletEventBus {
     fun emitCoinSelection(event: CoinSelectionEvent) { _coinSelection.tryEmit(event) }
     fun emitExchangeRates(rates: Map<String, Double>) { _exchangeRates.value = rates }
     fun emitWalletEvent(event: String) { _walletEvent.tryEmit(event) }
+
+    // DEX orders — handle delta actions (0=Add, 1=Remove, 2=Update, 3=Reset)
+    private val _dexOrders = kotlinx.coroutines.flow.MutableStateFlow<List<DexOrder>>(emptyList())
+    val dexOrders: kotlinx.coroutines.flow.StateFlow<List<DexOrder>> = _dexOrders
+    fun emitDexOrders(action: Int, ordersJson: String) {
+        android.util.Log.d("WalletEventBus", "emitDexOrders: action=$action, orders=${ordersJson.take(100)}")
+        val incoming = SwapManager.parseOrders(ordersJson)
+        val current = _dexOrders.value.toMutableList()
+        when (action) {
+            0 -> { // Added
+                incoming.forEach { order ->
+                    if (current.none { it.orderId == order.orderId }) current.add(order)
+                }
+            }
+            1 -> { // Removed
+                val removeIds = incoming.map { it.orderId }.toSet()
+                current.removeAll { it.orderId in removeIds }
+            }
+            2 -> { // Updated
+                incoming.forEach { updated ->
+                    val idx = current.indexOfFirst { it.orderId == updated.orderId }
+                    if (idx >= 0) current[idx] = updated else current.add(updated)
+                }
+            }
+            3 -> { // Reset — full list replacement
+                current.clear()
+                current.addAll(incoming)
+            }
+        }
+        _dexOrders.value = current.toList()
+    }
+
+    // New address generated (for DEX offer creation)
+    data class NewAddressEvent(val walletId: String, val ownId: Long)
+    private val _newAddress = kotlinx.coroutines.flow.MutableSharedFlow<NewAddressEvent>(extraBufferCapacity = 1)
+    val newAddress: kotlinx.coroutines.flow.SharedFlow<NewAddressEvent> = _newAddress
+    fun emitNewAddress(walletId: String, ownId: Long) {
+        android.util.Log.d("WalletEventBus", "emitNewAddress: walletId=${walletId.take(20)}... ownId=$ownId")
+        _newAddress.tryEmit(NewAddressEvent(walletId, ownId))
+    }
 }
 
 // Event data classes

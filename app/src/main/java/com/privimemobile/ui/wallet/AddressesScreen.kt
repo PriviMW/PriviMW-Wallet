@@ -302,10 +302,15 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = C.text,
+                            unfocusedTextColor = C.text,
                             focusedBorderColor = C.accent,
                             unfocusedBorderColor = C.border,
                             focusedLabelColor = C.accent,
+                            unfocusedLabelColor = C.textSecondary,
                             cursorColor = C.accent,
+                            focusedContainerColor = C.bg,
+                            unfocusedContainerColor = C.bg,
                         ),
                     )
                     Spacer(Modifier.height(20.dp))

@@ -211,11 +211,13 @@ object WalletListener {
 
     @JvmStatic
     fun onGeneratedNewAddress(addr: WalletAddressDTO) {
+        Log.d(TAG, "onGeneratedNewAddress: walletID=${addr.walletID.take(20)}... ownID=${addr.own}")
         // Re-fetch full address list so UI gets updated array
         uiHandler.post {
             try {
                 WalletManager.walletInstance?.getAddresses(true)
             } catch (_: Exception) {}
+            WalletEventBus.emitNewAddress(addr.walletID, addr.own)
         }
     }
 
@@ -375,6 +377,11 @@ object WalletListener {
         }
         Log.d(TAG, "onExchangeRates: ${rateMap.size} pairs")
         uiHandler.post { WalletEventBus.emitExchangeRates(rateMap) }
+    }
+
+    @JvmStatic fun onDexOrdersChanged(action: Int, ordersJson: String) {
+        Log.d(TAG, "onDexOrdersChanged: action=$action, json=${ordersJson.take(100)}...")
+        uiHandler.post { WalletEventBus.emitDexOrders(action, ordersJson) }
     }
 
     @JvmStatic fun onNewVersionNotification(action: Int, notificationInfo: NotificationDTO, content: VersionInfoDTO) { }

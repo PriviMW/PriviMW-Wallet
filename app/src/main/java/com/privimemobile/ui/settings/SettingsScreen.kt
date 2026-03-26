@@ -1090,62 +1090,6 @@ fun SettingsScreen(
                     toast("Error: ${e.message}")
                 }
             }
-            HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Test IPFS", "Hash first (safe), then add, then download") {
-                scope.launch { ipfsTestTitle = "IPFS Test"; ipfsTestResult = "Step 1: Hashing..." }
-                val testData = "PriviMe IPFS test".toList().map { it.code }
-                WalletApi.call("ipfs_hash", mapOf("data" to testData, "timeout" to 30000)) { hashResult ->
-                    val hashError = hashResult["error"]
-                    if (hashError != null) {
-                        scope.launch { ipfsTestTitle = "IPFS Hash Failed"; ipfsTestResult = "$hashError" }
-                        return@call
-                    }
-                    val hashCid = hashResult["hash"] as? String
-                    if (hashCid == null) {
-                        scope.launch { ipfsTestTitle = "IPFS Hash Failed"; ipfsTestResult = "No CID returned" }
-                        return@call
-                    }
-                    scope.launch { ipfsTestTitle = "IPFS Hash OK"; ipfsTestResult = "CID: $hashCid\n\nStep 2: Adding to IPFS..." }
-
-                    // Step 2: test ipfs_add
-                    WalletApi.call("ipfs_add", mapOf("data" to testData, "pin" to true, "timeout" to 30000)) { addResult ->
-                        val addError = addResult["error"]
-                        if (addError != null) {
-                            scope.launch { ipfsTestTitle = "IPFS Add Failed"; ipfsTestResult = "$addError" }
-                            return@call
-                        }
-                        val addCid = addResult["hash"] as? String
-                        if (addCid == null) {
-                            scope.launch { ipfsTestTitle = "IPFS Add Failed"; ipfsTestResult = "No CID returned" }
-                            return@call
-                        }
-                        scope.launch { ipfsTestTitle = "IPFS Add OK"; ipfsTestResult = "CID: $addCid\n\nStep 3: Downloading..." }
-
-                        // Step 3: test ipfs_get
-                        WalletApi.call("ipfs_get", mapOf("hash" to addCid, "timeout" to 30000)) { getResult ->
-                            val getError = getResult["error"]
-                            if (getError != null) {
-                                scope.launch { ipfsTestTitle = "IPFS Get Failed"; ipfsTestResult = "CID: $addCid\n\nError: $getError" }
-                                return@call
-                            }
-                            val data = getResult["data"]
-                            val byteCount = when (data) {
-                                is List<*> -> data.size
-                                else -> -1
-                            }
-                            scope.launch {
-                                if (byteCount > 0) {
-                                    ipfsTestTitle = "IPFS Test Complete"
-                                    ipfsTestResult = "All 3 steps passed!\n\nHash: OK\nAdd: OK\nGet: OK ($byteCount bytes)\n\nCID: $addCid"
-                                } else {
-                                    ipfsTestTitle = "IPFS Get Failed"
-                                    ipfsTestResult = "CID: $addCid\n\nNo data returned"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         // ========== ABOUT ==========

@@ -173,9 +173,16 @@ fun ChatScreen(
     }
     val groupMemberCount = groupMembers.size
     // Map handle → display name for sender labels in chat bubbles
-    val groupMemberNames = remember(groupMembers) {
-        groupMembers.filter { !it.displayName.isNullOrEmpty() }
-            .associate { it.handle to it.displayName!! }
+    // Resolve display names: group members first, then contacts DB
+    val contacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
+        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    val groupMemberNames = remember(groupMembers, contacts) {
+        val names = mutableMapOf<String, String>()
+        // From contacts DB
+        contacts.forEach { c -> if (!c.displayName.isNullOrEmpty()) names[c.handle] = c.displayName!! }
+        // From group members (overrides contacts if set)
+        groupMembers.forEach { m -> if (!m.displayName.isNullOrEmpty()) names[m.handle] = m.displayName!! }
+        names
     }
 
     val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"

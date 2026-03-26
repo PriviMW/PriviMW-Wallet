@@ -59,7 +59,7 @@ object TxAuthHelper {
     fun isAuthRequired(activity: Activity): Boolean {
         val prefs = getEncryptedPrefs(activity) ?: return false
         // SecureStorage stores these as booleans (putBoolean), not strings
-        val askPassword = prefs.getBoolean("ask_password_on_send", false)
+        val askPassword = prefs.getBoolean("ask_password_on_send", true)
         val fingerprint = prefs.getBoolean("fingerprint_enabled", false)
         return askPassword || fingerprint
     }

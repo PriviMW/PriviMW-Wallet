@@ -88,4 +88,11 @@ data class Wallet(val _this: Long) {
     external fun getNotifications()
     external fun markNotificationAsRead(id: String)
     external fun deleteNotification(id: String)
+
+    // DEX / Asset Swap
+    external fun getDexOrders()
+    external fun loadDexOrderParams()
+    external fun publishDexOrder(sbbsAddr: String, sbbsKeyIdx: Long, sendAssetId: Int, sendAmount: Long, sendSname: String, receiveAssetId: Int, receiveAmount: Long, receiveSname: String, expireMinutes: Int)
+    external fun cancelDexOrder(orderId: String)
+    external fun acceptDexOrder(orderId: String, sbbsId: String, sendAssetId: Int, sendAmount: Long, receiveAssetId: Int, receiveAmount: Long, fee: Long)
 }

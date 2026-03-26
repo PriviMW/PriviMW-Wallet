@@ -6,12 +6,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -43,8 +47,22 @@ private data class WalletAddress(
 
 private enum class AddressFilter(val label: String) {
     ALL("All"),
+    FAVOURITES("Favourites"),
     ACTIVE("Active"),
     EXPIRED("Expired"),
+}
+
+private fun getFavourites(context: android.content.Context): Set<String> {
+    return context.getSharedPreferences("address_prefs", android.content.Context.MODE_PRIVATE)
+        .getStringSet("favourites", emptySet()) ?: emptySet()
+}
+
+private fun toggleFavourite(context: android.content.Context, walletId: String): Boolean {
+    val prefs = context.getSharedPreferences("address_prefs", android.content.Context.MODE_PRIVATE)
+    val favs = prefs.getStringSet("favourites", emptySet())?.toMutableSet() ?: mutableSetOf()
+    val added = if (walletId in favs) { favs.remove(walletId); false } else { favs.add(walletId); true }
+    prefs.edit().putStringSet("favourites", favs).apply()
+    return added
 }
 
 @Composable
@@ -56,6 +74,8 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
     var editingAddress by remember { mutableStateOf<WalletAddress?>(null) }
     var editLabel by remember { mutableStateOf("") }
     var snackMessage by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    var favourites by remember { mutableStateOf(getFavourites(context)) }
 
     // Request addresses on mount via JNI (triggers onAddresses -> WalletEventBus.addresses)
     LaunchedEffect(Unit) {
@@ -87,9 +107,10 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
 
     val ownAddresses = addresses.filter { it.own }
 
-    val filtered = remember(ownAddresses, filter, now) {
+    val filtered = remember(ownAddresses, filter, now, favourites) {
         val list = when (filter) {
             AddressFilter.ALL -> ownAddresses
+            AddressFilter.FAVOURITES -> ownAddresses.filter { it.walletID in favourites }
             AddressFilter.ACTIVE -> ownAddresses.filter { addr ->
                 addr.duration == 0L || (addr.createTime + addr.duration) >= now
             }
@@ -166,6 +187,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             addr = addr,
                             expired = expired,
                             expiryText = getExpiryText(addr, now),
+                            isFavourite = addr.walletID in favourites,
                             onCopy = {
                                 clipboard.setText(AnnotatedString(addr.walletID))
                                 snackMessage = "Address copied"
@@ -179,6 +201,11 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                     WalletManager.walletInstance?.deleteAddress(addr.walletID)
                                     WalletManager.walletInstance?.getAddresses(true)
                                 } catch (_: Exception) {}
+                            },
+                            onToggleFavourite = {
+                                val added = toggleFavourite(context, addr.walletID)
+                                favourites = getFavourites(context)
+                                snackMessage = if (added) "Added to favourites" else "Removed from favourites"
                             },
                         )
                     }
@@ -303,7 +330,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                 val addr = editingAddress ?: return@Button
                                 try {
                                     WalletManager.walletInstance?.updateAddress(
-                                        addr.walletID, editLabel.trim(), 0
+                                        addr.walletID, editLabel.trim(), 3 /* AsIs — keep current expiration */
                                     )
                                     WalletManager.walletInstance?.getAddresses(true)
                                 } catch (_: Exception) {}
@@ -330,9 +357,11 @@ private fun AddressCard(
     addr: WalletAddress,
     expired: Boolean,
     expiryText: String,
+    isFavourite: Boolean,
     onCopy: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onToggleFavourite: () -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -348,12 +377,21 @@ private fun AddressCard(
                 .padding(14.dp)
                 .then(if (expired) Modifier else Modifier),
         ) {
-            // Header: label + expiry
+            // Header: label + star + expiry
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Icon(
+                    if (isFavourite) Icons.Filled.Star else Icons.Outlined.Star,
+                    contentDescription = "Favourite",
+                    tint = if (isFavourite) Color(0xFFFFC107) else C.textMuted,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { onToggleFavourite() }
+                        .padding(end = 2.dp),
+                )
                 Text(
                     text = addr.label.ifEmpty { "No label" },
                     color = if (expired) C.text.copy(alpha = 0.5f) else C.text,
@@ -363,7 +401,7 @@ private fun AddressCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(end = 8.dp),
+                        .padding(start = 4.dp, end = 8.dp),
                 )
                 Text(
                     text = expiryText,

@@ -60,7 +60,8 @@ class MainActivity : FragmentActivity() {
         handleDeepLink(intent)
 
         WalletManager.init(this)
-        window.navigationBarColor = Color.parseColor("#0a0e27")
+        com.privimemobile.ui.theme.C.loadSavedTheme(this)
+        // Let system handle nav bar color (follows system theme)
 
         // Force max refresh rate (120Hz)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -111,6 +112,13 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             PriviMWTheme {
+                // Update status bar icons based on theme (dark icons for light themes)
+                val isLight = com.privimemobile.ui.theme.C.isLight
+                androidx.compose.runtime.SideEffect {
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    controller.isAppearanceLightStatusBars = isLight
+                    controller.isAppearanceLightNavigationBars = isLight
+                }
                 Box(modifier = Modifier.fillMaxSize().imePadding()) {
                 var hasWallet by remember { mutableStateOf(WalletManager.isWalletCreated()) }
                 var unlocked by remember { mutableStateOf(false) }

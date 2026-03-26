@@ -40,7 +40,7 @@ fun CreateGroupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Group", color = Color.White) },
+                title = { Text("New Group", color = C.text) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -88,7 +88,7 @@ fun CreateGroupScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = C.accent, unfocusedBorderColor = C.textSecondary,
                     focusedLabelColor = C.accent, unfocusedLabelColor = C.textSecondary,
-                    cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                    cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                 ),
             )
 
@@ -111,7 +111,7 @@ fun CreateGroupScreen(
                     Icon(Icons.Default.Public, null, tint = if (isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Public", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Public", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Text("Anyone can find and join this group", color = C.textSecondary, fontSize = 12.sp)
                     }
                     RadioButton(selected = isPublic, onClick = { isPublic = true }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))
@@ -132,7 +132,7 @@ fun CreateGroupScreen(
                     Icon(Icons.Default.Lock, null, tint = if (!isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Private", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Private", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Text("Only people with an invite can join", color = C.textSecondary, fontSize = 12.sp)
                     }
                     RadioButton(selected = !isPublic, onClick = { isPublic = false }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))

@@ -69,10 +69,10 @@ fun GroupSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Group Info", color = Color.White) },
+                title = { Text("Group Info", color = C.text) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, "Back", tint = C.text)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
@@ -148,12 +148,12 @@ fun GroupSettingsScreen(
                                 )
                             } else {
                                 Box(modifier = Modifier.size(80.dp).background(C.accent, CircleShape), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(40.dp))
+                                    Icon(Icons.Default.Group, null, tint = C.text, modifier = Modifier.size(40.dp))
                                 }
                             }
                         } else {
                             Box(modifier = Modifier.size(80.dp).background(C.accent, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(40.dp))
+                                Icon(Icons.Default.Group, null, tint = C.text, modifier = Modifier.size(40.dp))
                             }
                         }
                     }
@@ -162,7 +162,7 @@ fun GroupSettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = group?.name ?: "",
-                            color = Color.White,
+                            color = C.text,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -179,7 +179,7 @@ fun GroupSettingsScreen(
                         AlertDialog(
                             onDismissRequest = { showNameDialog = false },
                             containerColor = C.card,
-                            title = { Text("Edit Group Name", color = Color.White) },
+                            title = { Text("Edit Group Name", color = C.text) },
                             text = {
                                 Column {
                                     OutlinedTextField(
@@ -189,7 +189,7 @@ fun GroupSettingsScreen(
                                         singleLine = true,
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                                            cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                            cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                                         ),
                                     )
                                     Text("${newName.length}/32", color = C.textMuted, fontSize = 12.sp, modifier = Modifier.align(Alignment.End))
@@ -249,7 +249,7 @@ fun GroupSettingsScreen(
                         Text("Description", color = C.textSecondary, fontSize = 12.sp)
                         Text(
                             desc?.ifEmpty { "No description" } ?: "No description",
-                            color = if (desc.isNullOrEmpty()) C.textMuted else Color.White,
+                            color = if (desc.isNullOrEmpty()) C.textMuted else C.text,
                             fontSize = 14.sp,
                         )
                     }
@@ -263,7 +263,7 @@ fun GroupSettingsScreen(
                     AlertDialog(
                         onDismissRequest = { showDescDialog = false },
                         containerColor = C.card,
-                        title = { Text("Edit Description", color = Color.White) },
+                        title = { Text("Edit Description", color = C.text) },
                         text = {
                             OutlinedTextField(
                                 value = newDesc,
@@ -272,7 +272,7 @@ fun GroupSettingsScreen(
                                 maxLines = 4,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                                    cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                    cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                                 ),
                             )
                         },
@@ -345,7 +345,7 @@ fun GroupSettingsScreen(
                             AlertDialog(
                                 onDismissRequest = { showAddDialog = false; searchJob?.cancel() },
                                 containerColor = C.card,
-                                title = { Text("Add Member", color = Color.White) },
+                                title = { Text("Add Member", color = C.text) },
                                 text = {
                                     Column(modifier = Modifier.heightIn(max = 350.dp)) {
                                         OutlinedTextField(
@@ -373,7 +373,7 @@ fun GroupSettingsScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             colors = OutlinedTextFieldDefaults.colors(
                                                 focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                                                cursorColor = C.accent, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                                cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                                             ),
                                         )
                                         Spacer(Modifier.height(8.dp))
@@ -409,7 +409,7 @@ fun GroupSettingsScreen(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         contact.displayName?.ifEmpty { null } ?: "@${contact.handle}",
-                                                        color = if (isMember) C.textMuted else Color.White,
+                                                        color = if (isMember) C.textMuted else C.text,
                                                         fontSize = 14.sp, fontWeight = FontWeight.Medium,
                                                     )
                                                     Text("@${contact.handle}", color = C.textSecondary, fontSize = 12.sp)
@@ -533,7 +533,7 @@ fun GroupSettingsScreen(
                         AlertDialog(
                             onDismissRequest = { showTransferDialog = false },
                             containerColor = C.card,
-                            title = { Text("Transfer Ownership", color = Color.White) },
+                            title = { Text("Transfer Ownership", color = C.text) },
                             text = {
                                 Column {
                                     if (admins.isEmpty()) {
@@ -562,7 +562,7 @@ fun GroupSettingsScreen(
                                             ) {
                                                 AvatarDisplay(handle = admin.handle, size = 36.dp)
                                                 Spacer(Modifier.width(10.dp))
-                                                Text("@${admin.handle}", color = Color.White, fontSize = 15.sp)
+                                                Text("@${admin.handle}", color = C.text, fontSize = 15.sp)
                                             }
                                         }
                                     }
@@ -667,7 +667,7 @@ private fun MemberRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (!member.displayName.isNullOrEmpty()) member.displayName else "@${member.handle}",
-                    color = Color.White,
+                    color = C.text,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,

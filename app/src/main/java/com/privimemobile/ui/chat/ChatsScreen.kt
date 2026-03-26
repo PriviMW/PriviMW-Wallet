@@ -1256,7 +1256,7 @@ private fun GroupRow(
                 }
                 Text(
                     text = group.name,
-                    color = Color.White,
+                    color = C.text,
                     fontSize = 16.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     maxLines = 1,

@@ -460,6 +460,78 @@ fun SettingsScreen(
             }
         }
 
+        // ========== APPEARANCE ==========
+        SectionTitle("APPEARANCE")
+        SettingsCard {
+            val currentTheme = C.currentThemeKey(context)
+            var showThemePicker by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showThemePicker = true }
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Theme", color = C.text, fontSize = 15.sp)
+                Text(com.privimemobile.ui.theme.THEME_NAMES[currentTheme] ?: "Dark", color = C.accent, fontSize = 15.sp)
+            }
+            if (showThemePicker) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showThemePicker = false },
+                    containerColor = C.card,
+                    title = { Text("Choose Theme", color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+                    text = {
+                        Column {
+                            com.privimemobile.ui.theme.ALL_THEMES.keys.toList().forEach { key ->
+                                val name = com.privimemobile.ui.theme.THEME_NAMES[key] ?: key
+                                val colors = com.privimemobile.ui.theme.ALL_THEMES[key]!!
+                                val isSelected = key == currentTheme
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            C.applyTheme(key, context)
+                                            showThemePicker = false
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    // Color preview dots
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf(colors.bg, colors.card, colors.accent).forEach { c ->
+                                            Box(
+                                                Modifier
+                                                    .size(16.dp)
+                                                    .background(c, shape = CircleShape)
+                                                    .then(
+                                                        if (c == Color(0xFFFFFFFF) || c == Color(0xFFF5F5F5))
+                                                            Modifier.border(1.dp, Color(0xFFCCCCCC), CircleShape)
+                                                        else Modifier
+                                                    )
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        name,
+                                        color = if (isSelected) C.accent else C.text,
+                                        fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isSelected) {
+                                        Text("\u2713", color = C.accent, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+        }
+
         // ========== NOTIFICATIONS ==========
         SectionTitle("NOTIFICATIONS")
         SettingsCard {
@@ -607,7 +679,7 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Security, null, tint = C.accent, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Enable Mobile Node", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("Enable Mobile Node", color = C.text, fontWeight = FontWeight.Bold)
                         }
                     },
                     text = {

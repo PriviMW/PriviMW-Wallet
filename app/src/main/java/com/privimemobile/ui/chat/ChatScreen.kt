@@ -2005,7 +2005,7 @@ fun ChatScreen(
                         ) {
                             Card(
                                 shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = if (isMine) Color(0xFF1B3A4B) else C.card),
+                                colors = CardDefaults.cardColors(containerColor = if (isMine) C.bubbleMine else C.bubbleOther),
                                 modifier = Modifier.widthIn(max = 280.dp),
                             ) {
                                 // 2-column grid
@@ -4620,7 +4620,7 @@ private fun MessageBubble(
             Column(modifier = Modifier.padding(14.dp)) {
                 Text("\uD83D\uDC65 Group Invite", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                Text(inviteGroupName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(inviteGroupName, color = C.bubbleText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text("$inviteMemberCount members \u2022 Invited by @$invitedBy", color = C.textSecondary, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))
                 if (!alreadyResponded && !joining) {
@@ -4801,7 +4801,7 @@ private fun MessageBubble(
             if (msg.type == "sticker_pack") {
                 Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = if (isMine) Color(0xFF1B3A4B) else C.card),
+                    colors = CardDefaults.cardColors(containerColor = if (isMine) C.bubbleMine else C.bubbleOther),
                     modifier = Modifier.widthIn(max = 260.dp).clickable { onTap() },
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -4960,8 +4960,8 @@ private fun MessageBubble(
                         targetValue = when {
                             isSelected -> C.accent.copy(alpha = 0.25f)
                             isHighlighted -> C.accent.copy(alpha = 0.3f)
-                            isMine -> Color(0xFF1B3A4B)
-                            else -> C.card
+                            isMine -> C.bubbleMine
+                            else -> C.bubbleOther
                         },
                         animationSpec = tween(180),
                         label = "bubbleColor",
@@ -5517,7 +5517,7 @@ private fun FullscreenImageViewer(
             }
             Text(
                 fileName,
-                color = Color.White,
+                color = C.bubbleText,
                 fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

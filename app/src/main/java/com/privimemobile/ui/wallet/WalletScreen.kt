@@ -115,7 +115,7 @@ object TxRateStore {
 /** Format USD value for display. */
 internal fun formatUsd(groth: Long, rate: Double): String? {
     if (rate <= 0) return null
-    val beam = groth.toDouble() / 100_000_000.0
+    val beam = Math.abs(groth.toDouble()) / 100_000_000.0
     val usd = beam * rate
     return if (usd < 0.01 && usd > 0) "< $0.01" else "$${String.format("%.2f", usd)}"
 }
@@ -744,6 +744,10 @@ private fun TxCard(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
+                            if (ca.assetId == 0 && tx.usdRate > 0) {
+                                val caUsd = formatUsd(displayAmount, tx.usdRate)
+                                if (caUsd != null) Text("≈ $caUsd USD", color = C.textSecondary, fontSize = 11.sp)
+                            }
                         }
                     }
                 } else {
@@ -758,8 +762,8 @@ private fun TxCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                // USD value at TX time (BEAM only)
-                if (tx.assetId == 0 && tx.usdRate > 0) {
+                // USD value at TX time (BEAM only, skip if contractAssets already showed it)
+                if (tx.assetId == 0 && tx.usdRate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
                     val usdStr = formatUsd(tx.amount, tx.usdRate)
                     if (usdStr != null) {
                         Text(

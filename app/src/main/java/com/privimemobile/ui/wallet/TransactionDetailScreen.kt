@@ -280,6 +280,18 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                         )
+                        if (ca.assetId == 0) {
+                            val txRate = TxRateStore.get(tx.txId)
+                            val caUsd = formatUsd(displayAmount, txRate)
+                            if (caUsd != null) {
+                                Text(
+                                    "≈ $caUsd USD at time of transaction",
+                                    color = C.textSecondary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
                     }
                 }
             } else {

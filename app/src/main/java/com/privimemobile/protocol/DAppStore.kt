@@ -48,6 +48,9 @@ object DAppStore {
         }
     }
 
+    /** Cached publisher PK → name map. */
+    private var publisherNames: Map<String, String> = emptyMap()
+
     /**
      * Query available DApps from the on-chain store.
      *
@@ -65,6 +68,46 @@ object DAppStore {
             return
         }
 
+        // First load publishers, then load DApps
+        loadPublishers(shader) {
+            loadDApps(context, shader, callback)
+        }
+    }
+
+    /** Query publisher PK → name mapping from on-chain store. */
+    private fun loadPublishers(shader: List<Int>, onDone: () -> Unit) {
+        if (publisherNames.isNotEmpty()) { onDone(); return }
+
+        val args = "action=view_publishers,cid=${Config.DAPP_STORE_CID}"
+        val params = mapOf<String, Any?>(
+            "args" to args,
+            "create_tx" to false,
+            "contract" to shader,
+        )
+        WalletApi.call("invoke_contract", params) { result ->
+            try {
+                @Suppress("UNCHECKED_CAST")
+                val publishers = result["publishers"] as? List<Map<String, Any?>>
+                if (publishers != null) {
+                    val map = mutableMapOf<String, String>()
+                    for (pub in publishers) {
+                        val pk = pub["pubkey"] as? String ?: continue
+                        val nameHex = pub["name"] as? String ?: continue
+                        val name = hexToString(nameHex)
+                        if (name.isNotEmpty()) map[pk.lowercase()] = name
+                    }
+                    publisherNames = map
+                    Log.d(TAG, "Loaded ${map.size} publishers")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load publishers: ${e.message}")
+            }
+            onDone()
+        }
+    }
+
+    /** Query DApps list from on-chain store. */
+    private fun loadDApps(context: Context, shader: List<Int>, callback: (List<AvailableDApp>) -> Unit) {
         val args = "action=view_dapps,cid=${Config.DAPP_STORE_CID}"
         val params = mapOf<String, Any?>(
             "args" to args,
@@ -95,7 +138,8 @@ object DAppStore {
                     if (name.isEmpty()) return@mapNotNull null
                     val description = hexToString(item["description"] as? String ?: "")
                     val ipfsCid = item["ipfs_id"] as? String ?: ""
-                    val publisher = item["publisher"] as? String ?: ""
+                    val publisherPk = item["publisher"] as? String ?: ""
+                    val publisherName = publisherNames[publisherPk.lowercase()] ?: ""
 
                     // Parse version
                     @Suppress("UNCHECKED_CAST")
@@ -116,7 +160,7 @@ object DAppStore {
                         if (svg.startsWith("<svg") || svg.startsWith("<?xml")) svg else ""
                     } else ""
 
-                    AvailableDApp(guid, name, description, version, ipfsCid, publisher, icon)
+                    AvailableDApp(guid, name, description, version, ipfsCid, publisherPk, icon, publisherName = publisherName)
                 }
 
                 // Merge bundled DApps (add first, skip if already in on-chain list)
@@ -190,4 +234,5 @@ data class AvailableDApp(
     val publisher: String,
     val icon: String = "",
     val bundledAsset: String = "",
+    val publisherName: String = "",
 )

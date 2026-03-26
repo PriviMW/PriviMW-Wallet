@@ -487,13 +487,23 @@ private fun DAppStoreCard(
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 1.dp),
                 )
+                if (dapp.publisherName.isNotEmpty()) {
+                    Text(
+                        text = dapp.publisherName,
+                        color = C.accent,
+                        fontSize = 11.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (dapp.publisher.isNotEmpty()) {
                     Text(
                         text = if (dapp.publisher.length > 20) {
                             "${dapp.publisher.take(8)}...${dapp.publisher.takeLast(8)}"
                         } else dapp.publisher,
                         color = C.textSecondary,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

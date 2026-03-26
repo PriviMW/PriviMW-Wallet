@@ -327,14 +327,14 @@ private fun BalancePanel(
     ) {
         // BEAM balance
         item {
-            BalanceRow(assetId = 0, name = "BEAM", available = beamStatus.available)
+            BalanceRow(assetId = 0, name = "BEAM", available = beamStatus.available + beamStatus.shielded)
         }
         // Other assets
-        val otherAssets = assetBalanceMap.filter { it.key != 0 && it.value.available > 0 }
+        val otherAssets = assetBalanceMap.filter { it.key != 0 && (it.value.available + it.value.shielded) > 0 }
         items(otherAssets.entries.toList(), key = { it.key }) { (assetId, bal) ->
             val info = assetInfoMap[assetId]
             val name = info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #$assetId"
-            BalanceRow(assetId = assetId, name = name, available = bal.available)
+            BalanceRow(assetId = assetId, name = name, available = bal.available + bal.shielded)
         }
         if (otherAssets.isEmpty()) {
             item {

@@ -72,9 +72,9 @@ fun SwapScreen(
         }
     }
 
-    var dismissedIds by remember { mutableStateOf(setOf<String>()) }
-    var filterAssetId by remember { mutableStateOf(-1) } // -1 = All assets
-    var showFilterPicker by remember { mutableStateOf(false) }
+    var dismissedIds by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var filterAssetId by rememberSaveable { mutableIntStateOf(-1) } // -1 = All assets
+    var showFilterPicker by rememberSaveable { mutableStateOf(false) }
 
     // Swap TX history from wallet transactions
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
@@ -107,11 +107,18 @@ fun SwapScreen(
             }.sortedByDescending { it.createTime }
         } catch (_: Exception) { emptyList() }
     }
-    var dismissedTxIds by remember { mutableStateOf(setOf<String>()) }
+    var dismissedTxIds by rememberSaveable { mutableStateOf(setOf<String>()) }
+    // Load dismissed history IDs from SecureStorage on mount
+    LaunchedEffect(Unit) {
+        dismissedTxIds = com.privimemobile.protocol.SecureStorage.getStringSet(
+            com.privimemobile.protocol.SecureStorage.KEY_DISMISSED_SWAP_HISTORY
+        )
+    }
     val filteredHistory = swapHistory.filter { it.txId.isNotEmpty() && it.txId !in dismissedTxIds }
-    var confirmOrder by remember { mutableStateOf<DexOrder?>(null) }
+    var confirmOrder by rememberSaveable { mutableStateOf<DexOrder?>(null) }
     val allOffers = orders.filter { it.isActive && !it.isMine && it.orderId !in dismissedIds &&
-            (filterAssetId == -1 || it.sendAssetId == filterAssetId || it.receiveAssetId == filterAssetId) }
+            (filterAssetId == -1 || it.sendAssetId == filterAssetId || it.receiveAssetId == filterAssetId) &&
+            SwapManager.isLegitimateReceiveAsset(it.receiveAssetId, it.receiveSname) }
     val myOffers = orders.filter { it.isMine && it.orderId !in dismissedIds }
 
     Scaffold(
@@ -157,7 +164,7 @@ fun SwapScreen(
 
             // Asset filter (only for All Offers tab)
             if (selectedTab == 0) {
-                val assetIds = orders.filter { it.isActive && !it.isMine }
+                val assetIds = allOffers
                     .flatMap { listOf(it.sendAssetId, it.receiveAssetId) }.toSet().sorted()
                 if (assetIds.size > 1) {
                     Row(
@@ -204,7 +211,7 @@ fun SwapScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.SwapHoriz, null, tint = C.textMuted, modifier = Modifier.size(48.dp))
                             Spacer(Modifier.height(12.dp))
-                            Text("No swap history", color = C.textSecondary, fontSize = 15.sp)
+                            Text("No swap history", color = C.textSecondary, fontSize = 13.sp)
                         }
                     }
                 } else {
@@ -216,7 +223,13 @@ fun SwapScreen(
                             SwapHistoryCard(
                                 tx = tx,
                                 onClick = { onTxDetail(tx.txId) },
-                                onDismiss = { dismissedTxIds = dismissedTxIds + tx.txId },
+                                onDismiss = {
+                                    dismissedTxIds = dismissedTxIds + tx.txId
+                                    com.privimemobile.protocol.SecureStorage.putStringSet(
+                                        com.privimemobile.protocol.SecureStorage.KEY_DISMISSED_SWAP_HISTORY,
+                                        dismissedTxIds
+                                    )
+                                },
                             )
                         }
                     }
@@ -561,16 +574,16 @@ private fun SwapOfferCardContent(
                 Text(
                     "${Helpers.formatBeam(order.sendAmount)} $sendTicker",
                     color = C.outgoing,
-                    fontSize = 17.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Text("  \u2192  ", color = C.textSecondary, fontSize = 17.sp)
+                Text("  \u2192  ", color = C.textSecondary, fontSize = 15.sp)
                 com.privimemobile.ui.components.AssetIcon(assetId = order.receiveAssetId, ticker = receiveTicker, size = 24.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
                     "${Helpers.formatBeam(order.receiveAmount)} $receiveTicker",
                     color = C.incoming,
-                    fontSize = 17.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -655,9 +668,9 @@ private fun SwapOfferCardContent(
                     ),
                 ) {
                     if (!canAfford && order.isActive) {
-                        Text("Insufficient $sendTicker", color = C.textMuted, fontSize = 14.sp)
+                        Text("Insufficient $sendTicker", color = C.textMuted, fontSize = 12.sp)
                     } else {
-                        Text("Accept Swap", color = C.bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Accept Swap", color = C.bg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -722,7 +735,7 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = ca.assetId, ticker = ticker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                Text("$prefix${Helpers.formatBeam(displayAmount)} $ticker", color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text("$prefix${Helpers.formatBeam(displayAmount)} $ticker", color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -732,7 +745,7 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         com.privimemobile.ui.components.AssetIcon(assetId = tx.assetId, ticker = ticker, size = 20.dp)
                         Spacer(Modifier.width(6.dp))
-                        Text("${Helpers.formatBeam(tx.amount)} $ticker", color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("${Helpers.formatBeam(tx.amount)} $ticker", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 

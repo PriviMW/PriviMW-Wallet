@@ -16,6 +16,41 @@ object SwapManager {
     private const val TAG = "SwapManager"
     private const val DEX_FEE_GROTH = 100_000L // 0.001 BEAM — hardcoded by Beam core
 
+    /** Known real asset IDs paired with their canonical ticker. Used to filter fake assets with duplicate names. */
+    private val knownAssets by lazy {
+        mapOf(
+            0 to "BEAM", 7 to "BEAMX", 9 to "TICO",
+            36 to "bETH", 37 to "bUSDT", 38 to "bWBTC", 39 to "bDAI", 47 to "NPH",
+        )
+    }
+
+    /**
+     * Returns true if the receive side of an offer appears legitimate.
+     * Checks BOTH the sname field (from the order directly, catches fakes before caching)
+     * AND the resolved ticker (from assetTicker cache, catches fakes after caching).
+     * A known ticker with a mismatched assetId is always fake.
+     * The send side is not filtered — users can offer any asset they hold.
+     */
+    fun isLegitimateReceiveAsset(receiveAssetId: Int, receiveSname: String): Boolean {
+        // Layer 1: check sname from order directly (works even if asset not cached yet)
+        // sname may be formatted as "TICKER (ID)" e.g. "BEAMX (26)" — match as whole word only
+        // so "BEAMX" doesn't false-match against "BEAM" prefix
+        if (receiveSname.isNotEmpty()) {
+            val canonicalEntry = knownAssets.entries.find { entry ->
+                Regex("^\\Q${entry.value}\\E\\b", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(receiveSname.trim())
+            }
+            if (canonicalEntry != null && canonicalEntry.key != receiveAssetId) return false
+        }
+        // Layer 2: check resolved ticker from cache (catches fakes after asset info is fetched)
+        val effectiveTicker = assetTicker(receiveAssetId)
+        if (effectiveTicker != "Asset #$receiveAssetId") {
+            val tickerCanonical = knownAssets.entries.find { it.value.equals(effectiveTicker, ignoreCase = true) }
+            if (tickerCanonical != null && tickerCanonical.key != receiveAssetId) return false
+        }
+        return true
+    }
+
     /** Request current DEX order book from the network. Results arrive via onDexOrdersChanged callback. */
     fun refreshOrders() {
         Log.d(TAG, "refreshOrders()")

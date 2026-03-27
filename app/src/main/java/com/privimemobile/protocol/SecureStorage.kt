@@ -25,6 +25,7 @@ object SecureStorage {
     const val KEY_FINGERPRINT_ENABLED = "fingerprint_enabled"
     const val KEY_FAILED_ATTEMPTS = "failed_unlock_attempts"
     const val KEY_LOCKOUT_UNTIL = "lockout_until_ts"
+    const val KEY_DISMISSED_SWAP_HISTORY = "dismissed_swap_history"
 
     private var prefs: SharedPreferences? = null
 
@@ -93,6 +94,23 @@ object SecureStorage {
     fun getLong(key: String, default: Long = 0L): Long = prefs?.getLong(key, default) ?: default
     fun putLong(key: String, value: Long) {
         prefs?.edit()?.putLong(key, value)?.apply()
+    }
+
+    /** Store a set of strings as a JSON array. */
+    fun putStringSet(key: String, value: Set<String>) {
+        val json = org.json.JSONArray(value.toList()).toString()
+        putString(key, json)
+    }
+
+    /** Retrieve a set of strings stored as a JSON array. */
+    fun getStringSet(key: String): Set<String> {
+        val json = getString(key) ?: return emptySet()
+        return try {
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { arr.getString(it) }.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
     }
 
     fun remove(key: String) {

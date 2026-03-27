@@ -12,7 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.rememberCoroutineScope
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.*
@@ -38,7 +36,10 @@ private data class PendingOfferParams(
 )
 
 /**
- * CreateOfferScreen — form to create a new DEX swap offer.
+ * CreateOfferScreen — exchange-style limit order form for DEX swap offers.
+ *
+ * Layout: Buy asset → Unit Price → Pay → You'll Receive (editable) → Rate → Expiry → Post
+ * Bidirectional calculation: Pay × Price = Receive, and Receive ÷ Price = Pay.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,7 +53,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         WalletEventBus.walletStatus.collect { event -> assetBalances[event.assetId] = event }
     }
 
-    // Available assets (with balance > 0)
+    // Available assets (with balance > 0) — for sell picker
     val availableAssets = assetBalances.filter { (_, v) -> (v.available + v.shielded) > 0 }
         .keys.sorted().toList()
 
@@ -63,15 +64,17 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         }
     }
 
-    var sendAssetId by remember { mutableIntStateOf(0) } // default BEAM
-    var receiveAssetId by remember { mutableIntStateOf(if (availableAssets.size > 1) availableAssets.first { it != 0 } else 0) }
-    var sendAmountText by remember { mutableStateOf("") }
-    var receiveAmountText by remember { mutableStateOf("") }
+    // ---- Form state ----
+    var buyAssetId by remember { mutableIntStateOf(7) }        // what user wants to buy
+    var sellAssetId by remember { mutableIntStateOf(0) }        // what user pays
+    var priceText by remember { mutableStateOf("") }             // unit price as string
+    var payAmountText by remember { mutableStateOf("") }         // user-editable Pay amount
+    var receiveAmountText by remember { mutableStateOf("") }     // user-editable Receive amount
+    var rateFlipped by remember { mutableStateOf(false) }        // false = "1 BUY = X SELL"
     var expireMinutes by remember { mutableIntStateOf(60) }
-    var showSendPicker by remember { mutableStateOf(false) }
-    var showReceivePicker by remember { mutableStateOf(false) }
+    var showBuyPicker by remember { mutableStateOf(false) }
+    var showSellPicker by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     // Pending offer params — set when user taps Post, consumed when address arrives
     var pendingOffer by remember { mutableStateOf<PendingOfferParams?>(null) }
@@ -106,17 +109,18 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         }
     }
 
-    // Known asset tickers
-    val knownTickers = mapOf(
-        0 to "BEAM", 7 to "BEAMX", 9 to "TICO",
-        36 to "bETH", 37 to "bUSDT", 38 to "bWBTC", 39 to "bDAI", 47 to "NPH",
-    )
+    // Hardcoded buyable assets (what users can search for)
+    val supportedBuyAssets = listOf(0, 7, 9, 36, 37, 38, 39, 47)
 
-    fun assetTicker(id: Int): String {
-        val name = knownTickers[id]
-            ?: assetInfoCache[id]?.let { it.unitName?.ifEmpty { null } ?: it.shortName?.ifEmpty { null } }
-            ?: "Asset"
-        return if (id == 0) name else "$name ($id)"
+    // ---- Ticker helpers ----
+    fun buyTicker() = if (buyAssetId == 0) "BEAM" else {
+        val info = assetInfoCache[buyAssetId]
+        info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${buyAssetId}"
+    }
+
+    fun sellTicker() = if (sellAssetId == 0) "BEAM" else {
+        val info = assetInfoCache[sellAssetId]
+        info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${sellAssetId}"
     }
 
     fun assetBalance(id: Int): Long {
@@ -124,11 +128,32 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         return bal.available + bal.shielded
     }
 
-    val sendBalance = assetBalance(sendAssetId)
-    val sendAmountGroth = try { (sendAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000 } catch (_: Exception) { 0.0 }
-    val receiveAmountGroth = try { (receiveAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000 } catch (_: Exception) { 0.0 }
-    val canCreate = sendAmountGroth > 0 && receiveAmountGroth > 0 &&
-            sendAssetId != receiveAssetId && sendAmountGroth.toLong() <= sendBalance && !creating
+    val sellBalance = assetBalance(sellAssetId)
+
+    // ---- Recalculate Receive from Pay ÷ Unit Price ----
+    fun recalcReceive() {
+        val price = priceText.toDoubleOrNull() ?: return
+        val pay = payAmountText.toDoubleOrNull() ?: return
+        if (price <= 0 || pay <= 0) { receiveAmountText = ""; return }
+        receiveAmountText = String.format("%.8f", pay / price).trimEnd('0').trimEnd('.')
+        if (receiveAmountText.isEmpty()) receiveAmountText = "0"
+    }
+
+    // ---- Recalculate Price from Pay ÷ Receive ----
+    fun recalcPrice() {
+        val pay = payAmountText.toDoubleOrNull() ?: return
+        val receive = receiveAmountText.toDoubleOrNull() ?: return
+        if (pay <= 0 || receive <= 0) { priceText = ""; return }
+        priceText = String.format("%.8f", pay / receive).trimEnd('0').trimEnd('.')
+        if (priceText.isEmpty()) priceText = "0"
+    }
+
+    // Parse groth amounts
+    val payGroth = (payAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000
+    val receiveGroth = (receiveAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000
+
+    val canCreate = payGroth > 0 && receiveGroth > 0 &&
+            sellAssetId != buyAssetId && payGroth.toLong() <= sellBalance && !creating
 
     Scaffold(
         topBar = {
@@ -153,63 +178,142 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         ) {
             Spacer(Modifier.height(16.dp))
 
-            // ---- I'M SELLING ----
-            Text("I'm selling", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // ---- BUY ASSET ----
+            Text("Buy", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = C.card),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showBuyPicker = true }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        com.privimemobile.ui.components.AssetIcon(
+                            assetId = buyAssetId,
+                            ticker = buyTicker(),
+                            size = 24.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(buyTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ---- UNIT PRICE CARD ----
+            Text("Unit Price", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = C.card),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Asset picker
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { showSendPicker = true },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            com.privimemobile.ui.components.AssetIcon(assetId = sendAssetId, ticker = assetTicker(sendAssetId), size = 24.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(assetTicker(sendAssetId), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
-                    }
+                    Text(
+                        "${buyTicker()}/${sellTicker()}",
+                        color = C.text,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
                     Spacer(Modifier.height(8.dp))
-                    // Amount input
                     OutlinedTextField(
-                        value = sendAmountText,
-                        onValueChange = { sendAmountText = it.filter { c -> c.isDigit() || c == '.' } },
+                        value = priceText,
+                        onValueChange = { raw ->
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
+                            val dotCount = filtered.count { it == '.' }
+                            if (dotCount > 1) return@OutlinedTextField
+                            priceText = filtered
+                            if (priceText.isNotEmpty() && payAmountText.isNotEmpty()) {
+                                recalcReceive()
+                            }
+                        },
                         placeholder = { Text("0.00", color = C.textMuted) },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = C.text, unfocusedTextColor = C.text,
+                            focusedTextColor = C.text,
+                            unfocusedTextColor = C.text,
                             cursorColor = C.accent,
-                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                            focusedBorderColor = C.accent,
+                            unfocusedBorderColor = C.border,
+                        ),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ---- PAY ----
+            Text("Pay", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(6.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = C.card),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Sell asset picker
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showSellPicker = true }
+                            .padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.privimemobile.ui.components.AssetIcon(
+                                assetId = sellAssetId,
+                                ticker = sellTicker(),
+                                size = 24.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(sellTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
+                    }
+                    // Amount input
+                    OutlinedTextField(
+                        value = payAmountText,
+                        onValueChange = { raw ->
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
+                            val dotCount = filtered.count { it == '.' }
+                            if (dotCount > 1) return@OutlinedTextField
+                            payAmountText = filtered
+                            if (payAmountText.isNotEmpty() && priceText.isNotEmpty()) {
+                                recalcReceive()
+                            }
+                        },
+                        placeholder = { Text("0.00", color = C.textMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = C.text,
+                            unfocusedTextColor = C.text,
+                            cursorColor = C.accent,
+                            focusedBorderColor = C.accent,
+                            unfocusedBorderColor = C.border,
                         ),
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Available: ${Helpers.formatBeam(sendBalance)} ${assetTicker(sendAssetId)}",
-                        color = if (sendAmountGroth.toLong() > sendBalance) C.error else C.textMuted,
+                        "Available: ${Helpers.formatBeam(sellBalance)} ${sellTicker()}",
+                        color = if (payGroth.toLong() > sellBalance) C.error else C.textMuted,
                         fontSize = 12.sp,
                     )
                 }
             }
 
-            // Swap direction icon
-            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                IconButton(onClick = {
-                    val tmp = sendAssetId; sendAssetId = receiveAssetId; receiveAssetId = tmp
-                    val tmpAmt = sendAmountText; sendAmountText = receiveAmountText; receiveAmountText = tmpAmt
-                }) {
-                    Icon(Icons.Default.SwapVert, "Swap direction", tint = C.accent, modifier = Modifier.size(32.dp))
-                }
-            }
-
-            // ---- I WANT ----
-            Text("I want", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            // ---- YOU'LL RECEIVE ----
+            Text("You'll Receive", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -217,48 +321,70 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { showReceivePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            com.privimemobile.ui.components.AssetIcon(assetId = receiveAssetId, ticker = assetTicker(receiveAssetId), size = 24.dp)
+                            com.privimemobile.ui.components.AssetIcon(
+                                assetId = buyAssetId,
+                                ticker = buyTicker(),
+                                size = 24.dp,
+                            )
                             Spacer(Modifier.width(8.dp))
-                            Text(assetTicker(receiveAssetId), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(buyTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
-                        Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = receiveAmountText,
-                        onValueChange = { receiveAmountText = it.filter { c -> c.isDigit() || c == '.' } },
+                        onValueChange = { raw ->
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
+                            val dotCount = filtered.count { it == '.' }
+                            if (dotCount > 1) return@OutlinedTextField
+                            receiveAmountText = filtered
+                            if (receiveAmountText.isNotEmpty() && priceText.isNotEmpty()) {
+                                recalcPrice()
+                            }
+                        },
                         placeholder = { Text("0.00", color = C.textMuted) },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = C.text, unfocusedTextColor = C.text,
+                            focusedTextColor = C.text,
+                            unfocusedTextColor = C.text,
                             cursorColor = C.accent,
-                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
+                            focusedBorderColor = C.accent,
+                            unfocusedBorderColor = C.border,
                         ),
                     )
                 }
             }
 
-            // Rate display (tappable to toggle)
-            var createRateFlipped by remember { mutableStateOf(false) }
-            if (sendAmountGroth > 0 && receiveAmountGroth > 0) {
+            // Same asset warning
+            if (sellAssetId == buyAssetId) {
+                Spacer(Modifier.height(8.dp))
+                Text("Cannot swap the same asset", color = C.error, fontSize = 12.sp)
+            }
+
+            // Rate bar (tappable to flip, default "1 BUY = X SELL")
+            if (priceText.toDoubleOrNull() != null && priceText.toDouble() > 0) {
                 Spacer(Modifier.height(12.dp))
-                val createRateText = if (!createRateFlipped) {
-                    "Rate: 1 ${assetTicker(sendAssetId)} = ${formatRate(receiveAmountGroth / sendAmountGroth)} ${assetTicker(receiveAssetId)}"
-                } else {
-                    "Rate: 1 ${assetTicker(receiveAssetId)} = ${formatRate(sendAmountGroth / receiveAmountGroth)} ${assetTicker(sendAssetId)}"
-                }
                 Row(
-                    modifier = Modifier.clickable { createRateFlipped = !createRateFlipped },
+                    modifier = Modifier.clickable { rateFlipped = !rateFlipped },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(createRateText, color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        if (!rateFlipped) {
+                            "1 ${buyTicker()} = ${formatRate(priceText.toDouble())} ${sellTicker()}"
+                        } else {
+                            "1 ${sellTicker()} = ${formatRate(1.0 / priceText.toDouble())} ${buyTicker()}"
+                        },
+                        color = C.accent,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
                     Spacer(Modifier.width(6.dp))
                     Text("\u21C4", color = C.accent, fontSize = 14.sp)
                 }
@@ -286,28 +412,21 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                 }
             }
 
-            // Same asset warning
-            if (sendAssetId == receiveAssetId) {
-                Spacer(Modifier.height(8.dp))
-                Text("Cannot swap the same asset", color = C.error, fontSize = 12.sp)
-            }
-
-            // Create button
+            // Post Offer button
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
                     creating = true
+                    // send = what user pays (sell), receive = what user gets (buy)
                     pendingOffer = PendingOfferParams(
-                        sendAssetId = sendAssetId,
-                        sendAmount = sendAmountGroth.toLong(),
-                        sendSname = assetTicker(sendAssetId),
-                        receiveAssetId = receiveAssetId,
-                        receiveAmount = receiveAmountGroth.toLong(),
-                        receiveSname = assetTicker(receiveAssetId),
+                        sendAssetId = sellAssetId,
+                        sendAmount = payGroth.toLong(),
+                        sendSname = sellTicker(),
+                        receiveAssetId = buyAssetId,
+                        receiveAmount = receiveGroth.toLong(),
+                        receiveSname = buyTicker(),
                         expireMinutes = expireMinutes,
                     )
-                    // Generate new SBBS address — onGeneratedNewAddress callback will
-                    // trigger the LaunchedEffect above which calls SwapManager.createOffer
                     WalletManager.walletInstance?.generateNewAddress()
                     Toast.makeText(context, "Creating offer...", Toast.LENGTH_SHORT).show()
                 },
@@ -336,29 +455,41 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(32.dp))
         }
 
-        // Asset picker dialogs
-        if (showSendPicker) {
-            AssetPickerDialog(
-                title = "Sell Asset",
-                assets = availableAssets,
-                selectedId = sendAssetId,
-                assetInfoCache = assetInfoCache,
-                assetBalances = assetBalances,
-                onSelect = { sendAssetId = it; showSendPicker = false },
-                onDismiss = { showSendPicker = false },
-            )
-        }
-        if (showReceivePicker) {
-            // Hardcoded supported assets for buying
-            val supportedAssets = listOf(0, 7, 9, 36, 37, 38, 39, 47)
+        // ---- Asset picker dialogs ----
+        if (showBuyPicker) {
             AssetPickerDialog(
                 title = "Buy Asset",
-                assets = supportedAssets,
-                selectedId = receiveAssetId,
+                assets = supportedBuyAssets,
+                selectedId = buyAssetId,
                 assetInfoCache = assetInfoCache,
                 assetBalances = assetBalances,
-                onSelect = { receiveAssetId = it; showReceivePicker = false },
-                onDismiss = { showReceivePicker = false },
+                onSelect = {
+                    buyAssetId = it
+                    showBuyPicker = false
+                    // Reset price when changing assets
+                    priceText = ""
+                    payAmountText = ""
+                    receiveAmountText = ""
+                },
+                onDismiss = { showBuyPicker = false },
+            )
+        }
+
+        if (showSellPicker) {
+            AssetPickerDialog(
+                title = "Pay Asset",
+                assets = availableAssets,
+                selectedId = sellAssetId,
+                assetInfoCache = assetInfoCache,
+                assetBalances = assetBalances,
+                onSelect = {
+                    sellAssetId = it
+                    showSellPicker = false
+                    priceText = ""
+                    payAmountText = ""
+                    receiveAmountText = ""
+                },
+                onDismiss = { showSellPicker = false },
             )
         }
     }
@@ -403,9 +534,9 @@ private fun AssetPickerDialog(
                             Text(
                                 ticker,
                                 color = if (isSelected) C.accent else C.text,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 15.sp,
-                        )
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 15.sp,
+                            )
                         }
                         Text("$balText $ticker", color = C.textSecondary, fontSize = 13.sp)
                     }

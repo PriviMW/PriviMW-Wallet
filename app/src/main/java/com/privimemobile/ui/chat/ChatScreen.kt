@@ -438,9 +438,12 @@ fun ChatScreen(
 
     // Capture unread count before setActiveChat clears it (for "X new messages" divider)
     // Read directly from DB to avoid race with reactive Flow clearing
-    var initialUnreadCount by remember { mutableStateOf(0) }
+    // Use nullable to distinguish "not loaded yet" from "loaded, count = 0"
+    var initialUnreadCount by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(convId) {
-        if (convId > 0L && initialUnreadCount == 0) {
+        // Reset to null when conversation changes, so scroll effect waits for correct count
+        initialUnreadCount = null
+        if (convId > 0L) {
             initialUnreadCount = com.privimemobile.chat.ChatService.db?.messageDao()?.countUnread(convId) ?: 0
         }
     }
@@ -478,10 +481,35 @@ fun ChatScreen(
         }
     }
 
-    // Scroll to bottom when messages change
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && scrollToTimestamp == 0L) {
-            listState.animateScrollToItem(0) // reversed layout, 0 = bottom
+    // Track initial scroll state - reset when conversation changes
+    var hasScrolledInitially by remember { mutableStateOf(false) }
+    LaunchedEffect(convId) {
+        hasScrolledInitially = false
+    }
+
+    // Scroll behavior:
+    // - Initial load with unread: scroll to "new messages" divider
+    // - Initial load with no unread: scroll to bottom
+    // - New message arrives while chat open: scroll to bottom
+    LaunchedEffect(messages.size, initialUnreadCount) {
+        if (messages.isNotEmpty() && scrollToTimestamp == 0L && initialUnreadCount != null) {
+            if (!hasScrolledInitially) {
+                // First load - scroll to divider if unread, else bottom
+                hasScrolledInitially = true
+                val unread = initialUnreadCount!!
+                if (unread > 0) {
+                    // Scroll to show the "new messages" divider
+                    // In reversed layout: index 0 = newest message (bottom)
+                    // Unread messages are at indices 0 to unread-1, divider shows after index unread-1
+                    listState.scrollToItem((unread - 1).coerceAtLeast(0))
+                } else {
+                    // No unread - scroll to bottom (newest)
+                    listState.animateScrollToItem(0)
+                }
+            } else {
+                // Chat is open, new message arrived - scroll to bottom
+                listState.animateScrollToItem(0)
+            }
         }
     }
 
@@ -629,7 +657,7 @@ fun ChatScreen(
         lastSendTime = now
 
         // Clear draft on send and dismiss unread divider
-        initialUnreadCount = 0
+        initialUnreadCount = 0 // explicitly set to 0 (not null) to hide divider
         if (convId > 0L) {
             scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(convId, null) }
         }
@@ -1964,7 +1992,8 @@ fun ChatScreen(
                     }
 
                     // "X new messages" unread divider
-                    if (initialUnreadCount > 0 && index == initialUnreadCount - 1 && !msg.sent) {
+                    val unreadCount = initialUnreadCount ?: 0
+                    if (unreadCount > 0 && index == unreadCount - 1 && !msg.sent) {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                             contentAlignment = Alignment.Center,
@@ -1974,7 +2003,7 @@ fun ChatScreen(
                                 color = C.accent.copy(alpha = 0.15f),
                             ) {
                                 Text(
-                                    "$initialUnreadCount new message${if (initialUnreadCount > 1) "s" else ""}",
+                                    "$unreadCount new message${if (unreadCount > 1) "s" else ""}",
                                     color = C.accent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,

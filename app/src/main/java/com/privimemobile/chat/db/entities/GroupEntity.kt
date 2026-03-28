@@ -31,6 +31,7 @@ data class GroupEntity(
     @ColumnInfo(name = "pinned") val pinned: Boolean = false,
     @ColumnInfo(name = "archived") val archived: Boolean = false,
     @ColumnInfo(name = "join_password") val joinPassword: String? = null, // Raw password for private groups (creator only)
+    @ColumnInfo(name = "last_info_update_ts") val lastInfoUpdateTs: Long = 0, // Timestamp dedup for group_info_update
 )
 
 @Entity(

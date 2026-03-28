@@ -130,7 +130,7 @@ fun GroupSettingsScreen(
                                     "avatar_hash" to result.hashHex,
                                 )
                                 ChatService.groups.sendGroupPayload(groupId, payload)
-                                ChatService.db?.groupDao()?.updateAvatarHash(groupId, result.hashHex)
+                                ChatService.db?.groupDao()?.updateGroupInfo(groupId, result.hashHex, ts)
                             }
                         }
                     } else {

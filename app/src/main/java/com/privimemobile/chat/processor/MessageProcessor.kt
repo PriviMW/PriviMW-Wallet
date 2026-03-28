@@ -522,14 +522,7 @@ class MessageProcessor(
     private suspend fun handleAvatarResponse(payload: Map<String, Any?>, from: String) {
         val avatarData = payload["avatar_data"] as? String ?: return
         val claimedHash = payload["avatar_hash"] as? String ?: return
-
-        // Security: verify image hash matches on-chain avatar_hash for this contact
-        val contact = db.contactDao().findByHandle(from)
-        val onChainHash = contact?.avatarCid
-        if (onChainHash != null && onChainHash != claimedHash) {
-            Log.w(TAG, "Avatar hash mismatch for @$from: claimed=$claimedHash, on-chain=$onChainHash — REJECTED")
-            return
-        }
+        val ts = (payload["ts"] as? Number)?.toLong() ?: 0L
 
         // Verify SHA-256 of received data matches claimed hash
         try {
@@ -543,8 +536,16 @@ class MessageProcessor(
                 return
             }
 
+            // Timestamp deduplication — skip older avatar responses
+            val contact = db.contactDao().findByHandle(from)
+            val prevTs = contact?.lastProfileUpdateTs ?: 0
+            if (ts > 0 && ts <= prevTs) {
+                Log.d(TAG, "Skipping older avatar_response from @$from (ts=$ts <= prevTs=$prevTs)")
+                return
+            }
+
             // Hash verified — check if we already have this exact avatar
-            val existingHash = db.contactDao().findByHandle(from)?.avatarCid
+            val existingHash = contact?.avatarCid
             if (existingHash == claimedHash) {
                 val filesDir2 = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
                 val existingFile = java.io.File(filesDir2, "avatars/${from}.webp")
@@ -553,29 +554,29 @@ class MessageProcessor(
                     return
                 }
             }
-            // Save
+            // Save avatar with message timestamp (not current time)
             val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
             val avatarDir = java.io.File(filesDir, "avatars").also { it.mkdirs() }
             val avatarFile = java.io.File(avatarDir, "${from}.webp")
             avatarFile.writeBytes(bytes)
-            db.contactDao().updateAvatarHash(from, claimedHash)
-            Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes)")
+            db.contactDao().updateProfileUpdate(from, claimedHash, if (ts > 0) ts else System.currentTimeMillis() / 1000)
+            Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes, ts=$ts)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to process avatar for @$from: ${e.message}")
         }
     }
 
     /** Handle profile_update: receive avatar image from contact (with hash verification). */
-    private var lastProfileUpdateTs = mutableMapOf<String, Long>() // handle → latest ts
     private suspend fun handleProfileUpdate(payload: Map<String, Any?>, from: String) {
         // Only process the latest profile_update per handle (SBBS re-delivery order isn't guaranteed)
         val ts = (payload["ts"] as? Number)?.toLong() ?: 0
-        val prevTs = lastProfileUpdateTs[from] ?: 0
-        if (ts < prevTs) {
-            Log.d(TAG, "Skipping older profile_update from @$from (ts=$ts < prevTs=$prevTs)")
+        val contact = db.contactDao().findByHandle(from)
+        val prevTs = contact?.lastProfileUpdateTs ?: 0
+        // Only skip if we have a valid timestamp AND it's not newer than what we've seen
+        if (ts > 0 && ts <= prevTs) {
+            Log.d(TAG, "Skipping older/same profile_update from @$from (ts=$ts <= prevTs=$prevTs)")
             return
         }
-        lastProfileUpdateTs[from] = ts
 
         val avatarHash = payload["avatar_hash"] as? String
         val avatarData = payload["avatar_data"] as? String
@@ -607,7 +608,11 @@ class MessageProcessor(
             }
         } catch (_: Exception) {}
 
-        if (avatarHash == null && avatarData == null) return // display-name-only update, done
+        if (avatarHash == null && avatarData == null) {
+            // display-name-only update — still update timestamp to prevent replay
+            db.contactDao().updateProfileUpdate(from, null, ts)
+            return
+        }
 
         // Save avatar image locally if data provided (with hash verification)
         if (avatarData != null) {
@@ -625,12 +630,14 @@ class MessageProcessor(
                 }
 
                 // Check if we already have this exact avatar
-                val existingHash = db.contactDao().findByHandle(from)?.avatarCid
+                val existingHash = contact?.avatarCid
                 if (existingHash == avatarHash) {
                     val existDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
                     val existFile = if (existDir != null) java.io.File(existDir, "avatars/${from}.webp") else null
                     if (existFile?.exists() == true) {
                         Log.d(TAG, "profile_update avatar for @$from already up-to-date — skip")
+                        // Still update timestamp to prevent re-processing older updates
+                        db.contactDao().updateProfileUpdate(from, avatarHash, ts)
                         return
                     }
                 }
@@ -638,7 +645,8 @@ class MessageProcessor(
                 val avatarDir = java.io.File(filesDir, "avatars").also { it.mkdirs() }
                 val avatarFile = java.io.File(avatarDir, "${from}.webp")
                 avatarFile.writeBytes(bytes)
-                db.contactDao().updateAvatarHash(from, avatarHash)
+                // Update both avatar hash and timestamp
+                db.contactDao().updateProfileUpdate(from, avatarHash, ts)
                 Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save avatar for @$from: ${e.message}")
@@ -1257,30 +1265,30 @@ class MessageProcessor(
         // Update group avatar if provided (base64 image bytes via SBBS)
         val avatarBase64 = payload["avatar"] as? String
         val avatarHash = payload["avatar_hash"] as? String
-        if (avatarBase64 != null) {
+        val avatarTs = (payload["ts"] as? Number)?.toLong() ?: 0L
+        if (avatarBase64 != null && avatarHash != null) {
             try {
                 if (avatarBase64.length > 200_000) { Log.w(TAG, "Group avatar too large for $groupId"); return }
                 val bytes = android.util.Base64.decode(avatarBase64, android.util.Base64.NO_WRAP)
                 if (bytes.size > 150_000) { Log.w(TAG, "Group avatar decoded too large for $groupId"); return }
-                // Verify hash — REQUIRE hash for security (reject without it)
-                val valid = if (avatarHash != null) {
-                    val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
-                    computed == avatarHash
-                } else false // reject avatar without hash verification
-                if (valid) {
-                    val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
-                    val existingHash = db.groupDao().findByGroupId(groupId)?.avatarHash
-                    val existFile = java.io.File(filesDir, "group_avatars/${sanitizeGroupId(groupId)}.webp")
-                    if (existingHash == avatarHash && existFile.exists()) {
-                        Log.d(TAG, "Group avatar for $groupId already up-to-date — skip")
-                    } else {
-                        val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
-                        java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
-                        db.groupDao().updateAvatarHash(groupId, avatarHash)
-                        Log.d(TAG, "Group avatar updated for $groupId (${bytes.size} bytes)")
-                    }
+                // Verify hash
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
+                if (computed != avatarHash) {
+                    Log.w(TAG, "Group avatar hash mismatch for $groupId")
+                    return
                 }
+                // Timestamp deduplication — skip older updates
+                val group = db.groupDao().findByGroupId(groupId)
+                if (group != null && avatarTs > 0 && avatarTs <= group.lastInfoUpdateTs) {
+                    Log.d(TAG, "Group avatar for $groupId outdated (ts=$avatarTs, db=${group.lastInfoUpdateTs}) — skip")
+                    return
+                }
+                val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+                val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
+                java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
+                db.groupDao().updateGroupInfo(groupId, avatarHash, avatarTs)
+                Log.d(TAG, "Group avatar updated for $groupId (${bytes.size} bytes, ts=$avatarTs)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save group avatar for $groupId: ${e.message}")
             }
@@ -1363,6 +1371,7 @@ class MessageProcessor(
      */
     private suspend fun handleGroupInfoResponse(payload: Map<String, Any?>, groupId: String) {
         val group = db.groupDao().findByGroupId(groupId) ?: return
+        val ts = (payload["ts"] as? Number)?.toLong() ?: 0L
 
         // Save description
         val description = payload["description"] as? String
@@ -1374,30 +1383,37 @@ class MessageProcessor(
         // Save avatar
         val avatarBase64 = payload["avatar"] as? String
         val avatarHash = payload["avatar_hash"] as? String
-        if (avatarBase64 != null) {
+        if (avatarBase64 != null && avatarHash != null) {
             try {
                 if (avatarBase64.length > 200_000) { Log.w(TAG, "Group info response avatar too large for $groupId"); return }
                 val bytes = android.util.Base64.decode(avatarBase64, android.util.Base64.NO_WRAP)
                 if (bytes.size > 150_000) { Log.w(TAG, "Group info response avatar decoded too large for $groupId"); return }
-                val valid = if (avatarHash != null) {
-                    val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
-                    computed == avatarHash
-                } else false // reject avatar without hash verification
-                if (valid) {
-                    // Only save if different from what we have (prevent stale SBBS overwrites)
-                    val existHash = group.avatarHash
+                // Verify hash
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val computed = digest.digest(bytes).joinToString("") { "%02x".format(it) }
+                if (computed != avatarHash) {
+                    Log.w(TAG, "Group info response avatar hash mismatch for $groupId")
+                    return
+                }
+                // Timestamp deduplication — skip older responses
+                if (ts > 0 && ts <= group.lastInfoUpdateTs) {
+                    Log.d(TAG, "Skipping older group_info_response for $groupId (ts=$ts <= db=${group.lastInfoUpdateTs})")
+                    return
+                }
+                // Only save if different from what we have
+                if (group.avatarHash == avatarHash) {
                     val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
                     val existFile = java.io.File(filesDir, "group_avatars/${sanitizeGroupId(groupId)}.webp")
-                    if (existHash == avatarHash && existFile.exists()) {
+                    if (existFile.exists()) {
                         Log.d(TAG, "Group avatar response for $groupId already up-to-date — skip")
-                    } else {
-                        val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
-                        java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
-                        db.groupDao().updateAvatarHash(groupId, avatarHash)
-                        Log.d(TAG, "Received group avatar for $groupId (${bytes.size} bytes)")
+                        return
                     }
                 }
+                val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return
+                val dir = java.io.File(filesDir, "group_avatars"); dir.mkdirs()
+                java.io.File(dir, "${sanitizeGroupId(groupId)}.webp").writeBytes(bytes)
+                db.groupDao().updateGroupInfo(groupId, avatarHash, if (ts > 0) ts else System.currentTimeMillis() / 1000)
+                Log.d(TAG, "Received group avatar for $groupId (${bytes.size} bytes, ts=$ts)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save group avatar response: ${e.message}")
             }

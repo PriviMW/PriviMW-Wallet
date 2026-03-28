@@ -70,6 +70,10 @@ interface ContactDao {
     @Query("UPDATE contacts SET avatar_cid = :avatarHash WHERE handle = :handle")
     suspend fun updateAvatarHash(handle: String, avatarHash: String?)
 
+    /** Update profile update timestamp and avatar hash (for profile_update deduplication). */
+    @Query("UPDATE contacts SET avatar_cid = :avatarHash, last_profile_update_ts = :timestamp WHERE handle = :handle")
+    suspend fun updateProfileUpdate(handle: String, avatarHash: String?, timestamp: Long)
+
     /** Update display name for a contact. */
     @Query("UPDATE contacts SET display_name = :displayName WHERE handle = :handle")
     suspend fun updateDisplayName(handle: String, displayName: String?)

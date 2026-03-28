@@ -74,6 +74,9 @@ interface GroupDao {
     @Query("UPDATE groups SET avatar_hash = :hash WHERE group_id = :groupId")
     suspend fun updateAvatarHash(groupId: String, hash: String?)
 
+    @Query("UPDATE groups SET avatar_hash = :hash, last_info_update_ts = :timestamp WHERE group_id = :groupId")
+    suspend fun updateGroupInfo(groupId: String, hash: String?, timestamp: Long)
+
     @Query("UPDATE groups SET description = :desc WHERE group_id = :groupId")
     suspend fun updateDescription(groupId: String, desc: String?)
 

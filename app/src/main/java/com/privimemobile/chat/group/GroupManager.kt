@@ -799,13 +799,18 @@ class GroupManager(
 
         if (hasAvatarLocally && hasDescLocally) return // have everything
 
-        // Find a member to ask (prefer creator, then any member with a wallet ID)
-        val members = db.groupDao().getMemberWalletIds(groupId, myHandle)
-            .filterNotNull()
-            .filter { it.isNotEmpty() }
-        if (members.isEmpty()) return
-
-        val targetWalletId = members.first()
+        // Prefer the group creator (they're most likely to have set the avatar/description)
+        var targetWalletId: String? = null
+        if (group.creatorHandle != myHandle) {
+            targetWalletId = db.groupDao().getMemberWalletId(groupId, group.creatorHandle)
+        }
+        // Fall back to first member with a wallet ID
+        if (targetWalletId.isNullOrEmpty()) {
+            targetWalletId = db.groupDao().getMemberWalletIds(groupId, myHandle)
+                .filterNotNull()
+                .firstOrNull { it.isNotEmpty() }
+        }
+        if (targetWalletId.isNullOrEmpty()) return
 
         // Get my wallet ID for the response to come back to
         val myWalletId = state.myWalletId ?: return
@@ -821,7 +826,7 @@ class GroupManager(
 
         try {
             ChatService.sbbs.sendOnce(targetWalletId, request)
-            Log.d(TAG, "Sent group_info_request for $groupId (hasAvatar=$hasAvatarLocally, hasDesc=$hasDescLocally)")
+            Log.d(TAG, "Sent group_info_request for $groupId to creator=${targetWalletId == db.groupDao().getMemberWalletId(groupId, group.creatorHandle)} (hasAvatar=$hasAvatarLocally, hasDesc=$hasDescLocally)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send group_info_request: ${e.message}")
         }

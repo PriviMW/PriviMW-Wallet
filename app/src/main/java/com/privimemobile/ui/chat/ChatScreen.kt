@@ -487,10 +487,19 @@ fun ChatScreen(
         hasScrolledInitially = false
     }
 
+    // Clear initialUnreadCount when user scrolls to bottom (Telegram-style)
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        // If user scrolls to near bottom (first 2 items visible), clear the unread badge
+        if (listState.firstVisibleItemIndex <= 2 && initialUnreadCount != null && initialUnreadCount!! > 0) {
+            initialUnreadCount = 0
+        }
+    }
+
     // Scroll behavior:
     // - Initial load with unread: scroll to "new messages" divider
     // - Initial load with no unread: scroll to bottom
-    // - New message arrives while chat open: scroll to bottom
+    // - New message arrives while at bottom: scroll to bottom (Telegram-style)
+    // - New message arrives while scrolled up: don't auto-scroll, badge shows count
     LaunchedEffect(messages.size, initialUnreadCount) {
         if (messages.isNotEmpty() && scrollToTimestamp == 0L && initialUnreadCount != null) {
             if (!hasScrolledInitially) {
@@ -507,8 +516,11 @@ fun ChatScreen(
                     listState.animateScrollToItem(0)
                 }
             } else {
-                // Chat is open, new message arrived - scroll to bottom
-                listState.animateScrollToItem(0)
+                // Chat is open, new message arrived - only scroll if user is at bottom
+                // If user scrolled up to read older messages, don't auto-scroll
+                if (listState.firstVisibleItemIndex <= 2) {
+                    listState.animateScrollToItem(0)
+                }
             }
         }
     }
@@ -2316,10 +2328,12 @@ fun ChatScreen(
         val showScrollButton by remember {
             derivedStateOf { listState.firstVisibleItemIndex > 3 }
         }
+        // Badge shows max of: real-time unread below scroll position, or initial unread count (before read receipts)
         val unreadBelow by remember {
             derivedStateOf {
                 val firstVisible = listState.firstVisibleItemIndex
-                reversedMessages.take(firstVisible).count { !it.sent && !it.read }
+                val fromScroll = reversedMessages.take(firstVisible).count { !it.sent && !it.read }
+                maxOf(fromScroll, initialUnreadCount ?: 0)
             }
         }
         val scrollBtnScale by animateFloatAsState(

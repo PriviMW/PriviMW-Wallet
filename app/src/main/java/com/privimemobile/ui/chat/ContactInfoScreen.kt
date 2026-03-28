@@ -302,6 +302,7 @@ fun ContactInfoScreen(
                         scope.launch {
                             ChatService.db?.messageDao()?.softDeleteByConversation(convId)
                             ChatService.db?.conversationDao()?.softDelete(convId)
+                            ChatService.db?.contactDao()?.deleteByHandle(handle)
                         }
                     }
                     showDeleteConfirm = false

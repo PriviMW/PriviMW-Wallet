@@ -3390,6 +3390,9 @@ fun ChatScreen(
                             scope.launch {
                                 com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
                                 com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(convId)
+                                if (!isGroupMode) {
+                                    com.privimemobile.chat.ChatService.db?.contactDao()?.deleteByHandle(handle)
+                                }
                             }
                         }
                         showDeleteConfirm = false

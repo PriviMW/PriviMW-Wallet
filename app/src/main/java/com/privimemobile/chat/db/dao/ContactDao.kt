@@ -81,4 +81,20 @@ interface ContactDao {
     /** Get contacts that need resolution (no wallet_id or stale). */
     @Query("SELECT * FROM contacts WHERE wallet_id IS NULL OR last_resolved_at < :staleThreshold")
     suspend fun getUnresolved(staleThreshold: Long): List<ContactEntity>
+
+    /**
+     * Contacts that have an active (non-deleted, non-group) DM conversation.
+     * This is "Your Contacts" — only people you currently have a DM open with.
+     */
+    @Query("""
+        SELECT c.* FROM contacts c
+        INNER JOIN conversations conv ON conv.conv_key = '@' || c.handle
+        WHERE conv.deleted_at_ts = 0 AND conv.is_group = 0
+        ORDER BY c.handle ASC
+    """)
+    fun observeDmContacts(): Flow<List<ContactEntity>>
+
+    /** Hard-delete a contact by handle. */
+    @Query("DELETE FROM contacts WHERE handle = :handle")
+    suspend fun deleteByHandle(handle: String)
 }

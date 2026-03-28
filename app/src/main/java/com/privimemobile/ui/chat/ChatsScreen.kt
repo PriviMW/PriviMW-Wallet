@@ -442,8 +442,10 @@ fun ChatsScreen(
                                                     ChatService.groups.leaveGroup(item.group!!.groupId)
                                                 } else {
                                                     val cid = item.conv!!.id
+                                                    val handle = item.conv!!.convKey.removePrefix("@")
                                                     ChatService.db?.messageDao()?.softDeleteByConversation(cid)
                                                     ChatService.db?.conversationDao()?.softDelete(cid)
+                                                    ChatService.db?.contactDao()?.deleteByHandle(handle)
                                                 }
                                             }
                                         }) { Text(if (isGrp) "Leave" else "Delete", color = C.error, fontWeight = FontWeight.Bold) }
@@ -722,6 +724,10 @@ fun ChatsScreen(
                         db.messageDao().softDeleteByConversation(target.id)
                         // Soft-delete conversation
                         db.conversationDao().softDelete(target.id)
+                        // Remove from contacts list if this was a DM
+                        if (!target.isGroup) {
+                            db.contactDao().deleteByHandle(handle)
+                        }
                     }; menuTarget = null
                 }
             }

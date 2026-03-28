@@ -28,13 +28,6 @@ import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-
-private val contactAvatarColors = listOf(
-    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
-    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
-    Color(0xFFFFA726), Color(0xFF78909C),
-)
 
 @Composable
 fun NewChatScreen(
@@ -55,8 +48,8 @@ fun NewChatScreen(
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     val myGroupIds = remember(myGroups) { myGroups.map { it.groupId }.toSet() }
 
-    // Local contacts from Room DB
-    val allContacts by ChatService.db?.contactDao()?.observeAll()
+    // Local contacts from Room DB — only DM contacts (active non-group conversations)
+    val allContacts by ChatService.db?.contactDao()?.observeDmContacts()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     val chatState by ChatService.observeState().collectAsState(initial = null)
     val myHandle = chatState?.myHandle
@@ -68,6 +61,15 @@ fun NewChatScreen(
         if (query.isEmpty()) contacts
         else contacts.filter { c ->
             c.handle.contains(query) || (c.displayName ?: "").lowercase().contains(query)
+        }
+    }
+
+    // Resolve missing display names / wallet_ids from chain for DM contacts
+    LaunchedEffect(allContacts) {
+        for (contact in allContacts) {
+            if (contact.displayName.isNullOrEmpty() || contact.walletId.isNullOrEmpty()) {
+                ChatService.contacts.resolveHandle(contact.handle)
+            }
         }
     }
 
@@ -244,9 +246,6 @@ fun NewChatScreen(
 
 @Composable
 private fun ContactRow(contact: ContactEntity, tag: String? = null, onClick: () -> Unit) {
-    val avatarBg = contactAvatarColors[abs(contact.handle.hashCode()) % contactAvatarColors.size]
-    val initial = (contact.displayName?.ifEmpty { null } ?: contact.handle).first().uppercase()
-
     Column {
         Row(
             modifier = Modifier
@@ -255,12 +254,11 @@ private fun ContactRow(contact: ContactEntity, tag: String? = null, onClick: () 
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(44.dp).clip(CircleShape).background(avatarBg),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            }
+            com.privimemobile.ui.components.AvatarDisplay(
+                handle = contact.handle,
+                displayName = contact.displayName,
+                size = 44.dp,
+            )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

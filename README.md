@@ -136,7 +136,7 @@ The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https
 Support PriviMW development (BEAM):
 
 ```
-1f80a21cf2b4baed9f88ede28bb05aa6a6032987cc3cc3934bb9e06d4d9fdc4feb3
+176c4cba6ccaed3d9762a9c712f616f945161550ebe4fcf6e7af3530916bc0ea3e0
 ```
 
 ## License

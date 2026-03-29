@@ -4,6 +4,16 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 
 **[Download Latest APK](https://github.com/PriviMW/PriviMW-Wallet/releases/latest)**
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/Wallet.png" width="150" height="300" alt="Wallet">
+  <img src="docs/Chats.png" width="150" height="300" alt="Chats">
+  <img src="docs/DApps.png" width="150" height="300" alt="DApps">
+  <img src="docs/Swap.png" width="150" height="300" alt="Swap">
+  <img src="docs/Settings.jpg" width="150" height="300" alt="Settings">
+</p>
+
 ## Features
 
 - **Wallet** — Send/receive BEAM and Confidential Assets (offline, online, max privacy)

@@ -16,8 +16,8 @@ android {
         applicationId = "com.privimemobile"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.3.0"
+        versionCode = 9
+        versionName = "1.3.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

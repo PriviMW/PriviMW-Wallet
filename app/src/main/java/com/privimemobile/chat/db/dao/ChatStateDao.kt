@@ -22,12 +22,18 @@ interface ChatStateDao {
     @Update
     suspend fun update(state: ChatStateEntity)
 
-    /** Initialize state — insert default row if empty. */
+    /** Initialize state — insert default row if empty, set first_install_ts on first run. */
     @Transaction
     suspend fun ensureInitialized(): ChatStateEntity {
         val existing = get()
-        if (existing != null) return existing
-        val default = ChatStateEntity()
+        if (existing != null) {
+            // Set first_install_ts on first ever run of this version (column added in v21)
+            if (existing.firstInstallTs == 0L) {
+                update(existing.copy(firstInstallTs = System.currentTimeMillis() / 1000))
+            }
+            return existing
+        }
+        val default = ChatStateEntity(firstInstallTs = System.currentTimeMillis() / 1000)
         insert(default)
         return default
     }

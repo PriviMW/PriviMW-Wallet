@@ -15,4 +15,5 @@ data class ReactionEntity(
     val emoji: String,
     val timestamp: Long,
     @ColumnInfo(name = "removed", defaultValue = "0") val removed: Boolean = false,
+    @ColumnInfo(name = "notified_at", defaultValue = "0") val notifiedAt: Long = 0,
 )

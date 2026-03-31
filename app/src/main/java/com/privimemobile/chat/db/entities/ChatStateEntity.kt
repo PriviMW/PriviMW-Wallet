@@ -12,4 +12,5 @@ data class ChatStateEntity(
     @ColumnInfo(name = "my_avatar_cid") val myAvatarCid: String? = null,
     @ColumnInfo(name = "my_registered_height") val myRegisteredHeight: Long = 0,
     @ColumnInfo(name = "registration_fee") val registrationFee: Long = 0,
+    @ColumnInfo(name = "first_install_ts") val firstInstallTs: Long = 0,
 )

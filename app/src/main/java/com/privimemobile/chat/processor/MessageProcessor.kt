@@ -131,8 +131,8 @@ class MessageProcessor(
             "ack" -> handleAck(payload, convKey)
             "delivered" -> handleDelivered(payload, convKey)
             "typing" -> handleTyping(from, ts)
-            "react" -> handleReaction(payload, convKey, from)
-            "unreact" -> handleUnreact(payload, from)
+            "react" -> handleReaction(payload, convKey, from, sent)
+            "unreact" -> handleUnreact(payload, from, sent)
             "delete" -> handleDelete(payload, convKey, from)
             "edit" -> handleEdit(payload, convKey, from)
             "disappear_config" -> handleDisappearConfig(payload, convKey)
@@ -379,7 +379,7 @@ class MessageProcessor(
     }
 
     /** Handle reaction. */
-    private suspend fun handleReaction(payload: Map<String, Any?>, convKey: String, from: String) {
+    private suspend fun handleReaction(payload: Map<String, Any?>, convKey: String, from: String, sent: Boolean) {
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val emoji = payload["emoji"] as? String ?: return
         val ts = (payload["ts"] as? Number)?.toLong() ?: System.currentTimeMillis() / 1000
@@ -396,11 +396,61 @@ class MessageProcessor(
             // Genuine re-reacts have ts > removal time → reactivated.
             db.reactionDao().reactivate(msgTs, from, emoji, ts)
         }
+
+        // Show reaction notification (merged into message notification) — only if someone reacted to MY message
+        if (!sent) {
+            val conv = db.conversationDao().findByKey(convKey)
+            if (conv != null) {
+                // Check if the reacted-upon message is mine
+                val myMsg = db.messageDao().findSentByTimestamp(conv.id, msgTs)
+                if (myMsg != null) {
+                    // Skip reactions from before this app install (reinstall dedup)
+                    val chatState = db.chatStateDao().get()
+                    val firstInstallTs = chatState?.firstInstallTs ?: 0L
+                    if (firstInstallTs > 0 && ts < firstInstallTs) {
+                        Log.d(TAG, "Skipping pre-install reaction notification: ts=$ts < firstInstallTs=$firstInstallTs")
+                        return
+                    }
+                    // Check if already notified — prevents duplicate from SBBS re-delivery between insert and here
+                    val notifiedAt = System.currentTimeMillis() / 1000
+                    val updated = db.reactionDao().markNotified(msgTs, from, emoji, notifiedAt)
+                    if (updated == 0) {
+                        Log.d(TAG, "Reaction $emoji from @$from already notified, skipping duplicate")
+                        return
+                    }
+                    // Look up sender's display name (fall back to @handle if no display name)
+                    val senderContact = db.contactDao().findByHandle(from)
+                    val senderDisplayName = senderContact?.displayName?.takeIf { it.isNotBlank() } ?: "@$from"
+                    val isMuted = db.conversationDao().isMuted(conv.id) ?: false
+                    val totalUnread = db.conversationDao().getTotalUnread()
+                    // For groups: use group entity name (conv.handle = full groupId for group convs)
+                    val senderName = if (convKey.startsWith("g_")) {
+                        val group = db.groupDao().findByGroupId(conv.handle ?: "")
+                        val groupName = group?.name?.ifEmpty { null } ?: "Group"
+                        "$groupName: $senderDisplayName"
+                    } else {
+                        senderDisplayName
+                    }
+                    // Merge reaction into the conversation's message notification (Telegram-style)
+                    com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
+                        convKey = convKey,
+                        convId = conv.id,
+                        senderName = senderName,
+                        text = "",
+                        type = "dm",
+                        isMuted = isMuted,
+                        totalUnread = totalUnread,
+                        senderHandle = from,
+                        reactionEmoji = emoji,
+                    )
+                }
+            }
+        }
         Log.d(TAG, "Reaction $emoji from @$from on message $msgTs")
     }
 
     /** Handle unreact (remove reaction for everyone). */
-    private suspend fun handleUnreact(payload: Map<String, Any?>, from: String) {
+    private suspend fun handleUnreact(payload: Map<String, Any?>, from: String, sent: Boolean) {
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val emoji = payload["emoji"] as? String ?: return
         val unreactTs = (payload["ts"] as? Number)?.toLong() ?: System.currentTimeMillis() / 1000
@@ -994,8 +1044,8 @@ class MessageProcessor(
         val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         when (type) {
-            "react" -> handleReaction(payload, groupConvKey, from)
-            "unreact" -> handleUnreact(payload, from)
+            "react" -> handleReaction(payload, groupConvKey, from, sent) // handleReaction already checks !sent for "someone else reacted"
+            "unreact" -> handleUnreact(payload, from, sent)
             "delete" -> handleDelete(payload, groupConvKey, from)
             "edit" -> handleEdit(payload, groupConvKey, from)
             "poll_vote" -> handlePollVote(payload, groupConvKey, from, false)

@@ -31,4 +31,12 @@ interface ReactionDao {
     /** Observe all reactions for a conversation's messages (excludes soft-deleted). */
     @Query("SELECT r.* FROM reactions r INNER JOIN messages m ON r.message_ts = m.timestamp WHERE m.conversation_id = :convId AND r.removed = 0 ORDER BY r.timestamp ASC")
     fun observeForConversation(convId: Long): Flow<List<ReactionEntity>>
+
+    /** Observe reactors for a specific (message, emoji) pair — used for reaction detail bottom sheet. */
+    @Query("SELECT * FROM reactions WHERE message_ts = :messageTs AND emoji = :emoji AND removed = 0 ORDER BY timestamp ASC")
+    fun observeForMessageEmoji(messageTs: Long, emoji: String): Flow<List<ReactionEntity>>
+
+    /** Mark a reaction as notified so SBBS re-delivery won't re-trigger a notification. */
+    @Query("UPDATE reactions SET notified_at = :notifiedAt WHERE message_ts = :messageTs AND sender_handle = :senderHandle AND emoji = :emoji AND notified_at = 0")
+    suspend fun markNotified(messageTs: Long, senderHandle: String, emoji: String, notifiedAt: Long): Int
 }

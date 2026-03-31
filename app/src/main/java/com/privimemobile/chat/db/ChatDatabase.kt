@@ -21,7 +21,7 @@ import net.sqlcipher.database.SupportFactory
         ChatStateEntity::class,
         PendingTxEntity::class,
     ],
-    version = 19,
+    version = 21,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -228,6 +228,19 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reactions ADD COLUMN notified_at INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** V20→V21: Add first_install_ts to chat_state for reaction notification reinstall dedup. */
+        private val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_state ADD COLUMN first_install_ts INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -236,7 +249,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
                 .fallbackToDestructiveMigration()
                 .build()
         }

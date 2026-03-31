@@ -35,7 +35,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -121,7 +123,7 @@ import java.util.*
  * - Reply display + swipe-left to reply
  * - Pending file preview bar
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     handle: String,
@@ -320,6 +322,10 @@ fun ChatScreen(
 
     // Long-press context menu target
     var contextMenuMsg by remember { mutableStateOf<ChatMessage?>(null) }
+
+    // Reaction detail — long-press a reaction pill to see who reacted
+    var reactionDetailMsg by remember { mutableStateOf<ChatMessage?>(null) }
+    var reactionDetailEmoji by remember { mutableStateOf("") }
 
     // Reactions — observe all reactions for this conversation
     val reactions by remember(convId) {
@@ -2243,32 +2249,67 @@ fun ChatScreen(
                         },
                         myHandle = myHandle,
                         reactions = reactionMap[msg.timestamp] ?: emptyList(),
-                        onRemoveReaction = { emoji, msgTs ->
+                        onReactionTap = { emoji, msgTs, isMine ->
+                            // Tap: mine → remove, not-mine → send
                             scope.launch {
-                                if (myHandle != null) {
-                                    // Soft-delete locally (stamp removal time for re-delivery detection)
-                                    val nowTs = System.currentTimeMillis() / 1000
-                                    com.privimemobile.chat.ChatService.db!!.reactionDao().remove(msgTs, myHandle, emoji, nowTs)
-                                    // Send unreact SBBS to remove on other side
-                                    val unreactPayload = mapOf(
-                                        "v" to 1,
-                                        "t" to "unreact",
-                                        "ts" to System.currentTimeMillis() / 1000,
-                                        "from" to myHandle,
-                                        "to" to (if (isGroupMode) groupId!! else handle),
-                                        "msg_ts" to msgTs,
-                                        "emoji" to emoji,
-                                    )
-                                    if (isGroupMode && groupId != null) {
-                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, unreactPayload)
+                                val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                if (state?.myHandle != null) {
+                                    if (isMine) {
+                                        // Remove reaction
+                                        val nowTs = System.currentTimeMillis() / 1000
+                                        com.privimemobile.chat.ChatService.db!!.reactionDao().remove(msgTs, state.myHandle!!, emoji, nowTs)
+                                        val unreactPayload = mapOf(
+                                            "v" to 1, "t" to "unreact",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "from" to state.myHandle!!,
+                                            "to" to (if (isGroupMode) groupId!! else handle),
+                                            "msg_ts" to msgTs, "emoji" to emoji,
+                                        )
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, unreactPayload)
+                                        } else {
+                                            val walletId = resolvedWalletId
+                                            if (!walletId.isNullOrEmpty()) {
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, unreactPayload)
+                                            }
+                                        }
                                     } else {
-                                        val walletId = resolvedWalletId
-                                        if (!walletId.isNullOrEmpty()) {
-                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, unreactPayload)
+                                        // Send reaction
+                                        val ts = System.currentTimeMillis() / 1000
+                                        val insertId = com.privimemobile.chat.ChatService.db!!.reactionDao().insert(
+                                            com.privimemobile.chat.db.entities.ReactionEntity(
+                                                messageTs = msgTs,
+                                                senderHandle = state.myHandle!!,
+                                                emoji = emoji,
+                                                timestamp = ts,
+                                            )
+                                        )
+                                        if (insertId == -1L) {
+                                            com.privimemobile.chat.ChatService.db!!.reactionDao().reactivate(msgTs, state.myHandle!!, emoji, ts)
+                                        }
+                                        val reactPayload = mapOf(
+                                            "v" to 1, "t" to "react",
+                                            "ts" to System.currentTimeMillis() / 1000,
+                                            "from" to state.myHandle!!,
+                                            "to" to (if (isGroupMode) groupId!! else handle),
+                                            "msg_ts" to msgTs, "emoji" to emoji,
+                                        )
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, reactPayload)
+                                        } else {
+                                            val walletId = resolvedWalletId
+                                            if (!walletId.isNullOrEmpty()) {
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, reactPayload)
+                                            }
                                         }
                                     }
                                 }
                             }
+                        },
+                        onReactionLongPress = { emoji, msgTs ->
+                            // Long-press any pill → show who reacted with this emoji
+                            reactionDetailMsg = msg
+                            reactionDetailEmoji = emoji
                         },
                         isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
                         isGroupMode = isGroupMode,
@@ -4278,6 +4319,173 @@ fun ChatScreen(
             }
         }
 
+        // ── Reaction detail — long-press a reaction pill → tabbed reaction info ──
+        if (reactionDetailMsg != null) {
+            val detailMsg = reactionDetailMsg!!
+            // Load ALL reactions for this message (for "All" tab + tab list)
+            val allReactorsFlow = remember(detailMsg.timestamp) {
+                com.privimemobile.chat.ChatService.db!!.reactionDao()
+                    .observeForMessage(detailMsg.timestamp)
+            }
+            val allReactors by allReactorsFlow.collectAsState(initial = emptyList())
+
+            // Build tab list: first = "All", then each unique emoji sorted by count
+            val emojiTabs = remember(allReactors) {
+                val active = allReactors.filter { r -> !r.removed }
+                val grouped: Map<String, List<com.privimemobile.chat.db.entities.ReactionEntity>> = active.groupBy { r -> r.emoji }
+                val sorted = grouped.entries.sortedByDescending { e -> e.value.size }
+                val tabs = mutableListOf<Pair<String, String?>>()
+                tabs.add(Pair("\uD83D\uDCAC", null)) // "All" tab with icon
+                for (entry in sorted) {
+                    tabs.add(Pair(entry.key, entry.key))
+                }
+                tabs
+            }
+            var selectedTabIdx by remember { mutableIntStateOf(0) }
+
+            ModalBottomSheet(
+                onDismissRequest = { reactionDetailMsg = null },
+                containerColor = C.card,
+                dragHandle = {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp).height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(C.textMuted.copy(alpha = 0.4f)),
+                        )
+                    }
+                },
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 0.dp).padding(bottom = 24.dp)) {
+                    // Header: emoji + total count
+                    Text(
+                        "${emojiTabs.size - 1} reaction${if (emojiTabs.size - 1 != 1) "s" else ""}",
+                        fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+
+                    // Scrollable tab row
+                    if (emojiTabs.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            emojiTabs.forEachIndexed { idx, (label, _) ->
+                                val isAllTab = idx == 0
+                                val isSelected = idx == selectedTabIdx
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = if (isSelected) C.accent.copy(alpha = 0.2f) else C.bg,
+                                    modifier = Modifier
+                                        .clickable { selectedTabIdx = idx }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(label, fontSize = 14.sp)
+                                        if (!isAllTab) {
+                                            val count = allReactors.count { r -> !r.removed && r.emoji == label }
+                                            if (count > 1) {
+                                                Text(" $count", fontSize = 12.sp, color = if (isSelected) C.accent else C.textMuted)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Content based on selected tab
+                    val selectedEmoji = if (selectedTabIdx == 0) null else emojiTabs.getOrNull(selectedTabIdx)?.second
+                    val filteredReactors = remember(allReactors, selectedEmoji) {
+                        if (selectedEmoji == null) {
+                            // "All" tab — show in emoji-grouped order
+                            allReactors.filter { !it.removed }
+                                .sortedByDescending { it.timestamp }
+                        } else {
+                            allReactors.filter { !it.removed && it.emoji == selectedEmoji }
+                                .sortedByDescending { it.timestamp }
+                        }
+                    }
+
+                    if (filteredReactors.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                            Text("No reactions yet", color = C.textSecondary, fontSize = 14.sp)
+                        }
+                    } else {
+                        // Per-reactor date formatting (reactor.timestamp = when they reacted)
+                        val reactedDateFormat = remember { java.text.SimpleDateFormat("E, MMM d 'at' HH:mm", java.util.Locale.getDefault()) }
+
+                        // Pre-load contacts once for avatar display names
+                        var contactsMap by remember { mutableStateOf<Map<String, com.privimemobile.chat.db.entities.ContactEntity>>(emptyMap()) }
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            val db = com.privimemobile.chat.ChatService.db ?: return@LaunchedEffect
+                            val allContacts = db.contactDao().observeAll()
+                            allContacts.collect { contacts ->
+                                contactsMap = contacts.associateBy { it.handle }
+                            }
+                        }
+
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            filteredReactors.forEach { reactor ->
+                                val isMe = reactor.senderHandle == myHandle
+                                val contact = contactsMap[reactor.senderHandle]
+                                val displayName = if (isMe) "You" else contact?.displayName ?: groupMemberNames[reactor.senderHandle] ?: "@${reactor.senderHandle}"
+                                val reactedDate = reactedDateFormat.format(java.util.Date(reactor.timestamp * 1000))
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    // Avatar
+                                    com.privimemobile.ui.components.AvatarDisplay(
+                                        handle = reactor.senderHandle,
+                                        displayName = contact?.displayName,
+                                        size = 44.dp,
+                                        isMe = isMe,
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+
+                                    // Name + "reacted on" timestamp
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            displayName,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            "reacted on $reactedDate",
+                                            fontSize = 12.sp,
+                                            color = C.textSecondary,
+                                        )
+                                    }
+
+                                    // Reaction emoji (only on "All" tab)
+                                    if (selectedEmoji == null) {
+                                        Text(reactor.emoji, fontSize = 20.sp)
+                                    }
+                                }
+
+                                if (reactor != filteredReactors.last()) {
+                                    HorizontalDivider(color = C.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 72.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Forward contact picker dialog ──
         if (forwardingMsg != null) {
             val fwdMsg = forwardingMsg!!
@@ -4599,7 +4807,7 @@ private fun TickIndicator(read: Boolean, delivered: Boolean) {
     Text(tickText, color = tickColor, fontSize = 10.sp,
         modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale))
 }
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     msg: ChatMessage,
@@ -4611,7 +4819,8 @@ private fun MessageBubble(
     onLongPress: () -> Unit = {},
     onFullscreenImage: () -> Unit = {},
     reactions: List<Triple<String, Int, Boolean>> = emptyList(),
-    onRemoveReaction: (emoji: String, msgTs: Long) -> Unit = { _, _ -> },
+    onReactionTap: (emoji: String, msgTs: Long, isMine: Boolean) -> Unit = { _, _, _ -> },
+    onReactionLongPress: (emoji: String, msgTs: Long) -> Unit = { _, _ -> },
     isHighlighted: Boolean = false,
     isSelected: Boolean = false,
     onPollVote: (optionIndex: Int) -> Unit = {},
@@ -5261,9 +5470,10 @@ private fun MessageBubble(
                         color = if (mine) C.accent.copy(alpha = 0.2f) else C.border,
                         modifier = Modifier
                             .graphicsLayer { scaleX = reactionScale; scaleY = reactionScale }
-                            .then(if (mine) Modifier.clickable {
-                                onRemoveReaction(emoji, msg.timestamp)
-                            } else Modifier),
+                            .combinedClickable(
+                                onClick = { onReactionTap(emoji, msg.timestamp, mine) },
+                                onLongClick = { onReactionLongPress(emoji, msg.timestamp) },
+                            ),
                     ) {
                         Text(
                             if (count > 1) "$emoji $count" else emoji,

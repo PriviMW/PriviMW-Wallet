@@ -5,6 +5,7 @@ import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.graphics.Canvas
 import android.content.Intent
 import android.os.Build
 import android.util.Log
@@ -18,8 +19,9 @@ import com.privimemobile.chat.ChatService
  * ChatNotificationManager — shows notifications for incoming chat messages.
  *
  * Features:
- * - MessagingStyle with last 3 messages per conversation
+ * - MessagingStyle with last N messages per conversation
  * - Separate channels for messages, tips, and files
+ * - Reaction notifications merged into message notifications (Telegram-style)
  * - Suppresses notifications for active chat and muted conversations
  * - Groups notifications per conversation
  * - Updates badge count via notification summary
@@ -34,7 +36,7 @@ object ChatNotificationManager {
     private const val CHANNEL_TIPS = "privime_tips"
     private const val CHANNEL_FILES = "privime_files"
 
-    // Notification IDs: use convId hash to group per conversation
+    // Notification IDs: 1000-7999 (single range, shared by messages and reactions)
     private const val SUMMARY_ID = 8000
     private const val MAX_MESSAGES_PER_CONV = 8
 
@@ -59,7 +61,11 @@ object ChatNotificationManager {
 
     /**
      * Show notification for an incoming message.
-     * Called from MessageProcessor after inserting a received message.
+     * Optionally appends a reaction entry (Telegram-style: reaction merged into message notification).
+     *
+     * @param reactionEmoji When set, this call represents a reaction notification that is merged into
+     *                      the conversation's message notification. The senderName is the reactor's
+     *                      display name, text is "Reacted to your message: $reactionEmoji".
      */
     fun notifyMessage(
         convKey: String,
@@ -70,6 +76,7 @@ object ChatNotificationManager {
         isMuted: Boolean,
         totalUnread: Int,
         senderHandle: String? = null,
+        reactionEmoji: String? = null,
     ) {
         if (!initialized) return
 
@@ -92,16 +99,37 @@ object ChatNotificationManager {
             else -> CHANNEL_MESSAGES
         }
 
-        // Content text
-        val contentText = when (type) {
-            "tip" -> "\uD83D\uDCB0 $text"  // 💰
-            "file" -> "\uD83D\uDCCE $text"  // 📎
-            else -> text
-        }
-
-        // Add to message history buffer (keep last 3)
+        // Add to message history buffer (keep last N)
         val history = messageHistory.getOrPut(convKey) { mutableListOf() }
-        history.add(NotifMessage(senderName, contentText, System.currentTimeMillis(), senderHandle))
+        if (reactionEmoji != null) {
+            // Reaction: preserve the existing last entry's sender info for the conversation title,
+            // then append a new reaction entry so the notification shows both the prior message
+            // and the reaction. This keeps the DM title as the contact's name, not the reactor's.
+            val lastEntry = if (history.isNotEmpty()) history.removeAt(history.size - 1) else null
+            if (lastEntry != null) {
+                // Re-add the original message first
+                history.add(lastEntry)
+                // Then add the reaction as a new entry using the original sender's name for the title
+                history.add(NotifMessage(
+                    senderName = lastEntry.senderName,
+                    text = "Reacted to your message: $reactionEmoji",
+                    timestamp = System.currentTimeMillis(),
+                    senderHandle = lastEntry.senderHandle,
+                ))
+            } else {
+                // No prior messages — add a reaction entry directly
+                history.add(NotifMessage(senderName, "Reacted to your message: $reactionEmoji",
+                    System.currentTimeMillis(), senderHandle))
+            }
+        } else {
+            // Regular message
+            val contentText = when (type) {
+                "tip" -> "\uD83D\uDCB0 $text"  // 💰
+                "file" -> "\uD83D\uDCCE $text"  // 📎
+                else -> text
+            }
+            history.add(NotifMessage(senderName, contentText, System.currentTimeMillis(), senderHandle))
+        }
         if (history.size > MAX_MESSAGES_PER_CONV) {
             history.removeAt(0)
         }
@@ -222,7 +250,7 @@ object ChatNotificationManager {
             channelId // Use default channel
         }
 
-        // Individual message notification with MessagingStyle
+        // Individual notification — same ID used for both messages and reactions (merged into one)
         val notifId = (convKey.hashCode() and 0x7FFFFFFF) % 7000 + 1000  // 1000-7999 range
         val notification = NotificationCompat.Builder(appContext, effectiveChannelId)
             .setSmallIcon(R.drawable.ic_notification)
@@ -232,7 +260,6 @@ object ChatNotificationManager {
             .setGroup(GROUP_ID)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .apply { if (avatarIcon != null) setLargeIcon(avatarIcon.toIcon(appContext)) }
             .build()
 
@@ -241,7 +268,7 @@ object ChatNotificationManager {
         // Summary notification (for grouping + badge count)
         updateBadge(totalUnread)
 
-        Log.d(TAG, "Notification: $senderName ($type) in $convKey, ${history.size} msgs, unread=$totalUnread")
+        Log.d(TAG, "Notification: $senderName ($type) in $convKey, ${history.size} msgs, unread=$totalUnread${if (reactionEmoji != null) ", reaction=$reactionEmoji" else ""}")
     }
 
     /** Update the summary notification with total unread count (drives badge). */

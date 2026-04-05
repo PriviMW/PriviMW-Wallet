@@ -12,6 +12,9 @@ android {
     namespace = "com.privimemobile"
     compileSdk = 35
 
+    // NDK version for native Opus encoding
+    ndkVersion = "27.1.12297006"
+
     defaultConfig {
         applicationId = "com.privimemobile"
         minSdk = 24
@@ -21,6 +24,20 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cFlags += listOf("-std=c11", "-O2")
+                arguments += listOf("-DANDROID_STL=c++_static")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/jni/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 

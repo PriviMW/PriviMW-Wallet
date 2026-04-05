@@ -28,6 +28,8 @@ data class ThemeColors(
     val bubbleMine: Color,
     val bubbleOther: Color,
     val bubbleText: Color,
+    val waveformActive: Color,
+    val waveformInactive: Color,
     val isLight: Boolean = false,
 )
 
@@ -52,6 +54,8 @@ private val DARK = ThemeColors(
     bubbleMine = Color(0xFF1B3A4B),
     bubbleOther = Color(0xFF1A1F3A),
     bubbleText = Color(0xFFFFFFFF),
+    waveformActive = Color(0xFF25D4D0),
+    waveformInactive = Color(0xFF25D4D0).copy(alpha = 0.3f),
 )
 
 private val LIGHT = ThemeColors(
@@ -75,6 +79,8 @@ private val LIGHT = ThemeColors(
     bubbleMine = Color(0xFFDCF8C6),
     bubbleOther = Color(0xFFFFFFFF),
     bubbleText = Color(0xFF1A1A2E),
+    waveformActive = Color(0xFF1BAFA8),
+    waveformInactive = Color(0xFF1BAFA8).copy(alpha = 0.3f),
     isLight = true,
 )
 
@@ -99,6 +105,8 @@ private val AMOLED = ThemeColors(
     bubbleMine = Color(0xFF1A2A30),
     bubbleOther = Color(0xFF0D0D0D),
     bubbleText = Color(0xFFFFFFFF),
+    waveformActive = Color(0xFF25D4D0),
+    waveformInactive = Color(0xFF25D4D0).copy(alpha = 0.3f),
 )
 
 private val MIDNIGHT_BLUE = ThemeColors(
@@ -122,6 +130,8 @@ private val MIDNIGHT_BLUE = ThemeColors(
     bubbleMine = Color(0xFF1A3050),
     bubbleOther = Color(0xFF132040),
     bubbleText = Color(0xFFE8ECF4),
+    waveformActive = Color(0xFF4DA6FF),
+    waveformInactive = Color(0xFF4DA6FF).copy(alpha = 0.3f),
 )
 
 private val EMERALD = ThemeColors(
@@ -145,6 +155,8 @@ private val EMERALD = ThemeColors(
     bubbleMine = Color(0xFF1A3528),
     bubbleOther = Color(0xFF122A20),
     bubbleText = Color(0xFFE8F5EE),
+    waveformActive = Color(0xFF34D399),
+    waveformInactive = Color(0xFF34D399).copy(alpha = 0.3f),
 )
 
 private val PURPLE_HAZE = ThemeColors(
@@ -168,6 +180,8 @@ private val PURPLE_HAZE = ThemeColors(
     bubbleMine = Color(0xFF2A1845),
     bubbleOther = Color(0xFF1E1435),
     bubbleText = Color(0xFFF0ECF8),
+    waveformActive = Color(0xFFA78BFA),
+    waveformInactive = Color(0xFFA78BFA).copy(alpha = 0.3f),
 )
 
 private val SOLAR = ThemeColors(
@@ -191,6 +205,8 @@ private val SOLAR = ThemeColors(
     bubbleMine = Color(0xFF352818),
     bubbleOther = Color(0xFF2A1E10),
     bubbleText = Color(0xFFF8F0E0),
+    waveformActive = Color(0xFFF59E0B),
+    waveformInactive = Color(0xFFF59E0B).copy(alpha = 0.3f),
 )
 
 private val OCEAN = ThemeColors(
@@ -214,6 +230,8 @@ private val OCEAN = ThemeColors(
     bubbleMine = Color(0xFF152838),
     bubbleOther = Color(0xFF122030),
     bubbleText = Color(0xFFE8F0F8),
+    waveformActive = Color(0xFF22D3EE),
+    waveformInactive = Color(0xFF22D3EE).copy(alpha = 0.3f),
 )
 
 val ALL_THEMES = mapOf(
@@ -262,6 +280,8 @@ object C {
     val bubbleMine get() = current.bubbleMine
     val bubbleOther get() = current.bubbleOther
     val bubbleText get() = current.bubbleText
+    val waveformActive get() = current.waveformActive
+    val waveformInactive get() = current.waveformInactive
     val isLight get() = current.isLight
 
     /** Apply a theme by key. Saves preference. */

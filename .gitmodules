@@ -1,0 +1,6 @@
+[submodule "app/src/main/jni/lib/opus"]
+	path = app/src/main/jni/lib/opus
+	url = https://github.com/xiph/opus.git
+[submodule "app/src/main/jni/lib/ogg"]
+	path = app/src/main/jni/lib/ogg
+	url = https://github.com/xiph/ogg.git

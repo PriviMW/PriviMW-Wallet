@@ -37,6 +37,11 @@ object Config {
      *  BBS max body = 1MB (proto::Bbs::s_MaxMsgSize). After base64 (~33% overhead), ~750KB raw fits. */
     const val MAX_INLINE_SIZE = 750 * 1024
 
+    /** Max voice message duration (seconds) — conservative limit to stay under MAX_INLINE_SIZE.
+     *  32kbps Opus: ~42KB/sec after base64. 750KB / 42KB = ~17sec, but waveform + overhead needs margin.
+     *  Conservative 2-minute limit ensures safe delivery via SBBS. */
+    const val MAX_VOICE_DURATION_SEC = 120
+
     /** IPFS upload timeout (ms) */
     const val IPFS_ADD_TIMEOUT = 60_000
 

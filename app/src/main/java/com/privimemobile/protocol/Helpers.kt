@@ -139,6 +139,15 @@ object Helpers {
         return mime != null && mime in listOf("image/jpeg", "image/png", "image/gif", "image/webp")
     }
 
+    fun isAudioMime(mime: String?): Boolean {
+        return mime != null && mime.startsWith("audio/")
+    }
+
+    fun isVoiceMime(mime: String?): Boolean {
+        // Voice messages are specifically OGG/Opus or AAC recordings
+        return mime != null && mime in listOf("audio/ogg", "audio/opus", "audio/aac", "audio/mp4", "audio/mpeg")
+    }
+
     fun truncateFilename(name: String?, max: Int = Config.MAX_FILENAME_LEN): String {
         if (name == null || name.length <= max) return name ?: ""
         val dotIdx = name.lastIndexOf('.')
@@ -161,6 +170,19 @@ object Helpers {
             (beamStr.toDouble() * 100_000_000).toLong()
         } catch (_: Exception) {
             0L
+        }
+    }
+
+    // === Duration formatting ===
+
+    /** Format seconds into human-readable duration like "5 min" or "30 sec". */
+    fun formatDuration(seconds: Int): String {
+        return when {
+            seconds == 0 -> "Off"
+            seconds < 60 -> "${seconds} sec"
+            seconds < 3600 -> "${seconds / 60} min"
+            seconds < 86400 -> "${seconds / 3600} hr"
+            else -> "${seconds / 86400} day${if (seconds >= 172800) "s" else ""}"
         }
     }
 

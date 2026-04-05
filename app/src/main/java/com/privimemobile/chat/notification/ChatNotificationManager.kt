@@ -125,7 +125,12 @@ object ChatNotificationManager {
             // Regular message
             val contentText = when (type) {
                 "tip" -> "\uD83D\uDCB0 $text"  // 💰
-                "file" -> "\uD83D\uDCCE $text"  // 📎
+                "file" -> {
+                    // For group messages, strip the sender prefix since MessagingStyle already shows it.
+                    // The preview text includes "SenderName: 🎤 Voice message" but we only want "🎤 Voice message"
+                    if (convKey.startsWith("g_")) text.substringAfterLast(": ").ifEmpty { text }
+                    else text
+                }
                 else -> text
             }
             history.add(NotifMessage(senderName, contentText, System.currentTimeMillis(), senderHandle))

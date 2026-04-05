@@ -228,19 +228,29 @@ class MessageProcessor(
             Log.d(TAG, "File attachment: type=${rawFile?.javaClass?.simpleName}, value=${rawFile.toString().take(100)}")
             val fileData = rawFile as? Map<*, *>
             if (fileData != null) {
-                insertAttachment(messageId, conv.id, fileData)
+                // Get extras (waveform, duration_ms for voice messages)
+                // Sender sends extras as JSON String; handle both String and Map formats
+                val rawExtras = payload["extras"]
+                val extras = when (rawExtras) {
+                    is String -> rawExtras
+                    is Map<*, *> -> runCatching { org.json.JSONObject(rawExtras).toString() }.getOrNull()
+                    else -> null
+                }
+                insertAttachment(messageId, conv.id, fileData, extras)
             }
         }
 
         // Update conversation
         val fileMime = (payload["file"] as? Map<*, *>)?.get("mime") as? String
         val isDmImage = type == "file" && fileMime?.startsWith("image/") == true
+        val isVoice = type == "file" && com.privimemobile.protocol.Helpers.isVoiceMime(fileMime ?: "")
         val preview = when {
             type == "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
             type == "sticker" -> "\uD83C\uDF1F Sticker"
             type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack: ${stickerPackName ?: "Stickers"}"
             type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
             isDmImage -> "\uD83D\uDDBC\uFE0F Image"
+            isVoice -> "\uD83C\uDFA4 Voice message"
             type == "file" -> "\uD83D\uDCCE ${(payload["file"] as? Map<*, *>)?.get("name") ?: "File"}"
             else -> text?.take(100)
         }
@@ -253,13 +263,14 @@ class MessageProcessor(
             val isMuted = db.conversationDao().isMuted(conv.id) ?: false
             val totalUnread = db.conversationDao().getTotalUnread()
             val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { "Unknown" }
-            val isImage = type == "file" && ((payload["file"] as? Map<*, *>)?.get("mime") as? String)?.startsWith("image/") == true
+            val isImage = type == "file" && fileMime?.startsWith("image/") == true
             val notifText = when {
                 type == "tip" -> preview ?: "Sent a tip"
                 type == "sticker" -> "\uD83C\uDF1F Sticker"
                 type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack"
                 type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
                 isImage -> "\uD83D\uDDBC\uFE0F Image"
+                isVoice -> "\uD83C\uDFA4 Voice message"
                 type == "file" -> "\uD83D\uDCCE File: ${(payload["file"] as? Map<*, *>)?.get("name") ?: "file"}"
                 else -> text?.take(200) ?: ""
             }
@@ -295,7 +306,7 @@ class MessageProcessor(
     }
 
     /** Insert file attachment for a message. */
-    private suspend fun insertAttachment(messageId: Long, convId: Long, fileData: Map<*, *>) {
+    private suspend fun insertAttachment(messageId: Long, convId: Long, fileData: Map<*, *>, extras: String? = null) {
         Log.d(TAG, "insertAttachment: msgId=$messageId, keys=${fileData.keys}")
         val key = fileData["key"] as? String
         val iv = fileData["iv"] as? String
@@ -322,6 +333,7 @@ class MessageProcessor(
             mimeType = fileData["mime"] as? String ?: "application/octet-stream",
             inlineData = inlineData,
             downloadStatus = if (inlineData != null) "idle" else "idle",
+            extras = extras,
         )
         db.attachmentDao().insert(attachment)
     }
@@ -1113,6 +1125,14 @@ class MessageProcessor(
                 if (fileData != null && insertedId > 0) {
                     val cid = fileData["cid"] as? String ?: ""
                     if (cid.isNotEmpty()) {
+                        // Get extras (waveform, duration_ms for voice messages)
+                        // Sender sends extras as JSON String; handle both String and Map formats
+                        val rawExtras = payload["extras"]
+                        val groupExtras = when (rawExtras) {
+                            is String -> rawExtras
+                            is Map<*, *> -> runCatching { org.json.JSONObject(rawExtras).toString() }.getOrNull()
+                            else -> null
+                        }
                         db.attachmentDao().insert(
                             AttachmentEntity(
                                 messageId = insertedId,
@@ -1125,6 +1145,7 @@ class MessageProcessor(
                                 mimeType = fileData["mime"] as? String ?: "",
                                 inlineData = fileData["data"] as? String,
                                 downloadStatus = "idle",
+                                extras = groupExtras,
                             )
                         )
                     }
@@ -1133,9 +1154,11 @@ class MessageProcessor(
                 // Update group preview + unread
                 val senderLabel = if (sent) "You" else (displayName ?: "@$from")
                 val isGroupImage = type == "file" && (fileData?.get("mime") as? String)?.startsWith("image/") == true
+                val isGroupVoice = type == "file" && com.privimemobile.protocol.Helpers.isVoiceMime(fileData?.get("mime") as? String ?: "")
                 val preview = when {
                     type == "tip" -> "$senderLabel: Tip"
                     isGroupImage -> "$senderLabel: \uD83D\uDDBC\uFE0F Image"
+                    isGroupVoice -> "$senderLabel: \uD83C\uDFA4 Voice message"
                     type == "file" -> "$senderLabel: \uD83D\uDCCE ${fileData?.get("name") ?: "File"}"
                     type == "sticker" -> "$senderLabel: \uD83C\uDF1F Sticker"
                     type == "sticker_pack" -> "$senderLabel: \uD83D\uDCE6 Sticker Pack"

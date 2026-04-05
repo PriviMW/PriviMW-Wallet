@@ -38,6 +38,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -71,6 +72,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.*
@@ -92,15 +95,21 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.privimemobile.protocol.*
+import com.privimemobile.ui.components.VoiceMessageBubble
+import com.privimemobile.ui.components.MicButton
+import com.privimemobile.chat.voice.VoiceWaveformView
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -312,6 +321,40 @@ fun ChatScreen(
     var showOneShotTimerPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showEmojiPicker by remember { mutableStateOf(false) }
+
+    // Voice recording state
+    var voiceRecording by remember { mutableStateOf(false) }
+    var voiceLocked by remember { mutableStateOf(false) }  // locked for hands-free
+    var voiceCanceling by remember { mutableStateOf(false) }  // sliding left to cancel
+    var voicePaused by remember { mutableStateOf(false) }     // paused before send (locked → pause)
+    var voicePauseDuration by remember { mutableStateOf(0L) } // duration at time of pause
+    var voicePreviewFile by remember { mutableStateOf<java.io.File?>(null) }
+    var voicePreviewWaveform by remember { mutableStateOf<ByteArray?>(null) }
+    var voicePreviewDuration by remember { mutableStateOf(0L) }
+    var voiceRecorder by remember { mutableStateOf<com.privimemobile.chat.voice.VoiceRecorder?>(null) }
+    var voiceRecordDuration by remember { mutableStateOf(0L) }  // live duration for display
+
+    // Mic button hint state — hoisted outside AnimatedContent to survive recomposition
+    var micShowRecordHint by remember { mutableStateOf(false) }
+    var micSlideOffset by remember { mutableStateOf(0f) }
+    var micIsRecordingVisual by remember { mutableStateOf(false) }
+
+    // Voice recording permission
+    var hasRecordPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    // After first-time permission grant, auto-enter locked recording so the recording
+    // bar shows immediately — the finger gesture is lost due to the permission dialog
+    // lifecycle interruption, so we auto-lock instead of re-triggering hold-to-record.
+    var startRecordingAfterPermission by remember { mutableStateOf(false) }
+    val voicePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasRecordPermission = granted
+        if (granted) startRecordingAfterPermission = true
+    }
 
     // Multi-select mode
     var selectionMode by remember { mutableStateOf(false) }
@@ -555,11 +598,11 @@ fun ChatScreen(
                 val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(fileCid)
                 if (path != null) {
                     filePaths[fileCid] = path
-                } else if ((Helpers.isImageMime(msg.file?.mime ?: "") || msg.type == "sticker_pack" || msg.type == "sticker")
+                } else if ((Helpers.isImageMime(msg.file?.mime ?: "") || msg.type == "sticker_pack" || msg.type == "sticker" || Helpers.isVoiceMime(msg.file?.mime))
                     && (msg.file?.size ?: 0) <= Config.AUTO_DL_MAX_SIZE
                     && downloadStatuses[fileCid] == null
                 ) {
-                    // Auto-download images, GIFs, and sticker packs
+                    // Auto-download images, GIFs, stickers, and voice messages
                     downloadStatuses[fileCid] = "downloading"
                     scope.launch {
                         try {
@@ -663,6 +706,258 @@ fun ChatScreen(
             }
         }
         setInputText("")
+    }
+
+    // Send voice message (from preview)
+    suspend fun sendVoiceMessage() {
+        val file = voicePreviewFile ?: return
+        val waveform = voicePreviewWaveform
+        val durationMs = voicePreviewDuration
+
+        if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+            Toast.makeText(context, "Cannot send — address not resolved", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+        if (state?.myHandle == null) return
+
+        val ts = System.currentTimeMillis() / 1000
+
+        // Read audio file and encrypt for inline delivery
+        val audioBytes = withContext(Dispatchers.IO) { file.readBytes() }
+
+        val (key, iv) = com.privimemobile.protocol.FileCrypto.generateFileKey()
+        val ciphertext = com.privimemobile.protocol.FileCrypto.encrypt(audioBytes, key, iv)
+        val inlineData = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP)
+
+        // Check actual size limit (SBBS max inline size ~750KB after base64)
+        if (inlineData.length > com.privimemobile.protocol.Config.MAX_INLINE_SIZE) {
+            val sizeKB = inlineData.length / 1024
+            val limitKB = com.privimemobile.protocol.Config.MAX_INLINE_SIZE / 1024
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Voice message too large (${sizeKB}KB). Max is ${limitKB}KB.", Toast.LENGTH_LONG).show()
+            }
+            file.delete()
+            voicePreviewFile = null
+            voicePreviewWaveform = null
+            voicePreviewDuration = 0L
+            return
+        }
+
+        // Encode waveform as base64
+        val waveformB64 = if (waveform != null) android.util.Base64.encodeToString(waveform, android.util.Base64.NO_WRAP) else null
+        val extras = org.json.JSONObject().apply {
+            if (waveformB64 != null) put("waveform", waveformB64)
+            put("duration_ms", durationMs)
+        }.toString()
+
+        // Build file metadata (OGG/Opus format from native encoder)
+        val fileName = "voice_${ts}.ogg"
+        val fileMeta = mapOf<String, Any?>(
+            "cid" to "inline-${java.util.UUID.randomUUID()}",
+            "key" to key,
+            "iv" to iv,
+            "name" to fileName,
+            "size" to audioBytes.size,
+            "mime" to "audio/ogg",
+            "data" to inlineData,
+        )
+
+        val payload = mutableMapOf<String, Any?>(
+            "v" to 1, "t" to "file", "ts" to ts,
+            "from" to state.myHandle, "to" to (if (isGroupMode) groupId!! else handle),
+            "dn" to (state.myDisplayName ?: ""),
+            "file" to fileMeta,
+            "extras" to extras,
+        )
+
+        // Optimistic DB insert
+        val voiceConvId = if (isGroupMode) convId else {
+            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+            conv.id
+        }
+        val dedupKey = "$ts:file:${fileMeta["cid"]}:true"
+        val entity = com.privimemobile.chat.db.entities.MessageEntity(
+            conversationId = voiceConvId, text = null,
+            timestamp = ts, sent = true, type = "file",
+            senderHandle = state.myHandle, sbbsDedupKey = dedupKey,
+        )
+        val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+
+        // Insert attachment with extras
+        if (msgId > 0) {
+            com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                com.privimemobile.chat.db.entities.AttachmentEntity(
+                    messageId = msgId, conversationId = voiceConvId,
+                    ipfsCid = fileMeta["cid"] as? String ?: "",
+                    encryptionKey = key, encryptionIv = iv,
+                    fileName = fileName, fileSize = audioBytes.size.toLong(),
+                    mimeType = "audio/ogg",
+                    inlineData = inlineData,
+                    downloadStatus = "done",
+                    extras = extras,
+                )
+            )
+        }
+
+        val preview = "\uD83C\uDFA4 Voice ${formatVoiceDuration(durationMs)}"
+
+        // Delete temp recording file and clear preview state
+        file.delete()
+        voicePreviewFile = null
+        voicePreviewWaveform = null
+        voicePreviewDuration = 0L
+
+        // Send via SBBS
+        if (isGroupMode && groupId != null) {
+            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
+        } else {
+            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+        }
+
+        // Clean up temp file
+        withContext(Dispatchers.IO) { file.delete() }
+    }
+
+    // Send voice message (direct from RecordingResult - Telegram-style release to send)
+    suspend fun sendVoiceMessage(result: com.privimemobile.chat.voice.VoiceRecorder.RecordingResult) {
+        if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+            Toast.makeText(context, "Cannot send — address not resolved", Toast.LENGTH_SHORT).show()
+            result.file.delete()
+            return
+        }
+
+        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+        if (state?.myHandle == null) {
+            result.file.delete()
+            return
+        }
+
+        val ts = System.currentTimeMillis() / 1000
+
+        // Read audio file and encrypt for inline delivery
+        val audioBytes = withContext(Dispatchers.IO) { result.file.readBytes() }
+
+        val (key, iv) = com.privimemobile.protocol.FileCrypto.generateFileKey()
+        val ciphertext = com.privimemobile.protocol.FileCrypto.encrypt(audioBytes, key, iv)
+        val inlineData = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP)
+
+        // Check actual size limit (SBBS max inline size ~750KB after base64)
+        if (inlineData.length > com.privimemobile.protocol.Config.MAX_INLINE_SIZE) {
+            val sizeKB = inlineData.length / 1024
+            val limitKB = com.privimemobile.protocol.Config.MAX_INLINE_SIZE / 1024
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Voice message too large (${sizeKB}KB). Max is ${limitKB}KB.", Toast.LENGTH_LONG).show()
+            }
+            result.file.delete()
+            return
+        }
+
+        // Encode waveform as base64
+        val waveformB64 = android.util.Base64.encodeToString(result.waveform, android.util.Base64.NO_WRAP)
+        val extras = org.json.JSONObject().apply {
+            put("waveform", waveformB64)
+            put("duration_ms", result.durationMs)
+        }.toString()
+
+        // Build file metadata (OGG/Opus format from native encoder)
+        val fileName = "voice_${ts}.ogg"
+        val fileMeta = mapOf<String, Any?>(
+            "cid" to "inline-${java.util.UUID.randomUUID()}",
+            "key" to key,
+            "iv" to iv,
+            "name" to fileName,
+            "size" to audioBytes.size,
+            "mime" to "audio/ogg",
+            "data" to inlineData,
+        )
+
+        val payload = mutableMapOf<String, Any?>(
+            "v" to 1, "t" to "file", "ts" to ts,
+            "from" to state.myHandle, "to" to (if (isGroupMode) groupId!! else handle),
+            "dn" to (state.myDisplayName ?: ""),
+            "file" to fileMeta,
+            "extras" to extras,
+        )
+
+        // Optimistic DB insert
+        val voiceConvId = if (isGroupMode) convId else {
+            val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
+            if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
+            conv.id
+        }
+        val dedupKey = "$ts:file:${fileMeta["cid"]}:true"
+        val entity = com.privimemobile.chat.db.entities.MessageEntity(
+            conversationId = voiceConvId, text = null,
+            timestamp = ts, sent = true, type = "file",
+            senderHandle = state.myHandle, sbbsDedupKey = dedupKey,
+        )
+        val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+
+        // Insert attachment with extras
+        if (msgId > 0) {
+            com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                com.privimemobile.chat.db.entities.AttachmentEntity(
+                    messageId = msgId, conversationId = voiceConvId,
+                    ipfsCid = fileMeta["cid"] as? String ?: "",
+                    encryptionKey = key, encryptionIv = iv,
+                    fileName = fileName, fileSize = audioBytes.size.toLong(),
+                    mimeType = "audio/ogg",
+                    inlineData = inlineData,
+                    downloadStatus = "done",
+                    extras = extras,
+                )
+            )
+        }
+
+        val preview = "\uD83C\uDFA4 Voice ${formatVoiceDuration(result.durationMs)}"
+
+        // Delete temp recording file
+        result.file.delete()
+
+        // Send via SBBS
+        if (isGroupMode && groupId != null) {
+            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
+        } else {
+            com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+        }
+    }
+
+    // After permission granted, auto-start recording in locked mode (hands-free)
+    // Must be AFTER sendVoiceMessage() definition so the capture sees it
+    LaunchedEffect(startRecordingAfterPermission) {
+        if (!startRecordingAfterPermission) return@LaunchedEffect
+        val recorder = com.privimemobile.chat.voice.VoiceRecorder(
+            context,
+            amplitudeCallback = { },
+            onMaxDurationReached = {
+                val result = voiceRecorder?.stop()
+                if (result != null && result.durationMs >= 700L) {
+                    scope.launch { sendVoiceMessage(result) }
+                } else if (result != null) {
+                    result.file.delete()
+                }
+                voiceRecording = false
+                voiceLocked = false
+                voicePaused = false
+                voiceRecorder = null
+                micIsRecordingVisual = false
+                startRecordingAfterPermission = false
+            }
+        )
+        if (recorder.start() != null) {
+            voiceRecorder = recorder
+            voiceRecording = true
+            voiceLocked = true        // show locked UI: CANCEL + pause circle + send button
+            micIsRecordingVisual = false
+        }
+        startRecordingAfterPermission = false
     }
 
     // Send message
@@ -1475,6 +1770,11 @@ fun ChatScreen(
                             OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
                         }
                         OverflowItem("\uD83C\uDFA8", "Wallpaper") { showOverflowMenu = false; showWallpaperPicker = true }
+                        // Per-message self-destruct timer
+                        OverflowItem("\u23F1", "Timer: ${if (oneShotTimer == 0) "Off" else Helpers.formatDuration(oneShotTimer)}") {
+                            showOverflowMenu = false
+                            showOneShotTimerPicker = true
+                        }
                         OverflowItem("\uD83D\uDCE4", "Export chat") {
                             showOverflowMenu = false
                             val exportTitle = if (isGroupMode) "PriviMe Group — ${group?.name ?: "Group"}" else "PriviMe Chat — @$handle"
@@ -2138,6 +2438,7 @@ fun ChatScreen(
                         msg = msg,
                         filePath = filePaths[msg.file?.cid ?: ""],
                         downloadStatus = downloadStatuses[msg.file?.cid ?: ""],
+                        attachmentExtras = attachmentMap[msg.id.toLong()]?.extras,
                         isFirstInCluster = isFirstInCluster,
                         isLastInCluster = isLastInCluster,
                         showTimestamp = showTimestamp,
@@ -3264,170 +3565,451 @@ fun ChatScreen(
             if (imeVisible && showEmojiPicker && emojiMainTab == 0) showEmojiPicker = false
             // Only auto-close on emoji tab (emojiMainTab=0). Sticker tab (emojiMainTab=1) uses dialogs/pickers that open keyboard.
         }
-        Surface(
-            color = C.card,
-            shadowElevation = 2.dp,
+
+        // Live duration timer for voice recording
+        LaunchedEffect(voiceRecording) {
+            while (voiceRecording) {
+                voiceRecordDuration = voiceRecorder?.getDurationMs() ?: 0L
+                delay(100)
+            }
+        }
+
+        // ── Input bar & overlays — outer Box with clip=false for floating elements ──
+        Box(
             modifier = Modifier
-                .animateContentSize(animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f))
-                .then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
+                .fillMaxWidth()
+                .graphicsLayer { clip = false },
         ) {
-            Row(
+            Surface(
+                color = C.card,
+                shadowElevation = 2.dp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min)
-                    .padding(horizontal = 2.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.Bottom,
+                    .then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
             ) {
-                // Emoji toggle (left — 48dp like Telegram)
-                IconButton(
-                    onClick = {
-                        if (showEmojiPicker) {
-                            showEmojiPicker = false
-                            keyboardController?.show()
-                        } else {
-                            showEmojiPicker = true
-                            keyboardController?.hide()
-                        }
-                    },
-                    modifier = Modifier.size(48.dp),
+                // ── Input bar: left bar content animates, MicButton stays always stable ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AnimatedContent(
-                        targetState = showEmojiPicker,
-                        transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.6f)).togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.6f)) },
-                        label = "emojiIcon",
-                    ) { isEmoji ->
-                        if (isEmoji) {
-                            Icon(Icons.Default.KeyboardArrowDown, "Keyboard", tint = C.textSecondary, modifier = Modifier.size(24.dp))
-                        } else {
-                            Text("\uD83D\uDE00", fontSize = 24.sp)
+                    // Left: AnimatedContent for bar content only (normal ↔ recording ↔ preview)
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnimatedContent(
+                            targetState = when { voicePaused -> 2; voiceRecording -> 1; else -> 0 },
+                            transitionSpec = {
+                                fadeIn(tween(200)).togetherWith(fadeOut(tween(100)))
+                            },
+                            label = "inputBarMode",
+                        ) { state ->
+                            if (state == 2) {
+                                VoicePreviewBar(
+                                    waveform = voicePreviewWaveform,
+                                    durationMs = voicePauseDuration,
+                                    onDelete = {
+                                        voiceRecorder?.cancel()
+                                        voicePreviewFile = null
+                                        voicePreviewWaveform = null
+                                        voicePreviewDuration = 0L
+                                        voicePauseDuration = 0L
+                                        voicePaused = false
+                                        voiceRecording = false
+                                        voiceLocked = false
+                                        voiceRecorder = null
+                                        micIsRecordingVisual = false
+                                        micSlideOffset = 0f
+                                    },
+                                    onSend = {
+                                        val result = voiceRecorder?.stop()
+                                        if (result != null) {
+                                            scope.launch { sendVoiceMessage(result) }
+                                        }
+                                        voicePreviewFile = null
+                                        voicePreviewWaveform = null
+                                        voicePreviewDuration = 0L
+                                        voicePauseDuration = 0L
+                                        voicePaused = false
+                                        voiceRecording = false
+                                        voiceLocked = false
+                                        voiceRecorder = null
+                                        micIsRecordingVisual = false
+                                        micSlideOffset = 0f
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                )
+                            } else if (state == 1) {
+                                VoiceRecordingBar(
+                                    durationMs = voiceRecordDuration,
+                                    isLocked = voiceLocked,
+                                    onCancel = {
+                                        voiceRecorder?.cancel()
+                                        voiceRecording = false
+                                        voiceLocked = false
+                                        voiceRecorder = null
+                                        micIsRecordingVisual = false
+                                    },
+                                    onLock = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                        voiceLocked = true
+                                    },
+                                    onSend = {
+                                        val result = voiceRecorder?.stop()
+                                        if (result != null) {
+                                            scope.launch { sendVoiceMessage(result) }
+                                        }
+                                        voiceRecording = false
+                                        voiceLocked = false
+                                        voiceRecorder = null
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                )
+                            } else {
+                                // Normal input bar
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
+                                        .heightIn(min = 52.dp)
+                                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    // Emoji toggle (left — 48dp like Telegram)
+                                    IconButton(
+                                        onClick = {
+                                            if (showEmojiPicker) {
+                                                showEmojiPicker = false
+                                                keyboardController?.show()
+                                            } else {
+                                                showEmojiPicker = true
+                                                keyboardController?.hide()
+                                            }
+                                        },
+                                        modifier = Modifier.size(48.dp),
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = showEmojiPicker,
+                                            transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.6f)).togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.6f)) },
+                                            label = "emojiIcon",
+                                        ) { isEmoji ->
+                                            if (isEmoji) {
+                                                Icon(Icons.Default.KeyboardArrowDown, "Keyboard", tint = C.textSecondary, modifier = Modifier.size(24.dp))
+                                            } else {
+                                                Text("\uD83D\uDE00", fontSize = 24.sp)
+                                            }
+                                        }
+                                    }
+
+                                    // Text field (center — fills available space)
+                                    OutlinedTextField(
+                                        value = inputText,
+                                        onValueChange = { newValue ->
+                                            inputText = newValue
+                                            val text = newValue.text
+                                            val cursor = newValue.selection.start
+                                            if (text == "/") showCommandMenu = true
+                                            else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
+                                            // @mention autocomplete detection (group mode only)
+                                            if (isGroupMode && cursor > 0) {
+                                                var atIdx = -1
+                                                for (k in cursor - 1 downTo 0) {
+                                                    val c = text[k]
+                                                    if (c == '@') { atIdx = k; break }
+                                                    if (c == ' ' || c == '\n') break
+                                                }
+                                                if (atIdx >= 0 && (atIdx == 0 || text[atIdx - 1] == ' ' || text[atIdx - 1] == '\n' ||
+                                                            text.substring(0, atIdx).trimEnd().endsWith("/tip"))) {
+                                                    mentionStartIdx = atIdx
+                                                    mentionFilter = text.substring(atIdx + 1, cursor)
+                                                    showMentionMenu = true
+                                                } else {
+                                                    showMentionMenu = false
+                                                }
+                                            } else {
+                                                showMentionMenu = false
+                                            }
+                                            if (text.isNotEmpty()) {
+                                                if (isGroupMode) com.privimemobile.chat.ChatService.groups.sendGroupTyping(groupId!!)
+                                                else com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
+                                            }
+                                        },
+                                        placeholder = {
+                                            Text(
+                                                when {
+                                                    pendingFile != null -> "Add a caption..."
+                                                    isDeletedAccount -> "This account has been deleted"
+                                                    !isGroupMode && resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
+                                                    else -> "Message"
+                                                },
+                                                color = C.textMuted, fontSize = 15.sp,
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
+                                            focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
+                                            cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
+                                        ),
+                                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
+                                        maxLines = 4,
+                                        enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading && !isDeletedAccount,
+                                    )
+
+                                    // Right side: animated morph icons ↔ send
+                                    AnimatedContent(
+                                        targetState = inputText.text.isNotBlank() || uploading,
+                                        transitionSpec = {
+                                            (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.4f) +
+                                                slideInVertically(tween(180)) { it / 4 })
+                                                .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.4f) +
+                                                    slideOutVertically(tween(150)) { -it / 4 })
+                                        },
+                                        label = "rightIcons",
+                                    ) { showSend ->
+                                        if (showSend) {
+                                            if (uploading) {
+                                                Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(22.dp), color = C.textDark, strokeWidth = 2.dp)
+                                                }
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent)
+                                                        .pointerInput(Unit) {
+                                                            detectTapGestures(onTap = { handleSend() }, onLongPress = { showSchedulePicker = true })
+                                                        },
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = C.textDark, modifier = Modifier.size(22.dp))
+                                                }
+                                            }
+                                        } else {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(48.dp)) {
+                                                IconButton(onClick = { showCommandMenu = !showCommandMenu }, modifier = Modifier.size(42.dp)) {
+                                                    Box(
+                                                        modifier = Modifier.size(32.dp).clip(CircleShape)
+                                                            .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        Text("/", color = C.textSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                IconButton(
+                                                    onClick = { showAttachPicker = true },
+                                                    enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
+                                                    modifier = Modifier.size(42.dp),
+                                                ) {
+                                                    Icon(Icons.Default.AttachFile, "Attach", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
 
-                // Text field (center — fills available space)
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { newValue ->
-                        inputText = newValue
-                        val text = newValue.text
-                        val cursor = newValue.selection.start
-                        if (text == "/") showCommandMenu = true
-                        else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
-                        // @mention autocomplete detection (group mode only)
-                        if (isGroupMode && cursor > 0) {
-                            // Find the '@' before the cursor
-                            var atIdx = -1
-                            for (k in cursor - 1 downTo 0) {
-                                val c = text[k]
-                                if (c == '@') { atIdx = k; break }
-                                if (c == ' ' || c == '\n') break
-                            }
-                            if (atIdx >= 0 && (atIdx == 0 || text[atIdx - 1] == ' ' || text[atIdx - 1] == '\n' ||
-                                        text.substring(0, atIdx).trimEnd().endsWith("/tip"))) {
-                                mentionStartIdx = atIdx
-                                mentionFilter = text.substring(atIdx + 1, cursor)
-                                showMentionMenu = true
-                            } else {
-                                showMentionMenu = false
-                            }
-                        } else {
-                            showMentionMenu = false
-                        }
-                        if (text.isNotEmpty()) {
-                            if (isGroupMode) com.privimemobile.chat.ChatService.groups.sendGroupTyping(groupId!!)
-                            else com.privimemobile.chat.ChatService.sbbs.sendTyping(convKey)
-                        }
-                    },
-                    placeholder = {
-                        Text(
-                            when {
-                                pendingFile != null -> "Add a caption..."
-                                isDeletedAccount -> "This account has been deleted"
-                                !isGroupMode && resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
-                                else -> "Message"
-                            },
-                            color = C.textMuted, fontSize = 15.sp,
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
-                        cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
-                    ),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
-                    maxLines = 4,
-                    enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading && !isDeletedAccount,
-                )
-
-                // Right side: animated morph icons ↔ send (Telegram-style 180ms with rotation)
-                AnimatedContent(
-                    targetState = hasText || uploading,
-                    transitionSpec = {
-                        (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.4f) +
-                            slideInVertically(tween(180)) { it / 4 })
-                            .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.4f) +
-                                slideOutVertically(tween(150)) { -it / 4 })
-                    },
-                    label = "rightIcons",
-                ) { showSend ->
-                    if (showSend) {
-                        if (uploading) {
+                    // Right: MicButton / SendButton — NEVER animates, always stable
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.padding(end = 2.dp, bottom = 2.dp),
+                    ) {
+                        if (voiceRecording && voiceLocked) {
+                            // ── Locked mode: large send button (Telegram-style) ──
                             Box(
-                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = C.textDark, strokeWidth = 2.dp)
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent)
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onTap = { handleSend() },
-                                            onLongPress = { showSchedulePicker = true },
-                                        )
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(C.accent)
+                                    .clickable {
+                                        val result = voiceRecorder?.stop()
+                                        if (result != null) {
+                                            scope.launch { sendVoiceMessage(result) }
+                                        }
+                                        voiceRecording = false
+                                        voiceLocked = false
+                                        voiceRecorder = null
+                                        micIsRecordingVisual = false
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = C.textDark, modifier = Modifier.size(22.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    "Send",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp),
+                                )
                             }
-                        }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.height(48.dp),
-                        ) {
-                            IconButton(onClick = { showCommandMenu = !showCommandMenu }, modifier = Modifier.size(42.dp)) {
-                                Box(
-                                    modifier = Modifier.size(32.dp).clip(CircleShape)
-                                        .background(if (showCommandMenu) C.accent.copy(alpha = 0.15f) else Color.Transparent),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text("/", color = C.textSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            IconButton(
-                                onClick = { showAttachPicker = true },
-                                enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
-                                modifier = Modifier.size(42.dp),
-                            ) {
-                                Icon(Icons.Default.AttachFile, "Attach", tint = C.textSecondary, modifier = Modifier.size(22.dp))
-                            }
-                            Box(modifier = Modifier.size(42.dp)) {
-                                IconButton(onClick = { showOneShotTimerPicker = true }, modifier = Modifier.size(42.dp)) {
-                                    Icon(Icons.Default.Timer, "Timer", tint = if (oneShotTimer > 0) C.accent else C.textMuted, modifier = Modifier.size(20.dp))
-                                }
-                                if (oneShotTimer > 0) {
-                                    Box(modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp).size(8.dp).clip(CircleShape).background(C.accent))
-                                }
-                            }
+                        } else if (inputText.text.isEmpty() && pendingFile == null && !voicePaused) {
+                            // ── Normal + recording (unlocked): mic button with swipe-to-lock ──
+                            MicButton(
+                                isRecordingVisual = micIsRecordingVisual,
+                                slideOffset = micSlideOffset,
+                                hasRecordPermission = hasRecordPermission,
+                                onRecordPermissionRequest = {
+                                    voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                },
+                                scope = scope,
+                                view = view,
+                                context = context,
+                                onStartRecording = {
+                                    voiceRecorder = com.privimemobile.chat.voice.VoiceRecorder(
+                                        context = context,
+                                        amplitudeCallback = { },
+                                        onMaxDurationReached = {
+                                            val result = voiceRecorder?.stop()
+                                            if (result != null && result.durationMs >= 700L) {
+                                                scope.launch { sendVoiceMessage(result) }
+                                            } else if (result != null) {
+                                                result.file.delete()
+                                            }
+                                            micIsRecordingVisual = false
+                                            voiceRecording = false
+                                            voiceLocked = false
+                                            voiceRecorder = null
+                                        }
+                                    ).also { recorder ->
+                                        if (recorder.start() != null) {
+                                            voiceRecording = true
+                                            micIsRecordingVisual = true
+                                        }
+                                    }
+                                },
+                                onSendRecording = {
+                                    voiceRecorder?.stop()?.let { result ->
+                                        if (result.durationMs >= 700L) {
+                                            scope.launch { sendVoiceMessage(result) }
+                                        } else {
+                                            result.file.delete()
+                                        }
+                                    }
+                                    voiceRecording = false
+                                    voiceRecorder = null
+                                    micIsRecordingVisual = false
+                                    micSlideOffset = 0f
+                                },
+                                onCancelRecording = {
+                                    voiceRecorder?.cancel()
+                                    micIsRecordingVisual = false
+                                    voiceRecording = false
+                                    voiceRecorder = null
+                                },
+                                onShowHint = { show ->
+                                    micShowRecordHint = show
+                                },
+                                onLockSwipe = {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    voiceLocked = true
+                                },
+                            )
                         }
                     }
                 }
+            } // close Surface (input bar)
+
+            // ── Record hint tooltip (anchored to input bar top-right, floats above into chat) ──
+            if (micShowRecordHint) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = (-12).dp, y = (-28).dp),
+                ) {
+                    com.privimemobile.ui.components.RecordHintTooltip()
+                }
             }
-        }
+
+            // ── Floating indicator: lock pill (recording), pause circle (locked), mic circle (paused) ──
+            if (voiceRecording && !voicePaused) {
+                if (voiceLocked) {
+                    // Pause circle (locked — tap to pause, see waveform preview, then resume or send)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = (-10).dp, y = (-100).dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2A2D2E).copy(alpha = 0.9f))
+                                .clickable {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    val ok = voiceRecorder?.pause()
+                                    if (ok == true) {
+                                        // Populate preview data from live recorder
+                                        val amps = voiceRecorder?.getAmplitudes() ?: emptyList()
+                                        voicePreviewWaveform = com.privimemobile.chat.voice.VoiceRecorder.Companion.packWaveform(amps)
+                                        voicePauseDuration = voiceRecorder?.getDurationMs() ?: 0L
+                                        voicePreviewDuration = voicePauseDuration
+                                        voiceRecordDuration = voicePauseDuration
+                                        voiceLocked = false
+                                        voicePaused = true
+                                        micIsRecordingVisual = false
+                                        micSlideOffset = 0f
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(4.dp)
+                                        .height(16.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Color.White.copy(alpha = 0.9f)),
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(4.dp)
+                                        .height(16.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Color.White.copy(alpha = 0.9f)),
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Lock pill (recording — swipe up to lock)
+                    VoiceLockIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = (-8).dp, y = (-100).dp),
+                    )
+                }
+            }
+            if (voicePaused) {
+                // Mic circle (paused — tap to resume recording in the same session)
+                // Trash is in VoicePreviewBar (left side of the bar), so no floating trash needed
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = (-10).dp, y = (-100).dp),
+                ) {
+                    // Mic resume button
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF2A2D2E).copy(alpha = 0.9f))
+                            .clickable {
+                                    // Resume the existing recording session — return to locked state
+                                    voicePaused = false
+                                    voiceRecording = true
+                                    voiceLocked = true
+                                    voiceRecorder?.resume()
+                                    micIsRecordingVisual = true
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.Mic,
+                                "Mic",
+                                tint = Color.White.copy(alpha = 0.9f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                }
+            }
+        } // close Box (input bar + tooltip overlay)
 
         // ── Clear history confirmation ──
         if (showClearConfirm) {
@@ -4226,29 +4808,116 @@ fun ChatScreen(
                             }
                         }
 
-                        // Resend option for sent messages not yet delivered
-                        if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L && (targetMsg.type == "dm" || targetMsg.type == "group_msg")) {
+                        // Resend option for sent messages not yet delivered (text, file, voice, sticker, sticker_pack, poll)
+                        if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L) {
                             MenuItemRow("Resend") {
                                 scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
+                                        val msgId = targetMsg.id.toLong()
+                                        val attachment = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByMessageId(msgId)
+                                        val isNewTs = System.currentTimeMillis() / 1000
                                         if (isGroupMode && groupId != null) {
-                                            com.privimemobile.chat.ChatService.groups.sendGroupMessage(
-                                                groupId, targetMsg.text, replyText = targetMsg.reply,
-                                            )
+                                            // GROUP: rebuild payload based on original type
+                                            val payload = when {
+                                                targetMsg.type == "tip" -> mutableMapOf<String, Any?>(
+                                                    "v" to 1, "t" to "tip", "ts" to isNewTs,
+                                                    "from" to state.myHandle!!, "to" to groupId,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "msg" to (targetMsg.text ?: ""),
+                                                    "amount" to targetMsg.tipAmount,
+                                                    "asset_id" to targetMsg.tipAssetId,
+                                                    "reply" to (targetMsg.reply ?: ""), "reply_ts" to targetMsg.replyTs,
+                                                )
+                                                targetMsg.type == "poll" -> mutableMapOf<String, Any?>(
+                                                    "v" to 1, "t" to "poll", "ts" to isNewTs,
+                                                    "from" to state.myHandle!!, "to" to groupId,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "poll" to (targetMsg.pollData ?: targetMsg.text ?: ""),
+                                                    "reply" to (targetMsg.reply ?: ""), "reply_ts" to targetMsg.replyTs,
+                                                )
+                                                attachment != null && attachment.mimeType == "application/x-tgsticker" -> mutableMapOf<String, Any?>(
+                                                    "v" to 1, "t" to targetMsg.type, "ts" to isNewTs,
+                                                    "from" to state.myHandle!!, "to" to groupId,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "file" to mapOf<String, Any?>(
+                                                        "name" to attachment.fileName, "size" to attachment.fileSize,
+                                                        "mime" to attachment.mimeType, "data" to attachment.inlineData,
+                                                        "key" to attachment.encryptionKey, "iv" to attachment.encryptionIv,
+                                                        "cid" to attachment.ipfsCid,
+                                                    ),
+                                                    "extras" to attachment.extras,
+                                                )
+                                                attachment != null -> mutableMapOf<String, Any?>(
+                                                    "v" to 1, "t" to targetMsg.type, "ts" to isNewTs,
+                                                    "from" to state.myHandle!!, "to" to groupId,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "file" to mapOf<String, Any?>(
+                                                        "name" to attachment.fileName, "size" to attachment.fileSize,
+                                                        "mime" to attachment.mimeType, "data" to attachment.inlineData,
+                                                        "key" to attachment.encryptionKey, "iv" to attachment.encryptionIv,
+                                                        "cid" to attachment.ipfsCid,
+                                                    ),
+                                                    "extras" to attachment.extras,
+                                                )
+                                                else -> mutableMapOf<String, Any?>(
+                                                    "v" to 1, "t" to targetMsg.type, "ts" to isNewTs,
+                                                    "from" to state.myHandle!!, "to" to groupId,
+                                                    "dn" to (state.myDisplayName ?: ""),
+                                                    "msg" to (targetMsg.text ?: targetMsg.type),
+                                                    "reply" to (targetMsg.reply ?: ""), "reply_ts" to targetMsg.replyTs,
+                                                )
+                                            }
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
                                             withContext(Dispatchers.Main) {
-                                                Toast.makeText(context, "Message resent to group", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
                                             }
                                         } else {
+                                            // DM: rebuild payload based on original type
                                             val wid = resolvedWalletId
                                             if (!wid.isNullOrEmpty()) {
-                                                val payload = mapOf(
-                                                    "v" to 1, "t" to "dm",
-                                                    "ts" to targetMsg.timestamp,
-                                                    "from" to state.myHandle!!, "to" to handle,
-                                                    "dn" to (state.myDisplayName ?: ""),
-                                                    "msg" to targetMsg.text,
-                                                )
+                                                val payload = when {
+                                                    targetMsg.type == "tip" -> mapOf<String, Any?>(
+                                                        "v" to 1, "t" to "tip", "ts" to isNewTs,
+                                                        "from" to state.myHandle!!, "to" to handle,
+                                                        "dn" to (state.myDisplayName ?: ""),
+                                                        "msg" to (targetMsg.text ?: ""),
+                                                        "amount" to targetMsg.tipAmount,
+                                                        "asset_id" to targetMsg.tipAssetId,
+                                                    )
+                                                    attachment != null && attachment.mimeType == "application/x-tgsticker" -> mapOf<String, Any?>(
+                                                        "v" to 1, "t" to "file", "ts" to isNewTs,
+                                                        "from" to state.myHandle!!, "to" to handle,
+                                                        "dn" to (state.myDisplayName ?: ""),
+                                                        "file" to mapOf<String, Any?>(
+                                                            "name" to attachment.fileName, "size" to attachment.fileSize,
+                                                            "mime" to attachment.mimeType,
+                                                            "data" to attachment.inlineData,
+                                                            "key" to attachment.encryptionKey, "iv" to attachment.encryptionIv,
+                                                            "cid" to attachment.ipfsCid,
+                                                        ),
+                                                        "extras" to attachment.extras,
+                                                    )
+                                                    attachment != null -> mapOf<String, Any?>(
+                                                        "v" to 1, "t" to "file", "ts" to isNewTs,
+                                                        "from" to state.myHandle!!, "to" to handle,
+                                                        "dn" to (state.myDisplayName ?: ""),
+                                                        "file" to mapOf<String, Any?>(
+                                                            "name" to attachment.fileName, "size" to attachment.fileSize,
+                                                            "mime" to attachment.mimeType,
+                                                            "data" to attachment.inlineData,
+                                                            "key" to attachment.encryptionKey, "iv" to attachment.encryptionIv,
+                                                            "cid" to attachment.ipfsCid,
+                                                        ),
+                                                        "extras" to attachment.extras,
+                                                    )
+                                                    else -> mapOf<String, Any?>(
+                                                        "v" to 1, "t" to "dm", "ts" to isNewTs,
+                                                        "from" to state.myHandle!!, "to" to handle,
+                                                        "dn" to (state.myDisplayName ?: ""),
+                                                        "msg" to (targetMsg.text ?: ""),
+                                                    )
+                                                }
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(wid, payload)
                                                 withContext(Dispatchers.Main) {
                                                     Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
@@ -4832,6 +5501,7 @@ private fun MessageBubble(
     isLastInCluster: Boolean = true,
     showTimestamp: Boolean = true,
     onScrollToReply: (Long) -> Unit = {},
+    attachmentExtras: String? = null, // JSON from AttachmentEntity.extras for voice waveform/duration
 ) {
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
@@ -5311,29 +5981,61 @@ private fun MessageBubble(
                 if (isFileMsg) {
                     val fName = msg.file?.name ?: ""
                     val fMime = msg.file?.mime ?: "application/octet-stream"
-                    FileContent(
-                        cid = msg.file?.cid ?: "",
-                        fileName = fName,
-                        fileSize = msg.file?.size ?: 0L,
-                        filePath = filePath,
-                        downloadStatus = downloadStatus,
-                        isImage = isImage,
-                        onDownload = {
-                            onDownload(
-                                msg.file?.cid ?: "",
-                                msg.file?.key ?: "",
-                                msg.file?.iv ?: "",
-                                fMime,
-                                msg.file?.data,
-                            )
-                        },
-                        onSave = {
-                            if (filePath != null) {
-                                saveFileToDownloads(context, filePath, fName, fMime)
-                            }
-                        },
-                        onFullscreen = onFullscreenImage,
-                    )
+                    val isVoice = Helpers.isVoiceMime(fMime) && !isImage
+
+                    if (isVoice) {
+                        // Voice message — render waveform bubble
+                        val voiceData = remember(attachmentExtras) {
+                            try {
+                                if (attachmentExtras != null) {
+                                    val obj = org.json.JSONObject(attachmentExtras)
+                                    val waveformB64 = obj.optString("waveform")
+                                    val durationMs = obj.optLong("duration_ms", 0)
+                                    val waveformBytes = if (waveformB64.isNotEmpty()) {
+                                        try { android.util.Base64.decode(waveformB64, android.util.Base64.DEFAULT) } catch (_: Exception) { null }
+                                    } else null
+                                    Pair(waveformBytes, durationMs)
+                                } else null
+                            } catch (_: Exception) { null }
+                        }
+                        val waveform = voiceData?.first
+                        val durationSec = (voiceData?.second ?: 0L) / 1000
+
+                        // Parse extras from attachment for waveform/duration
+                        com.privimemobile.ui.components.VoiceMessageBubble(
+                            id = msg.id,
+                            durationSecs = durationSec.toInt(),
+                            waveform = waveform,
+                            filePath = filePath,
+                            isMine = isMine,
+                            onLongPress = onLongPress,
+                        )
+                    } else {
+                        // Regular file (image or document)
+                        FileContent(
+                            cid = msg.file?.cid ?: "",
+                            fileName = fName,
+                            fileSize = msg.file?.size ?: 0L,
+                            filePath = filePath,
+                            downloadStatus = downloadStatus,
+                            isImage = isImage,
+                            onDownload = {
+                                onDownload(
+                                    msg.file?.cid ?: "",
+                                    msg.file?.key ?: "",
+                                    msg.file?.iv ?: "",
+                                    fMime,
+                                    msg.file?.data,
+                                )
+                            },
+                            onSave = {
+                                if (filePath != null) {
+                                    saveFileToDownloads(context, filePath, fName, fMime)
+                                }
+                            },
+                            onFullscreen = onFullscreenImage,
+                        )
+                    }
                 }
 
                 // Poll display
@@ -5484,9 +6186,9 @@ private fun MessageBubble(
                 }
             }
         }
-    }
-    }  // close Column wrapper
-}
+    } // close Column
+    } // close Box
+} // close ChatScreen
 
 @Composable
 private fun FileContent(
@@ -6207,6 +6909,225 @@ private fun MenuItemRow(
 private fun formatMessageTime(ts: Long): String {
     if (ts <= 0) return ""
     return msgTimeFormat.format(Date(ts * 1000))
+}
+
+/** Format voice duration as m:ss */
+private fun formatVoiceDuration(ms: Long): String {
+    val totalSeconds = (ms / 1000).toInt()
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
+}
+
+/**
+ * Telegram-style voice recording bar.
+ * Shows recording duration, slide-to-cancel and swipe-up-to-lock gestures.
+ *
+ * States:
+ * - Recording: [red dot] duration  < Slide to Cancel  (or "Release to cancel" when sliding left)
+ * - Locked: duration  CANCEL  [send]  — mic area shows pause overlay (handled by caller)
+ */
+@Composable
+private fun VoiceRecordingBar(
+    durationMs: Long,
+    isLocked: Boolean,
+    onCancel: () -> Unit,
+    onLock: () -> Unit,
+    onSend: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val cancelThreshold = 120f
+    val lockThreshold = 80f
+
+    val shouldCancel = dragOffsetX < -cancelThreshold
+    val shouldLock = dragOffsetY < -lockThreshold
+
+    // Trigger lock when upward swipe crosses threshold
+    LaunchedEffect(shouldLock) {
+        if (shouldLock && !isLocked) {
+            onLock()
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(start = 12.dp, end = 8.dp)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (shouldCancel) onCancel()
+                        dragOffsetX = 0f
+                    },
+                    onHorizontalDrag = { _, drag ->
+                        dragOffsetX = (dragOffsetX + drag).coerceIn(-200f, 0f)
+                    },
+                )
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = { dragOffsetY = 0f },
+                    onVerticalDrag = { _, drag ->
+                        if (!isLocked) {
+                            dragOffsetY = (dragOffsetY + drag).coerceIn(-150f, 0f)
+                        }
+                    },
+                )
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Left side: recording indicator (red dot always shown during recording)
+        Box(
+            modifier = Modifier.size(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(if (shouldCancel) C.textMuted else Color(0xFFE53935)),
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        // Duration
+        Text(
+            text = formatVoiceDuration(durationMs),
+            color = if (shouldCancel) C.textMuted else C.text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+        )
+
+        // Center: slide hint / CANCEL (centered in available space)
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                shouldCancel -> {
+                    Text(
+                        text = "Release to cancel",
+                        color = C.error,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+
+                isLocked -> {
+                    Text(
+                        text = "CANCEL",
+                        color = if (shouldLock) C.accent else C.accent.copy(alpha = 0.7f),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { onCancel() },
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = "\u27F5 Slide to Cancel",
+                        color = C.textSecondary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+
+    }
+}
+
+/**
+ * Telegram-style voice preview bar (shown after user pauses a locked recording).
+ * [trash icon] [waveform] [duration] [send button]
+ */
+@Composable
+private fun VoicePreviewBar(
+    waveform: ByteArray?,
+    durationMs: Long,
+    onDelete: () -> Unit,
+    onSend: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Delete/trash button
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.size(40.dp).clip(CircleShape),
+        ) {
+            Icon(Icons.Default.Delete, "Delete", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+        }
+
+        Spacer(Modifier.width(4.dp))
+
+        // Waveform preview
+        VoiceWaveformView(
+            waveform = waveform,
+            progress = 0f,
+            isMine = true,
+            modifier = Modifier.weight(1f).height(24.dp),
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        // Duration
+        Text(
+            text = formatVoiceDuration(durationMs),
+            color = C.text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        // Send button
+        IconButton(
+            onClick = onSend,
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(C.accent),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/**
+ * Telegram-style lock indicator overlay: dark pill with lock icon + up-arrow.
+ * Shown during recording (not locked) to indicate swipe-up-to-lock.
+ */
+@Composable
+private fun VoiceLockIndicator(
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF2A2D2E),
+        shadowElevation = 4.dp,
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Icon(
+                Icons.Default.Lock,
+                "Lock",
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+            Text("↑", color = Color.White.copy(alpha = 0.7f), fontSize = 18.sp)
+        }
+    }
 }
 
 /** Parse simple markdown: **bold**, *italic*, `code`, ~~strikethrough~~ */

@@ -29,4 +29,5 @@ data class AttachmentEntity(
     @ColumnInfo(name = "inline_data") val inlineData: String? = null, // base64 ciphertext
     @ColumnInfo(name = "local_path") val localPath: String? = null,
     @ColumnInfo(name = "download_status") val downloadStatus: String = "idle", // idle/downloading/decrypting/done/error
+    @ColumnInfo(name = "extras") val extras: String? = null, // JSON: {"waveform": "base64", "duration_ms": 45000}
 )

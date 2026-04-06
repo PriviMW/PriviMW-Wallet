@@ -691,11 +691,11 @@ internal fun formatRate(rate: Double): String {
             // Very small: show in scientific-ish format
             // Count leading zeros after decimal
             val full = String.format("%.12f", rate)
-            val afterDot = full.substringAfter(".")
+            val afterDot = full.substringAfter(".").ifEmpty { full.substringAfter(",") }
             val leadingZeros = afterDot.takeWhile { it == '0' }.length
             String.format("%.${leadingZeros + 4}f", rate)       // 0.0000001234
         }
-    }.trimEnd('0').trimEnd('.')
+    }.trimEnd('0').trimEnd { it == '.' || it == ',' }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -71,7 +71,21 @@ fun AssetDetailScreen(
             val arr = JSONArray(txJson)
             (0 until arr.length()).mapNotNull { i ->
                 val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                if (obj.optInt("assetId") != assetId) return@mapNotNull null
+
+                // Parse contractAssets early to check asset involvement for DApp TXs
+                val contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
+                    (0 until ca.length()).mapNotNull { j ->
+                        val ao = ca.optJSONObject(j) ?: return@mapNotNull null
+                        Pair(ao.optInt("assetId"), Pair(ao.optLong("sending"), ao.optLong("receiving")))
+                    }
+                } ?: emptyList()
+
+                // Include TX if either top-level assetId matches OR (for DApp TXs) a contract asset matches
+                val topAssetId = obj.optInt("assetId")
+                val hasContractAsset = contractAssets.any { it.first == assetId }
+                val isDapps = obj.optBoolean("isDapps")
+                if (topAssetId != assetId && !(isDapps && hasContractAsset)) return@mapNotNull null
+
                 TxItem(
                     txId = obj.optString("txId"),
                     amount = obj.optLong("amount"),
@@ -89,16 +103,9 @@ fun AssetDetailScreen(
                     isDapps = obj.optBoolean("isDapps"),
                     appName = obj.optString("appName", "").ifEmpty { null },
                     contractCids = obj.optString("contractCids", "").ifEmpty { null },
-                    contractAssets = obj.optJSONArray("contractAssets")?.let { ca ->
-                        (0 until ca.length()).mapNotNull { j ->
-                            val ao = ca.optJSONObject(j) ?: return@mapNotNull null
-                            ContractAsset(
-                                assetId = ao.optInt("assetId"),
-                                sending = ao.optLong("sending"),
-                                receiving = ao.optLong("receiving"),
-                            )
-                        }
-                    } ?: emptyList(),
+                    contractAssets = contractAssets.map { (cAssetId, amounts) ->
+                        ContractAsset(assetId = cAssetId, sending = amounts.first, receiving = amounts.second)
+                    },
                 )
             }.sortedByDescending { it.createTime }
         } catch (_: Exception) { emptyList() }
@@ -326,7 +333,7 @@ fun AssetDetailScreen(
                                     val displayAmt = Math.abs(if (isSpending) ca.sending else ca.receiving)
                                     val caPrefix = if (isSpending) "-" else "+"
                                     val caColor = if (isFailed) C.textSecondary else if (isSpending) C.outgoing else C.incoming
-                                    val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else assetName
+                                    val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else "BEAM"
                                     if (displayAmt > 0) {
                                         Text(
                                             "$caPrefix${Helpers.formatBeam(displayAmt)} $caTicker",

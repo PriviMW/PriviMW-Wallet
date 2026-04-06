@@ -135,7 +135,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         val price = priceText.toDoubleOrNull() ?: return
         val pay = payAmountText.toDoubleOrNull() ?: return
         if (price <= 0 || pay <= 0) { receiveAmountText = ""; return }
-        receiveAmountText = String.format("%.8f", pay / price).trimEnd('0').trimEnd('.')
+        receiveAmountText = String.format("%.8f", pay / price).trimEnd('0').trimEnd { it == '.' || it == ',' }
         if (receiveAmountText.isEmpty()) receiveAmountText = "0"
     }
 
@@ -144,7 +144,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         val pay = payAmountText.toDoubleOrNull() ?: return
         val receive = receiveAmountText.toDoubleOrNull() ?: return
         if (pay <= 0 || receive <= 0) { priceText = ""; return }
-        priceText = String.format("%.8f", pay / receive).trimEnd('0').trimEnd('.')
+        priceText = String.format("%.8f", pay / receive).trimEnd('0').trimEnd { it == '.' || it == ',' }
         if (priceText.isEmpty()) priceText = "0"
     }
 

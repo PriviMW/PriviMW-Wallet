@@ -488,7 +488,7 @@ object NativeTxApprovalDialog {
         return try {
             val num = beamStr.toDouble()
             if (num == 0.0) "0"
-            else String.format("%.8f", num).trimEnd('0').trimEnd('.')
+            else String.format("%.8f", num).trimEnd('0').trimEnd { it == '.' || it == ',' }
         } catch (_: Exception) {
             beamStr
         }

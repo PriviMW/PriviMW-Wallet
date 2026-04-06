@@ -16,12 +16,24 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 
 ## Features
 
-- **Wallet** — Send/receive BEAM and Confidential Assets (offline, online, max privacy)
-- **Assets Swap (DEX)** — Peer-to-peer asset trading with no intermediaries. Create offers, accept swaps, fully private atomic settlement on-chain
-- **PriviMe Messaging** — End-to-end encrypted chat via SBBS (no servers, no intermediaries)
-- **Group Chats** — On-chain groups with admin roles, bans, invites, password-protected private groups
-- **DApp Store** — Browse and install Beam DApps
+### Wallet
+
+- **Send & Receive** — BEAM and Confidential Assets (offline, online, max privacy modes)
+- **Assets Swap (DEX)** — Peer-to-peer asset trading. Create offers, accept swaps, fully private atomic settlement on-chain
+- **Send to @handle** — Address wallet sends by human-readable handle names
+- **Address Favourites** — Save frequently used addresses for quick sends
+- **8 Themes** — Light and dark theme variants with full app-wide support
+- **DApp Store** — Browse, install, and sideload Beam DApps
 - **Mobile Node** — Optional FlyClient lightweight verification for trustless operation
+
+### Messaging
+
+- **End-to-End Encrypted DMs** — Peer-to-peer messaging via SBBS, no servers
+- **Voice Messages** — Record and send Opus voice messages with waveform visualization
+- **Message Reactions** — Add emoji reactions to messages, merged into chat notifications
+- **Group Chats** — On-chain groups with admin roles, bans, invites, password-protected private groups, @mention autocomplete
+- **Delete Messages** — Unsend messages from conversations
+- **Media Gallery** — View images, audio, and files with fullscreen viewer
 - **Profile Pictures** — Peer-to-peer avatar exchange via SBBS
 - **Stickers** — Custom packs with animated TGS/Lottie support
 - **Tips** — Send BEAM/assets directly in chat conversations
@@ -60,8 +72,9 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 - **Wallet Core**: Beam C++ via JNI (`libwallet-jni.so`)
 - **Database**: Room + SQLCipher (encrypted)
 - **Network**: Beam Mainnet (SBBS for messaging, BVM for contracts)
-- **Min SDK**: Android 8.0 (API 26)
-- **Target SDK**: Android 14 (API 34)
+- **Min SDK**: Android 7.0 (API 24)
+- **Target SDK**: Android 15 (API 35)
+- **CPU Architecture**: arm64-v8a only (64-bit devices)
 
 ## Building
 
@@ -69,9 +82,17 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 
 - Android Studio Ladybug+
 - JDK 17
-- Android SDK 34, NDK 27
+- Android SDK 35, NDK 27
 
 ### Build
+
+Initialize git submodules for Opus and Ogg sources (voice message encoding):
+
+```bash
+git submodule update --init --recursive
+```
+
+Then build:
 
 ```bash
 ./gradlew assembleDebug
@@ -88,23 +109,29 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 app/src/main/java/com/privimemobile/
 ├── chat/                  # Messaging system
+│   ├── contacts/          # Contact resolution
 │   ├── db/                # Room database (entities, DAOs)
 │   ├── group/             # Group chat manager + PendingTx
 │   ├── identity/          # Handle registration + profile
-│   ├── contacts/          # Contact resolution
+│   ├── notification/      # Chat notification manager (reactions + messages)
 │   ├── processor/         # SBBS message processing
 │   ├── transport/         # SBBS transport layer
+│   ├── voice/             # Opus voice message recording
 │   └── ChatService.kt    # Singleton orchestrator
-├── protocol/              # Beam wallet JNI bridge
-├── wallet/                # Wallet events, background service
-├── dapp/                  # DApp WebView bridge
+├── protocol/              # Beam JNI bridge, SBBS, config, types, secure storage
+├── wallet/                # Wallet manager, TX auth, swap manager, update checker, notifications
+├── dapp/                  # DApp WebView bridge + native TX approval
 ├── ui/                    # Jetpack Compose screens
-│   ├── wallet/            # Send, receive, TX history
-│   ├── chat/              # Chat, groups, registration
+│   ├── auth/              # Onboarding, lock screen
+│   ├── chat/              # DMs, groups, registration, search, media gallery
+│   ├── components/        # AvatarDisplay, AvatarPicker, VoiceMessageBubble
 │   ├── dapps/             # DApp store + viewer
-│   ├── settings/          # Settings, mobile node, about
-│   └── navigation/        # Nav graph
-└── MainActivity.kt
+│   ├── navigation/        # Nav graph
+│   ├── settings/          # Settings screen
+│   ├── theme/             # 8-theme system (light/dark variants)
+│   └── wallet/            # Send, receive, swap, addresses, UTXO, TX detail
+├── MainActivity.kt
+└── PriviMWApp.kt          # Application entry point
 ```
 
 ## Native Libraries
@@ -117,6 +144,8 @@ The pre-compiled native libraries are built from our open-source Beam forks:
 | `libipfs-bindings.so` | [PriviMW/asio-ipfs](https://github.com/PriviMW/asio-ipfs) | IPFS transport bindings |
 
 Forked from the official [BeamMW/beam](https://github.com/BeamMW/beam) with minimal changes for mobile compatibility.
+
+Voice messages use a separate JNI library (`libvoice.so`) built from official Opus + Ogg sources in `app/src/main/jni/` — compiled directly during APK build via CMake.
 
 ## Smart Contracts
 

@@ -71,7 +71,7 @@ object Helpers {
         return if (beam == beam.toLong().toDouble()) {
             beam.toLong().toString()
         } else {
-            "%.8f".format(beam).trimEnd('0').trimEnd('.')
+            "%.8f".format(beam).trimEnd('0').trimEnd { it == '.' || it == ',' }
         }
     }
 
@@ -161,7 +161,7 @@ object Helpers {
     fun formatBeam(groth: Long): String {
         if (groth == 0L) return "0"
         val beam = groth / 100_000_000.0
-        return String.format("%.8f", beam).trimEnd('0').trimEnd('.')
+        return String.format("%.8f", beam).trimEnd('0').trimEnd { it == '.' || it == ',' }
     }
 
     /** Convert BEAM display string to groth. */

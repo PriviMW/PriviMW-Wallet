@@ -34,6 +34,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
@@ -478,6 +480,11 @@ fun ChatScreen(
     // Attachment picker
     var showAttachPicker by remember { mutableStateOf(false) }
     var attachPickerTab by remember { mutableStateOf(0) } // 0 = Gallery, 1 = Files
+
+    // Single-image preview (from gallery grid → fullscreen preview with caption + send)
+    var imagePreview by remember { mutableStateOf<ImagePreviewData?>(null) }
+    var previewCaption by remember { mutableStateOf("") }
+    var sendingFromPreview by remember { mutableStateOf(false) }
 
     // Fullscreen image viewer
     data class FullscreenImageData(val filePath: String, val fileName: String, val msgId: Long = 0, val msgTs: Long = 0, val isMine: Boolean = false)
@@ -2635,32 +2642,71 @@ fun ChatScreen(
             }
         }
 
-        // Pending file preview bar
+        // Pending file preview bar with thumbnail
         if (pendingFile != null) {
             Surface(
                 color = C.card,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
-                    modifier = Modifier
-                        .padding(10.dp),
+                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        if (Helpers.isImageMime(pendingFile!!.mimeType)) "\uD83D\uDDBC" else "\uD83D\uDCCE",
-                        fontSize = 20.sp,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
-                        color = C.text,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { pendingFile = null }) {
-                        Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (Helpers.isImageMime(pendingFile!!.mimeType)) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = pendingFile!!.uri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            // Remove button overlaid on thumbnail
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(2.dp)
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .clickable { pendingFile = null },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
+                            color = C.text,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Text("\uD83D\uDCCE", fontSize = 20.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
+                            color = C.text,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = { pendingFile = null }) {
+                            Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -5393,7 +5439,12 @@ fun ChatScreen(
                 showAttachPicker = false
                 filePickerLauncher.launch("*/*")
             },
-            onImageSelected = { uri -> handlePickedUri(uri) },
+            onPreviewImage = { uri, _, _, _ ->
+                showAttachPicker = false
+                // Open fullscreen preview for single image
+                imagePreview = ImagePreviewData(uri, name = "", size = 0L, mimeType = "")
+                previewCaption = ""
+            },
             onMultiImageSelected = { uris ->
                 showAttachPicker = false
                 // Send images one by one with buffer
@@ -5409,6 +5460,54 @@ fun ChatScreen(
                 }
             },
         )
+    }
+
+    // Single-image preview from gallery (Telegram-style: fullscreen + caption + send)
+    AnimatedVisibility(
+        visible = imagePreview != null,
+        enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.6f, animationSpec = tween(180)),
+        exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.8f, animationSpec = tween(120)),
+    ) {
+        imagePreview?.let { preview ->
+            ImagePreviewSheet(
+                previewData = preview,
+                caption = previewCaption,
+                onCaptionChange = { previewCaption = it },
+                onDismiss = { imagePreview = null },
+                isSending = sendingFromPreview,
+                onSend = { caption ->
+                sendingFromPreview = true
+                // First validate file size via getFileInfo
+                val info = getFileInfo(context, preview.uri)
+                if (info != null) {
+                    val isImage = Helpers.isImageMime(info.mimeType)
+                    val limit = if (isImage) Config.MAX_FILE_SIZE else Config.MAX_INLINE_SIZE
+                    if (info.size > limit) {
+                        val msg = if (isImage) "Image too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)"
+                        else "File too large (max ${Config.MAX_INLINE_SIZE / 1024}KB)"
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        imagePreview = null
+                        sendingFromPreview = false
+                        return@ImagePreviewSheet
+                    }
+                }
+                // Set the caption text if provided
+                if (caption.trim().isNotEmpty()) {
+                    inputText = androidx.compose.ui.text.input.TextFieldValue(caption.trim())
+                }
+                // Pass through handlePickedUri to set pendingFile, then send
+                handlePickedUri(preview.uri)
+                scope.launch {
+                    delay(500) // brief wait for pendingFile to be set
+                    if (pendingFile != null) {
+                        handleSend()
+                    }
+                    imagePreview = null
+                    sendingFromPreview = false
+                }
+            },
+        )
+        }
     }
 
     // Fullscreen image viewer
@@ -6324,6 +6423,15 @@ private fun FileContent(
     }
 }
 
+// Data for single-image preview (from gallery grid → caption + send)
+private data class ImagePreviewData(
+    val uri: Uri,
+    val name: String,
+    val size: Long,
+    val mimeType: String,
+)
+
+// Holds state for a file that's awaiting send
 private data class PendingFile(
     val uri: Uri,
     val name: String,
@@ -6523,12 +6631,13 @@ private fun FullscreenImageViewer(
 
 // ── Attachment picker bottom sheet (Telegram-style Gallery/Files tabs) ──
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AttachmentPickerSheet(
     onDismiss: () -> Unit,
     onPickGallery: () -> Unit,
     onPickFile: () -> Unit,
-    onImageSelected: (Uri) -> Unit,
+    onPreviewImage: (Uri, String, Long, String) -> Unit, // (uri, name, size, mimeType)
     onMultiImageSelected: (List<Uri>) -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -6699,7 +6808,7 @@ private fun AttachmentPickerSheet(
                         } else {
                             val selectedUris = remember { mutableStateListOf<Uri>() }
                             Column(modifier = Modifier.fillMaxSize()) {
-                                // Send button when multiple selected
+                                // Send button when images are selected
                                 if (selectedUris.size > 0) {
                                     Surface(
                                         color = C.accent,
@@ -6707,7 +6816,8 @@ private fun AttachmentPickerSheet(
                                             .fillMaxWidth()
                                             .clickable {
                                                 if (selectedUris.size == 1) {
-                                                    onImageSelected(selectedUris.first())
+                                                    // Single selected: go through preview flow
+                                                    onMultiImageSelected(selectedUris.toList())
                                                 } else {
                                                     onMultiImageSelected(selectedUris.toList())
                                                 }
@@ -6732,14 +6842,24 @@ private fun AttachmentPickerSheet(
                                 ) {
                                     items(galleryImages.value) { uri ->
                                         val isSelected = uri in selectedUris
+                                        val inMultiMode = selectedUris.isNotEmpty()
                                         Box(
                                             modifier = Modifier
                                                 .aspectRatio(1f)
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .clickable {
-                                                    if (isSelected) selectedUris.remove(uri)
-                                                    else selectedUris.add(uri)
-                                                },
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (inMultiMode) {
+                                                            if (isSelected) selectedUris.remove(uri)
+                                                            else selectedUris.add(uri)
+                                                        } else {
+                                                            onPreviewImage(uri, "", 0L, "")
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        if (!isSelected) selectedUris.add(uri)
+                                                    },
+                                                ),
                                         ) {
                                             AsyncImage(
                                                 model = uri,
@@ -6838,6 +6958,127 @@ private fun AttachmentPickerSheet(
                                 color = C.textMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Single image preview sheet (Telegram-style: fullscreen image + caption + send) ──
+
+@Composable
+private fun ImagePreviewSheet(
+    previewData: ImagePreviewData,
+    caption: String,
+    onCaptionChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit, // called with caption
+    isSending: Boolean,
+) {
+    val context = LocalContext.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = { } // consume background clicks without dismissing
+            ),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top bar — dismiss button only
+            Surface(color = Color.Black.copy(alpha = 0.7f), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+
+            // Full-size image — swipe down to dismiss
+            var imageOffsetY by remember { mutableStateOf(0f) }
+            val dismissThreshold = 150f
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .offset(y = imageOffsetY.coerceAtLeast(0f).dp)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (imageOffsetY > dismissThreshold) {
+                                    onDismiss()
+                                } else {
+                                    imageOffsetY = 0f
+                                }
+                            },
+                            onDragCancel = { imageOffsetY = 0f },
+                            onVerticalDrag = { _, dragAmount ->
+                                if (dragAmount > 0) {
+                                    imageOffsetY = (imageOffsetY + dragAmount).coerceAtLeast(0f)
+                                }
+                            },
+                        )
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = previewData.uri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+
+            // Bottom bar — caption input + send button (same row as chat composer)
+            Surface(color = C.card, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = caption,
+                        onValueChange = { onCaptionChange(it) },
+                        placeholder = {
+                            Text("Add a caption...", color = C.textMuted, fontSize = 14.sp)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = C.bg,
+                            unfocusedContainerColor = C.bg,
+                            cursorColor = C.accent,
+                            focusedTextColor = C.text,
+                            unfocusedTextColor = C.text,
+                        ),
+                        maxLines = 3,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            color = C.accent, strokeWidth = 2.dp, modifier = Modifier.size(32.dp)
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent)
+                                .clickable { onSend(caption) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = C.textDark,
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                     }

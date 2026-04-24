@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
@@ -60,9 +61,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.*
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.ChatStateEntity
+import com.privimemobile.chat.db.entities.ContactEntity
 import com.privimemobile.chat.db.entities.ConversationEntity
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -173,7 +176,44 @@ fun ChatsScreen(
     var menuTargetGroup by remember { mutableStateOf<com.privimemobile.chat.db.entities.GroupEntity?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    // On-chain search state
+    var onChainHandles by remember { mutableStateOf<List<ContactEntity>>(emptyList()) }
+    var onChainGroups by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var isSearchingOnChain by remember { mutableStateOf(false) }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
+    val myHandle = chatState?.myHandle
+    val myGroupIds = remember(groups) { groups.map { it.groupId }.toSet() }
+
+    // On-chain results that aren't already in local conversations
+    val onChainNew = remember(onChainHandles, conversations, myHandle) {
+        val localHandles = conversations.mapNotNull { it.handle }.toSet()
+        onChainHandles.filter { it.handle !in localHandles && it.handle != myHandle }
+    }
+    val onChainGroupsNew = remember(onChainGroups, myGroupIds) {
+        onChainGroups.filter { (it["group_id"] as? String) !in myGroupIds }
+    }
+
+    // Debounced on-chain search when user types in the search bar
+    LaunchedEffect(searchQuery) {
+        searchJob?.cancel()
+        onChainHandles = emptyList()
+        onChainGroups = emptyList()
+        isSearchingOnChain = false
+
+        val trimmed = searchQuery.trim().removePrefix("@").lowercase()
+        if (trimmed.isEmpty() || !Regex("^[a-z0-9_]+$").matches(trimmed)) return@LaunchedEffect
+
+        isSearchingOnChain = true
+        searchJob = scope.launch {
+            delay(300) // debounce
+            val handles = try { ChatService.contacts.searchOnChain(trimmed) } catch (_: Exception) { emptyList() }
+            val chainGroups = try { ChatService.groups.searchGroups(trimmed) } catch (_: Exception) { emptyList() }
+            onChainHandles = handles.filter { it.handle != myHandle }
+            onChainGroups = chainGroups
+            isSearchingOnChain = false
+        }
+    }
 
     // Chat folder tabs
     var activeTab by remember { mutableStateOf(0) } // 0=All, 1=Unread, 2=Archived
@@ -263,9 +303,23 @@ fun ChatsScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search conversations...", color = C.textMuted, fontSize = 14.sp) },
+                            placeholder = { Text("Search chats, handles, or groups...", color = C.textMuted, fontSize = 14.sp) },
                             leadingIcon = {
                                 Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(18.dp))
+                            },
+                            trailingIcon = {
+                                if (isSearchingOnChain) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
+                                } else if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Clear search",
+                                            tint = C.textSecondary,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
                             },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -332,7 +386,9 @@ fun ChatsScreen(
                 }
 
                 // ── Conversation list ──
-                if (filteredConversations.isEmpty() && filteredGroups.isEmpty()) {
+                val hasOnChain = onChainNew.isNotEmpty() || onChainGroupsNew.isNotEmpty() || (isSearchingOnChain && searchQuery.isNotBlank())
+
+                if (filteredConversations.isEmpty() && filteredGroups.isEmpty() && !hasOnChain) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -502,7 +558,163 @@ fun ChatsScreen(
                                 }
                             }
                         }
+
+
+                    // ── On-chain search results (Telegram-style global search) ──
+
+                    // Show spinner while searching
+                    if (isSearchingOnChain && searchQuery.isNotBlank()) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(Modifier.size(18.dp), color = C.accent, strokeWidth = 2.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Searching...", color = C.textSecondary, fontSize = 13.sp)
+                            }
+                        }
                     }
+
+                    // On-chain handle results
+                    if (onChainNew.isNotEmpty()) {
+                        item {
+                            Text(
+                                "GLOBAL SEARCH",
+                                color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp,
+                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(onChainNew.size, key = { "oc_${onChainNew[it].handle}" }) { idx ->
+                            val contact = onChainNew[idx]
+                            Column(modifier = Modifier.background(C.bg)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            scope.launch {
+                                                ChatService.contacts.ensureContact(contact.handle, contact.displayName, contact.walletId)
+                                            }
+                                            // Navigate to chat (clears search)
+                                            searchQuery = ""
+                                            onOpenChat(contact.handle)
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    com.privimemobile.ui.components.AvatarDisplay(
+                                        handle = contact.handle,
+                                        displayName = contact.displayName,
+                                        size = 44.dp,
+                                    )
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            contact.displayName?.ifEmpty { null } ?: "@${contact.handle}",
+                                            color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                                        )
+                                        if (!contact.displayName.isNullOrEmpty()) {
+                                            Text("@${contact.handle}", color = C.textSecondary, fontSize = 13.sp)
+                                        }
+                                    }
+                                    Surface(shape = RoundedCornerShape(20.dp), color = C.accent) {
+                                        Text(
+                                            "Chat", color = C.textDark, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
+                                HorizontalDivider(
+                                    color = C.border.copy(alpha = 0.5f),
+                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(start = 74.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    // On-chain group results
+                    if (onChainGroupsNew.isNotEmpty()) {
+                        item {
+                            Text(
+                                "PUBLIC GROUPS",
+                                color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp,
+                                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(onChainGroupsNew.size, key = { "ocg_${onChainGroupsNew[it]["group_id"]}" }) { idx ->
+                            val g = onChainGroupsNew[idx]
+                            val groupId = g["group_id"] as? String ?: return@items
+                            val name = g["name"] as? String ?: ""
+                            val creator = g["creator"] as? String ?: ""
+                            val memberCount = g["member_count"] as? Int ?: 0
+                            val needsApproval = (g["require_approval"] as? Int ?: 0) == 1
+                            var joining by remember { mutableStateOf(false) }
+
+                            Column(modifier = Modifier.background(C.bg)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF5C6BC0)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            "$memberCount members · by @$creator",
+                                            color = C.textSecondary, fontSize = 13.sp,
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            joining = true
+                                            ChatService.groups.joinGroup(groupId) { success, error ->
+                                                joining = false
+                                                if (success) {
+                                                    searchQuery = ""
+                                                    scope.launch {
+                                                        ChatService.groups.refreshMyGroups()
+                                                    }
+                                                    onOpenGroup(groupId)
+                                                }
+                                            }
+                                        },
+                                        enabled = !joining,
+                                        colors = ButtonDefaults.buttonColors(containerColor = C.accent),
+                                        shape = RoundedCornerShape(20.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                        modifier = Modifier.height(34.dp),
+                                    ) {
+                                        if (joining) {
+                                            CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                        } else {
+                                            Text(
+                                                if (needsApproval) "Request" else "Join",
+                                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(
+                                    color = C.border.copy(alpha = 0.5f),
+                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(start = 74.dp),
+                                )
+                            }
+                        }
+                    }
+                    } // close LazyColumn
                     } // close PullToRefreshBox
                 }
             }

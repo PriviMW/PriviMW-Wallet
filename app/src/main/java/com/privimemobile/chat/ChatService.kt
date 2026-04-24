@@ -219,17 +219,36 @@ object ChatService {
             Log.d(TAG, "Cleaned up $deleted expired disappearing messages")
             // Update conversation previews for affected conversations
             for (convId in affectedConvIds) {
+                val conv = db?.conversationDao()?.findById(convId)
                 val latest = db?.messageDao()?.getLatestMessage(convId)
                 if (latest != null) {
                     val preview = when (latest.type) {
                         "tip" -> "Tip"
-                        "file" -> "\uD83D\uDCCE File"
+                        "file" -> "📎 File"
                         else -> latest.text?.take(100)
                     }
                     db?.conversationDao()?.updateLastMessage(convId, latest.timestamp, preview)
                 } else {
                     // No messages left — clear preview
                     db?.conversationDao()?.updateLastMessage(convId, 0, null)
+                }
+                // Group chats also need their GroupEntity preview updated
+                if (conv != null && conv.convKey.startsWith("g_")) {
+                    val groupPrefix = conv.convKey.removePrefix("g_")
+                    val group = db?.groupDao()?.findByConvKey(groupPrefix)
+                    if (group != null) {
+                        if (latest != null) {
+                            val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
+                            val groupPreview = when (latest.type) {
+                                "tip" -> "$senderLabel: Tip"
+                                "file" -> "$senderLabel: 📎 File"
+                                else -> "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                            }
+                            db?.groupDao()?.updateLastMessage(group.groupId, latest.timestamp, groupPreview)
+                        } else {
+                            db?.groupDao()?.updateLastMessage(group.groupId, 0, null)
+                        }
+                    }
                 }
             }
         }

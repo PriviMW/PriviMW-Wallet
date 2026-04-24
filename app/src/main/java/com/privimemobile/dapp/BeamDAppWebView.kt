@@ -573,9 +573,9 @@ body { height: 100vh !important; margin: 0 !important; padding: 0 !important; ba
 
             try {
                 // HTML files: inject BEAM.api shim into <head>
-                if (url.endsWith("/index.html") || url.endsWith(".html")) {
+                if (url.endsWith(".html") || url.endsWith(".htm")) {
                     val html = file.readText(Charsets.UTF_8)
-                    val needsShim = url.endsWith("/index.html")
+                    val needsShim = true // always inject into HTML pages (shim is idempotent)
                     val finalHtml = if (needsShim) {
                         val headIdx = html.indexOf("<head>", ignoreCase = true)
                         if (headIdx >= 0) {

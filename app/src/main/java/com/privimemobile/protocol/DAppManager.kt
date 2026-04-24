@@ -37,6 +37,7 @@ object DAppManager {
                     version = obj.optString("version", "1.0"),
                     localPath = obj.optString("localPath"),
                     icon = obj.optString("icon", ""),
+                    url = obj.optString("url", "localapp/app/index.html"),
                 )
             }
         } catch (_: Exception) {
@@ -55,6 +56,7 @@ object DAppManager {
                 put("version", d.version)
                 put("localPath", d.localPath)
                 put("icon", d.icon)
+                put("url", d.url)
             })
         }
         ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -119,6 +121,7 @@ object DAppManager {
             version = manifest.optString("version", "1.0"),
             localPath = dappDir.absolutePath,
             icon = icon ?: fallbackIcon,
+            url = manifest.optString("url", "localapp/app/index.html"),
         )
 
         // Add to installed list
@@ -148,7 +151,10 @@ object DAppManager {
     }
 
     /** Get file:// launch URL for an installed DApp. */
-    fun getLaunchUrl(dapp: DApp): String = "file://${dapp.localPath}/app/index.html"
+    fun getLaunchUrl(dapp: DApp): String {
+        val relativeUrl = dapp.url.removePrefix("localapp/")
+        return "file://${dapp.localPath}/$relativeUrl"
+    }
 }
 
 /** Installed DApp metadata. */
@@ -159,4 +165,5 @@ data class DApp(
     val version: String,
     val localPath: String,
     val icon: String = "",
+    val url: String = "localapp/app/index.html",
 )

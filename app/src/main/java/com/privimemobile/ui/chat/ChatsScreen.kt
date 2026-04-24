@@ -41,12 +41,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -227,6 +222,17 @@ fun ChatsScreen(
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
         val chatListState = rememberLazyListState()
+        // Scroll to top every time this screen becomes visible (tab switch back, back navigation)
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    scope.launch { chatListState.scrollToItem(0) }
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ── Top bar ──
@@ -252,14 +258,7 @@ fun ChatsScreen(
                             }
                         }
 
-                        // Search/filter bar — collapses when scrolled past first item
-                        val searchBarVisible = chatListState.firstVisibleItemIndex == 0 || searchQuery.isNotEmpty()
-                        AnimatedVisibility(
-                            visible = searchBarVisible,
-                            enter = expandVertically(tween(250)) + fadeIn(tween(200)),
-                            exit = shrinkVertically(tween(250)) + fadeOut(tween(200)),
-                        ) {
-                        Column {
+                        // Search/filter bar — always visible (fixed above scrollable list)
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = searchQuery,
@@ -282,8 +281,6 @@ fun ChatsScreen(
                             ),
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                         )
-                    }
-                    } // close AnimatedVisibility
                     }
                 }
 

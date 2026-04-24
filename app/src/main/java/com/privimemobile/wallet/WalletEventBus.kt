@@ -116,7 +116,11 @@ object WalletEventBus {
         _assetInfo.tryEmit(event)
     }
     fun emitExportData(json: String) { _exportData.tryEmit(ExportDataEvent("json", json)) }
-    fun emitExportCsv(csv: String) { _exportData.tryEmit(ExportDataEvent("csv", csv)) }
+
+    // CSV bundle — all TX history CSVs accumulated from native callbacks
+    private val _exportCsvBundle = MutableSharedFlow<Map<String, String>>(extraBufferCapacity = 1)
+    val exportCsvBundle: SharedFlow<Map<String, String>> = _exportCsvBundle.asSharedFlow()
+    fun emitExportCsvBundle(csvs: Map<String, String>) { _exportCsvBundle.tryEmit(csvs) }
     fun emitCoinSelection(event: CoinSelectionEvent) { _coinSelection.tryEmit(event) }
     fun emitExchangeRates(rates: Map<String, Double>) { _exchangeRates.value = rates }
     fun emitWalletEvent(event: String) { _walletEvent.tryEmit(event) }
@@ -228,7 +232,7 @@ data class PaymentProofEvent(
     val assetId: Int,
 )
 
-data class ExportDataEvent(val type: String, val data: String) // type: "json" or "csv"
+data class ExportDataEvent(val type: String, val data: String) // type: "json" (CSV uses exportCsvBundle)
 
 data class CoinSelectionEvent(
     val explicitFee: Long = 0,

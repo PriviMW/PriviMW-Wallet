@@ -407,9 +407,33 @@ object WalletListener {
     }
     @JvmStatic fun onExportTxHistoryToCsv(value: String) {
         Log.d(TAG, "onExportTxHistoryToCsv: ${value.length} chars")
-        uiHandler.post { WalletEventBus.emitExportCsv(value) }
+        uiHandler.post { flushCsv("transactions", value) }
     }
-    @JvmStatic fun onExportContractTxHistoryToCsv(value: String) { }
+    @JvmStatic fun onExportAtomicSwapTxHistoryToCsv(value: String) {
+        Log.d(TAG, "onExportAtomicSwapTxHistoryToCsv: ${value.length} chars")
+        uiHandler.post { flushCsv("atomic_swap", value) }
+    }
+    @JvmStatic fun onExportAssetsSwapTxHistoryToCsv(value: String) {
+        Log.d(TAG, "onExportAssetsSwapTxHistoryToCsv: ${value.length} chars")
+        uiHandler.post { flushCsv("assets_swap", value) }
+    }
+    @JvmStatic fun onExportContractTxHistoryToCsv(value: String) {
+        Log.d(TAG, "onExportContractTxHistoryToCsv: ${value.length} chars")
+        uiHandler.post { flushCsv("contracts", value) }
+    }
+
+    // CSV export accumulator — native exportTxHistoryToCsv() fires up to 4 callbacks
+    // (regular, atomic swap, assets swap, contracts). Contract is always last.
+    // We accumulate all CSVs and emit a bundle when contracts arrive.
+    private val pendingCsvs = mutableMapOf<String, String>()
+    private fun flushCsv(name: String, csv: String) {
+        pendingCsvs[name] = csv
+        if (name == "contracts") {
+            val bundle = pendingCsvs.toMap()
+            pendingCsvs.clear()
+            WalletEventBus.emitExportCsvBundle(bundle)
+        }
+    }
 
     // === SBBS Instant Message (fired by C++ core when SBBS message arrives) ===
 

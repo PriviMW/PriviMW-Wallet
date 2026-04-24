@@ -134,6 +134,21 @@ fun SettingsScreen(
 
     fun toast(msg: String) { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
 
+    fun saveToDownloads(filename: String, mimeType: String, data: ByteArray) {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
+            put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+        }
+        val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+            toast("Saved to Downloads/$filename")
+        } else {
+            toast("Failed to save file")
+        }
+    }
+
     // File picker launcher for wallet data import
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -185,29 +200,55 @@ fun SettingsScreen(
         }
     }
 
-    // Listen for export data events (wallet JSON backup + TX CSV) and save to Downloads
+    // Listen for wallet JSON backup export and save to Downloads
     LaunchedEffect(Unit) {
         WalletEventBus.exportData.collect { event ->
+            if (event.type != "json") return@collect
             try {
                 val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                val filename = if (event.type == "csv") "privimw-transactions-$date.csv" else "privimw-backup-$date.json"
-                val mimeType = if (event.type == "csv") "text/csv" else "application/json"
-
-                // Save to Downloads via MediaStore
-                val values = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
-                    put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
-                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
-                }
-                val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                if (uri != null) {
-                    context.contentResolver.openOutputStream(uri)?.use { it.write(event.data.toByteArray()) }
-                    toast("Saved to Downloads/$filename")
-                } else {
-                    toast("Failed to save file")
-                }
-            } catch (e: Exception) {
+                val filename = "privimw-backup-$date.json"
+                saveToDownloads(filename, "application/json", event.data.toByteArray())
+            } catch (e: Throwable) {
                 toast("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    // Listen for TX history CSV bundle (all types accumulated) and save as ZIP to Downloads
+    LaunchedEffect(Unit) {
+        WalletEventBus.exportCsvBundle.collect { csvs ->
+            try {
+                val date = java.text.SimpleDateFormat("yyyy-MM-dd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+                val zipFilename = "privimw-tx-history-$date.zip"
+                val csvFilenames = mapOf(
+                    "transactions" to "transactions.csv",
+                    "atomic_swap" to "atomic_swap_transactions.csv",
+                    "assets_swap" to "assets_swap_transactions.csv",
+                    "contracts" to "contracts_transactions.csv",
+                )
+                // Build ZIP in memory
+                val baos = java.io.ByteArrayOutputStream()
+                java.util.zip.ZipOutputStream(baos).use { zos ->
+                    for ((key, csv) in csvs) {
+                        val entry = java.util.zip.ZipEntry(csvFilenames[key] ?: "$key.csv")
+                        zos.putNextEntry(entry)
+                        zos.write(csv.toByteArray())
+                        zos.closeEntry()
+                    }
+                }
+                saveToDownloads(zipFilename, "application/zip", baos.toByteArray())
+            } catch (e: Throwable) {
+                toast("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    // Listen for wallet import result
+    LaunchedEffect(Unit) {
+        WalletEventBus.walletEvent.collect { event ->
+            when (event) {
+                "import_ok" -> toast("Wallet data imported successfully")
+                "import_failed" -> toast("Import failed — invalid or corrupt file")
             }
         }
     }
@@ -1030,20 +1071,21 @@ fun SettingsScreen(
                 try {
                     WalletManager.walletInstance?.exportDataToJson()
                     toast("Exporting wallet data...")
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     toast("Export failed: ${e.message}")
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             SettingsAction("Import wallet data", "Restore from a backup file") {
-                importLauncher.launch("application/json")
+                importLauncher.launch("*/*")
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Export transaction history", "Save CSV to Downloads") {
+            SettingsAction("Export transaction history", "Save ZIP with all TX types to Downloads") {
                 try {
                     WalletManager.walletInstance?.exportTxHistoryToCsv()
+                        ?: run { toast("Wallet not open"); return@SettingsAction }
                     toast("Exporting transaction history...")
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     toast("Export failed: ${e.message}")
                 }
             }
@@ -1332,7 +1374,7 @@ fun SettingsScreen(
                         try {
                             WalletManager.walletInstance?.importDataFromJson(importFileContent)
                             toast("Importing wallet data...")
-                        } catch (e: Exception) {
+                        } catch (e: Throwable) {
                             toast("Import failed: ${e.message}")
                         }
                         showImportConfirm = false

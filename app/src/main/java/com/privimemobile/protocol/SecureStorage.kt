@@ -26,6 +26,7 @@ object SecureStorage {
     const val KEY_FAILED_ATTEMPTS = "failed_unlock_attempts"
     const val KEY_LOCKOUT_UNTIL = "lockout_until_ts"
     const val KEY_DISMISSED_SWAP_HISTORY = "dismissed_swap_history"
+    const val KEY_BALANCE_HIDDEN = "balance_hidden"
 
     private var prefs: SharedPreferences? = null
 

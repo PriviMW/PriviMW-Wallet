@@ -7,15 +7,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,6 +123,9 @@ internal fun formatUsd(groth: Long, rate: Double): String? {
     return if (usd < 0.01 && usd > 0) "< $0.01" else "$${String.format("%.2f", usd)}"
 }
 
+/** Masked placeholder for hidden amounts. */
+internal const val MASKED = "••••"
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletScreen(
@@ -130,6 +136,16 @@ fun WalletScreen(
 ) {
     val context = LocalContext.current
     TxRateStore.init(context)
+
+    // Balance visibility toggle
+    var balanceHidden by remember {
+        mutableStateOf(SecureStorage.getBoolean(SecureStorage.KEY_BALANCE_HIDDEN, false))
+    }
+    fun toggleBalanceHidden(hidden: Boolean) {
+        balanceHidden = hidden
+        SecureStorage.putBoolean(SecureStorage.KEY_BALANCE_HIDDEN, hidden)
+    }
+
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
     val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
@@ -312,33 +328,41 @@ fun WalletScreen(
         ) {
             // Balance Card
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = C.card),
-                ) {
-                    Column(
+                Box {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                            .padding(16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = C.card),
                     ) {
-                        // Status row — centered
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 16.dp),
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
+                            // Status row — text centered, eye icon is corner overlay
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(statusDotColor),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(statusText, color = C.textSecondary, fontSize = 12.sp)
-                        }
+                                    .fillMaxWidth()
+                                    .padding(bottom = 16.dp),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(statusDotColor),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(statusText, color = C.textSecondary, fontSize = 12.sp)
+                                }
+                            }
 
                         // Sync progress bar
                         if (isSyncing && syncProgress.total > 0) {
@@ -356,7 +380,8 @@ fun WalletScreen(
 
                         Text("Available", color = C.textSecondary, fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
-                        val balanceText = "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM"
+                        val balanceText = if (balanceHidden) MASKED
+                            else "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM"
                         val balanceFontSize = when {
                             balanceText.length > 20 -> 22.sp
                             balanceText.length > 16 -> 26.sp
@@ -373,10 +398,10 @@ fun WalletScreen(
 
                         // USD equivalent
                         if (beamUsdRate > 0) {
-                            val totalBeam = (beamStatus.available + beamStatus.shielded).toDouble() / 100_000_000.0
-                            val usdValue = totalBeam * beamUsdRate
+                            val usdDisplay = if (balanceHidden) MASKED
+                                else "≈ $${String.format("%.2f", (beamStatus.available + beamStatus.shielded).toDouble() / 100_000_000.0 * beamUsdRate)} USD"
                             Text(
-                                text = "≈ $${String.format("%.2f", usdValue)} USD",
+                                text = usdDisplay,
                                 color = C.textSecondary,
                                 fontSize = 14.sp,
                                 modifier = Modifier.padding(top = 2.dp),
@@ -390,30 +415,31 @@ fun WalletScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
+                                val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
                                 if (beamStatus.sending > 0) {
                                     Text(
-                                        "Sending: ${Helpers.formatBeam(beamStatus.sending)}",
+                                        "Sending: ${masked(beamStatus.sending)}",
                                         color = C.textSecondary,
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.receiving > 0) {
                                     Text(
-                                        "Receiving: ${Helpers.formatBeam(beamStatus.receiving)}",
+                                        "Receiving: ${masked(beamStatus.receiving)}",
                                         color = C.accent,
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.maturing > 0) {
                                     Text(
-                                        "Locked: ${Helpers.formatBeam(beamStatus.maturing)}",
+                                        "Locked: ${masked(beamStatus.maturing)}",
                                         color = Color(0xFFFF9800),
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.maxPrivacy > 0) {
                                     Text(
-                                        "Max Privacy (locked): ${Helpers.formatBeam(beamStatus.maxPrivacy)}",
+                                        "Max Privacy (locked): ${masked(beamStatus.maxPrivacy)}",
                                         color = Color(0xFFFF9800),
                                         fontSize = 12.sp,
                                     )
@@ -449,6 +475,21 @@ fun WalletScreen(
                         }
                     }
                 }
+                // Eye icon overlay at card's top right corner
+                    IconButton(
+                        onClick = { toggleBalanceHidden(!balanceHidden) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(20.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (balanceHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (balanceHidden) "Show balance" else "Hide balance",
+                            tint = C.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
 
             // BEAM asset row — tappable
@@ -473,12 +514,13 @@ fun WalletScreen(
                             // Show sub-text for in-flight amounts (matches RN exactly)
                             if (beamStatus.sending > 0 || beamStatus.receiving > 0 ||
                                 beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0) {
+                                val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
                                 val subParts = mutableListOf<String>()
-                                if (beamStatus.sending > 0) subParts.add("Sending: ${Helpers.formatBeam(beamStatus.sending)}")
-                                if (beamStatus.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(beamStatus.receiving)}")
-                                if (beamStatus.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(beamStatus.maturing)}")
-                                if (beamStatus.maxPrivacy > 0) subParts.add("Max Privacy: ${Helpers.formatBeam(beamStatus.maxPrivacy)}")
-                                if (beamStatus.shielded > 0) subParts.add("Shielded: ${Helpers.formatBeam(beamStatus.shielded)}")
+                                if (beamStatus.sending > 0) subParts.add("Sending: ${masked(beamStatus.sending)}")
+                                if (beamStatus.receiving > 0) subParts.add("Receiving: ${masked(beamStatus.receiving)}")
+                                if (beamStatus.maturing > 0) subParts.add("Locked: ${masked(beamStatus.maturing)}")
+                                if (beamStatus.maxPrivacy > 0) subParts.add("Max Privacy: ${masked(beamStatus.maxPrivacy)}")
+                                if (beamStatus.shielded > 0) subParts.add("Shielded: ${masked(beamStatus.shielded)}")
                                 Text(
                                     subParts.joinToString("  "),
                                     color = C.textSecondary,
@@ -489,18 +531,21 @@ fun WalletScreen(
                         }
                         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
                             Text(
-                                Helpers.formatBeam(beamStatus.available + beamStatus.shielded),
+                                if (balanceHidden) MASKED
+                                else Helpers.formatBeam(beamStatus.available + beamStatus.shielded),
                                 color = C.text,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            val cardUsd = formatUsd(beamStatus.available + beamStatus.shielded, beamUsdRate)
-                            if (cardUsd != null) {
-                                Text(
-                                    "≈ $cardUsd",
-                                    color = C.textSecondary,
-                                    fontSize = 11.sp,
-                                )
+                            if (!balanceHidden && beamUsdRate > 0) {
+                                val cardUsd = formatUsd(beamStatus.available + beamStatus.shielded, beamUsdRate)
+                                if (cardUsd != null) {
+                                    Text(
+                                        "≈ $cardUsd USD",
+                                        color = C.textSecondary,
+                                        fontSize = 11.sp,
+                                    )
+                                }
                             }
                         }
                     }
@@ -520,6 +565,7 @@ fun WalletScreen(
                 }
                 items(otherAssets, key = { it.assetId }) { asset ->
                     val assetLabel = localTicker(asset.assetId)
+                    val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -538,11 +584,11 @@ fun WalletScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(assetLabel, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 val subParts = mutableListOf<String>()
-                                if (asset.sending > 0) subParts.add("Sending: ${Helpers.formatBeam(asset.sending)}")
-                                if (asset.receiving > 0) subParts.add("Receiving: ${Helpers.formatBeam(asset.receiving)}")
-                                if (asset.maturing > 0) subParts.add("Locked: ${Helpers.formatBeam(asset.maturing)}")
-                                if (asset.maxPrivacy > 0) subParts.add("Max Privacy: ${Helpers.formatBeam(asset.maxPrivacy)}")
-                                if (asset.shielded > 0) subParts.add("Shielded: ${Helpers.formatBeam(asset.shielded)}")
+                                if (asset.sending > 0) subParts.add("Sending: ${masked(asset.sending)}")
+                                if (asset.receiving > 0) subParts.add("Receiving: ${masked(asset.receiving)}")
+                                if (asset.maturing > 0) subParts.add("Locked: ${masked(asset.maturing)}")
+                                if (asset.maxPrivacy > 0) subParts.add("Max Privacy: ${masked(asset.maxPrivacy)}")
+                                if (asset.shielded > 0) subParts.add("Shielded: ${masked(asset.shielded)}")
                                 if (subParts.isNotEmpty()) {
                                     Text(
                                         subParts.joinToString("  "),
@@ -553,7 +599,8 @@ fun WalletScreen(
                                 }
                             }
                             Text(
-                                Helpers.formatBeam(asset.available + asset.shielded),
+                                if (balanceHidden) MASKED
+                                else Helpers.formatBeam(asset.available + asset.shielded),
                                 color = C.text,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -595,6 +642,7 @@ fun WalletScreen(
                     TxCard(
                         tx = tx,
                         assetInfoMap = assetInfoMap,
+                        balanceHidden = balanceHidden,
                         onClick = { onTxDetail(tx.txId) },
                     )
                 }
@@ -607,6 +655,7 @@ fun WalletScreen(
 private fun TxCard(
     tx: TxItem,
     assetInfoMap: Map<Int, AssetInfoEvent>,
+    balanceHidden: Boolean,
     onClick: () -> Unit,
 ) {
     val isSend = tx.sender
@@ -658,6 +707,7 @@ private fun TxCard(
         val info = assetInfoMap[tx.assetId]
         info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: info?.name?.ifEmpty { null } ?: "Asset #${tx.assetId}"
     } else "BEAM"
+    val maskedAmount = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
 
     Card(
         modifier = Modifier
@@ -739,12 +789,12 @@ private fun TxCard(
                         } else "BEAM"
                         if (displayAmount > 0) {
                             Text(
-                                text = "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
+                                text = "$caPrefix${maskedAmount(displayAmount)} $caTicker",
                                 color = caColor,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            if (ca.assetId == 0 && tx.usdRate > 0) {
+                            if (!balanceHidden && ca.assetId == 0 && tx.usdRate > 0) {
                                 val caUsd = formatUsd(displayAmount, tx.usdRate)
                                 if (caUsd != null) Text("≈ $caUsd USD", color = C.textSecondary, fontSize = 11.sp)
                             }
@@ -756,14 +806,14 @@ private fun TxCard(
                     val amountPrefix = if (effectiveSend) "-" else "+"
                     val amountColor = if (effectiveSend) C.outgoing else C.incoming
                     Text(
-                        text = "$amountPrefix${Helpers.formatBeam(tx.amount)} $assetLabel",
+                        text = "$amountPrefix${maskedAmount(tx.amount)} $assetLabel",
                         color = amountColor,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
                 // USD value at TX time (BEAM only, skip if contractAssets already showed it)
-                if (tx.assetId == 0 && tx.usdRate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
+                if (!balanceHidden && tx.assetId == 0 && tx.usdRate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
                     val usdStr = formatUsd(tx.amount, tx.usdRate)
                     if (usdStr != null) {
                         Text(

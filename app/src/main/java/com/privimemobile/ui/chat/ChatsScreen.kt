@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -216,13 +217,21 @@ fun ChatsScreen(
     }
 
     // Chat folder tabs
-    var activeTab by remember { mutableStateOf(0) } // 0=All, 1=Unread, 2=Archived
+    var activeTab by remember { mutableStateOf(0) } // 0=All, 1=Unread, 2=Groups, 3=DMs, 4=Archived
 
     // Filter conversations by tab + search query
-    val filteredConversations = remember(conversations, searchQuery, activeTab) {
+    // Note: group conversations stored in ConversationEntity have convKey starting with "g_"
+    // but isGroup is not set, so we filter by convKey instead
+    val dms = remember(conversations) { conversations.filter { !it.convKey.startsWith("g_") } }
+    val groupConvs = remember(conversations) { conversations.filter { it.convKey.startsWith("g_") } }
+
+    val filteredConversations = remember(conversations, searchQuery, activeTab, dms, groupConvs) {
         val tabFiltered = when (activeTab) {
+            0 -> conversations.filter { !it.archived }  // All — DMs + group convs + standalone groups
             1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
-            2 -> conversations.filter { it.archived }
+            2 -> emptyList()  // Groups tab — handled by filteredGroups
+            3 -> dms.filter { !it.archived }  // DMs tab — only non-group conversations
+            4 -> conversations.filter { it.archived }
             else -> conversations.filter { !it.archived }
         }
         if (searchQuery.isBlank()) tabFiltered
@@ -237,8 +246,11 @@ fun ChatsScreen(
 
     val filteredGroups = remember(groups, searchQuery, activeTab) {
         val tabFiltered = when (activeTab) {
+            0 -> groups.filter { !it.archived }  // All — standalone group entries
             1 -> groups.filter { !it.archived && it.unreadCount > 0 }
-            2 -> groups.filter { it.archived }
+            2 -> groups.filter { !it.archived }  // Groups tab — all non-archived groups
+            3 -> emptyList()  // DMs tab — no groups here
+            4 -> groups.filter { it.archived }
             else -> groups.filter { !it.archived }
         }
         if (searchQuery.isBlank()) tabFiltered
@@ -338,19 +350,26 @@ fun ChatsScreen(
                     }
                 }
 
-                // ── Tab bar (All / Unread / Archived) ──
-                val tabLabels = listOf("All", "Unread", "Archived")
+                // ── Tab bar (All / Unread / Groups / DMs / Archived) ──
+                val tabLabels = listOf("All", "Unread", "Groups", "DMs", "Archived")
                 val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 } + groups.count { !it.archived && it.unreadCount > 0 }
+                val groupsTotal = groups.count { !it.archived }
+                val dmsTotal = dms.count { !it.archived }
                 val archivedTotal = conversations.count { it.archived } + groups.count { it.archived }
-                // Telegram-style tab selector with animated pill indicator
+                // Telegram-style tab selector with animated pill indicator — horizontally scrollable
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     tabLabels.forEachIndexed { idx, label ->
                         val badge = when (idx) {
                             1 -> if (unreadTotal > 0) " ($unreadTotal)" else ""
-                            2 -> if (archivedTotal > 0) " ($archivedTotal)" else ""
+                            2 -> if (groupsTotal > 0) " ($groupsTotal)" else ""
+                            3 -> if (dmsTotal > 0) " ($dmsTotal)" else ""
+                            4 -> if (archivedTotal > 0) " ($archivedTotal)" else ""
                             else -> ""
                         }
                         val selected = activeTab == idx
@@ -362,14 +381,8 @@ fun ChatsScreen(
                             if (selected) C.accent else C.textSecondary,
                             animationSpec = tween(250), label = "tabTxt$idx",
                         )
-                        val tabScale by animateFloatAsState(
-                            targetValue = if (selected) 1f else 0.95f,
-                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-                            label = "tabScale$idx",
-                        )
                         Box(
                             modifier = Modifier
-                                .graphicsLayer { scaleX = tabScale; scaleY = tabScale }
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(bgColor)
                                 .clickable { activeTab = idx }
@@ -380,6 +393,7 @@ fun ChatsScreen(
                                 color = textColor,
                                 fontSize = 13.sp,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
                             )
                         }
                     }

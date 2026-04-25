@@ -153,6 +153,28 @@ class GroupManager(
             payload["join_password"] = group.joinPassword
         }
         ChatService.sbbs.sendWithRetry(walletId, payload)
+
+        // Insert sender-side message in DM conversation
+        val convKey = "@$targetHandle"
+        val conv = db.conversationDao().getOrCreate(convKey, targetHandle, contact?.displayName)
+        if (conv.deletedAtTs > 0) db.conversationDao().undelete(conv.id)
+
+        val inviteTs = payload["ts"] as Long
+        val inviteText = "👥 You invited @$targetHandle to ${group.name}"
+        val dedupKey = "$inviteTs:group_invite_sent:$groupId:$targetHandle:$myHandle".hashCode().toString(16)
+
+        val entity = com.privimemobile.chat.db.entities.MessageEntity(
+            conversationId = conv.id,
+            timestamp = inviteTs,
+            senderHandle = myHandle,
+            text = inviteText,
+            type = "group_service",
+            sent = true,
+            sbbsDedupKey = dedupKey,
+        )
+        db.messageDao().insert(entity)
+        db.conversationDao().updateLastMessage(conv.id, inviteTs, inviteText)
+
         Log.d(TAG, "Sent group invite for '${ group.name}' to @$targetHandle")
         return true
     }

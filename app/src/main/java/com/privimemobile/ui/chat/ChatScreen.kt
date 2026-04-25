@@ -4098,17 +4098,39 @@ fun ChatScreen(
                 ) },
                 confirmButton = {
                     TextButton(onClick = {
-                        if (convId > 0L) {
+                        showDeleteConfirm = false
+                        if (isGroupMode && groupId != null) {
+                            // Fire contract TX first — wallet popup must be confirmed by user
+                            val capturedConvId = convId
+                            com.privimemobile.chat.ChatService.groups.leaveGroup(groupId) { success, error ->
+                                if (error != null || success == false) {
+                                    scope.launch {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Failed to leave group: ${error ?: "Transaction failed"}",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                } else {
+                                    // TX submitted — hide chat immediately, clean up on-chain later
+                                    scope.launch {
+                                        if (capturedConvId > 0L) {
+                                            com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(capturedConvId)
+                                            com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(capturedConvId)
+                                        }
+                                    }
+                                    onBack()
+                                }
+                            }
+                        } else if (convId > 0L) {
+                            // DM: delete immediately (no contract TX for DMs)
                             scope.launch {
                                 com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
                                 com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(convId)
-                                if (!isGroupMode) {
-                                    com.privimemobile.chat.ChatService.db?.contactDao()?.deleteByHandle(handle)
-                                }
+                                com.privimemobile.chat.ChatService.db?.contactDao()?.deleteByHandle(handle)
                             }
+                            onBack()
                         }
-                        showDeleteConfirm = false
-                        onBack()
                     }) {
                         Text("Delete", color = C.error, fontWeight = FontWeight.Bold)
                     }
@@ -5604,6 +5626,7 @@ private fun MessageBubble(
 ) {
     val context = LocalContext.current
     val bubbleView = androidx.compose.ui.platform.LocalView.current
+    var pendingOpenUrl by remember { mutableStateOf<String?>(null) }
     val isMine = msg.sent
     val isSticker = msg.type == "sticker"
     val isFileMsg = (msg.file?.cid ?: "").isNotEmpty()
@@ -6196,9 +6219,20 @@ private fun MessageBubble(
                     lines.drop(1).joinToString("\n").trim() // skip "→@handle" line, show caption only
                 } else msg.text
                 if (displayText.isNotEmpty()) {
-                    Text(
-                        text = parseMarkdown(displayText),
-                        color = C.text, fontSize = 15.sp, lineHeight = 20.sp,
+                    val annotated = parseMarkdown(displayText)
+                    androidx.compose.foundation.text.ClickableText(
+                        text = annotated,
+                        style = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 15.sp, lineHeight = 20.sp),
+                        onClick = { offset ->
+                            val urlAnnotation = annotated.getStringAnnotations(tag = "url", start = offset, end = offset).firstOrNull()
+                            if (urlAnnotation != null) {
+                                val url = urlAnnotation.item
+                                // Show confirmation dialog
+                                pendingOpenUrl = url
+                            } else {
+                                onTap()
+                            }
+                        },
                     )
                 }
                 }
@@ -6287,7 +6321,54 @@ private fun MessageBubble(
         }
     } // close Column
     } // close Box
-} // close ChatScreen
+
+    // ── URL open confirmation dialog ──
+    if (pendingOpenUrl != null) {
+        AlertDialog(
+            onDismissRequest = { pendingOpenUrl = null },
+            containerColor = C.card,
+            title = { Text("Open link?", color = C.text, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    Text(
+                        "This URL will open in your default browser:",
+                        color = C.textSecondary,
+                        fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        pendingOpenUrl!!,
+                        color = C.accent,
+                        fontSize = 12.sp,
+                        modifier = androidx.compose.ui.Modifier
+                            .background(Color(0x10FFFFFF), RoundedCornerShape(4.dp))
+                            .padding(8.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            data = android.net.Uri.parse(pendingOpenUrl)
+                            addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {}
+                    pendingOpenUrl = null
+                }) {
+                    Text("Open", color = C.accent, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingOpenUrl = null }) {
+                    Text("Cancel", color = C.textSecondary)
+                }
+            },
+        )
+    }
+} // close MessageBubble
 
 @Composable
 private fun FileContent(
@@ -7372,10 +7453,32 @@ private fun VoiceLockIndicator(
 }
 
 /** Parse simple markdown: **bold**, *italic*, `code`, ~~strikethrough~~ */
+private val URL_PATTERN = java.util.regex.Pattern.compile("https?://[^\\s<\\]]{2,}|(\\bwww\\.[^\\s<\\]]{2,})")
+
 private fun parseMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
+    // First, find all URL positions
+    val urlMatches = URL_PATTERN.matcher(text)
+    val urlRanges = mutableListOf<Triple<Int, Int, String>>() // start index, original length, full URL
+    while (urlMatches.find()) {
+        val match = urlMatches.group()
+        val displayUrl = if (match.startsWith("www.")) "https://$match" else match
+        urlRanges.add(Triple(urlMatches.start(), match.length, displayUrl))
+    }
+
     return androidx.compose.ui.text.buildAnnotatedString {
         var i = 0
         while (i < text.length) {
+            // Check if we're at a URL position — always prefer URL over other patterns
+            val urlRange = urlRanges.find { it.first == i }
+            if (urlRange != null) {
+                pushStringAnnotation(tag = "url", annotation = urlRange.third)
+                withStyle(SpanStyle(color = C.accent, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                    append(urlRange.third)
+                }
+                pop()
+                i += urlRange.second
+                continue
+            }
             when {
                 // **bold**
                 i + 1 < text.length && text[i] == '*' && text[i + 1] == '*' -> {

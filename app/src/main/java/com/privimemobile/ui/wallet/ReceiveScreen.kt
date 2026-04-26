@@ -31,6 +31,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.NodeConnectionEvent
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.delay
@@ -74,6 +75,8 @@ fun ReceiveScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var ownNode by remember { mutableStateOf(false) }
+    val nodeConn by WalletEventBus.nodeConnection.collectAsState(initial = NodeConnectionEvent(false))
+    val isFallback = nodeConn.isFallback
     var addressType by remember { mutableStateOf("regular") }
     var currentAddress by remember { mutableStateOf<String?>(null) }
     var generating by remember { mutableStateOf(false) }
@@ -187,7 +190,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         try {
             val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
-            val mobileProtocol = com.privimemobile.protocol.SecureStorage.getString("node_mode") == "mobile"
+            val mobileProtocol = SecureStorage.getString("node_mode") == "mobile"
             ownNode = trusted || mobileProtocol
             if (ownNode) {
                 addressType = "offline"
@@ -300,19 +303,22 @@ fun ReceiveScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Remote node info banner — only when on remote node (matches RN)
-            if (!ownNode) {
+            // Remote node / fallback info banner
+            if (!ownNode || isFallback) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0x1AFFC107),
-                    border = BorderStroke(1.dp, Color(0x4DFFC107)),
+                    color = if (isFallback) Color(0x1AFFA726) else Color(0x1AFFC107),
+                    border = BorderStroke(1.dp, if (isFallback) Color(0x4DFFA726) else Color(0x4DFFC107)),
                 ) {
                     Text(
-                        "Connected to remote node \u2014 only online transactions are supported. Offline and Max Privacy addresses require your own node.",
-                        color = Color(0xFFFFC107),
+                        if (isFallback)
+                            "Connected to public node (own node unreachable) \u2014 only online transactions supported"
+                        else
+                            "Connected to remote node \u2014 only online transactions are supported. Offline and Max Privacy addresses require your own node.",
+                        color = if (isFallback) Color(0xFFFFA726) else Color(0xFFFFC107),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                         lineHeight = 17.sp,

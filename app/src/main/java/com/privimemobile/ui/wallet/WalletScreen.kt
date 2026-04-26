@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,9 +22,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.NodeReconnect
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
@@ -286,15 +294,19 @@ fun WalletScreen(
         (syncProgress.done.toFloat() / syncProgress.total * 100).toInt().coerceAtMost(100)
     else 0
     val isConnected = nodeConnection.connected
+    val isInOwnMode = SecureStorage.getString("node_mode") == "own"
+    val isFallback = isInOwnMode && (WalletManager.walletInstance?.isConnectionTrusted() ?: true) == false && isConnected
 
     val nodeLabel = when (SecureStorage.getString("node_mode")) {
-        "own" -> "Own Node"
+        "own" -> if (isFallback) "Fallback Node" else "Own Node"
         "mobile" -> "Mobile Node"
         else -> "Random Node"
     }
 
     val isMobileMode = nodeLabel == "Mobile Node"
     val statusText = when {
+        isFallback && isConnected -> "$nodeLabel · Block #${beamStatus.height}"
+        isFallback && !isConnected -> "$nodeLabel · Block #${beamStatus.height}"
         !isConnected -> "Connecting to node..."
         isMobileMode && isSyncing && syncProgress.total > 0 ->
             "Mobile syncing ${syncPercent}% \u00B7 Online via remote node"
@@ -306,6 +318,7 @@ fun WalletScreen(
     }
 
     val statusDotColor = when {
+        isFallback -> C.warning
         !isConnected -> C.offline
         isSyncing -> C.warning
         else -> C.accent
@@ -351,14 +364,38 @@ fun WalletScreen(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .let { if (isFallback) it.clickable {
+                                            NodeReconnect.reconnectOwnNode()
+                                            Toast.makeText(context, "Reconnecting to own node...", Toast.LENGTH_SHORT).show()
+                                        } else it },
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(statusDotColor),
-                                    )
+                                    if (isFallback) {
+                                        // Pulsing warning dot
+                                        val pulse = rememberInfiniteTransition(label = "pulse").animateFloat(
+                                            initialValue = 0.4f,
+                                            targetValue = 1.0f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(800),
+                                                repeatMode = RepeatMode.Reverse,
+                                            ),
+                                            label = "pulse",
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(statusDotColor.copy(alpha = pulse.value)),
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(statusDotColor),
+                                        )
+                                    }
                                     Spacer(Modifier.width(6.dp))
                                     Text(statusText, color = C.textSecondary, fontSize = 12.sp)
                                 }

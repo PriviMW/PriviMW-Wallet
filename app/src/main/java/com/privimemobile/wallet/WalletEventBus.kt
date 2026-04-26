@@ -180,7 +180,11 @@ data class WalletStatusEvent(
 
 data class SyncProgressEvent(val done: Int, val total: Int)
 
-data class NodeConnectionEvent(val connected: Boolean, val error: Int = 0)
+data class NodeConnectionEvent(
+    val connected: Boolean,
+    val error: Int = 0,
+    val isFallback: Boolean = false,
+)
 
 data class ContractConsentEvent(
     val request: String,

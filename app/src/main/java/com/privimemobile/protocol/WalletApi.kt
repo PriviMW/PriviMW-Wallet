@@ -193,14 +193,6 @@ object WalletApi {
         call("ev_subunsub", mapOf("ev_txs_changed" to true, "ev_system_state" to true))
     }
 
-    /** Clear stale callbacks (e.g. after backgrounding). */
-    fun cleanupStaleCallbacks() {
-        if (callbacks.isNotEmpty()) {
-            Log.d(TAG, "Clearing ${callbacks.size} stale callbacks")
-            callbacks.clear()
-        }
-    }
-
     // --- Internal ---
 
     private fun handleApiResult(json: String) {

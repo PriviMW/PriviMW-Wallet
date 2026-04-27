@@ -277,7 +277,7 @@ fun DAppStoreBrowseScreen(
                 }.thenBy { it.name.lowercase() }), key = { it.guid }) { dapp ->
                     val localVer = installedMap[dapp.guid]
                     val isInstalled = localVer != null
-                    val hasUpdate = isInstalled && localVer != dapp.version
+                    val hasUpdate = isInstalled && localVer != null && DAppStore.isVersionOlder(localVer, dapp.version)
                     DAppStoreCard(
                         dapp = dapp,
                         installing = installing == dapp.guid,

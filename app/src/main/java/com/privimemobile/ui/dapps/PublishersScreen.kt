@@ -1,5 +1,6 @@
 package com.privimemobile.ui.dapps
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,7 +24,6 @@ import kotlinx.coroutines.launch
  *
  * Ports PublishersList.qml from beam-ui.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PublishersScreen(
     onBack: () -> Unit = {},
@@ -38,7 +38,11 @@ fun PublishersScreen(
     fun refresh() {
         scope.launch {
             loading = true
-            publishers = DAppStore.queryPublishersAsync(context)
+            val allPublishers = DAppStore.queryPublishersAsync(context)
+            // Get ALL DApps regardless of unwanted filter so disabled publishers still appear
+            val allDApps = DAppStore.queryAvailableDAppsAsync(context, filterUnwanted = false)
+            val activePubkeys = allDApps.map { it.publisher.lowercase() }.filter { it.isNotEmpty() }.toSet()
+            publishers = allPublishers.filter { activePubkeys.contains(it.pubkey.lowercase()) }
             unwanted = DAppStore.getUnwantedPublishers(context)
             loading = false
         }
@@ -48,34 +52,41 @@ fun PublishersScreen(
         refresh()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Publishers", color = C.text, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    TextButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp)) {
-                        Text("< Back", color = C.accent, fontWeight = FontWeight.Bold)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = C.bg),
-            )
-        },
-        containerColor = C.bg,
-    ) { padding ->
+    Column(modifier = Modifier.fillMaxSize().background(C.bg)) {
+        // Back button — consistent with DAppStoreBrowseScreen
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+        ) {
+            Text("< Back", color = C.textSecondary)
+        }
+
+        Text(
+            "Publishers",
+            color = C.text,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Enable or disable publishers to filter their DApps",
+            color = C.textSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+
         if (loading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = C.accent)
             }
         } else if (publishers.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -86,9 +97,7 @@ fun PublishersScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {

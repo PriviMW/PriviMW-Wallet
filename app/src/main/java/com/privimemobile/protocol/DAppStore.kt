@@ -63,6 +63,7 @@ object DAppStore {
      */
     fun queryAvailableDApps(
         context: Context,
+        filterUnwanted: Boolean = true,
         callback: (List<AvailableDApp>) -> Unit,
     ) {
         loadShader(context)
@@ -75,7 +76,7 @@ object DAppStore {
 
         // First load publishers, then load DApps
         loadPublishers(shader) {
-            loadDApps(context, shader, callback)
+            loadDApps(context, shader, filterUnwanted, callback)
         }
     }
 
@@ -120,7 +121,7 @@ object DAppStore {
     }
 
     /** Query DApps list from on-chain store. */
-    private fun loadDApps(context: Context, shader: List<Int>, callback: (List<AvailableDApp>) -> Unit) {
+    private fun loadDApps(context: Context, shader: List<Int>, filterUnwanted: Boolean, callback: (List<AvailableDApp>) -> Unit) {
         val args = "action=view_dapps,cid=${Config.DAPP_STORE_CID}"
         val params = mapOf<String, Any?>(
             "args" to args,
@@ -145,7 +146,7 @@ object DAppStore {
                     return@call
                 }
 
-                val unwanted = getUnwantedPublishers(context)
+                val unwanted = if (filterUnwanted) getUnwantedPublishers(context) else emptySet()
                 val results = dapps.mapNotNull { item ->
                     val guid = item["id"] as? String ?: return@mapNotNull null
                     val name = hexToString(item["name"] as? String ?: "")
@@ -155,7 +156,7 @@ object DAppStore {
                     val publisherPk = item["publisher"] as? String ?: ""
 
                     // Skip DApps from unwanted publishers
-                    if (publisherPk.isNotEmpty() && unwanted.contains(publisherPk.lowercase())) {
+                    if (filterUnwanted && publisherPk.isNotEmpty() && unwanted.contains(publisherPk.lowercase())) {
                         return@mapNotNull null
                     }
 
@@ -270,8 +271,8 @@ object DAppStore {
     }
 
     /** Query available DApps and return result (suspend wrapper). */
-    suspend fun queryAvailableDAppsAsync(context: Context): List<AvailableDApp> = suspendCancellableCoroutine { cont ->
-        queryAvailableDApps(context) { dapps ->
+    suspend fun queryAvailableDAppsAsync(context: Context, filterUnwanted: Boolean = true): List<AvailableDApp> = suspendCancellableCoroutine { cont ->
+        queryAvailableDApps(context, filterUnwanted) { dapps ->
             if (cont.isActive) cont.resume(dapps) {}
         }
     }

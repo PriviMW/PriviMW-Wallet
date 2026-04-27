@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -53,7 +55,10 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
+fun DAppStoreBrowseScreen(
+    onBack: () -> Unit = {},
+    onOpenPublishers: () -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -174,13 +179,27 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
                 Text("< Back", color = C.textSecondary)
             }
 
-            Text(
-                "DApp Store",
-                color = C.text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "DApp Store",
+                    color = C.text,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(onClick = onOpenPublishers) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Publishers",
+                        tint = C.textSecondary,
+                    )
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 "Browse and install DApps from the Beam on-chain registry",

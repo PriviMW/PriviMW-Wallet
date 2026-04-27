@@ -56,6 +56,7 @@ import com.privimemobile.ui.wallet.AssetDetailScreen
 import com.privimemobile.ui.wallet.QRScannerScreen
 import com.privimemobile.ui.dapps.DAppScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
+import com.privimemobile.ui.dapps.PublishersScreen
 import com.privimemobile.ui.chat.ChatScreen
 import com.privimemobile.ui.chat.ChatsScreen
 import com.privimemobile.ui.chat.ContactInfoScreen
@@ -498,7 +499,13 @@ fun AppNavigation() {
                 )
             }
             composable("dapp_store") {
-                DAppStoreBrowseScreen(onBack = { navController.popBackStack() })
+                DAppStoreBrowseScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPublishers = { navController.navigate("dapp_publishers") },
+                )
+            }
+            composable("dapp_publishers") {
+                PublishersScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 Tab.SWAP.route,

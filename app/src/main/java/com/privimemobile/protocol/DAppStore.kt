@@ -49,8 +49,12 @@ object DAppStore {
         }
     }
 
-    /** Cached publisher PK → name map. */
-    private var publisherNames: Map<String, String> = emptyMap()
+    /** Cached publisher list from on-chain store. */
+    private var cachedPublishers: List<Publisher> = emptyList()
+
+    /** SharedPreferences key for unwanted publisher blocklist. */
+    private const val PREFS_PUBLISHERS = "privimw_publishers"
+    private const val KEY_UNWANTED = "unwanted_publishers"
 
     /**
      * Query available DApps from the on-chain store.
@@ -75,9 +79,9 @@ object DAppStore {
         }
     }
 
-    /** Query publisher PK → name mapping from on-chain store. */
+    /** Query publisher list from on-chain store. */
     private fun loadPublishers(shader: List<Int>, onDone: () -> Unit) {
-        if (publisherNames.isNotEmpty()) { onDone(); return }
+        if (cachedPublishers.isNotEmpty()) { onDone(); return }
 
         val args = "action=view_publishers,cid=${Config.DAPP_STORE_CID}"
         val params = mapOf<String, Any?>(
@@ -90,15 +94,23 @@ object DAppStore {
                 @Suppress("UNCHECKED_CAST")
                 val publishers = result["publishers"] as? List<Map<String, Any?>>
                 if (publishers != null) {
-                    val map = mutableMapOf<String, String>()
-                    for (pub in publishers) {
-                        val pk = pub["pubkey"] as? String ?: continue
-                        val nameHex = pub["name"] as? String ?: continue
-                        val name = hexToString(nameHex)
-                        if (name.isNotEmpty()) map[pk.lowercase()] = name
+                    cachedPublishers = publishers.mapNotNull { pub ->
+                        val pk = pub["pubkey"] as? String ?: return@mapNotNull null
+                        val name = hexToString(pub["name"] as? String ?: "")
+                        if (name.isEmpty()) return@mapNotNull null
+                        Publisher(
+                            pubkey = pk,
+                            name = name,
+                            aboutMe = hexToString(pub["about_me"] as? String ?: ""),
+                            website = hexToString(pub["website"] as? String ?: ""),
+                            twitter = hexToString(pub["twitter"] as? String ?: ""),
+                            linkedin = hexToString(pub["linkedin"] as? String ?: ""),
+                            instagram = hexToString(pub["instagram"] as? String ?: ""),
+                            telegram = hexToString(pub["telegram"] as? String ?: ""),
+                            discord = hexToString(pub["discord"] as? String ?: ""),
+                        )
                     }
-                    publisherNames = map
-                    Log.d(TAG, "Loaded ${map.size} publishers")
+                    Log.d(TAG, "Loaded ${cachedPublishers.size} publishers")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load publishers: ${e.message}")
@@ -133,6 +145,7 @@ object DAppStore {
                     return@call
                 }
 
+                val unwanted = getUnwantedPublishers(context)
                 val results = dapps.mapNotNull { item ->
                     val guid = item["id"] as? String ?: return@mapNotNull null
                     val name = hexToString(item["name"] as? String ?: "")
@@ -140,7 +153,13 @@ object DAppStore {
                     val description = hexToString(item["description"] as? String ?: "")
                     val ipfsCid = item["ipfs_id"] as? String ?: ""
                     val publisherPk = item["publisher"] as? String ?: ""
-                    val publisherName = publisherNames[publisherPk.lowercase()] ?: ""
+
+                    // Skip DApps from unwanted publishers
+                    if (publisherPk.isNotEmpty() && unwanted.contains(publisherPk.lowercase())) {
+                        return@mapNotNull null
+                    }
+
+                    val publisherName = cachedPublishers.find { it.pubkey.equals(publisherPk, ignoreCase = true) }?.name ?: ""
 
                     // Parse version
                     @Suppress("UNCHECKED_CAST")
@@ -298,6 +317,58 @@ object DAppStore {
             false
         }
     }
+
+    // --- Publisher blocklist storage ---
+
+    /** Get set of unwanted publisher pubkeys (lowercase). */
+    fun getUnwantedPublishers(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences(PREFS_PUBLISHERS, Context.MODE_PRIVATE)
+        val json = prefs.getString(KEY_UNWANTED, null) ?: return emptySet()
+        return try {
+            org.json.JSONArray(json).let { arr ->
+                (0 until arr.length()).map { arr.getString(it).lowercase() }.toSet()
+            }
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    /** Add a publisher to the unwanted blocklist. */
+    fun addUnwantedPublisher(context: Context, pubkey: String) {
+        val set = getUnwantedPublishers(context).toMutableSet()
+        set.add(pubkey.lowercase())
+        saveUnwantedPublishers(context, set)
+    }
+
+    /** Remove a publisher from the unwanted blocklist. */
+    fun removeUnwantedPublisher(context: Context, pubkey: String) {
+        val set = getUnwantedPublishers(context).toMutableSet()
+        set.remove(pubkey.lowercase())
+        saveUnwantedPublishers(context, set)
+    }
+
+    private fun saveUnwantedPublishers(context: Context, set: Set<String>) {
+        val arr = org.json.JSONArray()
+        set.forEach { arr.put(it) }
+        context.getSharedPreferences(PREFS_PUBLISHERS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_UNWANTED, arr.toString()).apply()
+    }
+
+    /** Query all publishers from cache or on-chain store. */
+    suspend fun queryPublishersAsync(context: Context): List<Publisher> {
+        return try {
+            if (cachedPublishers.isNotEmpty()) return cachedPublishers
+            loadShader(context)
+            val shader = storeShaderBytes ?: return emptyList()
+            suspendCancellableCoroutine { cont ->
+                loadPublishers(shader) {
+                    if (cont.isActive) cont.resume(cachedPublishers) {}
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }
 
 /** A DApp available for installation from the on-chain store. */
@@ -311,4 +382,17 @@ data class AvailableDApp(
     val icon: String = "",
     val bundledAsset: String = "",
     val publisherName: String = "",
+)
+
+/** A publisher in the DApp Store. */
+data class Publisher(
+    val pubkey: String,
+    val name: String,
+    val aboutMe: String = "",
+    val website: String = "",
+    val twitter: String = "",
+    val linkedin: String = "",
+    val instagram: String = "",
+    val telegram: String = "",
+    val discord: String = "",
 )

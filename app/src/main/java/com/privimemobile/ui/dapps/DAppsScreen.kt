@@ -1,6 +1,7 @@
 package com.privimemobile.ui.dapps
 
 import android.content.Intent
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -114,7 +115,22 @@ fun DAppsScreen(
     }
 
     fun handleLaunch(dapp: DApp) {
-        onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+        scope.launch {
+            try {
+                val updated = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.privimemobile.protocol.DAppStore.checkAndUpdate(context, dapp)
+                }
+                if (updated) {
+                    loadDApps()
+                    Toast.makeText(context, "${dapp.name} successfully updated", Toast.LENGTH_SHORT).show()
+                } else {
+                    onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+                }
+            } catch (e: Exception) {
+                Log.w("DAppsScreen", "Update check failed: ${e.message}")
+                onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+            }
+        }
     }
 
     PullToRefreshBox(
@@ -325,7 +341,11 @@ fun DAppsScreen(
                                 onLongClick = { editMode = true },
                             ),
                         ) {
-                            DAppCard(dapp = dapp, onOpen = {}, onUninstall = { uninstallTarget = dapp })
+                            DAppCard(
+                                dapp = dapp,
+                                onOpen = {},
+                                onUninstall = { uninstallTarget = dapp },
+                            )
                         }
                     }
                 }
@@ -393,7 +413,11 @@ fun DAppsScreen(
 }
 
 @Composable
-private fun DAppCard(dapp: DApp, onOpen: () -> Unit, onUninstall: () -> Unit) {
+private fun DAppCard(
+    dapp: DApp,
+    onOpen: () -> Unit,
+    onUninstall: () -> Unit,
+) {
     val context = LocalContext.current
 
     Card(

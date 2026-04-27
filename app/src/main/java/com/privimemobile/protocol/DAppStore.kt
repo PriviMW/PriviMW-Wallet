@@ -3,6 +3,7 @@ package com.privimemobile.protocol
 import android.content.Context
 import android.util.Log
 import java.util.zip.ZipInputStream
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * DApp Store — queries the on-chain DApp Store contract for published DApps.
@@ -220,6 +221,81 @@ object DAppStore {
             String(bytes, Charsets.UTF_8)
         } catch (_: Exception) {
             ""
+        }
+    }
+
+    /** Download a DApp ZIP from IPFS via the wallet API (Beam private IPFS network). */
+    suspend fun downloadFromIpfs(cid: String): ByteArray = suspendCancellableCoroutine { cont ->
+        WalletApi.call("ipfs_get", mapOf(
+            "hash" to cid,
+            "timeout" to Config.IPFS_GET_TIMEOUT,
+        )) { result ->
+            if (result.containsKey("error")) {
+                val err = result["error"]
+                val msg = when (err) {
+                    is Map<*, *> -> err["message"] as? String ?: "IPFS download failed"
+                    is String -> err
+                    else -> "IPFS download failed"
+                }
+                if (cont.isActive) cont.resumeWith(Result.failure(Exception(msg)))
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                val data = result["data"] as? List<Number>
+                if (data != null && cont.isActive) {
+                    cont.resume(ByteArray(data.size) { data[it].toByte() }) {}
+                } else if (cont.isActive) {
+                    cont.resumeWith(Result.failure(Exception("No data returned from IPFS")))
+                }
+            }
+        }
+    }
+
+    /** Query available DApps and return result (suspend wrapper). */
+    suspend fun queryAvailableDAppsAsync(context: Context): List<AvailableDApp> = suspendCancellableCoroutine { cont ->
+        queryAvailableDApps(context) { dapps ->
+            if (cont.isActive) cont.resume(dapps) {}
+        }
+    }
+
+    /** Parse semantic version string "a.b.c" into comparable Int list. */
+    private fun parseVersion(v: String): List<Int> {
+        return v.split(".").mapNotNull { it.toIntOrNull() }
+    }
+
+    /** Returns true if v1 < v2 (semantic version comparison). */
+    fun isVersionOlder(v1: String, v2: String): Boolean {
+        val a = parseVersion(v1)
+        val b = parseVersion(v2)
+        val maxLen = maxOf(a.size, b.size)
+        for (i in 0 until maxLen) {
+            val av = a.getOrElse(i) { 0 }
+            val bv = b.getOrElse(i) { 0 }
+            if (av != bv) return av < bv
+        }
+        return false
+    }
+
+    /**
+     * Check if an installed DApp has an update, and install it if so.
+     * Returns true if an update was applied.
+     */
+    suspend fun checkAndUpdate(context: Context, dapp: DApp): Boolean {
+        return try {
+            val availableList = queryAvailableDAppsAsync(context)
+            val available = availableList.find { it.guid == dapp.guid } ?: return false
+            if (!isVersionOlder(dapp.version, available.version)) return false
+
+            if (available.bundledAsset.isNotEmpty()) {
+                DAppManager.installFromAsset(context, available.guid, available.bundledAsset, available.name)
+            } else if (available.ipfsCid.isNotEmpty()) {
+                val zipData = downloadFromIpfs(available.ipfsCid)
+                DAppManager.installFromZip(context, available.guid, zipData, available.name, available.icon)
+            } else {
+                return false
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 }

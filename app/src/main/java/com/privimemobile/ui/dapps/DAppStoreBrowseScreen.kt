@@ -283,7 +283,7 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
                                         loadAvailable()
                                     } else if (dapp.ipfsCid.isNotEmpty()) {
                                         // Download from IPFS
-                                        val zipData = downloadFromIpfs(dapp.ipfsCid)
+                                        val zipData = DAppStore.downloadFromIpfs(dapp.ipfsCid)
                                         withContext(Dispatchers.IO) {
                                             DAppManager.installFromZip(
                                                 context,
@@ -335,32 +335,6 @@ fun DAppStoreBrowseScreen(onBack: () -> Unit = {}) {
             }
         }
 
-    }
-}
-
-/** Download a DApp ZIP from IPFS via the wallet API (Beam private IPFS network). */
-private suspend fun downloadFromIpfs(cid: String): ByteArray = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-    com.privimemobile.protocol.WalletApi.call("ipfs_get", mapOf(
-        "hash" to cid,
-        "timeout" to com.privimemobile.protocol.Config.IPFS_GET_TIMEOUT,
-    )) { result ->
-        if (result.containsKey("error")) {
-            val err = result["error"]
-            val msg = when (err) {
-                is Map<*, *> -> err["message"] as? String ?: "IPFS download failed"
-                is String -> err
-                else -> "IPFS download failed"
-            }
-            if (cont.isActive) cont.resumeWithException(Exception(msg))
-        } else {
-            @Suppress("UNCHECKED_CAST")
-            val data = result["data"] as? List<Number>
-            if (data != null && cont.isActive) {
-                cont.resume(ByteArray(data.size) { data[it].toByte() }) {}
-            } else if (cont.isActive) {
-                cont.resumeWithException(Exception("No data returned from IPFS"))
-            }
-        }
     }
 }
 

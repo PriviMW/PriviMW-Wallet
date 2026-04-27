@@ -84,16 +84,20 @@ object WalletApi {
      * }
      * ```
      */
+    /**
+     * Call a wallet API method with callback.
+     * Returns the call ID so callers can cancel or track the request.
+     */
     fun call(
         method: String,
         params: Map<String, Any?> = emptyMap(),
         callback: ((Map<String, Any?>) -> Unit)? = null,
-    ) {
+    ): Int {
         val wallet = WalletManager.walletInstance
         if (wallet == null || !com.mw.beam.beamwallet.core.Api.isWalletRunning()) {
             Log.w(TAG, "call($method): wallet not available")
             callback?.invoke(mapOf("error" to mapOf("message" to "Wallet not connected")))
-            return
+            return -1
         }
 
         val id = ++callIdCounter
@@ -119,6 +123,7 @@ object WalletApi {
             Log.e(TAG, "call($method) failed: ${e.message}")
             callback?.invoke(mapOf("error" to mapOf("message" to (e.message ?: "Unknown error"))))
         }
+        return id
     }
 
     /**
@@ -167,11 +172,11 @@ object WalletApi {
         method: String,
         params: Map<String, Any?> = emptyMap(),
     ): Map<String, Any?> = suspendCancellableCoroutine { cont ->
-        call(method, params) { result ->
+        val id = call(method, params) { result ->
             if (cont.isActive) cont.resume(result)
         }
         cont.invokeOnCancellation {
-            // Clean up if coroutine is cancelled
+            if (id >= 0) callbacks.remove(id)
         }
     }
 

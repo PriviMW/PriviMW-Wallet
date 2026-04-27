@@ -3754,7 +3754,7 @@ fun ChatScreen(
                                             val text = newValue.text
                                             val cursor = newValue.selection.start
                                             if (text == "/") showCommandMenu = true
-                                            else if (showCommandMenu && !text.startsWith("/")) showCommandMenu = false
+                                            else if (showCommandMenu && (!text.startsWith("/") || text.contains(" "))) showCommandMenu = false
                                             // @mention autocomplete detection (group mode only)
                                             if (isGroupMode && cursor > 0) {
                                                 var atIdx = -1
@@ -4101,9 +4101,8 @@ fun ChatScreen(
                         showDeleteConfirm = false
                         if (isGroupMode && groupId != null) {
                             // Fire contract TX first — wallet popup must be confirmed by user
-                            val capturedConvId = convId
                             com.privimemobile.chat.ChatService.groups.leaveGroup(groupId) { success, error ->
-                                if (error != null || success == false) {
+                                if (!success) {
                                     scope.launch {
                                         android.widget.Toast.makeText(
                                             context,
@@ -4112,12 +4111,13 @@ fun ChatScreen(
                                         ).show()
                                     }
                                 } else {
-                                    // TX submitted — hide chat immediately, clean up on-chain later
+                                    // Wallet accepted the TX data — wait for on-chain confirmation before deleting local data
                                     scope.launch {
-                                        if (capturedConvId > 0L) {
-                                            com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(capturedConvId)
-                                            com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(capturedConvId)
-                                        }
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Leave transaction submitted. Group will be removed once confirmed.",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                     onBack()
                                 }

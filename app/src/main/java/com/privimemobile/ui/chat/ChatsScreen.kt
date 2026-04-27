@@ -504,10 +504,28 @@ fun ChatsScreen(
                                     confirmButton = {
                                         TextButton(onClick = {
                                             showDeleteConfirmItem = false
-                                            scope.launch {
-                                                if (isGrp) {
-                                                    ChatService.groups.leaveGroup(item.group!!.groupId)
-                                                } else {
+                                            if (isGrp) {
+                                                val gid = item.group!!.groupId
+                                                ChatService.groups.leaveGroup(gid) { success, error ->
+                                                    scope.launch {
+                                                        if (!success) {
+                                                            android.widget.Toast.makeText(
+                                                                context,
+                                                                "Leave failed: ${error ?: "Transaction failed"}",
+                                                                android.widget.Toast.LENGTH_LONG
+                                                            ).show()
+                                                        } else {
+                                                            // Wallet accepted TX data — soft-delete local conv
+                                                            val conv = ChatService.db?.conversationDao()?.findByKey("g_${gid.take(16)}")
+                                                            conv?.let {
+                                                                ChatService.db?.messageDao()?.softDeleteByConversation(it.id)
+                                                                ChatService.db?.conversationDao()?.softDelete(it.id)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                scope.launch {
                                                     val cid = item.conv!!.id
                                                     val handle = item.conv!!.convKey.removePrefix("@")
                                                     ChatService.db?.messageDao()?.softDeleteByConversation(cid)

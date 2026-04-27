@@ -201,8 +201,11 @@ class MainActivity : FragmentActivity() {
             // Re-start WalletApi with current Activity's lifecycleScope
             // (previous scope may have been destroyed if Activity was recreated)
             WalletApi.start(lifecycleScope)
-            // Clear stale callbacks that will never get responses
-            WalletApi.cleanupStaleCallbacks()
+            // DO NOT call cleanupStaleCallbacks() here. A password manager overlay
+            // or system dialog can trigger onPause/onResume while a TX (e.g. /tip)
+            // is pending. Clearing callbacks would drop the active response handler,
+            // causing callAsync to hang forever and the chat message to never send.
+            // Callbacks are already cleared in WalletApi.stop() on wallet shutdown.
             // Re-subscribe to wallet events (C++ core may have dropped them)
             WalletApi.resubscribeEvents()
             // Refresh wallet state

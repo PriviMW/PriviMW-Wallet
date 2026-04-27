@@ -195,6 +195,13 @@ class PendingTxManager(
                 // Remove from local DB
                 db.groupDao().deleteByGroupId(tx.targetId)
                 db.groupDao().removeAllMembers(tx.targetId)
+                // Soft-delete the conversation too
+                val convKey = "g_${tx.targetId.take(16)}"
+                val conv = db.conversationDao().findByKey(convKey)
+                if (conv != null) {
+                    db.messageDao().softDeleteByConversation(conv.id)
+                    db.conversationDao().softDelete(conv.id)
+                }
             }
             PendingTxEntity.ACTION_REMOVE_MEMBER -> {
                 ChatService.groups.refreshGroupMembers(tx.targetId)
@@ -317,6 +324,18 @@ class PendingTxManager(
             PendingTxEntity.ACTION_RELEASE_HANDLE -> {
                 // TX failed — identity was NOT cleared (we wait for confirm now), nothing to revert
                 Log.d(TAG, "Release handle TX failed — identity unchanged")
+            }
+            PendingTxEntity.ACTION_LEAVE_GROUP -> {
+                // Leave failed on-chain — user is still a member. Refresh group so it reappears.
+                ChatService.groups.refreshGroupInfo(tx.targetId)
+                ChatService.groups.refreshGroupMembers(tx.targetId)
+                scope.launch {
+                    val group = db.groupDao().findByGroupId(tx.targetId)
+                    group?.let {
+                        val convKey = "g_${tx.targetId.take(16)}"
+                        db.conversationDao().getOrCreate(convKey, group.name, group.name)
+                    }
+                }
             }
             // Other failures: just refresh to get correct state
             else -> {

@@ -32,6 +32,11 @@ object NodeReconnect {
     @Volatile
     private var autoReconnect = true
 
+    // Silent reconnect — periodically try own node while on fallback without UI changes
+    @Volatile
+    private var silentReconnect = false
+    private var silentCheckCount = 0
+
     @Volatile
     var lastDataTs = 0L
         private set
@@ -42,6 +47,7 @@ object NodeReconnect {
     private var walletStatusJob: Job? = null
     private var healthCheckJob: Job? = null
     private var reconnectJob: Job? = null
+    private var silentTimeoutJob: Job? = null
     private var scope: CoroutineScope? = null
 
     // Node settings
@@ -63,7 +69,13 @@ object NodeReconnect {
     }
 
     fun start(coroutineScope: CoroutineScope) {
-        if (listenerJob != null) return
+        // If jobs were cancelled (scope destroyed but stop() not called, e.g. after
+        // Activity recreation with BackgroundService running), reset and restart.
+        if (listenerJob?.isActive != true) {
+            stop()
+        } else {
+            return // Already running with active jobs
+        }
         scope = coroutineScope
 
         savedNodeMode = SecureStorage.getString("node_mode") ?: "random"
@@ -90,17 +102,45 @@ object NodeReconnect {
             WalletEventBus.walletStatus.collect { status ->
                 if (status.height > 0) {
                     lastDataTs = System.currentTimeMillis()
-                    connected = true
+                    if (!connected) {
+                        connected = true
+                        val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+                        val isFallback = savedNodeMode == "own" && !trusted
+                        Log.d(TAG, "Data flowing after disconnect: trusted=$trusted, isFallback=$isFallback")
+                        WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = isFallback))
+                    }
                 }
             }
         }
 
-        // Periodic health check — detect silent disconnects
+        // Periodic health check — detect silent disconnects, attempt silent own-node reconnection
         healthCheckJob = coroutineScope.launch {
             delay(HEALTH_CHECK_INTERVAL) // initial wait
             while (isActive) {
                 checkHealth()
                 delay(HEALTH_CHECK_INTERVAL)
+            }
+        }
+
+        // After restarting jobs, verify the actual connection trust state. We can't
+        // trust StateFlow's isFallback — WalletListener always emits isFallback=false,
+        // and our handleConnectionEvent was dead during the background period.
+        // Schedule a brief delay to let wallet callbacks settle, then emit correct state.
+        scope?.launch {
+            delay(500)
+            if (savedNodeMode == "own" || savedNodeMode == "fallback") {
+                val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+                val shouldBeFallback = !trusted
+                val currentEvent = WalletEventBus.nodeConnection.value
+                if (currentEvent.connected && currentEvent.isFallback != shouldBeFallback) {
+                    Log.d(TAG, "Post-restart trust check: trusted=$trusted, correcting isFallback to $shouldBeFallback")
+                    connected = true
+                    if (shouldBeFallback) {
+                        savedNodeMode = "fallback"
+                        autoReconnect = false
+                    }
+                    WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = shouldBeFallback))
+                }
             }
         }
     }
@@ -110,17 +150,34 @@ object NodeReconnect {
         walletStatusJob?.cancel(); walletStatusJob = null
         healthCheckJob?.cancel(); healthCheckJob = null
         reconnectJob?.cancel(); reconnectJob = null
+        silentTimeoutJob?.cancel(); silentTimeoutJob = null
+        silentReconnect = false
         scope = null
     }
 
     /** Called on app foreground recovery — attempt to reconnect to user's own node. */
     fun onForegroundRecovery() {
-        if (!connected) {
-            Log.d(TAG, "Foreground recovery — forcing immediate reconnect")
+        val sinceLastData = System.currentTimeMillis() - lastDataTs
+        val isStale = connected && lastDataTs > 0 && sinceLastData > DATA_STALE_THRESHOLD
+
+        if (!connected || isStale) {
+            if (isStale) {
+                Log.d(TAG, "Foreground recovery — stale connection (${sinceLastData / 1000}s since last data)")
+                connected = false
+                WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = false))
+            } else {
+                Log.d(TAG, "Foreground recovery — forcing immediate reconnect")
+            }
             reconnectJob?.cancel()
             reconnectJob = null
             reconnectDelay = RECONNECT_BASE_DELAY
             failCount = 0
+            // If user had own node configured but we're in fallback mode, switch back
+            val persistentMode = SecureStorage.getString("node_mode") ?: "random"
+            if (persistentMode == "own" && savedNodeMode != "own") {
+                savedNodeMode = "own"
+                autoReconnect = true
+            }
             tryReconnect()
         } else if (savedNodeMode == "fallback" && autoReconnect) {
             // In fallback mode with auto-reconnect on — try own node
@@ -135,6 +192,22 @@ object NodeReconnect {
     }
 
     fun onConnectionFailed(error: Int) {
+        if (silentReconnect) {
+            // Silent reconnect failed — switch back to fallback node quietly
+            silentReconnect = false
+            silentTimeoutJob?.cancel()
+            silentTimeoutJob = null
+            savedNodeMode = "fallback"
+            autoReconnect = false
+            failCount = 0
+            val wallet = WalletManager.walletInstance
+            val fb = savedFallbackNode ?: nodePool.firstOrNull()
+            if (wallet != null && fb != null) {
+                Log.d(TAG, "Silent reconnect failed — back to fallback: $fb")
+                try { wallet.changeNodeAddress(fb) } catch (_: Exception) {}
+            }
+            return
+        }
         connected = false
         failCount++
         Log.d(TAG, "Connection failed (count=$failCount, error=$error, mode=$savedNodeMode)")
@@ -143,6 +216,41 @@ object NodeReconnect {
 
     private fun handleConnectionEvent(event: NodeConnectionEvent) {
         if (event.connected) {
+            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+            val isInOwnMode = savedNodeMode == "own"
+
+            if (silentReconnect) {
+                // Silent reconnect succeeded at the transport level — now check trust
+                silentReconnect = false
+                silentTimeoutJob?.cancel()
+                silentTimeoutJob = null
+                connected = true
+                failCount = 0
+                reconnectDelay = RECONNECT_BASE_DELAY
+                lastDataTs = System.currentTimeMillis()
+                reconnectJob?.cancel()
+                WalletManager.setApiReady(true)
+
+                if (trusted) {
+                    savedNodeMode = "own"
+                    autoReconnect = true
+                    SecureStorage.putString("node_mode", "own")
+                    Log.d(TAG, "Silent reconnect succeeded — switching to Own Node")
+                    WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = false))
+                } else {
+                    // Connected but trust handshake not done yet — schedule check
+                    Log.d(TAG, "Silent reconnect: connected, waiting for trust")
+                    scope?.launch {
+                        delay(3000)
+                        if (WalletManager.walletInstance?.isConnectionTrusted() == true && savedNodeMode == "own") {
+                            SecureStorage.putString("node_mode", "own")
+                            WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = false))
+                        }
+                    }
+                }
+                return
+            }
+
             connected = true
             failCount = 0
             reconnectDelay = RECONNECT_BASE_DELAY
@@ -151,11 +259,24 @@ object NodeReconnect {
             WalletManager.setApiReady(true)
 
             // Compute isFallback from actual trust state at connection time
-            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
-            val isInOwnMode = savedNodeMode == "own"
             val isFallback = isInOwnMode && !trusted
             Log.d(TAG, "Connected: trusted=$trusted, isInOwnMode=$isInOwnMode, isFallback=$isFallback")
             WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = isFallback))
+
+            // If we're in own mode but untrusted right after connection, the trust handshake
+            // may not have completed yet. Schedule a delayed re-check so the UI updates
+            // when trust is established. Without this, the UI can get stuck showing
+            // "Fallback Node" until the user navigates away and back.
+            if (isInOwnMode && !trusted) {
+                scope?.launch {
+                    delay(3000)
+                    val nowTrusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+                    if (nowTrusted && savedNodeMode == "own") {
+                        Log.d(TAG, "Delayed trust check: now trusted, updating UI")
+                        WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = false))
+                    }
+                }
+            }
         }
     }
 
@@ -179,6 +300,48 @@ object NodeReconnect {
                     scheduleReconnect()
                 } else {
                     Log.d(TAG, "Health check probe OK — data received after poke")
+                }
+            }
+        }
+
+        // When in fallback mode, periodically try own node silently (no UI changes).
+        // Runs every ~5 health checks (~2.5 min) when the fallback connection is healthy.
+        if (savedNodeMode == "fallback" && !autoReconnect && !silentReconnect && lastDataTs > 0 &&
+            sinceLastData < DATA_STALE_THRESHOLD) {
+            silentCheckCount++
+            if (silentCheckCount >= 5) {
+                silentCheckCount = 0
+                trySilentReconnect()
+            }
+        }
+    }
+
+    /** Try reconnecting to own node without updating UI — only emits on success. */
+    private fun trySilentReconnect() {
+        val wallet = WalletManager.walletInstance ?: return
+        val savedAddr = SecureStorage.getString("own_node_address")
+        if (savedAddr == null || savedAddr.isBlank()) return
+
+        Log.d(TAG, "Silent reconnect: trying own node $savedAddr")
+        silentReconnect = true
+        try {
+            wallet.changeNodeAddress(savedAddr)
+            wallet.enableBodyRequests(false)
+        } catch (e: Exception) {
+            Log.d(TAG, "Silent reconnect failed: ${e.message}")
+            silentReconnect = false
+            return
+        }
+
+        // Safety timeout — if nothing happens after 15s, return to fallback
+        silentTimeoutJob = scope?.launch {
+            delay(15_000)
+            if (silentReconnect) {
+                silentReconnect = false
+                val fb = savedFallbackNode ?: nodePool.firstOrNull()
+                if (fb != null) {
+                    Log.d(TAG, "Silent reconnect timed out — back to fallback: $fb")
+                    try { wallet.changeNodeAddress(fb) } catch (_: Exception) {}
                 }
             }
         }
@@ -281,6 +444,8 @@ object NodeReconnect {
         autoReconnect = true
         reconnectDelay = RECONNECT_BASE_DELAY
         failCount = 0
+        // Update SecureStorage so WalletScreen reads consistent node_mode
+        SecureStorage.putString("node_mode", "own")
         WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = false))
         try {
             wallet.changeNodeAddress(savedAddr)

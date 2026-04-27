@@ -105,7 +105,12 @@ object ProtocolStartup {
 
     fun onForegroundRecovery(newScope: CoroutineScope? = null) {
         Log.d(TAG, "Foreground recovery")
-        if (newScope != null) pollingScope = newScope
+        if (newScope != null) {
+            pollingScope = newScope
+            // Restart NodeReconnect jobs — they died with the old Activity's scope.
+            // start() detects cancelled jobs and resets them; is a no-op if already running.
+            NodeReconnect.start(newScope)
+        }
         NodeReconnect.onForegroundRecovery()
         refreshWalletData()
     }

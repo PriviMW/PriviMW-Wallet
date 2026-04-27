@@ -104,7 +104,7 @@ object NodeReconnect {
                     lastDataTs = System.currentTimeMillis()
                     if (!connected) {
                         connected = true
-                        val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+                        val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
                         val isFallback = savedNodeMode == "own" && !trusted
                         Log.d(TAG, "Data flowing after disconnect: trusted=$trusted, isFallback=$isFallback")
                         WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = isFallback))
@@ -179,15 +179,6 @@ object NodeReconnect {
                 autoReconnect = true
             }
             tryReconnect()
-        } else if (savedNodeMode == "fallback" && autoReconnect) {
-            // In fallback mode with auto-reconnect on — try own node
-            Log.d(TAG, "Foreground recovery — trying own node from fallback")
-            reconnectJob?.cancel()
-            reconnectJob = null
-            reconnectDelay = RECONNECT_BASE_DELAY
-            failCount = 0
-            savedNodeMode = "own"
-            tryReconnect()
         }
     }
 
@@ -216,7 +207,7 @@ object NodeReconnect {
 
     private fun handleConnectionEvent(event: NodeConnectionEvent) {
         if (event.connected) {
-            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: true
+            val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
             val isInOwnMode = savedNodeMode == "own"
 
             if (silentReconnect) {
@@ -393,8 +384,14 @@ object NodeReconnect {
                     }
                     val fallback = savedFallbackNode ?: return
                     Log.d(TAG, "Own node failed 3+ times — switching to fallback: $fallback")
-                    try { wallet.changeNodeAddress(fallback) } catch (_: Exception) {}
-                    WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = true))
+                    savedNodeMode = "fallback"
+                    autoReconnect = false
+                    try {
+                        wallet.changeNodeAddress(fallback)
+                        WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = true))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Fallback node reconnect failed: ${e.message}")
+                    }
                 } else {
                     Log.d(TAG, "Reconnecting to own node: $ownAddr")
                     try {

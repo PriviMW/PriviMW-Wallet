@@ -2,6 +2,7 @@ package com.privimemobile.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1079,11 +1080,15 @@ fun SettingsScreen(
         SectionTitle("UTILITIES")
         SettingsCard {
             SettingsAction("Export wallet data", "Save wallet backup JSON to Downloads") {
-                try {
-                    WalletManager.walletInstance?.exportDataToJson()
-                    toast("Exporting wallet data...")
-                } catch (e: Throwable) {
-                    toast("Export failed: ${e.message}")
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    toast("Export requires Android 10+")
+                } else {
+                    try {
+                        WalletManager.walletInstance?.exportDataToJson()
+                        toast("Exporting wallet data...")
+                    } catch (e: Throwable) {
+                        toast("Export failed: ${e.message}")
+                    }
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
@@ -1092,12 +1097,16 @@ fun SettingsScreen(
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             SettingsAction("Export transaction history", "Save ZIP with all TX types to Downloads") {
-                try {
-                    WalletManager.walletInstance?.exportTxHistoryToCsv()
-                        ?: run { toast("Wallet not open"); return@SettingsAction }
-                    toast("Exporting transaction history...")
-                } catch (e: Throwable) {
-                    toast("Export failed: ${e.message}")
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    toast("Export requires Android 10+")
+                } else {
+                    try {
+                        WalletManager.walletInstance?.exportTxHistoryToCsv()
+                            ?: run { toast("Wallet not open"); return@SettingsAction }
+                        toast("Exporting transaction history...")
+                    } catch (e: Throwable) {
+                        toast("Export failed: ${e.message}")
+                    }
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))

@@ -1,5 +1,6 @@
 package com.privimemobile.ui.wallet
 
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -257,12 +258,16 @@ fun TransactionHistoryScreen(
                 Button(
                     onClick = {
                         showExportDialog = false
-                        try {
-                            WalletManager.walletInstance?.exportTxHistoryToCsv()
-                                ?: run { Toast.makeText(context, "Wallet not open", Toast.LENGTH_SHORT).show(); return@Button }
-                            Toast.makeText(context, "Exporting transaction history...", Toast.LENGTH_SHORT).show()
-                        } catch (e: Throwable) {
-                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                            Toast.makeText(context, "Export requires Android 10+", Toast.LENGTH_SHORT).show()
+                        } else {
+                            try {
+                                WalletManager.walletInstance?.exportTxHistoryToCsv()
+                                    ?: run { Toast.makeText(context, "Wallet not open", Toast.LENGTH_SHORT).show(); return@Button }
+                                Toast.makeText(context, "Exporting transaction history...", Toast.LENGTH_SHORT).show()
+                            } catch (e: Throwable) {
+                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),

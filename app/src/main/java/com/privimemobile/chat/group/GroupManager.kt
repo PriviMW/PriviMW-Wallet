@@ -550,14 +550,23 @@ class GroupManager(
 
                 val memberDisplayName = if (handle == myHandle) state?.myDisplayName
                     else db.contactDao().findByHandle(handle)?.displayName
-                Log.d(TAG, "insertMember: handle=$handle walletId=${walletId?.take(12)}")
+                // Preserve existing display_name if contract/contract doesn't return one.
+                // Messages carry display names in their payload (handleGroupMessage updates
+                // them), but refreshGroupMembers pulls from contacts which may be empty.
+                // Without this, REPLACE would overwrite a known display name with null.
+                val existingMember = db.groupDao().findMember(groupId, handle)
+                val resolvedDisplayName = memberDisplayName
+                    ?: existingMember?.displayName
+                val resolvedWalletId = walletId
+                    ?: existingMember?.walletId
+                Log.d(TAG, "insertMember: handle=$handle walletId=${resolvedWalletId?.take(12)} dn=${resolvedDisplayName?.take(12)}")
                 db.groupDao().insertMember(GroupMemberEntity(
                     groupId = groupId,
                     handle = handle,
-                    displayName = memberDisplayName,
+                    displayName = resolvedDisplayName,
                     role = role,
                     permissions = permissions,
-                    walletId = walletId,
+                    walletId = resolvedWalletId,
                     joinedHeight = joinedHeight,
                 ))
 

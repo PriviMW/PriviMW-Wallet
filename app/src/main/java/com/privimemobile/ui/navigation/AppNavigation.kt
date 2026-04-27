@@ -50,6 +50,7 @@ import com.privimemobile.ui.wallet.SendScreen
 import com.privimemobile.ui.wallet.ReceiveScreen
 import com.privimemobile.ui.wallet.SendConfirmScreen
 import com.privimemobile.ui.wallet.TransactionDetailScreen
+import com.privimemobile.ui.wallet.TransactionHistoryScreen
 import com.privimemobile.ui.wallet.UTXOScreen
 import com.privimemobile.ui.wallet.AddressesScreen
 import com.privimemobile.ui.wallet.AssetDetailScreen
@@ -218,6 +219,7 @@ fun AppNavigation() {
                     onReceive = { navController.navigate("receive") },
                     onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
                     onAssetDetail = { assetId -> navController.navigate("asset_detail/$assetId") },
+                    onTxHistory = { navController.navigate("tx_history") },
                 )
             }
             composable("send") { backStackEntry ->
@@ -279,6 +281,12 @@ fun AppNavigation() {
             composable("tx_detail/{txId}") { backStackEntry ->
                 val txId = backStackEntry.arguments?.getString("txId") ?: ""
                 TransactionDetailScreen(txId = txId, onBack = { navController.popBackStack() })
+            }
+            composable("tx_history") {
+                TransactionHistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                )
             }
             composable(
                 "asset_detail/{assetId}",

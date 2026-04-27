@@ -141,6 +141,7 @@ fun WalletScreen(
     onReceive: () -> Unit = {},
     onTxDetail: (String) -> Unit = {},
     onAssetDetail: (Int) -> Unit = {},
+    onTxHistory: () -> Unit = {},
 ) {
     val context = LocalContext.current
     TxRateStore.init(context)
@@ -675,7 +676,8 @@ fun WalletScreen(
                     }
                 }
             } else {
-                items(transactions, key = { it.txId }) { tx ->
+                val previewCount = 10
+                items(transactions.take(previewCount), key = { it.txId }) { tx ->
                     TxCard(
                         tx = tx,
                         assetInfoMap = assetInfoMap,
@@ -683,13 +685,38 @@ fun WalletScreen(
                         onClick = { onTxDetail(tx.txId) },
                     )
                 }
+                if (transactions.size > previewCount) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(C.card)
+                                .clickable { onTxHistory() }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "View All (${transactions.size} transactions)",
+                                    color = C.accent,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("→", color = C.accent, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TxCard(
+internal fun TxCard(
     tx: TxItem,
     assetInfoMap: Map<Int, AssetInfoEvent>,
     balanceHidden: Boolean,

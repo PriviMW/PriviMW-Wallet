@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.NodeReconnect
 // Old ProtocolStartup removed — using ChatService for identity
 import com.privimemobile.protocol.ProtocolStorage
 import com.privimemobile.protocol.SecureStorage
@@ -812,13 +813,23 @@ fun SettingsScreen(
                                     toast("Invalid format. Use hostname:port")
                                     return@Button
                                 }
-                                WalletManager.walletInstance?.changeNodeAddress(addr)
-                                WalletManager.walletInstance?.enableBodyRequests(false)
-                                SecureStorage.putString("node_mode", "own")
-                                SecureStorage.putString("own_node_address", addr)
-                                SecureStorage.storeNodeAddress(addr)
-                                showNodeInput = false
-                                toast("Connected to $addr")
+                                val port = parts[1].toIntOrNull()
+                                if (port == null || port !in 1..65535) {
+                                    toast("Invalid port number")
+                                    return@Button
+                                }
+                                try {
+                                    WalletManager.walletInstance?.changeNodeAddress(addr)
+                                    WalletManager.walletInstance?.enableBodyRequests(false)
+                                    NodeReconnect.clearFallbackNode()
+                                    SecureStorage.putString("node_mode", "own")
+                                    SecureStorage.putString("own_node_address", addr)
+                                    SecureStorage.storeNodeAddress(addr)
+                                    showNodeInput = false
+                                    toast("Connected to $addr")
+                                } catch (e: Exception) {
+                                    toast("Failed to connect: ${e.message}")
+                                }
                             }
                         },
                         shape = RoundedCornerShape(8.dp),

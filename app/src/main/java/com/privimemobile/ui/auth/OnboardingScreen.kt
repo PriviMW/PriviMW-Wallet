@@ -158,6 +158,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                         when {
                             password.length < 6 -> error = "Password must be at least 6 characters"
                             password != confirmPassword -> error = "Passwords don't match"
+                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = "Invalid node address. Use hostname:port with valid port (1-65535)"
                             else -> {
                                 error = null
                                 loading = true
@@ -326,6 +327,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                         when {
                             password.length < 6 -> error = "Password must be at least 6 characters"
                             password != confirmPassword -> error = "Passwords don't match"
+                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = "Invalid node address. Use hostname:port with valid port (1-65535)"
                             else -> {
                                 error = null
                                 loading = true
@@ -889,4 +891,13 @@ private fun LoadingScreen(message: String) {
             Text(message, color = C.textSecondary, fontSize = 16.sp)
         }
     }
+}
+
+/** Validate a user-provided node address: must contain exactly one colon with a numeric port (1-65535). */
+private fun isValidNodeAddress(addr: String): Boolean {
+    if (addr.isBlank()) return false
+    val parts = addr.split(":")
+    if (parts.size != 2) return false
+    val port = parts[1].toIntOrNull()
+    return port != null && port in 1..65535
 }

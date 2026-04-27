@@ -370,15 +370,35 @@ object NodeReconnect {
         when (savedNodeMode) {
             "own" -> {
                 // OWN NODE: retry user's node, switch to fallback after 3 failures
+                val ownAddr = savedOwnNodeAddr
+                if (ownAddr.isNullOrBlank()) {
+                    Log.w(TAG, "Own node mode but no address stored — switching to random")
+                    savedNodeMode = "random"
+                    if (nodePool.isEmpty()) return
+                    currentNodeIdx = (currentNodeIdx + 1) % nodePool.size
+                    val nextNode = nodePool[currentNodeIdx]
+                    try { wallet.changeNodeAddress(nextNode) } catch (_: Exception) {}
+                    return
+                }
+
                 if (failCount >= 3 && savedFallbackNode != null) {
                     // Already have a fallback — use it
-                    Log.d(TAG, "Own node failed 3+ times — switching to fallback: $savedFallbackNode")
-                    wallet.changeNodeAddress(savedFallbackNode!!)
+                    val fb = savedFallbackNode
+                    if (fb.isNullOrBlank()) {
+                        Log.w(TAG, "Fallback node is blank — picking new fallback")
+                        if (nodePool.isNotEmpty()) {
+                            currentNodeIdx = (currentNodeIdx + 1) % nodePool.size
+                            savedFallbackNode = nodePool[currentNodeIdx]
+                        }
+                    }
+                    val fallback = savedFallbackNode ?: return
+                    Log.d(TAG, "Own node failed 3+ times — switching to fallback: $fallback")
+                    try { wallet.changeNodeAddress(fallback) } catch (_: Exception) {}
                     WalletEventBus.emitNodeConnection(NodeConnectionEvent(connected = true, isFallback = true))
                 } else {
-                    Log.d(TAG, "Reconnecting to own node: $savedOwnNodeAddr")
+                    Log.d(TAG, "Reconnecting to own node: $ownAddr")
                     try {
-                        wallet.changeNodeAddress(savedOwnNodeAddr!!)
+                        wallet.changeNodeAddress(ownAddr)
                     } catch (e: Exception) {
                         Log.w(TAG, "Own node reconnect failed: ${e.message}")
                         // After 3 failures, pick a fallback node
@@ -419,6 +439,12 @@ object NodeReconnect {
                 }
             }
         }
+    }
+
+    /** Clear the cached fallback node so the next failure picks a fresh random node. */
+    fun clearFallbackNode() {
+        savedFallbackNode = null
+        Log.d(TAG, "Cleared saved fallback node")
     }
 
     /**

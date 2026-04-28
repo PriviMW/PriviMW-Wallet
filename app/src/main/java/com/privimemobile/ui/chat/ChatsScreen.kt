@@ -776,29 +776,32 @@ fun ChatsScreen(
                 animationSpec = tween(200),
                 label = "fabAlpha",
             )
-            Column(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                    .graphicsLayer { scaleX = fabScale; scaleY = fabScale; alpha = fabAlpha },
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.End,
-            ) {
-                // Small FAB - Create Group
-                SmallFloatingActionButton(
-                    onClick = onCreateGroup,
-                    containerColor = C.card,
-                    contentColor = C.accent,
-                    shape = CircleShape,
+            // Hide FABs while searching — they block the join button on search results
+            if (searchQuery.isBlank()) {
+                Column(
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                        .graphicsLayer { scaleX = fabScale; scaleY = fabScale; alpha = fabAlpha },
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Icon(Icons.Filled.Group, contentDescription = "Create Group", modifier = Modifier.size(20.dp))
-                }
-                // Main FAB - New Chat
-                FloatingActionButton(
-                    onClick = onNewChat,
-                    containerColor = C.accent,
-                    contentColor = C.textDark,
-                    shape = CircleShape,
-                ) {
-                    Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                    // Small FAB - Create Group
+                    SmallFloatingActionButton(
+                        onClick = onCreateGroup,
+                        containerColor = C.card,
+                        contentColor = C.accent,
+                        shape = CircleShape,
+                    ) {
+                        Icon(Icons.Filled.Group, contentDescription = "Create Group", modifier = Modifier.size(20.dp))
+                    }
+                    // Main FAB - New Chat
+                    FloatingActionButton(
+                        onClick = onNewChat,
+                        containerColor = C.accent,
+                        contentColor = C.textDark,
+                        shape = CircleShape,
+                    ) {
+                        Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                    }
                 }
             }
         }

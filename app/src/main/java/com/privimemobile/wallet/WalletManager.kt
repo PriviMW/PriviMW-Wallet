@@ -32,6 +32,8 @@ object WalletManager {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        // Background cleanup of C++ wallet core log files (unbounded growth — 3GB+/month)
+        Thread { cleanOldWalletLogs() }.start()
     }
 
     /** Returns the directory path (NOT file path) — C++ core appends /wallet.db internally. */
@@ -256,6 +258,33 @@ object WalletManager {
         if (file.exists()) {
             file.delete()
             Log.d(TAG, "Deleted recovery.bin")
+        }
+    }
+
+    /** C++ wallet core writes wallet_*.log to filesDir/logs/ every ~15-30 min with no cleanup.
+     * Keep the 5 most recent logs, delete the rest. */
+    private fun cleanOldWalletLogs() {
+        try {
+            val ctx = appContext ?: return
+            val logsDir = java.io.File(ctx.filesDir, "logs")
+            val files = logsDir.listFiles { f -> f.name.startsWith("wallet_") && f.name.endsWith(".log") }
+                ?: return
+            if (files.size <= 5) return
+            val sorted = files.sortedByDescending { it.lastModified() }
+            var freed = 0L
+            var deleted = 0
+            for (f in sorted.drop(5)) {
+                val len = f.length()
+                if (f.delete()) {
+                    freed += len
+                    deleted++
+                }
+            }
+            if (deleted > 0) {
+                Log.d(TAG, "cleanOldWalletLogs: deleted $deleted old logs, freed ${freed / 1024 / 1024} MB")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "cleanOldWalletLogs failed: ${e.message}")
         }
     }
 }

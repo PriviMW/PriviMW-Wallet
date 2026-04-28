@@ -484,7 +484,9 @@ fun AppNavigation() {
                     onLaunchDApp = { name, path, guid ->
                         navController.navigate(
                             "dapp_view/${java.net.URLEncoder.encode(name, "UTF-8")}/${java.net.URLEncoder.encode(path, "UTF-8")}/$guid"
-                        )
+                        ) {
+                            launchSingleTop = true
+                        }
                     },
                 )
             }

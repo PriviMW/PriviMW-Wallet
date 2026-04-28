@@ -4,6 +4,7 @@ import android.content.Intent
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,6 +69,7 @@ fun DAppsScreen(
     var dapps by remember { mutableStateOf(DAppManager.getInstalled(context)) }
     var refreshing by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
+    var launchingGuid by remember { mutableStateOf<String?>(null) }
 
     // Persisted order — load from prefs
     val prefs = context.getSharedPreferences("dapp_order", 0)
@@ -115,6 +117,9 @@ fun DAppsScreen(
     }
 
     fun handleLaunch(dapp: DApp) {
+        if (launchingGuid == dapp.guid) return
+        launchingGuid = dapp.guid
+
         scope.launch {
             try {
                 val updated = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -129,6 +134,8 @@ fun DAppsScreen(
             } catch (e: Exception) {
                 Log.w("DAppsScreen", "Update check failed: ${e.message}")
                 onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+            } finally {
+                launchingGuid = null
             }
         }
     }
@@ -249,7 +256,7 @@ fun DAppsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.weight(1f)) {
-                                DAppCard(dapp = dapp, onOpen = {}, onUninstall = { uninstallTarget = dapp })
+                                DAppCard(dapp = dapp, isLaunching = false, onOpen = {}, onUninstall = { uninstallTarget = dapp })
                             }
                             // Drag handle ≡
                             Box(
@@ -335,14 +342,17 @@ fun DAppsScreen(
                 ) {
                     items(orderedDapps.size, key = { orderedDapps[it].guid }) { index ->
                         val dapp = orderedDapps[index]
+                        val isLaunching = launchingGuid == dapp.guid
                         Box(
                             modifier = Modifier.combinedClickable(
+                                enabled = !isLaunching,
                                 onClick = { handleLaunch(dapp) },
                                 onLongClick = { editMode = true },
                             ),
                         ) {
                             DAppCard(
                                 dapp = dapp,
+                                isLaunching = isLaunching,
                                 onOpen = {},
                                 onUninstall = { uninstallTarget = dapp },
                             )
@@ -415,16 +425,41 @@ fun DAppsScreen(
 @Composable
 private fun DAppCard(
     dapp: DApp,
+    isLaunching: Boolean,
     onOpen: () -> Unit,
     onUninstall: () -> Unit,
 ) {
     val context = LocalContext.current
 
+    // Pulse animation when launching — smooth 1s cycle, gentle alpha range
+    val pulseAlpha by if (isLaunching) {
+        val transition = rememberInfiniteTransition(label = "pulse")
+        transition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.5f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = EaseInOutCubic),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulseAlpha",
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = C.card),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLaunching) C.accent.copy(alpha = 0.06f) else C.card
+        ),
+        border = if (isLaunching) {
+            BorderStroke(
+                width = 2.dp,
+                color = C.accent.copy(alpha = pulseAlpha),
+            )
+        } else null,
     ) {
         Box {
         Row(

@@ -56,7 +56,7 @@ class DAppActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             ))
-            wv.launchDApp(name, path)
+            wv.launchDApp(name, path, guid)
         }
 
         Log.d(TAG, "Launched DApp '$name' (guid=$guid)")

@@ -38,6 +38,7 @@ class BeamDAppWebView(context: Context) : WebView(context) {
     private var dappAppDir: String = ""  // e.g., /data/.../dapps/{guid}/app
 
     private var backCallback: androidx.activity.OnBackPressedCallback? = null
+    private var trueDappRootPath: String = "" // canonical path of dapps/{guid}/ — for traversal guard
 
     init {
         setupWebView()
@@ -125,14 +126,20 @@ class BeamDAppWebView(context: Context) : WebView(context) {
         WebView.setWebContentsDebuggingEnabled(com.privimemobile.BuildConfig.DEBUG)
     }
 
-    /** Launch a DApp by name and URL */
-    fun launchDApp(name: String, sourceUri: String) {
+    /** Launch a DApp by name, URL, and GUID. */
+    fun launchDApp(name: String, sourceUri: String, guid: String) {
         this.appName = name
         this.isActive = true
         // Extract DApp's app/ directory from sourceUri for resolving absolute paths
         // sourceUri: file:///data/.../dapps/{guid}/app/index.html → dappAppDir: /data/.../dapps/{guid}/app
         val uriPath = android.net.Uri.parse(sourceUri).path ?: ""
         this.dappAppDir = uriPath.substringBeforeLast('/') // remove /index.html
+
+        // Derive the TRUE DApp root from context.filesDir (not from the potentially-traversed URI)
+        // This is critical for the path-traversal guard in shouldInterceptRequest.
+        val dappsDir = File(context.filesDir, "dapps")
+        val dappRoot = File(dappsDir, guid).canonicalFile
+        this.trueDappRootPath = dappRoot.path
 
         // Register this WebView as the active DApp response target
         DAppResponseRouter.setActiveWebView(this)
@@ -541,18 +548,18 @@ body { height: 100vh !important; margin: 0 !important; padding: 0 !important; ba
             // Prevents path traversal (e.g., ../../other-dapp/app/index.html) that could
             // let a malicious DApp read other DApps' source code or app data.
             var file = File(path)
-            if (dappAppDir.isNotEmpty()) {
-                val dappRoot = File(dappAppDir).parentFile  // {guid}/ directory
-                val dappRootPath = dappRoot?.canonicalPath ?: ""
+            val rootPath = trueDappRootPath
+            if (rootPath.isNotEmpty()) {
+                val dappRoot = File(rootPath)
 
                 if (!file.exists()) {
                     // Try resolving relative to app/ dir first, then DApp root
                     val resolved = File(dappAppDir, path.trimStart('/'))
-                    val resolvedRoot = if (dappRoot != null) File(dappRoot, path.trimStart('/')) else null
+                    val resolvedRoot = File(dappRoot, path.trimStart('/'))
 
                     if (resolved.exists()) {
                         file = resolved
-                    } else if (resolvedRoot != null && resolvedRoot.exists()) {
+                    } else if (resolvedRoot.exists()) {
                         file = resolvedRoot
                     } else {
                         Log.w(TAG, "File not found: $path")
@@ -562,8 +569,8 @@ body { height: 100vh !important; margin: 0 !important; padding: 0 !important; ba
 
                 // Verify resolved path is within the DApp's directory (prevent traversal)
                 val canonicalPath = file.canonicalPath
-                if (dappRootPath.isNotEmpty() && !canonicalPath.startsWith(dappRootPath + File.separator) && canonicalPath != dappRootPath) {
-                    Log.w(TAG, "Path traversal BLOCKED: $path → $canonicalPath (outside $dappRootPath)")
+                if (!canonicalPath.startsWith(rootPath + File.separator) && canonicalPath != rootPath) {
+                    Log.w(TAG, "Path traversal BLOCKED: $path → $canonicalPath (outside $rootPath)")
                     return null
                 }
             } else if (!file.exists()) {

@@ -69,7 +69,7 @@ object DAppWebViewHolder {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            it.launchDApp(name, path)
+            it.launchDApp(name, path, guid)
         }
         activeWebView = wv
         activeGuid = guid

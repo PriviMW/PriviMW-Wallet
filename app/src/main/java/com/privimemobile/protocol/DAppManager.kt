@@ -114,6 +114,12 @@ object DAppManager {
 
         val manifest = if (manifestJson != null) JSONObject(manifestJson!!) else JSONObject()
 
+        val rawUrl = manifest.optString("url", "localapp/app/index.html")
+        val safeUrl = validateDAppUrl(rawUrl) ?: "localapp/app/index.html"
+        if (safeUrl != rawUrl) {
+            Log.w(TAG, "Sanitized manifest url for $guid: '$rawUrl' → '$safeUrl'")
+        }
+
         val dapp = DApp(
             guid = guid,
             name = manifest.optString("name", fallbackName),
@@ -121,7 +127,7 @@ object DAppManager {
             version = manifest.optString("version", "1.0"),
             localPath = dappDir.absolutePath,
             icon = icon ?: fallbackIcon,
-            url = manifest.optString("url", "localapp/app/index.html"),
+            url = safeUrl,
         )
 
         // Add to installed list
@@ -153,7 +159,32 @@ object DAppManager {
     /** Get file:// launch URL for an installed DApp. */
     fun getLaunchUrl(dapp: DApp): String {
         val relativeUrl = dapp.url.removePrefix("localapp/")
-        return "file://${dapp.localPath}/$relativeUrl"
+        val resolved = File(dapp.localPath, relativeUrl).canonicalFile
+        val root = File(dapp.localPath).canonicalFile
+        val safe = if (
+            !resolved.path.startsWith(root.path + File.separator) &&
+            resolved.path != root.path
+        ) {
+            Log.e(TAG, "BLOCKED path traversal: ${dapp.url} → ${resolved.path} (outside ${root.path})")
+            File(dapp.localPath, "app/index.html").canonicalFile
+        } else resolved
+        return "file://${safe.path}"
+    }
+
+    /**
+     * Validate a DApp manifest url field.
+     * Rejects path traversal, absolute paths, and anything outside the DApp directory.
+     * Returns a safe url string, or null if the input is malicious.
+     */
+    private fun validateDAppUrl(url: String): String? {
+        if (url.isEmpty()) return "localapp/app/index.html"
+        // Reject path traversal sequences
+        if (url.contains("..") || url.contains("//")) return null
+        // Reject absolute paths
+        if (url.startsWith("/") || url.startsWith("\\")) return null
+        // Only allow relative paths within localapp/
+        if (!url.startsWith("localapp/") && url.contains("/")) return null
+        return url
     }
 }
 

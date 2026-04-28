@@ -22,6 +22,7 @@ import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.AssetInfoEvent
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletStatusEvent
 import com.privimemobile.wallet.assetTicker
@@ -53,6 +54,11 @@ fun AssetDetailScreen(
             if (event.assetId == assetId) assetStatus = event
         }
     }
+
+    // Exchange rates for fiat display
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
+    val currency = CurrencyManager.getPreferredCurrency()
+    val rate = exchangeRates["beam_$currency"] ?: 0.0
 
     // Asset info (name, unitName, etc.) — pre-populate from persistent cache
     val assetInfoMap = remember { mutableStateMapOf<Int, AssetInfoEvent>().apply {
@@ -166,8 +172,6 @@ fun AssetDetailScreen(
                 }
 
                 val totalBalance = assetStatus.available + assetStatus.shielded
-                val exchRates by WalletEventBus.exchangeRates.collectAsState()
-                val usdRate = exchRates["beam_usd"] ?: 0.0
 
                 // Divider
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 12.dp))
@@ -187,10 +191,10 @@ fun AssetDetailScreen(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                         )
-                        if (assetId == 0 && usdRate > 0) {
-                            val usd = formatUsd(totalAvailable, usdRate)
-                            if (usd != null) {
-                                Text("≈ $usd USD", color = C.textSecondary, fontSize = 12.sp)
+                        if (assetId == 0 && rate > 0) {
+                            val fiat = formatFiatCurrent(totalAvailable, rate)
+                            if (fiat != null) {
+                                Text("≈ $fiat", color = C.textSecondary, fontSize = 12.sp)
                             }
                         }
                     }
@@ -341,6 +345,13 @@ fun AssetDetailScreen(
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                         )
+                                        // Show fiat for BEAM entries on any asset screen
+                                        if (ca.assetId == 0 && rate > 0) {
+                                            val caFiat = formatFiatCurrent(displayAmt, rate)
+                                            if (caFiat != null) {
+                                                Text("≈ $caFiat", color = C.textSecondary, fontSize = 10.sp)
+                                            }
+                                        }
                                     }
                                 }
                             } else {
@@ -350,13 +361,12 @@ fun AssetDetailScreen(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                            }
-                            // USD at TX time
-                            if (assetId == 0) {
-                                val txRate = TxRateStore.get(tx.txId)
-                                val txUsd = formatUsd(tx.amount, txRate)
-                                if (txUsd != null) {
-                                    Text("≈ $txUsd USD", color = C.textSecondary, fontSize = 10.sp)
+                                // Fiat for non-contract BEAM TXs (only on BEAM screen)
+                                if (assetId == 0 && rate > 0) {
+                                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                                    if (txFiat != null) {
+                                        Text("≈ $txFiat", color = C.textSecondary, fontSize = 10.sp)
+                                    }
                                 }
                             }
                             Text(

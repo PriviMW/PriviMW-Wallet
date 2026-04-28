@@ -34,6 +34,8 @@ import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.NodeReconnect
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.CurrencyManager
+import com.privimemobile.wallet.PortfolioSnapshotStore
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
 import com.privimemobile.wallet.WalletStatusEvent
@@ -123,12 +125,13 @@ object TxRateStore {
     }
 }
 
-/** Format USD value for display. */
-internal fun formatUsd(groth: Long, rate: Double): String? {
-    if (rate <= 0) return null
-    val beam = Math.abs(groth.toDouble()) / 100_000_000.0
-    val usd = beam * rate
-    return if (usd < 0.01 && usd > 0) "< $0.01" else "$${String.format("%.2f", usd)}"
+/** Format fiat value in user's preferred currency. Pass explicit rate for Compose-observable usage. */
+internal fun formatFiatCurrent(groth: Long, rate: Double? = null): String? {
+    val currency = CurrencyManager.getPreferredCurrency()
+    val actualRate = rate ?: CurrencyManager.getRate(currency)
+    if (actualRate <= 0) return null
+    val value = groth.toDouble() / 100_000_000.0 * actualRate
+    return if (value > 0) CurrencyManager.formatFiat(value, currency) else null
 }
 
 /** Masked placeholder for hidden amounts. */
@@ -157,7 +160,8 @@ fun WalletScreen(
 
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
-    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
+    val currency = CurrencyManager.getPreferredCurrency()
+    val rate = exchangeRates["beam_$currency"] ?: 0.0
     val syncProgress by WalletEventBus.syncProgress.collectAsState()
     val nodeConnection by WalletEventBus.nodeConnection.collectAsState(
         initial = NodeConnectionEvent(connected = false)
@@ -416,33 +420,84 @@ fun WalletScreen(
                             Spacer(Modifier.height(8.dp))
                         }
 
-                        Text("Available", color = C.textSecondary, fontSize = 14.sp)
-                        Spacer(Modifier.height(4.dp))
-                        val balanceText = if (balanceHidden) MASKED
-                            else "${Helpers.formatBeam(beamStatus.available + beamStatus.shielded)} BEAM"
-                        val balanceFontSize = when {
-                            balanceText.length > 20 -> 22.sp
-                            balanceText.length > 16 -> 26.sp
-                            balanceText.length > 12 -> 30.sp
-                            else -> 36.sp
-                        }
-                        Text(
-                            text = balanceText,
-                            color = C.text,
-                            fontSize = balanceFontSize,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
+                        // Total portfolio fiat value
+                        val totalGroth = beamStatus.available + beamStatus.shielded
+                        val totalFiat = if (rate > 0) CurrencyManager.grothToFiat(totalGroth, currency, rate) else 0.0
 
-                        // USD equivalent
-                        if (beamUsdRate > 0) {
-                            val usdDisplay = if (balanceHidden) MASKED
-                                else "≈ $${String.format("%.2f", (beamStatus.available + beamStatus.shielded).toDouble() / 100_000_000.0 * beamUsdRate)} USD"
+                        if (!balanceHidden && rate > 0) {
+                            PortfolioSnapshotStore.saveSnapshot(totalGroth, exchangeRates)
+                            val fiatText = CurrencyManager.formatPortfolioValue(totalFiat, currency)
+                            androidx.compose.foundation.layout.BoxWithConstraints(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                val density = androidx.compose.ui.platform.LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerCharAt36 = with(density) { (18.sp).toPx() }
+                                val fitCount36 = (availPx / pxPerCharAt36).toInt()
+                                val fontSize = when {
+                                    fiatText.length > (fitCount36 * 1.0f).toInt() -> 22.sp
+                                    fiatText.length > (fitCount36 * 0.82f).toInt() -> 26.sp
+                                    fiatText.length > (fitCount36 * 0.68f).toInt() -> 30.sp
+                                    else -> 36.sp
+                                }
+                                Text(
+                                    text = fiatText,
+                                    color = C.text,
+                                    fontSize = fontSize,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
+                            }
+                            // 24h portfolio change (vs snapshot ~24 hours ago)
+                            val daily = PortfolioSnapshotStore.get24hChange(totalFiat, currency)
+                            if (daily != null) {
+                                val (diff, percent) = daily
+                                val isUp = diff >= 0
+                                val arrow = if (isUp) "↑" else "↓"
+                                val diffStr = CurrencyManager.formatFiat(diff, currency)
+                                val sign = if (isUp) "+" else ""
+                                val changeColor = if (isUp) C.incoming else C.outgoing
+                                Text(
+                                    text = "$arrow $sign$diffStr ($sign${String.format("%.2f", percent)}%)",
+                                    color = changeColor,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            } else {
+                                // Fallback: CoinGecko 24h market change until 24h snapshot exists
+                                val marketChange = exchangeRates["beam_${currency}_change"] ?: 0.0
+                                if (marketChange != 0.0) {
+                                    val isUp = marketChange >= 0
+                                    val arrow = if (isUp) "↑" else "↓"
+                                    val sign = if (isUp) "+" else ""
+                                    val changeColor = if (isUp) C.incoming else C.outgoing
+                                    Text(
+                                        text = "$arrow $sign${String.format("%.2f", marketChange)}%",
+                                        color = changeColor,
+                                    fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
+                            }
+                        } else if (balanceHidden) {
                             Text(
-                                text = usdDisplay,
-                                color = C.textSecondary,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(top = 2.dp),
+                                text = MASKED,
+                                color = C.text,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                        } else {
+                            // Rates not yet loaded — show loading placeholder
+                            Text(
+                                text = "Loading...",
+                                color = C.textMuted,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
                             )
                         }
 
@@ -575,11 +630,11 @@ fun WalletScreen(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            if (!balanceHidden && beamUsdRate > 0) {
-                                val cardUsd = formatUsd(beamStatus.available + beamStatus.shielded, beamUsdRate)
-                                if (cardUsd != null) {
+                            if (!balanceHidden && rate > 0) {
+                                val cardFiat = formatFiatCurrent(beamStatus.available + beamStatus.shielded, rate)
+                                if (cardFiat != null) {
                                     Text(
-                                        "≈ $cardUsd USD",
+                                        "≈ $cardFiat",
                                         color = C.textSecondary,
                                         fontSize = 11.sp,
                                     )
@@ -683,6 +738,7 @@ fun WalletScreen(
                         assetInfoMap = assetInfoMap,
                         balanceHidden = balanceHidden,
                         onClick = { onTxDetail(tx.txId) },
+                        exchangeRates = exchangeRates,
                     )
                 }
                 if (transactions.size > previewCount) {
@@ -721,7 +777,10 @@ internal fun TxCard(
     assetInfoMap: Map<Int, AssetInfoEvent>,
     balanceHidden: Boolean,
     onClick: () -> Unit,
+    exchangeRates: Map<String, Double> = emptyMap(),
 ) {
+    val currency = CurrencyManager.getPreferredCurrency()
+    val rate = exchangeRates["beam_$currency"] ?: 0.0
     val isSend = tx.sender
 
     // Status text — online SBBS waiting = "Waiting for receiver" (matches TransactionDetailScreen)
@@ -858,9 +917,9 @@ internal fun TxCard(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            if (!balanceHidden && ca.assetId == 0 && tx.usdRate > 0) {
-                                val caUsd = formatUsd(displayAmount, tx.usdRate)
-                                if (caUsd != null) Text("≈ $caUsd USD", color = C.textSecondary, fontSize = 11.sp)
+                            if (!balanceHidden && ca.assetId == 0 && rate > 0) {
+                                val caFiat = formatFiatCurrent(displayAmount, rate)
+                                if (caFiat != null) Text("≈ $caFiat", color = C.textSecondary, fontSize = 11.sp)
                             }
                         }
                     }
@@ -876,12 +935,12 @@ internal fun TxCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                // USD value at TX time (BEAM only, skip if contractAssets already showed it)
-                if (!balanceHidden && tx.assetId == 0 && tx.usdRate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
-                    val usdStr = formatUsd(tx.amount, tx.usdRate)
-                    if (usdStr != null) {
+                // Fiat value in preferred currency (BEAM only, skip if contractAssets already showed it)
+                if (!balanceHidden && tx.assetId == 0 && rate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
+                    val fiatStr = formatFiatCurrent(tx.amount, rate)
+                    if (fiatStr != null) {
                         Text(
-                            "≈ $usdStr USD",
+                            "≈ $fiatStr",
                             color = C.textSecondary,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(top = 1.dp),

@@ -53,6 +53,7 @@ fun TransactionHistoryScreen(
     onTxDetail: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
 
     // Export confirmation dialog
     var showExportDialog by remember { mutableStateOf(false) }
@@ -223,6 +224,7 @@ fun TransactionHistoryScreen(
                         assetInfoMap = assetInfoMap,
                         balanceHidden = balanceHidden,
                         onClick = { onTxDetail(tx.txId) },
+                        exchangeRates = exchangeRates,
                     )
                 }
             }

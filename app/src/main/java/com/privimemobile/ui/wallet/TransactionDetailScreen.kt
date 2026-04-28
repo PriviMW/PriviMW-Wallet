@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.assetTicker
 import org.json.JSONArray
@@ -96,6 +97,9 @@ private data class PaymentProof(
 @Composable
 fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
+    val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
+    val currency = CurrencyManager.getPreferredCurrency()
+    val rate = exchangeRates["beam_$currency"] ?: 0.0
     val clipboard = LocalClipboardManager.current
 
     val tx = remember(txJson, txId) {
@@ -286,12 +290,11 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                         )
-                        if (ca.assetId == 0) {
-                            val txRate = TxRateStore.get(tx.txId)
-                            val caUsd = formatUsd(displayAmount, txRate)
-                            if (caUsd != null) {
+                        if (ca.assetId == 0 && rate > 0) {
+                            val caFiat = formatFiatCurrent(displayAmount, rate)
+                            if (caFiat != null) {
                                 Text(
-                                    "≈ $caUsd USD at time of transaction",
+                                    "≈ $caFiat",
                                     color = C.textSecondary,
                                     fontSize = 13.sp,
                                     modifier = Modifier.padding(top = 2.dp),
@@ -312,13 +315,12 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                // USD at TX time
-                if (tx.assetId == 0) {
-                    val txRate = TxRateStore.get(tx.txId)
-                    val txUsd = formatUsd(tx.amount, txRate)
-                    if (txUsd != null) {
+                // Fiat value in preferred currency
+                if (tx.assetId == 0 && rate > 0) {
+                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                    if (txFiat != null) {
                         Text(
-                            "≈ $txUsd USD at time of transaction",
+                            "≈ $txFiat",
                             color = C.textSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(top = 2.dp),

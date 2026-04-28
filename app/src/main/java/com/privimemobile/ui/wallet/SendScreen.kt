@@ -28,6 +28,7 @@ import com.privimemobile.chat.ChatService
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
 import com.privimemobile.wallet.assetTicker
@@ -76,7 +77,8 @@ fun SendScreen(
     var amount by remember { mutableStateOf("") }
     var isUsdMode by remember { mutableStateOf(false) }
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
-    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
+    val currency = CurrencyManager.getPreferredCurrency()
+    val currencyRate = exchangeRates["beam_$currency"] ?: 0.0
     var comment by remember { mutableStateOf("") }
     var commentExpanded by remember { mutableStateOf(false) }
 
@@ -205,9 +207,9 @@ fun SendScreen(
         else -> FEE_REGULAR
     }
 
-    val amountGroth = if (isUsdMode && beamUsdRate > 0) {
-        val usdVal = amount.toDoubleOrNull() ?: 0.0
-        (usdVal / beamUsdRate * 100_000_000).toLong()
+    val amountGroth = if (isUsdMode && currencyRate > 0) {
+        val fiatVal = amount.toDoubleOrNull() ?: 0.0
+        (fiatVal / currencyRate * 100_000_000).toLong()
     } else Helpers.parseBeamToGroth(amount)
 
     // Validation — matches RN's 3-part check
@@ -568,10 +570,10 @@ fun SendScreen(
                     ),
                     singleLine = true,
                 )
-                if (selectedAssetId == 0 && beamUsdRate > 0) {
-                    // Toggle BEAM/USD
+                if (selectedAssetId == 0 && currencyRate > 0) {
+                    // Toggle BEAM / fiat currency
                     Text(
-                        if (isUsdMode) "USD" else "BEAM",
+                        if (isUsdMode) currency.uppercase() else "BEAM",
                         color = C.accent,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -591,14 +593,14 @@ fun SendScreen(
             }
 
             // Conversion display
-            if (selectedAssetId == 0 && beamUsdRate > 0 && amount.isNotEmpty()) {
+            if (selectedAssetId == 0 && currencyRate > 0 && amount.isNotEmpty()) {
                 val displayVal = amount.toDoubleOrNull() ?: 0.0
                 if (displayVal > 0) {
                     val convText = if (isUsdMode) {
                         "≈ ${Helpers.formatBeam(amountGroth)} BEAM"
                     } else {
-                        val usd = displayVal * beamUsdRate
-                        "≈ $${String.format("%.2f", usd)} USD"
+                        val fiat = displayVal * currencyRate
+                        "≈ ${CurrencyManager.formatFiat(fiat, currency)}"
                     }
                     Text(
                         convText,

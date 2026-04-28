@@ -27,6 +27,9 @@ object SecureStorage {
     const val KEY_LOCKOUT_UNTIL = "lockout_until_ts"
     const val KEY_DISMISSED_SWAP_HISTORY = "dismissed_swap_history"
     const val KEY_BALANCE_HIDDEN = "balance_hidden"
+    const val KEY_PREFERRED_CURRENCY = "preferred_currency"
+    const val KEY_CACHED_RATES = "cached_exchange_rates"
+    const val KEY_CACHED_RATES_TS = "cached_exchange_rates_ts"
 
     private var prefs: SharedPreferences? = null
 

@@ -48,6 +48,7 @@ import com.privimemobile.protocol.ShaderInvoker
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.BackgroundService
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
 import com.privimemobile.wallet.NodeConnectionEvent
@@ -565,6 +566,68 @@ fun SettingsScreen(
                                     )
                                     if (isSelected) {
                                         Text("\u2713", color = C.accent, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+            HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
+            // Currency picker
+            var showCurrencyPicker by remember { mutableStateOf(false) }
+            val currentCurrency = CurrencyManager.getPreferredCurrency()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showCurrencyPicker = true }
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Currency", color = C.text, fontSize = 15.sp)
+                Text("${currentCurrency.uppercase()} (${CurrencyManager.getLabel(currentCurrency)})", color = C.accent, fontSize = 15.sp)
+            }
+            if (showCurrencyPicker) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showCurrencyPicker = false },
+                    containerColor = C.card,
+                    title = { Text("Choose Currency", color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+                    text = {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        ) {
+                            CurrencyManager.SUPPORTED.forEach { (code, pair) ->
+                                val (label, symbol) = pair
+                                val isSelected = code == currentCurrency
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            CurrencyManager.setPreferredCurrency(code)
+                                            showCurrencyPicker = false
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "$symbol ${code.uppercase()}",
+                                        color = C.text,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.width(80.dp),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        label,
+                                        color = if (isSelected) C.accent else C.text,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isSelected) {
+                                        Text("\u2713", color = C.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }

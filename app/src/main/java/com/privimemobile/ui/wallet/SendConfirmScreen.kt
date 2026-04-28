@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.WalletEventBus
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +61,8 @@ fun SendConfirmScreen(
 
     val ticker = assetTicker(assetId)
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
-    val beamUsdRate = exchangeRates["beam_usd"] ?: 0.0
+    val currency = CurrencyManager.getPreferredCurrency()
+    val rate = exchangeRates["beam_$currency"] ?: 0.0
 
     // TX type passed from SendScreen — matches RN: "regular" = SBBS online, "offline" = offline
     val isOffline = txType == "offline"
@@ -242,9 +244,9 @@ fun SendConfirmScreen(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                         )
-                        if (assetId == 0 && beamUsdRate > 0) {
-                            val usd = formatUsd(amountGroth, beamUsdRate)
-                            if (usd != null) Text("≈ $usd USD", color = C.textSecondary, fontSize = 12.sp)
+                        if (assetId == 0 && rate > 0) {
+                            val fiat = formatFiatCurrent(amountGroth, rate)
+                            if (fiat != null) Text("≈ $fiat", color = C.textSecondary, fontSize = 12.sp)
                         }
                     }
                 }
@@ -258,10 +260,8 @@ fun SendConfirmScreen(
                             color = C.textSecondary,
                             fontSize = 14.sp,
                         )
-                        if (beamUsdRate > 0) {
-                            val feeUsd = formatUsd(fee, beamUsdRate)
-                            if (feeUsd != null) Text("≈ $feeUsd USD", color = C.textSecondary, fontSize = 11.sp)
-                        }
+                        val feeFiat = if (rate > 0) formatFiatCurrent(fee, rate) else null
+                        if (feeFiat != null) Text("≈ $feeFiat", color = C.textSecondary, fontSize = 11.sp)
                     }
                 }
                 HorizontalDivider(color = C.border, thickness = 1.dp)
@@ -276,10 +276,8 @@ fun SendConfirmScreen(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                             )
-                            if (beamUsdRate > 0) {
-                                val totalUsd = formatUsd(amountGroth + fee, beamUsdRate)
-                                if (totalUsd != null) Text("≈ $totalUsd USD", color = C.textSecondary, fontSize = 12.sp)
-                            }
+                            val totalFiat = if (rate > 0) formatFiatCurrent(amountGroth + fee, rate) else null
+                            if (totalFiat != null) Text("≈ $totalFiat", color = C.textSecondary, fontSize = 12.sp)
                         }
                     } else {
                         Column(horizontalAlignment = Alignment.End) {

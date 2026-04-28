@@ -50,7 +50,18 @@ class MessageProcessor(
         }
         val contractStartTs = state.contractStartTs
 
-        for (raw in rawMessages) {
+        // Sort by timestamp ascending so newest message is processed last
+        // and its preview wins the chat list preview. SBBS may deliver
+        // batches in reverse chronological order after reconnect.
+        val sorted = rawMessages.sortedBy { raw ->
+            val msg = raw as? Map<*, *> ?: return@sortedBy 0L
+            val payload = extractPayload(msg)
+            (payload?.get("ts") as? Number)?.toLong()
+                ?: (msg["timestamp"] as? Number)?.toLong()
+                ?: 0L
+        }
+
+        for (raw in sorted) {
             try {
                 val msg = raw as? Map<*, *> ?: continue
                 processOneMessage(msg, myHandle, contractStartTs)

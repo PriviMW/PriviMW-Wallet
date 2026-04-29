@@ -410,7 +410,7 @@ fun ChatScreen(
     var forwardingMsgs by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
 
     // All contacts for forward picker
-    val allContacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
+    val allContacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeDmContacts()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
     // 3-dot overflow menu
@@ -2231,6 +2231,8 @@ fun ChatScreen(
                     if (reversedMessages[i].id in skipIds) continue
                     val msg = reversedMessages[i]
                     if (msg.type != "file" || msg.file == null || !com.privimemobile.protocol.Helpers.isImageMime(msg.file.mime)) continue
+                    // Don't group images that have captions — captions need individual bubbles
+                    if (msg.text.isNotEmpty()) continue
                     // Collect consecutive images from same sender
                     val albumIds = mutableListOf(msg.id)
                     var j = i + 1
@@ -2239,7 +2241,8 @@ fun ChatScreen(
                         if (next.type == "file" && next.file != null &&
                             com.privimemobile.protocol.Helpers.isImageMime(next.file.mime) &&
                             next.sent == msg.sent &&
-                            kotlin.math.abs(next.timestamp - msg.timestamp) < 60
+                            kotlin.math.abs(next.timestamp - msg.timestamp) < 60 &&
+                            next.text.isEmpty()
                         ) {
                             albumIds.add(next.id)
                             skipIds.add(next.id)
@@ -5330,8 +5333,66 @@ fun ChatScreen(
                                                         if (state?.myHandle != null) {
                                                             val m = msgs.first()
                                                             val fwdFrom = if (m.sent) state.myHandle!! else m.from
-                                                            Log.d("ChatScreen", "Forward to group $targetGid: text=${m.text.take(20)}")
-                                                            com.privimemobile.chat.ChatService.groups.sendGroupMessage(targetGid, m.text, fwdFrom = fwdFrom, fwdTs = m.timestamp)
+                                                            val isFile = m.file != null
+                                                            val ts = System.currentTimeMillis() / 1000
+
+                                                            if (isFile) {
+                                                                val f = m.file!!
+                                                                val fileMeta = mutableMapOf<String, Any?>(
+                                                                    "name" to f.name, "size" to f.size,
+                                                                    "mime" to f.mime, "key" to f.key, "iv" to f.iv,
+                                                                )
+                                                                if (f.cid.isNotEmpty() && !f.cid.startsWith("inline-")) fileMeta["cid"] = f.cid
+                                                                if (f.data != null) fileMeta["data"] = f.data
+
+                                                                val payload = mutableMapOf<String, Any?>(
+                                                                    "v" to 1, "t" to "file", "ts" to ts,
+                                                                    "from" to state.myHandle, "to" to targetGid,
+                                                                    "dn" to (state.myDisplayName ?: ""),
+                                                                    "file" to fileMeta,
+                                                                    "fwd_from" to fwdFrom,
+                                                                    "fwd_ts" to m.timestamp,
+                                                                )
+                                                                if (m.text.isNotEmpty()) payload["msg"] = m.text
+
+                                                                val convId = com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(targetGid, targetName)
+                                                                val dedupKey = "$ts:fwd_file:${m.timestamp}:true"
+                                                                val entity = com.privimemobile.chat.db.entities.MessageEntity(
+                                                                    conversationId = convId,
+                                                                    text = if (m.text.isNotEmpty()) m.text else null,
+                                                                    timestamp = ts,
+                                                                    sent = true,
+                                                                    type = "file",
+                                                                    senderHandle = state.myHandle,
+                                                                    sbbsDedupKey = dedupKey,
+                                                                    fwdFrom = fwdFrom,
+                                                                    fwdTs = m.timestamp,
+                                                                )
+                                                                val msgId = com.privimemobile.chat.ChatService.db!!.messageDao().insert(entity)
+                                                                if (msgId > 0) {
+                                                                    com.privimemobile.chat.ChatService.db!!.attachmentDao().insert(
+                                                                        com.privimemobile.chat.db.entities.AttachmentEntity(
+                                                                            messageId = msgId,
+                                                                            conversationId = convId,
+                                                                            ipfsCid = f.cid.ifEmpty { "inline-${System.currentTimeMillis().toString(36)}" },
+                                                                            encryptionKey = f.key,
+                                                                            encryptionIv = f.iv,
+                                                                            fileName = f.name,
+                                                                            fileSize = f.size,
+                                                                            mimeType = f.mime,
+                                                                            inlineData = f.data,
+                                                                        )
+                                                                    )
+                                                                }
+                                                                val preview = if (m.text.isNotEmpty()) "📎 ${f.name.ifEmpty { "File" }}" else "📎 ${f.name.ifEmpty { "File" }}"
+                                                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(targetGid, ts, preview)
+
+                                                                com.privimemobile.chat.ChatService.groups.sendGroupPayload(targetGid, payload)
+                                                            } else {
+                                                                Log.d("ChatScreen", "Forward to group $targetGid: text=${m.text.take(20)}")
+                                                                com.privimemobile.chat.ChatService.groups.sendGroupMessage(targetGid, m.text, fwdFrom = fwdFrom, fwdTs = m.timestamp)
+                                                            }
+
                                                             withContext(Dispatchers.Main) {
                                                                 Toast.makeText(context, "Forwarded to $targetName", Toast.LENGTH_SHORT).show()
                                                             }
@@ -5345,11 +5406,26 @@ fun ChatScreen(
                                                 .padding(vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Box(
-                                                Modifier.size(36.dp).clip(CircleShape).background(C.accent),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Icon(Icons.Default.Group, null, tint = C.textDark, modifier = Modifier.size(20.dp))
+                                            val groupAvatarBmp = remember(grp.groupId) {
+                                                try {
+                                                    val f = java.io.File(context.filesDir, "group_avatars/${grp.groupId}.webp")
+                                                    if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+                                                } catch (_: Exception) { null }
+                                            }
+                                            if (groupAvatarBmp != null) {
+                                                androidx.compose.foundation.Image(
+                                                    bitmap = groupAvatarBmp.asImageBitmap(),
+                                                    contentDescription = grp.name,
+                                                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                                                    contentScale = ContentScale.Crop,
+                                                )
+                                            } else {
+                                                Box(
+                                                    Modifier.size(36.dp).clip(CircleShape).background(C.accent),
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Icon(Icons.Default.Group, null, tint = C.textDark, modifier = Modifier.size(20.dp))
+                                                }
                                             }
                                             Spacer(Modifier.width(10.dp))
                                             Column {
@@ -5452,23 +5528,24 @@ fun ChatScreen(
                                             .padding(vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        // Avatar circle
-                                        Box(
-                                            Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                                                .background(C.accent),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Text(
-                                                (contact.displayName?.ifEmpty { null } ?: contact.handle).first().uppercase(),
-                                                color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                                            )
-                                        }
+                                        com.privimemobile.ui.components.AvatarDisplay(
+                                            handle = contact.handle,
+                                            displayName = contact.displayName,
+                                            size = 36.dp,
+                                        )
                                         Spacer(Modifier.width(10.dp))
                                         Column {
-                                            Text("@${contact.handle}", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                            if (!contact.displayName.isNullOrEmpty()) {
-                                                Text(contact.displayName!!, color = C.textSecondary, fontSize = 12.sp)
-                                            }
+                                            Text(
+                                                contact.displayName?.ifEmpty { null } ?: contact.handle,
+                                                color = C.text,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                            Text(
+                                                "@${contact.handle}",
+                                                color = C.textSecondary,
+                                                fontSize = 12.sp,
+                                            )
                                         }
                                     }
                                     HorizontalDivider(color = C.border, thickness = 0.5.dp)

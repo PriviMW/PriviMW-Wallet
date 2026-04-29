@@ -127,6 +127,46 @@ object WalletApi {
     }
 
     /**
+     * Direct wallet API call — bypasses DApp sandbox restrictions.
+     * Same as desktop/CLI wallet API. Use for methods like tx_split
+     * that are blocked in the DApp bridge.
+     */
+    fun callDirect(
+        method: String,
+        params: Map<String, Any?> = emptyMap(),
+        callback: ((Map<String, Any?>) -> Unit)? = null,
+    ): Int {
+        val wallet = WalletManager.walletInstance
+        if (wallet == null || !com.mw.beam.beamwallet.core.Api.isWalletRunning()) {
+            Log.w(TAG, "callDirect($method): wallet not available")
+            callback?.invoke(mapOf("error" to mapOf("message" to "Wallet not connected")))
+            return -1
+        }
+
+        val id = ++callIdCounter
+        if (callback != null) {
+            callbacks[id] = CallbackInfo(method, callback)
+        }
+
+        try {
+            val payload = JSONObject().apply {
+                put("jsonrpc", "2.0")
+                put("id", id)
+                put("method", method)
+                put("params", JSONObject(params))
+            }.toString()
+
+            Log.d(TAG, "→ $method (id=$id, direct, pending=${callbacks.size})")
+            wallet.callWalletApiDirect(payload)
+        } catch (e: Exception) {
+            callbacks.remove(id)
+            Log.e(TAG, "callDirect($method) failed: ${e.message}")
+            callback?.invoke(mapOf("error" to mapOf("message" to (e.message ?: "Unknown error"))))
+        }
+        return id
+    }
+
+    /**
      * Call with pre-built JSON params string — avoids JSONObject serialization for large data.
      * Use for IPFS operations with large byte arrays to prevent OOM.
      */
@@ -173,6 +213,19 @@ object WalletApi {
         params: Map<String, Any?> = emptyMap(),
     ): Map<String, Any?> = suspendCancellableCoroutine { cont ->
         val id = call(method, params) { result ->
+            if (cont.isActive) cont.resume(result)
+        }
+        cont.invokeOnCancellation {
+            if (id >= 0) callbacks.remove(id)
+        }
+    }
+
+    /** Direct version of [callAsync] — bypasses DApp sandbox. */
+    suspend fun callAsyncDirect(
+        method: String,
+        params: Map<String, Any?> = emptyMap(),
+    ): Map<String, Any?> = suspendCancellableCoroutine { cont ->
+        val id = callDirect(method, params) { result ->
             if (cont.isActive) cont.resume(result)
         }
         cont.invokeOnCancellation {

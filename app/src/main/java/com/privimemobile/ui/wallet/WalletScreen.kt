@@ -80,6 +80,7 @@ internal data class TxItem(
     val contractCids: String? = null,
     val contractAssets: List<ContractAsset> = emptyList(),
     val usdRate: Double = 0.0,
+    val selfTx: Boolean = false,
 )
 
 /** Per-asset spend/receive entry for contract TXs (like beam-ui's _contractSpend). */
@@ -242,6 +243,7 @@ fun WalletScreen(
                         }
                     } ?: emptyList(),
                     usdRate = TxRateStore.get(obj.optString("txId")),
+                    selfTx = obj.optBoolean("selfTx"),
                 )
             }.sortedByDescending { it.createTime }.also { txList ->
                 // Backfill USD rate for new TXs that don't have a stored rate
@@ -782,6 +784,7 @@ internal fun TxCard(
     val currency = CurrencyManager.getPreferredCurrency()
     val rate = exchangeRates["beam_$currency"] ?: 0.0
     val isSend = tx.sender
+    val isSelfTx = tx.selfTx
 
     // Status text — online SBBS waiting = "Waiting for receiver" (matches TransactionDetailScreen)
     val isOnlineTx = !tx.isShielded && !tx.isMaxPrivacy && !tx.isOffline && !tx.isPublicOffline
@@ -853,6 +856,7 @@ internal fun TxCard(
                     .background(
                         when {
                             tx.isDapps -> Color(0x269B59B6) // purple tint for contract TXs
+                            isSelfTx -> Color(0x26F0A030) // gold tint for self-transfers
                             isSend -> Color(0x26FF6B6B)
                             else -> Color(0x2625D4D0)
                         }
@@ -862,6 +866,7 @@ internal fun TxCard(
                 Text(
                     when {
                         tx.isDapps -> "\u2B22" // hexagon for contract
+                        isSelfTx -> "\u21C4" // arrows for self-transfer
                         isSend -> ">"
                         else -> "<"
                     },
@@ -878,6 +883,7 @@ internal fun TxCard(
                     buildString {
                         when {
                             tx.isDapps -> append(tx.appName ?: "DApp")
+                            isSelfTx -> append("Self-transfer")
                             isSend -> append("Sent")
                             else -> append("Received")
                         }
@@ -923,6 +929,13 @@ internal fun TxCard(
                             }
                         }
                     }
+                } else if (isSelfTx) {
+                    Text(
+                        text = maskedAmount(tx.amount) + " $assetLabel",
+                        color = C.textSecondary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 } else {
                     // Fallback: use sender flag (inverted for contract DApp TXs only, not tx_send tips)
                     val effectiveSend = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !isSend else isSend

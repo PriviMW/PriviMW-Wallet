@@ -112,6 +112,7 @@ fun AssetDetailScreen(
                     contractAssets = contractAssets.map { (cAssetId, amounts) ->
                         ContractAsset(assetId = cAssetId, sending = amounts.first, receiving = amounts.second)
                     },
+                    selfTx = obj.optBoolean("selfTx"),
                 )
             }.sortedByDescending { it.createTime }
         } catch (_: Exception) { emptyList() }
@@ -126,6 +127,9 @@ fun AssetDetailScreen(
     LaunchedEffect(Unit) {
         lockHours = SecureStorage.getInt("max_privacy_hours", 72)
     }
+
+    // Split coins sheet
+    var showSplitSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -145,7 +149,7 @@ fun AssetDetailScreen(
             colors = CardDefaults.cardColors(containerColor = C.card),
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                // Header: icon + name
+                // Header: icon + name + split button
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     com.privimemobile.ui.components.AssetIcon(assetId = assetId, ticker = assetName, size = 48.dp)
                     Spacer(Modifier.width(14.dp))
@@ -167,6 +171,26 @@ fun AssetDetailScreen(
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 )
                             }
+                        }
+                    }
+
+                    // Split coins button — BEAM only
+                    if (assetId == 0) {
+                        Surface(
+                            onClick = { showSplitSheet = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = C.accent.copy(alpha = 0.15f),
+                            border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(C.accent.copy(alpha = 0.5f))
+                            ),
+                        ) {
+                            Text(
+                                "Split",
+                                color = C.accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
                         }
                     }
                 }
@@ -267,9 +291,11 @@ fun AssetDetailScreen(
                 val effectiveOut = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
                 val isPending = tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS || tx.status == TxStatus.REGISTERING
                 val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
-                val amountColor = if (isFailed) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
+                val isSelf = tx.selfTx
+                val amountColor = if (isFailed) C.textSecondary else if (isSelf) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
                 val peerAddr = when {
                     tx.isDapps -> tx.appName ?: "DApp"
+                    isSelf -> "Self"
                     tx.peerId.isNotEmpty() -> if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
                     else -> "—"
                 }
@@ -308,6 +334,8 @@ fun AssetDetailScreen(
                                 buildString {
                                     if (tx.isDapps) {
                                         append(tx.appName ?: "DApp")
+                                    } else if (isSelf) {
+                                        append("Self-transfer")
                                     } else {
                                         append(if (tx.sender) "Sent" else "Received")
                                     }
@@ -354,6 +382,13 @@ fun AssetDetailScreen(
                                         }
                                     }
                                 }
+                            } else if (isSelf) {
+                                Text(
+                                    "${Helpers.formatBeam(tx.amount)} $assetName",
+                                    color = C.textSecondary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
                             } else {
                                 Text(
                                     "${if (effectiveOut) "−" else "+"}${Helpers.formatBeam(tx.amount)} $assetName",
@@ -392,6 +427,15 @@ fun AssetDetailScreen(
         }
 
         Spacer(Modifier.height(40.dp))
+    }
+
+    // Split coins bottom sheet
+    if (showSplitSheet) {
+        SplitCoinsSheet(
+            assetId = 0,
+            assetTicker = assetName,
+            onDismiss = { showSplitSheet = false },
+        )
     }
 }
 

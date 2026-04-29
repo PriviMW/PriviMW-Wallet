@@ -39,8 +39,9 @@ data class Wallet(val _this: Long) {
     external fun isAddress(address: String): Boolean
     external fun getTransactionParameters(token: String, requestInfo: Boolean): TransactionParametersDTO?
 
-    // DApp / Contract API — this is the key method
+    // DApp / Contract API
     external fun callWalletApi(json: String)
+    external fun callWalletApiDirect(json: String)
     external fun contractInfoApproved(json: String)
     external fun contractInfoRejected(json: String)
     external fun appSupported(version: String, minVersion: String): Boolean

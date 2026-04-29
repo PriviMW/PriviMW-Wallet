@@ -165,6 +165,11 @@ object WalletManager {
         walletInstance?.callWalletApi(json)
     }
 
+    /** Direct wallet API call — bypasses DApp sandbox restrictions. */
+    fun callWalletApiDirect(json: String) {
+        walletInstance?.callWalletApiDirect(json)
+    }
+
     fun generateSeed(): List<String> {
         return Api.createMnemonic().toList()
     }

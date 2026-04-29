@@ -156,6 +156,7 @@ fun TransactionHistoryScreen(
                         }
                     } ?: emptyList(),
                     usdRate = TxRateStore.get(obj.optString("txId")),
+                    selfTx = obj.optBoolean("selfTx"),
                 )
             }.sortedByDescending { it.createTime }.also { txList ->
                 val currentRate = WalletEventBus.exchangeRates.value["beam_usd"] ?: 0.0

@@ -303,9 +303,28 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                         }
                     }
                 }
+            } else if (isSelf) {
+                Text(
+                    text = "Self-transfer",
+                    color = C.textSecondary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${Helpers.formatBeam(tx.amount)} $ticker",
+                    color = C.text,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Fee: ${Helpers.formatBeam(tx.fee)} $ticker",
+                    color = C.textSecondary,
+                    fontSize = 13.sp,
+                )
             } else {
                 val sign = when {
-                    isSelf -> ""
                     isOutgoing -> "-"
                     else -> "+"
                 }
@@ -345,7 +364,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 color = badgeBg,
             ) {
                 Text(
-                    text = if (isSelf) "Sending to own address" else statusText,
+                    text = if (isSelf) "Self-transfer" else statusText,
                     color = badgeTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,

@@ -289,27 +289,45 @@ object WalletListener {
         }
     }
 
-    @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
-    @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
-    @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
-    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) { utxos?.let { serializeAndEmitUtxos(it) } }
+    // Accumulated UTXOs merged across callbacks — partial callbacks (normal, shielded)
+    // fire in sequence and would overwrite each other if emitted independently.
+    // Instead we merge into this map and emit the union. onAllUtxoChanged resets it.
+    private val mergedUtxos = java.util.concurrent.ConcurrentHashMap<Long, JSONObject>()
 
-    private fun serializeAndEmitUtxos(utxos: Array<UtxoDTO>) {
-        val arr = JSONArray()
-        utxos.forEach { u ->
-            val obj = JSONObject()
-            obj.put("id", u.id)
-            obj.put("stringId", u.stringId)
-            obj.put("amount", u.amount)
-            obj.put("status", u.status)
-            obj.put("maturity", u.maturity)
-            obj.put("confirmHeight", u.confirmHeight)
-            obj.put("createTxId", u.createTxId ?: "")
-            obj.put("spentTxId", u.spentTxId ?: "")
-            obj.put("assetId", u.assetId)
-            obj.put("isShielded", u.isShielded)
-            arr.put(obj)
+    @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
+    @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
+    @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
+    @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) {
+        utxos?.let {
+            mergedUtxos.clear()
+            it.forEach { u -> mergedUtxos[u.id] = utxoToJson(u) }
+            emitMergedUtxos()
         }
+    }
+
+    private fun utxoToJson(u: UtxoDTO): JSONObject {
+        val obj = JSONObject()
+        obj.put("id", u.id)
+        obj.put("stringId", u.stringId)
+        obj.put("amount", u.amount)
+        obj.put("status", u.status)
+        obj.put("maturity", u.maturity)
+        obj.put("confirmHeight", u.confirmHeight)
+        obj.put("createTxId", u.createTxId ?: "")
+        obj.put("spentTxId", u.spentTxId ?: "")
+        obj.put("assetId", u.assetId)
+        obj.put("isShielded", u.isShielded)
+        return obj
+    }
+
+    private fun mergeAndEmitUtxos(utxos: Array<UtxoDTO>) {
+        utxos.forEach { u -> mergedUtxos[u.id] = utxoToJson(u) }
+        emitMergedUtxos()
+    }
+
+    private fun emitMergedUtxos() {
+        val arr = JSONArray()
+        mergedUtxos.values.forEach { arr.put(it) }
         uiHandler.post { WalletEventBus.emitUtxos(arr.toString()) }
     }
 

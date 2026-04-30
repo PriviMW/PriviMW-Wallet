@@ -102,6 +102,29 @@ object WalletEventBus {
         }
     }
     fun emitTransactions(json: String) { _transactions.value = json }
+
+    /** Merge incoming TXs into current state — prevents partial updates from overwriting the full list. */
+    fun mergeTransactions(json: String) {
+        try {
+            val incoming = org.json.JSONArray(json)
+            if (incoming.length() == 0) return
+            val current = org.json.JSONArray(_transactions.value)
+            val map = LinkedHashMap<String, org.json.JSONObject>()
+            for (i in 0 until current.length()) {
+                val obj = current.getJSONObject(i)
+                map[obj.getString("txId")] = obj
+            }
+            for (i in 0 until incoming.length()) {
+                val obj = incoming.getJSONObject(i)
+                map[obj.getString("txId")] = obj
+            }
+            val merged = org.json.JSONArray()
+            map.values.sortedByDescending { it.optLong("createTime") }.forEach { merged.put(it) }
+            _transactions.value = merged.toString()
+        } catch (_: Exception) {
+            _transactions.value = json
+        }
+    }
     fun emitSyncProgress(event: SyncProgressEvent) { _syncProgress.value = event }
     fun emitNodeConnection(event: NodeConnectionEvent) { _nodeConnection.value = event }
     fun emitApiResult(json: String) { _apiResult.tryEmit(json) }

@@ -316,12 +316,17 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     color = C.text,
                     maxFontSize = 28,
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Fee: ${Helpers.formatBeam(tx.fee)} $ticker",
-                    color = C.textSecondary,
-                    fontSize = 13.sp,
-                )
+                if (tx.assetId == 0 && rate > 0) {
+                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                    if (txFiat != null) {
+                        Text(
+                            "≈ $txFiat",
+                            color = C.textSecondary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
             } else {
                 val sign = when {
                     isOutgoing -> "-"

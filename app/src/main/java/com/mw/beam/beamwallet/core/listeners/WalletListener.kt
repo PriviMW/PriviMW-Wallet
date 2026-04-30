@@ -94,8 +94,6 @@ object WalletListener {
             obj.put("appName", t.appName ?: "")
             obj.put("appID", t.appID ?: "")
             obj.put("contractCids", t.contractCids ?: "")
-            // Per-asset contract spend breakdown (like beam-ui's _contractSpend)
-            // JNI now sends proper ArrayList<WalletStatusDTO> (fixed in wallet_model.cpp)
             if (t.isDapps) {
                 Log.d(TAG, "DApp TX '${t.appName}': sender=${t.sender}, amount=${t.amount}, assets=${t.assets?.javaClass?.name ?: "null"}, size=${t.assets?.size ?: -1}")
                 try {
@@ -120,7 +118,13 @@ object WalletListener {
             }
             arr.put(obj)
         }
-        uiHandler.post { WalletEventBus.emitTransactions(arr.toString()) }
+        val json = arr.toString()
+        uiHandler.post {
+            // action 3 = reset (full replace), otherwise merge to avoid partial updates
+            // wiping out the full transaction list (e.g. after sendTransaction).
+            if (action == 3) WalletEventBus.emitTransactions(json)
+            else WalletEventBus.mergeTransactions(json)
+        }
     }
 
     // === Sync Progress ===

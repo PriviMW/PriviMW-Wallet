@@ -222,19 +222,26 @@ fun AppNavigation() {
                     onTxHistory = { navController.navigate("tx_history") },
                 )
             }
-            composable("send") { backStackEntry ->
+            composable(
+                "send?assetId={assetId}",
+                arguments = listOf(
+                    navArgument("assetId") { type = NavType.IntType; defaultValue = 0 },
+                ),
+            ) { backStackEntry ->
                 // Read QR result passed back via savedStateHandle
                 val scannedAddress = backStackEntry.savedStateHandle
                     ?.getStateFlow<String?>("scanned_address", null)
                     ?.collectAsState()?.value
+                val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
                 SendScreen(
                     onBack = { navController.popBackStack() },
                     onSent = { navController.popBackStack() },
                     onScanQr = { navController.navigate("qr_scanner") },
                     scannedAddress = scannedAddress,
-                    onNavigateConfirm = { address, amount, fee, comment, assetId, txType ->
+                    initialAssetId = assetId,
+                    onNavigateConfirm = { address, amount, fee, comment, asset, txType ->
                         navController.navigate(
-                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$assetId/$txType"
+                            "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$asset/$txType"
                         )
                     },
                 )
@@ -296,7 +303,7 @@ fun AppNavigation() {
                 AssetDetailScreen(
                     assetId = assetId,
                     onBack = { navController.popBackStack() },
-                    onSend = { navController.navigate("send") },
+                    onSend = { navController.navigate("send?assetId=$assetId") },
                     onReceive = { navController.navigate("receive") },
                     onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
                 )

@@ -68,6 +68,7 @@ fun SendScreen(
     onSent: () -> Unit,
     onScanQr: () -> Unit = {},
     scannedAddress: String? = null,
+    initialAssetId: Int = 0,
     onNavigateConfirm: (address: String, amountGroth: Long, fee: Long, comment: String, assetId: Int, txType: String) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val beamStatus by WalletEventBus.beamStatus.collectAsState()
@@ -137,7 +138,7 @@ fun SendScreen(
         list.sortedBy { it.assetId }
     }
 
-    var selectedAssetId by remember { mutableIntStateOf(0) }
+    var selectedAssetId by remember { mutableIntStateOf(initialAssetId) }
     var assetPickerOpen by remember { mutableStateOf(false) }
     val selectedAsset = assetList.find { it.assetId == selectedAssetId } ?: assetList[0]
     val ticker = selectedAsset.ticker

@@ -362,11 +362,10 @@ fun WalletScreen(
                                 .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            // Status row — text centered, eye icon is corner overlay
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
+                            // Status + sync progress
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -379,7 +378,6 @@ fun WalletScreen(
                                         } else it },
                                 ) {
                                     if (isFallback) {
-                                        // Pulsing warning dot
                                         val pulse = rememberInfiniteTransition(label = "pulse").animateFloat(
                                             initialValue = 0.4f,
                                             targetValue = 1.0f,
@@ -406,21 +404,28 @@ fun WalletScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text(statusText, color = C.textSecondary, fontSize = 12.sp)
                                 }
-                            }
 
-                        // Sync progress bar
-                        if (isSyncing && syncProgress.total > 0) {
-                            LinearProgressIndicator(
-                                progress = { syncPercent / 100f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = C.warning,
-                                trackColor = C.border,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
+                                // Reserved space for sync progress — always 12dp so
+                                // content below never shifts when the bar appears/disappears.
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(12.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSyncing && syncProgress.total > 0) {
+                                        LinearProgressIndicator(
+                                            progress = { syncPercent / 100f },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(4.dp)
+                                                .clip(RoundedCornerShape(2.dp)),
+                                            color = C.warning,
+                                            trackColor = C.border,
+                                        )
+                                    }
+                                }
+                            }
 
                         // Total portfolio fiat value
                         val totalGroth = beamStatus.available + beamStatus.shielded

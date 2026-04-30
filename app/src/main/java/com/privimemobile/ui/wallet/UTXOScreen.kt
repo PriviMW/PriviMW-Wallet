@@ -16,7 +16,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Helpers
@@ -218,10 +220,34 @@ private fun SummaryItem(label: String, value: String, valueColor: Color, modifie
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(label, color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
-        Text(value, color = valueColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val density = LocalDensity.current
+            val availPx = with(density) { maxWidth.toPx() }
+            val pxPerChar = with(density) { (18.sp).toPx() }
+            val fitCount = (availPx / pxPerChar).toInt()
+            val fontSize = when {
+                value.length > (fitCount * 1.0f).toInt() -> 12.sp
+                value.length > (fitCount * 0.82f).toInt() -> 14.sp
+                value.length > (fitCount * 0.68f).toInt() -> 15.sp
+                else -> 16.sp
+            }
+            Text(
+                value,
+                color = valueColor,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

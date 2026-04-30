@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -209,12 +210,28 @@ fun AssetDetailScreen(
                 ) {
                     Text("Available", color = C.textSecondary, fontSize = 13.sp)
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "${Helpers.formatBeam(totalAvailable)} $assetName",
-                            color = C.text,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        val balText = "${Helpers.formatBeam(totalAvailable)} $assetName"
+                        BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (18.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val balFontSize = when {
+                                balText.length > (fitCount * 1.0f).toInt() -> 14.sp
+                                balText.length > (fitCount * 0.82f).toInt() -> 15.sp
+                                balText.length > (fitCount * 0.68f).toInt() -> 16.sp
+                                else -> 18.sp
+                            }
+                            Text(
+                                balText,
+                                color = C.text,
+                                fontSize = balFontSize,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         if (assetId == 0 && rate > 0) {
                             val fiat = formatFiatCurrent(totalAvailable, rate)
                             if (fiat != null) {

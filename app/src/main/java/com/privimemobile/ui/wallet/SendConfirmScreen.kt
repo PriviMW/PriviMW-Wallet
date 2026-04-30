@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -238,12 +239,28 @@ fun SendConfirmScreen(
                 // Amount
                 ConfirmRow("Amount") {
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "${Helpers.formatBeam(amountGroth)} $ticker",
-                            color = C.outgoing,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        val amtText = "${Helpers.formatBeam(amountGroth)} $ticker"
+                        BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (18.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val amtFontSize = when {
+                                amtText.length > (fitCount * 1.0f).toInt() -> 12.sp
+                                amtText.length > (fitCount * 0.82f).toInt() -> 14.sp
+                                amtText.length > (fitCount * 0.68f).toInt() -> 16.sp
+                                else -> 18.sp
+                            }
+                            Text(
+                                amtText,
+                                color = C.outgoing,
+                                fontSize = amtFontSize,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         if (assetId == 0 && rate > 0) {
                             val fiat = formatFiatCurrent(amountGroth, rate)
                             if (fiat != null) Text("≈ $fiat", color = C.textSecondary, fontSize = 12.sp)
@@ -270,23 +287,55 @@ fun SendConfirmScreen(
                 ConfirmRow("Total") {
                     if (assetId == 0) {
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "${Helpers.formatBeam(amountGroth + fee)} BEAM",
-                                color = C.text,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            val totalText = "${Helpers.formatBeam(amountGroth + fee)} BEAM"
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (18.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val totalFontSize = when {
+                                    totalText.length > (fitCount * 1.0f).toInt() -> 12.sp
+                                    totalText.length > (fitCount * 0.82f).toInt() -> 13.sp
+                                    totalText.length > (fitCount * 0.68f).toInt() -> 14.sp
+                                    else -> 16.sp
+                                }
+                                Text(
+                                    totalText,
+                                    color = C.text,
+                                    fontSize = totalFontSize,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             val totalFiat = if (rate > 0) formatFiatCurrent(amountGroth + fee, rate) else null
                             if (totalFiat != null) Text("≈ $totalFiat", color = C.textSecondary, fontSize = 12.sp)
                         }
                     } else {
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "${Helpers.formatBeam(amountGroth)} $ticker",
-                                color = C.text,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            val assetTotalText = "${Helpers.formatBeam(amountGroth)} $ticker"
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (18.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val assetTotalFontSize = when {
+                                    assetTotalText.length > (fitCount * 1.0f).toInt() -> 12.sp
+                                    assetTotalText.length > (fitCount * 0.82f).toInt() -> 13.sp
+                                    assetTotalText.length > (fitCount * 0.68f).toInt() -> 14.sp
+                                    else -> 16.sp
+                                }
+                                Text(
+                                    assetTotalText,
+                                    color = C.text,
+                                    fontSize = assetTotalFontSize,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Text(
                                 "+ ${Helpers.formatBeam(fee)} BEAM (fee)",
                                 color = C.textSecondary,

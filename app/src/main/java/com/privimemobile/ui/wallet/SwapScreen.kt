@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -377,7 +378,21 @@ fun SwapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.sendAssetId, ticker = sendTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                Text("${Helpers.formatBeam(order.sendAmount)} $sendTicker", color = C.outgoing, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                val sendText = "${Helpers.formatBeam(order.sendAmount)} $sendTicker"
+                                BoxWithConstraints(contentAlignment = Alignment.CenterStart) {
+                                    val density = LocalDensity.current
+                                    val availPx = with(density) { maxWidth.toPx() }
+                                    val pxPerChar = with(density) { (18.sp).toPx() }
+                                    val fitCount = (availPx / pxPerChar).toInt()
+                                    val sendFontSize = when {
+                                        sendText.length > (fitCount * 1.0f).toInt() -> 12.sp
+                                        sendText.length > (fitCount * 0.82f).toInt() -> 14.sp
+                                        sendText.length > (fitCount * 0.68f).toInt() -> 15.sp
+                                        else -> 16.sp
+                                    }
+                                    Text(sendText, color = C.outgoing, fontSize = sendFontSize, fontWeight = FontWeight.Bold,
+                                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }
@@ -397,7 +412,21 @@ fun SwapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.receiveAssetId, ticker = receiveTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                Text("${Helpers.formatBeam(order.receiveAmount)} $receiveTicker", color = C.incoming, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                val recvText = "${Helpers.formatBeam(order.receiveAmount)} $receiveTicker"
+                                BoxWithConstraints(contentAlignment = Alignment.CenterStart) {
+                                    val density = LocalDensity.current
+                                    val availPx = with(density) { maxWidth.toPx() }
+                                    val pxPerChar = with(density) { (18.sp).toPx() }
+                                    val fitCount = (availPx / pxPerChar).toInt()
+                                    val recvFontSize = when {
+                                        recvText.length > (fitCount * 1.0f).toInt() -> 12.sp
+                                        recvText.length > (fitCount * 0.82f).toInt() -> 14.sp
+                                        recvText.length > (fitCount * 0.68f).toInt() -> 15.sp
+                                        else -> 16.sp
+                                    }
+                                    Text(recvText, color = C.incoming, fontSize = recvFontSize, fontWeight = FontWeight.Bold,
+                                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }

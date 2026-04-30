@@ -25,9 +25,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -344,12 +346,28 @@ fun SplitCoinsSheet(
                     ) {
                         Text("Total Available", color = C.textSecondary, fontSize = 13.sp)
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "${Helpers.formatBeam(totalAvailable)} $assetTicker",
-                                color = C.text,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            val splitBalText = "${Helpers.formatBeam(totalAvailable)} $assetTicker"
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (18.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val splitBalFontSize = when {
+                                    splitBalText.length > (fitCount * 1.0f).toInt() -> 14.sp
+                                    splitBalText.length > (fitCount * 0.82f).toInt() -> 15.sp
+                                    splitBalText.length > (fitCount * 0.68f).toInt() -> 16.sp
+                                    else -> 18.sp
+                                }
+                                Text(
+                                    splitBalText,
+                                    color = C.text,
+                                    fontSize = splitBalFontSize,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
 

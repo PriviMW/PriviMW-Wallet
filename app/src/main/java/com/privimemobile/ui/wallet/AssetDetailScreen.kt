@@ -155,23 +155,25 @@ fun AssetDetailScreen(
                     com.privimemobile.ui.components.AssetIcon(assetId = assetId, ticker = assetName, size = 48.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(assetName, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(assetName, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            if (assetId != 0) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = C.border,
+                                ) {
+                                    Text(
+                                        "ID: $assetId",
+                                        color = C.textSecondary,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                        }
                         if (fullName != assetName) {
                             Text(fullName, color = C.textSecondary, fontSize = 13.sp)
-                        }
-                        if (assetId != 0) {
-                            Spacer(Modifier.height(4.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = C.border,
-                            ) {
-                                Text(
-                                    "ID: $assetId",
-                                    color = C.textSecondary,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
                         }
                     }
 

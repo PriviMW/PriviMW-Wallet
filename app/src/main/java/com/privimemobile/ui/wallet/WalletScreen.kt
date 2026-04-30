@@ -677,7 +677,21 @@ fun WalletScreen(
                             com.privimemobile.ui.components.AssetIcon(assetId = asset.assetId, ticker = assetLabel, size = 36.dp)
                             Spacer(Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(assetLabel, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(assetLabel, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = C.border,
+                                    ) {
+                                        Text(
+                                            "ID: ${asset.assetId}",
+                                            color = C.textSecondary,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
                                 val subParts = mutableListOf<String>()
                                 if (asset.sending > 0) subParts.add("Sending: ${masked(asset.sending)}")
                                 if (asset.receiving > 0) subParts.add("Receiving: ${masked(asset.receiving)}")

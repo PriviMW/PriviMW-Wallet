@@ -17,10 +17,13 @@ object PortfolioSnapshotStore {
 
     private const val KEY_SNAPSHOTS = "portfolio_snapshots_v2"
     private const val MAX_AGE_DAYS = 30
+    private const val MAX_COUNT = 500
 
     /**
-     * Save a new snapshot. Skips write if too recent (<5 min) and balance change <1%.
-     * Updates the last snapshot if within 1 hour, otherwise appends new.
+     * Save a new snapshot. Appends at most once per hour unless the balance
+     * shifted by >5%, in which case it captures the change immediately.
+     * Never replaces existing snapshots — always appends — so the timeline
+     * has continuous coverage for the 24h change window.
      */
     fun saveSnapshot(beamGroth: Long, rates: Map<String, Double>) {
         val now = System.currentTimeMillis() / 1000
@@ -29,22 +32,19 @@ object PortfolioSnapshotStore {
 
         if (last != null) {
             val timeDiff = now - last.ts
-            val valueDiff = if (last.groth > 0)
-                kotlin.math.abs(beamGroth - last.groth).toDouble() / last.groth.toDouble()
-            else 1.0
-            if (timeDiff < 300 && valueDiff < 0.01) return // skip: too recent and too similar
             if (timeDiff < 3600) {
-                snapshots[snapshots.lastIndex] = Snapshot(now, beamGroth, rates)
-            } else {
-                snapshots.add(Snapshot(now, beamGroth, rates))
+                val valueDiff = if (last.groth > 0)
+                    kotlin.math.abs(beamGroth - last.groth).toDouble() / last.groth.toDouble()
+                else 1.0
+                if (valueDiff < 0.05) return // already have a recent snapshot, no major change
             }
-        } else {
-            snapshots.add(Snapshot(now, beamGroth, rates))
         }
+
+        snapshots.add(Snapshot(now, beamGroth, rates))
 
         val cutoff = now - (MAX_AGE_DAYS * 24 * 3600)
         val pruned = snapshots.filter { it.ts >= cutoff }
-        putSnapshots(pruned)
+        putSnapshots(if (pruned.size > MAX_COUNT) pruned.takeLast(MAX_COUNT) else pruned)
     }
 
     /**

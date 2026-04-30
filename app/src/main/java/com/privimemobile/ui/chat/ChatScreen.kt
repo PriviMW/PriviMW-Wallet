@@ -138,6 +138,10 @@ import java.util.*
 private val openedChatSessions = mutableSetOf<String>()
 /** Saves scroll position per chat so re-entry preserves it. */
 private val chatScrollPositions = mutableMapOf<String, Pair<Int, Int>>()
+/** Saves badge floor per chat so re-entry preserves the seen-unread count. */
+private val chatBadgeFloors = mutableMapOf<String, Pair<Int, Int>>() // floor, version
+/** Saves initial unread count so re-entry preserves it (DB acked status is cleared by setActiveChat). */
+private val chatInitialUnread = mutableMapOf<String, Int>()
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -205,17 +209,17 @@ fun ChatScreen(
 
     val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"
 
-    // Track first open per session — only auto-scroll on first entry, not on re-entry
+    // Track first open per session
     val isFirstOpen = remember(convKey) { !openedChatSessions.contains(convKey) }
     if (isFirstOpen) openedChatSessions.add(convKey)
 
-    // Observe conversation reactively — updates when MessageProcessor creates it
+    // Observe conversation reactively
     val conversations by com.privimemobile.chat.ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
     val conv = conversations.firstOrNull { it.convKey == convKey }
     val convId = if (isGroupMode) (groupConvId ?: conv?.id ?: 0L) else (conv?.id ?: 0L)
 
-    // Messages from Room DB — automatically updates when convId changes
+    // Messages from Room DB
     val roomMessages by remember(convId) {
         if (convId > 0L) {
             com.privimemobile.chat.ChatService.db!!.messageDao().observeAll(convId)
@@ -516,33 +520,38 @@ fun ChatScreen(
     // Capture unread count before setActiveChat clears it (for "X new messages" divider)
     // Read directly from DB to avoid race with reactive Flow clearing
     // Use nullable to distinguish "not loaded yet" from "loaded, count = 0"
-    var initialUnreadCount by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(convId) {
-        // Reset to null when conversation changes, so scroll effect waits for correct count
-        initialUnreadCount = null
-        if (convId > 0L) {
-            initialUnreadCount = com.privimemobile.chat.ChatService.db?.messageDao()?.countUnread(convId) ?: 0
-        }
+    // Restore from persisted state on re-entry (DB acks are cleared by first visit's setActiveChat)
+    var initialUnreadCount by remember {
+        mutableStateOf<Int?>(chatInitialUnread[convKey])
     }
+    // Keep latest convId available for DisposableEffect (plain val isn't captured correctly)
+    val currentConvId by rememberUpdatedState(convId)
 
-    // Load draft on mount — read directly from DB to avoid reactive state race
-    LaunchedEffect(convId) {
+    // Capture unread count first, THEN mark chat as active.
+    // Sequencing is critical: setActiveChat sends acks which would make countUnread return 0.
+    LaunchedEffect(convId, handle, groupId) {
         if (convId > 0L) {
+            // Capture unread count BEFORE setActiveChat sends acks
+            if (chatInitialUnread[convKey] == null) {
+                initialUnreadCount = null
+                // Group chats track unread on GroupEntity, DMs track on ConversationEntity
+                initialUnreadCount = if (isGroupMode && groupId != null) {
+                    com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId!!)?.unreadCount ?: 0
+                } else {
+                    conv?.unreadCount ?:
+                        com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.unreadCount ?: 0
+                }
+            }
+            // Load draft
             val draft = com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.draftText
             if (!draft.isNullOrEmpty()) {
                 setInputText(draft)
             }
-        }
-    }
-
-    // Keep latest convId available for DisposableEffect (plain val isn't captured correctly)
-    val currentConvId by rememberUpdatedState(convId)
-
-    // Mark chat as active, clear unread, send read receipts
-    LaunchedEffect(handle, groupId) {
-        com.privimemobile.chat.ChatService.setActiveChat(convKey)
-        if (!isGroupMode) {
-            com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
+            // Set active chat (sends acks via internal scope.launch — async)
+            com.privimemobile.chat.ChatService.setActiveChat(convKey)
+            if (!isGroupMode) {
+                com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
+            }
         }
     }
     DisposableEffect(handle, groupId) {
@@ -568,6 +577,46 @@ fun ChatScreen(
     // Badge only counts messages newer than this that arrived while scrolled up.
     var lastBottomTimestamp by remember { mutableLongStateOf(0L) }
 
+    // Track message arrivals: version bumps when message count changes, so badge
+    // can distinguish "new messages arrived" (allow increase) from "scrolled up" (don't).
+    var newMsgVersion by remember { mutableIntStateOf(0) }
+    var lastMsgCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(messages.size) {
+        if (messages.size != lastMsgCount) {
+            lastMsgCount = messages.size
+            newMsgVersion++
+        }
+    }
+
+    // Badge floor: only decreases as user scrolls down. Resets when new messages arrive
+    // or user reaches bottom. This prevents scroll-up from re-incrementing the badge.
+    // Restore persisted floor on re-entry so the user sees the same count they left with.
+    var badgeFloor by remember {
+        mutableIntStateOf(chatBadgeFloors[convKey]?.first ?: Int.MAX_VALUE)
+    }
+    var badgeFloorVersion by remember {
+        mutableIntStateOf(chatBadgeFloors[convKey]?.second ?: -1)
+    }
+    LaunchedEffect(convId) {
+        if (convId > 0L && chatBadgeFloors[convKey] == null) {
+            badgeFloor = Int.MAX_VALUE
+            badgeFloorVersion = -1
+        }
+    }
+
+    // Persist badge floor and initial unread count when leaving, restore on re-entry
+    DisposableEffect(convKey) {
+        onDispose {
+            if (badgeFloor != Int.MAX_VALUE) {
+                chatBadgeFloors[convKey] = badgeFloor to badgeFloorVersion
+            }
+            val unread = initialUnreadCount
+            if (unread != null && unread > 0) {
+                chatInitialUnread[convKey] = unread
+            }
+        }
+    }
+
     // Initialize baseline when messages first load (covers first open and re-entry)
     LaunchedEffect(messages.isNotEmpty()) {
         if (messages.isNotEmpty() && lastBottomTimestamp == 0L) {
@@ -575,41 +624,77 @@ fun ChatScreen(
         }
     }
 
-    // Clear initialUnreadCount and update baseline when user scrolls to bottom (Telegram-style)
+    // Clear unread state only when the user transitions to the bottom (scrolls from >2 to <=2).
+    // Using a transition guard instead of hasScrolledInitially avoids edge cases on re-entry
+    // where the list starts at index 0 (restored position) and would clear immediately.
+    var prevFirstVisible by remember { mutableIntStateOf(Int.MAX_VALUE) }
     LaunchedEffect(listState.firstVisibleItemIndex, messages) {
-        if (listState.firstVisibleItemIndex <= 2 && messages.isNotEmpty()) {
+        val current = listState.firstVisibleItemIndex
+        if (current <= 2 && prevFirstVisible > 2 && prevFirstVisible != Int.MAX_VALUE && messages.isNotEmpty()) {
             lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
+            chatBadgeFloors.remove(convKey) // cleared at bottom, next re-entry starts fresh
+            chatInitialUnread.remove(convKey)
+            badgeFloor = Int.MAX_VALUE
             if (initialUnreadCount != null && initialUnreadCount!! > 0) {
                 initialUnreadCount = 0
             }
         }
+        prevFirstVisible = current
+    }
+
+    // Find the index in the reversed list of the last (oldest) unread received message.
+    // Scans from newest to oldest counting received messages until we hit initialUnreadCount.
+    // This correctly handles interleaved sent messages that would throw off a simple index.
+    val unreadBoundaryIndex = remember(messages, initialUnreadCount) {
+        val unread = initialUnreadCount ?: 0
+        if (unread <= 0) {
+            -1
+        } else {
+            var receivedCount = 0
+            var boundary = -1
+            // messages is ASC (oldest first), iterate newest first
+            for (i in messages.indices.reversed()) {
+                if (!messages[i].sent) {
+                    receivedCount++
+                    if (receivedCount == unread) {
+                        boundary = messages.size - 1 - i // convert to reversedLayout index
+                        break
+                    }
+                }
+            }
+            boundary
+        }
     }
 
     // Scroll behavior:
-    // - First open with unread: scroll to "new messages" divider
-    // - First open with no unread: scroll to bottom
-    // - Re-entry: don't auto-scroll, preserve position
-    // - New message arrives while at bottom: scroll to bottom (Telegram-style)
-    // - New message arrives while scrolled up: don't auto-scroll, badge shows count
+    // - First open + unread > 0: scroll to divider
+    // - First open + unread == 0: scroll to bottom
+    // - Re-entry + was at bottom + unread > 0: scroll to divider
+    // - Re-entry + was scrolled up + unread > 0: stay at saved position, badge shows
+    // - Re-entry + no unread: stay at saved position
+    // - New message while at bottom: auto-scroll to bottom
+    // - New message while scrolled up: don't auto-scroll, badge counts it
     LaunchedEffect(messages.size, initialUnreadCount) {
         if (messages.isNotEmpty() && scrollToTimestamp == 0L && initialUnreadCount != null) {
             if (!hasScrolledInitially) {
-                hasScrolledInitially = true
-                if (isFirstOpen) {
-                    val unread = initialUnreadCount!!
-                    if (unread > 0) {
-                        // Scroll to show the "new messages" divider
-                        // In reversed layout: index 0 = newest message (bottom)
-                        // Unread messages are at indices 0 to unread-1, divider shows after index unread-1
-                        listState.scrollToItem((unread - 1).coerceAtLeast(0))
-                    } else {
-                        // No unread - scroll to bottom (newest)
-                        listState.animateScrollToItem(0)
+                val unread = initialUnreadCount!!
+                val wasAtBottom = savedScroll == null || savedScroll.first <= 2
+                if (unread == 0) {
+                    hasScrolledInitially = true
+                    if (savedScroll == null) {
+                        listState.animateScrollToItem(0) // first open, no unread → bottom
                     }
+                    // re-entry, no unread → stay at saved position
+                } else if (unreadBoundaryIndex >= 0 && wasAtBottom) {
+                    hasScrolledInitially = true
+                    listState.scrollToItem(unreadBoundaryIndex)
+                } else if (unreadBoundaryIndex >= 0) {
+                    // unread > 0, wasAtBottom = false: stay at saved position
+                    hasScrolledInitially = true
                 }
+                // else: boundary not found, messages not loaded yet — wait
             } else {
-                // Chat is open, new message arrived - only scroll if user is at bottom
-                // If user scrolled up to read older messages, don't auto-scroll
+                // Chat is open, new message arrived — scroll if user is at bottom
                 if (listState.firstVisibleItemIndex <= 2) {
                     listState.animateScrollToItem(0)
                 }
@@ -2355,9 +2440,9 @@ fun ChatScreen(
                         }
                     }
 
-                    // "X new messages" unread divider
+                    // "X new messages" unread divider — shown at the boundary between read and unread
                     val unreadCount = initialUnreadCount ?: 0
-                    if (unreadCount > 0 && index == unreadCount - 1 && !msg.sent) {
+                    if (unreadBoundaryIndex >= 0 && index == unreadBoundaryIndex) {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                             contentAlignment = Alignment.Center,
@@ -2755,11 +2840,32 @@ fun ChatScreen(
         val showScrollButton by remember {
             derivedStateOf { listState.firstVisibleItemIndex > 3 }
         }
-        // Badge counts messages that arrived after the user left the bottom
-        val unreadBelow by remember(messages) {
+        // Badge: counts unseen messages below current scroll position.
+        // badgeFloor prevents re-increment on scroll-up: it only decreases as the user
+        // scrolls down. Resets when newMsgVersion changes (new messages arrived) or
+        // when user reaches the bottom.
+        val unreadBelow by remember(messages, reversedMessages) {
             derivedStateOf {
-                if (listState.firstVisibleItemIndex <= 2 || lastBottomTimestamp == 0L) return@derivedStateOf 0
-                messages.count { it.timestamp > lastBottomTimestamp && !it.sent }
+                @Suppress("UNUSED_EXPRESSION")
+                roomMessages.size // subscribe to new message arrivals
+                val current = listState.firstVisibleItemIndex
+                if (current <= 2) return@derivedStateOf 0
+                val unread = initialUnreadCount ?: 0
+                val raw = if (unread > 0) {
+                    reversedMessages.take(current).count { !it.sent }.coerceAtMost(unread)
+                } else {
+                    if (lastBottomTimestamp == 0L) 0
+                    else reversedMessages.take(current)
+                        .count { !it.sent && it.timestamp > lastBottomTimestamp }
+                }
+                // Reset floor when new messages arrive
+                if (newMsgVersion != badgeFloorVersion) {
+                    badgeFloor = raw
+                    badgeFloorVersion = newMsgVersion
+                }
+                // Floor only decreases (scroll-down), not increases (scroll-up)
+                if (raw <= badgeFloor) badgeFloor = raw
+                badgeFloor.coerceAtMost(raw)
             }
         }
         val scrollBtnScale by animateFloatAsState(

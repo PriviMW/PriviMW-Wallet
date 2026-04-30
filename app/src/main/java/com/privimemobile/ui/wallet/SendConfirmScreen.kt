@@ -261,8 +261,9 @@ fun SendConfirmScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (assetId == 0 && rate > 0) {
-                            val fiat = formatFiatCurrent(amountGroth, rate)
+                        if (rate > 0) {
+                            val fiat = if (assetId == 0) formatFiatCurrent(amountGroth, rate)
+                                       else CurrencyManager.assetToFiat(assetId, amountGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                             if (fiat != null) Text("≈ $fiat", color = C.textSecondary, fontSize = 12.sp)
                         }
                     }
@@ -336,11 +337,17 @@ fun SendConfirmScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
+                            if (rate > 0) {
+                                val assetFiat = CurrencyManager.assetToFiat(assetId, amountGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                                if (assetFiat != null) Text("≈ $assetFiat", color = C.textSecondary, fontSize = 11.sp)
+                            }
                             Text(
                                 "+ ${Helpers.formatBeam(fee)} BEAM (fee)",
                                 color = C.textSecondary,
                                 fontSize = 12.sp,
                             )
+                            val feeFiat = if (rate > 0) formatFiatCurrent(fee, rate) else null
+                            if (feeFiat != null) Text("≈ $feeFiat", color = C.textSecondary, fontSize = 11.sp)
                         }
                     }
                 }

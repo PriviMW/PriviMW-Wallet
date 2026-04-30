@@ -72,7 +72,7 @@ object ProtocolStartup {
 
         refreshWalletData()
 
-        // Fetch BEAM price from CoinGecko (repeat every 10 min)
+        // Fetch BEAM price from CoinGecko + DEX asset prices from BeamScreener (repeat every 10 min)
         scope.launch {
             while (true) {
                 try {
@@ -89,18 +89,30 @@ object ProtocolStartup {
                             conn.disconnect()
                         }
                     }
+                    val rates = mutableMapOf<String, Double>()
                     if (price != null) {
-                        val rates = mutableMapOf<String, Double>()
                         val currencies = vsCurrencies.split(",")
                         for (c in currencies) {
                             if (price.has(c)) rates["beam_$c"] = price.getDouble(c)
                             val changeKey = "${c}_24h_change"
                             if (price.has(changeKey)) rates["beam_${c}_change"] = price.getDouble(changeKey)
                         }
+                        Log.d(TAG, "CoinGecko rates: ${rates.filter { !it.key.endsWith("_change") }}")
+                    }
+
+                    // Fetch DEX-derived asset prices from BeamScreener
+                    try {
+                        val dexRates = withContext(Dispatchers.IO) { fetchDexAssetPrices() }
+                        rates.putAll(dexRates)
+                        if (dexRates.isNotEmpty()) Log.d(TAG, "DEX rates: $dexRates")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "DEX price fetch failed: ${e.message}")
+                    }
+
+                    if (rates.isNotEmpty()) {
                         WalletEventBus.emitExchangeRates(rates)
                         cacheRates(rates)
                         maybeSaveSnapshot()
-                        Log.d(TAG, "Exchange rates: ${rates.filter { !it.key.endsWith("_change") }}")
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Exchange rate fetch failed: ${e.message}")
@@ -174,6 +186,56 @@ object ProtocolStartup {
                 PortfolioSnapshotStore.saveSnapshot(totalGroth, rates)
             }
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Fetch DEX-derived asset/BEAM ratios from BeamScreener API.
+     * Returns map of:
+     *   "{assetId}_beam"     → how many BEAM per 1 human-readable unit of asset
+     *   "{assetId}_decimals" → decimal places for the asset
+     *   "{assetId}_beam_change" → 24h price change %
+     * The UI multiplies: humanBalance × beamRatio × beamRateInCurrency.
+     */
+    private fun fetchDexAssetPrices(): Map<String, Double> {
+        val url = java.net.URL("https://buybeam.my/dashboard/api/pairs?limit=200")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        try {
+            val json = conn.inputStream.bufferedReader().readText()
+            val data = org.json.JSONObject(json)
+            val pairs = data.optJSONArray("pairs") ?: return emptyMap()
+            val rates = mutableMapOf<String, Double>()
+            // Track which asset we already stored (pick the most liquid — highest TVL)
+            val seenTvl = mutableMapOf<Int, Double>()
+            for (i in 0 until pairs.length()) {
+                val pair = pairs.getJSONObject(i)
+                val aid1 = pair.optInt("aid1", -1)
+                val aid2 = pair.optInt("aid2", -1)
+                if (aid1 != 0 || aid2 <= 0) continue
+                val symbol = pair.optString("symbol2", "")
+                if (symbol.startsWith("LP-")) continue // skip AMM LP tokens
+
+                val tvl = pair.optDouble("tvl_usd", 0.0)
+                val prevTvl = seenTvl[aid2] ?: 0.0
+                if (prevTvl > 0 && tvl <= prevTvl) continue // keep the more liquid pool
+
+                val priceNative = pair.optDouble("price_native", 0.0)
+                if (priceNative <= 0) continue
+
+                seenTvl[aid2] = tvl
+                rates["${aid2}_beam"] = priceNative
+                rates["${aid2}_decimals"] = pair.optInt("decimals2", 8).toDouble()
+
+                val priceChange24h = pair.optDouble("price_change_24h", 0.0)
+                if (priceChange24h != 0.0) {
+                    rates["${aid2}_beam_change"] = priceChange24h
+                }
+            }
+            return rates
+        } finally {
+            conn.disconnect()
+        }
     }
 
     /** Persist exchange rates to SecureStorage. */

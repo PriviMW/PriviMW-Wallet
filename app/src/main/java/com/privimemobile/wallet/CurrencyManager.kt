@@ -100,5 +100,25 @@ object CurrencyManager {
         return groth.toDouble() / 100_000_000.0 * actualRate
     }
 
+    /**
+     * Convert raw asset units to fiat using DEX-derived pricing.
+     * Returns null if the asset has no known price.
+     *
+     * @param assetId the Beam asset ID
+     * @param rawAmount raw balance in smallest units (like groth for BEAM)
+     * @param currency target fiat currency code (e.g. "usd", "eur")
+     * @param beamRate preferred-currency BEAM rate (pass for Compose-observable; auto-reads if null)
+     * @return fiat double value, or null if unpriced
+     */
+    fun assetToFiat(assetId: Int, rawAmount: Long, currency: String, beamRate: Double? = null): Double? {
+        val rates = WalletEventBus.exchangeRates.value
+        val beamRatio = rates["${assetId}_beam"] ?: return null
+        if (beamRatio <= 0) return null
+        val actualBeamRate = beamRate ?: getRate(currency)
+        if (actualBeamRate <= 0) return null
+        val decimals = rates["${assetId}_decimals"]?.toInt() ?: 8
+        return rawAmount.toDouble() / Math.pow(10.0, decimals.toDouble()) * beamRatio * actualBeamRate
+    }
+
     const val KEY_PREFERRED_CURRENCY = "preferred_currency"
 }

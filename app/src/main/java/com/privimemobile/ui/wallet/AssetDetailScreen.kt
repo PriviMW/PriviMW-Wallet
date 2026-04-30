@@ -234,8 +234,9 @@ fun AssetDetailScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (assetId == 0 && rate > 0) {
-                            val fiat = formatFiatCurrent(totalAvailable, rate)
+                        if (rate > 0) {
+                            val fiat = if (assetId == 0) formatFiatCurrent(totalAvailable, rate)
+                                       else CurrencyManager.assetToFiat(assetId, totalAvailable, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                             if (fiat != null) {
                                 Text("≈ $fiat", color = C.textSecondary, fontSize = 12.sp)
                             }
@@ -392,9 +393,10 @@ fun AssetDetailScreen(
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                         )
-                                        // Show fiat for BEAM entries on any asset screen
-                                        if (ca.assetId == 0 && rate > 0) {
-                                            val caFiat = formatFiatCurrent(displayAmt, rate)
+                                        // Show fiat for priced assets
+                                        if (rate > 0) {
+                                            val caFiat = if (ca.assetId == 0) formatFiatCurrent(displayAmt, rate)
+                                                          else CurrencyManager.assetToFiat(ca.assetId, displayAmt, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                                             if (caFiat != null) {
                                                 Text("≈ $caFiat", color = C.textSecondary, fontSize = 10.sp)
                                             }
@@ -408,6 +410,13 @@ fun AssetDetailScreen(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
+                                if (rate > 0) {
+                                    val selfFiat = if (assetId == 0) formatFiatCurrent(tx.amount, rate)
+                                                    else CurrencyManager.assetToFiat(assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                                    if (selfFiat != null) {
+                                        Text("≈ $selfFiat", color = C.textSecondary, fontSize = 10.sp)
+                                    }
+                                }
                             } else {
                                 Text(
                                     "${if (effectiveOut) "−" else "+"}${Helpers.formatBeam(tx.amount)} $assetName",
@@ -415,9 +424,10 @@ fun AssetDetailScreen(
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                                // Fiat for non-contract BEAM TXs (only on BEAM screen)
-                                if (assetId == 0 && rate > 0) {
-                                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                                // Fiat for priced assets
+                                if (rate > 0) {
+                                    val txFiat = if (assetId == 0) formatFiatCurrent(tx.amount, rate)
+                                                  else CurrencyManager.assetToFiat(assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                                     if (txFiat != null) {
                                         Text("≈ $txFiat", color = C.textSecondary, fontSize = 10.sp)
                                     }

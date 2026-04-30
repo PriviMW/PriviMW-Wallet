@@ -290,8 +290,9 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             color = caColor,
                             maxFontSize = 28,
                         )
-                        if (ca.assetId == 0 && rate > 0) {
-                            val caFiat = formatFiatCurrent(displayAmount, rate)
+                        if (rate > 0) {
+                            val caFiat = if (ca.assetId == 0) formatFiatCurrent(displayAmount, rate)
+                                          else CurrencyManager.assetToFiat(ca.assetId, displayAmount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                             if (caFiat != null) {
                                 Text(
                                     "≈ $caFiat",
@@ -316,8 +317,9 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     color = C.text,
                     maxFontSize = 28,
                 )
-                if (tx.assetId == 0 && rate > 0) {
-                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                if (rate > 0) {
+                    val txFiat = if (tx.assetId == 0) formatFiatCurrent(tx.amount, rate)
+                                  else CurrencyManager.assetToFiat(tx.assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                     if (txFiat != null) {
                         Text(
                             "≈ $txFiat",
@@ -337,8 +339,9 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     color = amountColor,
                 )
                 // Fiat value in preferred currency
-                if (tx.assetId == 0 && rate > 0) {
-                    val txFiat = formatFiatCurrent(tx.amount, rate)
+                if (rate > 0) {
+                    val txFiat = if (tx.assetId == 0) formatFiatCurrent(tx.amount, rate)
+                                  else CurrencyManager.assetToFiat(tx.assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                     if (txFiat != null) {
                         Text(
                             "≈ $txFiat",

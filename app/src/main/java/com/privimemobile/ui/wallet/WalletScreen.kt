@@ -427,9 +427,25 @@ fun WalletScreen(
                                 }
                             }
 
-                        // Total portfolio fiat value
+                        // Total portfolio fiat value (BEAM + DEX-priced assets)
                         val totalGroth = beamStatus.available + beamStatus.shielded
-                        val totalFiat = if (rate > 0) CurrencyManager.grothToFiat(totalGroth, currency, rate) else 0.0
+                        var totalFiat = if (rate > 0) CurrencyManager.grothToFiat(totalGroth, currency, rate) else 0.0
+
+                        // Add non-BEAM assets: value = amount × beamRatio × beamRate
+                        if (rate > 0) {
+                            for ((assetId, status) in assetBalanceMap) {
+                                if (assetId == 0) continue
+                                val beamRatio = exchangeRates["${assetId}_beam"] ?: 0.0
+                                if (beamRatio > 0) {
+                                    val assetGroth = status.available + status.shielded
+                                    if (assetGroth > 0) {
+                                        val decimals = exchangeRates["${assetId}_decimals"]?.toInt() ?: 8
+                                        val humanBalance = assetGroth.toDouble() / Math.pow(10.0, decimals.toDouble())
+                                        totalFiat += humanBalance * beamRatio * rate
+                                    }
+                                }
+                            }
+                        }
 
                         if (!balanceHidden && rate > 0) {
                             PortfolioSnapshotStore.saveSnapshot(totalGroth, exchangeRates)
@@ -712,14 +728,31 @@ fun WalletScreen(
                                     )
                                 }
                             }
-                            Text(
-                                if (balanceHidden) MASKED
-                                else Helpers.formatBeam(asset.available + asset.shielded),
-                                color = C.text,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
+                            Column(
+                                horizontalAlignment = Alignment.End,
                                 modifier = Modifier.padding(start = 8.dp),
-                            )
+                            ) {
+                                Text(
+                                    if (balanceHidden) MASKED
+                                    else Helpers.formatBeam(asset.available + asset.shielded),
+                                    color = C.text,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                if (!balanceHidden) {
+                                    val beamRatio = exchangeRates["${asset.assetId}_beam"] ?: 0.0
+                                    if (beamRatio > 0 && rate > 0) {
+                                        val decimals = exchangeRates["${asset.assetId}_decimals"]?.toInt() ?: 8
+                                        val humanBalance = (asset.available + asset.shielded).toDouble() / Math.pow(10.0, decimals.toDouble())
+                                        val fiatValue = humanBalance * beamRatio * rate
+                                        Text(
+                                            "≈ ${CurrencyManager.formatFiat(fiatValue, currency)}",
+                                            color = C.textSecondary,
+                                            fontSize = 11.sp,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -942,8 +975,9 @@ internal fun TxCard(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            if (!balanceHidden && ca.assetId == 0 && rate > 0) {
-                                val caFiat = formatFiatCurrent(displayAmount, rate)
+                            if (!balanceHidden && rate > 0) {
+                                val caFiat = if (ca.assetId == 0) formatFiatCurrent(displayAmount, rate)
+                                              else CurrencyManager.assetToFiat(ca.assetId, displayAmount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                                 if (caFiat != null) Text("≈ $caFiat", color = C.textSecondary, fontSize = 11.sp)
                             }
                         }
@@ -967,9 +1001,10 @@ internal fun TxCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-                // Fiat value in preferred currency (BEAM only, skip if contractAssets already showed it)
-                if (!balanceHidden && tx.assetId == 0 && rate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
-                    val fiatStr = formatFiatCurrent(tx.amount, rate)
+                // Fiat value in preferred currency (skip if contractAssets already showed it)
+                if (!balanceHidden && rate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
+                    val fiatStr = if (tx.assetId == 0) formatFiatCurrent(tx.amount, rate)
+                                   else CurrencyManager.assetToFiat(tx.assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                     if (fiatStr != null) {
                         Text(
                             "≈ $fiatStr",

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,9 +20,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.protocol.Helpers
-import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
+import com.privimemobile.wallet.assetTicker
 import org.json.JSONArray
 
 // UTXO status codes from Beam C++ core
@@ -57,14 +58,13 @@ private enum class UtxoFilter(val label: String) {
 
 @Composable
 fun UTXOScreen(onBack: () -> Unit = {}) {
-    // Request UTXOs on mount
     LaunchedEffect(Unit) {
         try { com.privimemobile.wallet.WalletManager.walletInstance?.getAllUtxosStatus() } catch (_: Exception) {}
     }
 
-    // Listen for UTXO data from JNI onAllUtxoChanged callback
     val utxoJson by WalletEventBus.utxos.collectAsState()
     var filter by remember { mutableStateOf(UtxoFilter.ALL) }
+    var selectedAsset by remember { mutableIntStateOf(0) } // default to BEAM
 
     val utxos = remember(utxoJson) {
         try {
@@ -73,8 +73,21 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
         } catch (_: Exception) { emptyList() }
     }
 
-    val filtered = remember(utxos, filter) {
-        val list = when (filter) {
+    // Unique asset IDs from available UTXOs
+    val assetIds = remember(utxos) {
+        utxos.map { it.assetId }.distinct().sorted()
+    }
+
+    // Reset selected asset if it no longer exists
+    LaunchedEffect(assetIds) {
+        if (selectedAsset !in assetIds) {
+            selectedAsset = 0
+        }
+    }
+
+    // Filter by status + optionally by asset
+    val filtered = remember(utxos, filter, selectedAsset) {
+        val byStatus = when (filter) {
             UtxoFilter.ALL -> utxos
             UtxoFilter.AVAILABLE -> utxos.filter { it.status == UtxoStatus.AVAILABLE }
             UtxoFilter.MATURING -> utxos.filter {
@@ -86,36 +99,27 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
                         it.status == UtxoStatus.OUTGOING
             }
         }
+        val list = byStatus.filter { it.assetId == selectedAsset }
         list.sortedWith(compareBy<Utxo> { it.status }.thenByDescending { it.amount })
     }
 
-    val totalAvailable = utxos
-        .filter { it.status == UtxoStatus.AVAILABLE }
-        .sumOf { it.amount }
-
-    val totalMaturing = utxos
-        .filter { it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING }
-        .sumOf { it.amount }
+    // Per-asset totals
+    val scopeUtxos = utxos.filter { it.assetId == selectedAsset }
+    val scopeAvailable = scopeUtxos.filter { it.status == UtxoStatus.AVAILABLE }.sumOf { it.amount }
+    val scopeMaturing = scopeUtxos.filter { it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING }.sumOf { it.amount }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(C.bg),
     ) {
-        // Back button
-        TextButton(
-            onClick = onBack,
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-        ) {
+        TextButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
             Text("< Back", color = C.textSecondary)
         }
 
         // Summary card
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = C.card),
         ) {
@@ -123,36 +127,46 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummaryItem(
-                    label = "Available",
-                    value = Helpers.formatBeam(totalAvailable),
-                    valueColor = C.text,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(C.border),
-                )
-                SummaryItem(
-                    label = "Maturing",
-                    value = Helpers.formatBeam(totalMaturing),
-                    valueColor = C.warning,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(C.border),
-                )
-                SummaryItem(
-                    label = "Total UTXOs",
-                    value = utxos.size.toString(),
-                    valueColor = C.text,
-                    modifier = Modifier.weight(1f),
-                )
+                SummaryItem("Available", Helpers.formatBeam(scopeAvailable), C.text, Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(32.dp).background(C.border))
+                SummaryItem("Maturing", Helpers.formatBeam(scopeMaturing), C.warning, Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(32.dp).background(C.border))
+                SummaryItem("Total UTXOs", scopeUtxos.size.toString(), C.text, Modifier.weight(1f))
+            }
+        }
+
+        // Asset selector
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(assetIds.ifEmpty { listOf(0) }) { assetId ->
+                val isSelected = selectedAsset == assetId
+                val ticker = assetTicker(assetId)
+                Surface(
+                    onClick = { selectedAsset = assetId },
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSelected) C.accent else C.card,
+                    border = ButtonDefaults.outlinedButtonBorder(true).copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(if (isSelected) C.accent else C.border)
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        com.privimemobile.ui.components.AssetIcon(assetId = assetId, ticker = ticker, size = 16.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            ticker,
+                            color = if (isSelected) C.textDark else C.text,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
             }
         }
 
@@ -173,13 +187,11 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
         // UTXO list
         if (filtered.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(40.dp),
+                modifier = Modifier.fillMaxSize().padding(40.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (utxos.isEmpty()) "No UTXOs yet -- waiting for data..."
+                    text = if (utxos.isEmpty()) "No UTXOs yet — waiting for data..."
                     else "No UTXOs match this filter",
                     color = C.textSecondary,
                     fontSize = 14.sp,
@@ -202,12 +214,7 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
 }
 
 @Composable
-private fun SummaryItem(
-    label: String,
-    value: String,
-    valueColor: Color,
-    modifier: Modifier,
-) {
+private fun SummaryItem(label: String, value: String, valueColor: Color, modifier: Modifier) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -225,9 +232,7 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
         shape = RoundedCornerShape(8.dp),
         color = if (selected) Color(0x1A25D4D0) else Color.Transparent,
         border = ButtonDefaults.outlinedButtonBorder(true).copy(
-            brush = androidx.compose.ui.graphics.SolidColor(
-                if (selected) C.accent else C.border
-            )
+            brush = androidx.compose.ui.graphics.SolidColor(if (selected) C.accent else C.border)
         ),
     ) {
         Text(
@@ -259,10 +264,7 @@ private fun UtxoCard(utxo: Utxo) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(statusColor),
+                        modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor),
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -292,7 +294,9 @@ private fun UtxoCard(utxo: Utxo) {
 
             // Detail rows
             Spacer(Modifier.height(4.dp))
-
+            if (utxo.assetId != 0) {
+                UtxoDetailRow("Asset ID", "#${utxo.assetId}")
+            }
             if (utxo.isShielded) {
                 UtxoDetailRow("Type", "Shielded")
             }
@@ -315,18 +319,11 @@ private fun UtxoCard(utxo: Utxo) {
 @Composable
 private fun UtxoDetailRow(label: String, value: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, color = C.textSecondary.copy(alpha = 0.7f), fontSize = 12.sp)
-        Text(
-            value,
-            color = C.textSecondary,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
-        )
+        Text(value, color = C.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
     }
 }
 

@@ -132,8 +132,8 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
 
     // ---- Recalculate Receive from Pay ÷ Unit Price ----
     fun recalcReceive() {
-        val price = priceText.toDoubleOrNull() ?: return
-        val pay = payAmountText.toDoubleOrNull() ?: return
+        val price = priceText.replace(',', '.').toDoubleOrNull() ?: return
+        val pay = payAmountText.replace(',', '.').toDoubleOrNull() ?: return
         if (price <= 0 || pay <= 0) { receiveAmountText = ""; return }
         receiveAmountText = String.format("%.8f", pay / price).trimEnd('0').trimEnd { it == '.' || it == ',' }
         if (receiveAmountText.isEmpty()) receiveAmountText = "0"
@@ -141,16 +141,16 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
 
     // ---- Recalculate Price from Pay ÷ Receive ----
     fun recalcPrice() {
-        val pay = payAmountText.toDoubleOrNull() ?: return
-        val receive = receiveAmountText.toDoubleOrNull() ?: return
+        val pay = payAmountText.replace(',', '.').toDoubleOrNull() ?: return
+        val receive = receiveAmountText.replace(',', '.').toDoubleOrNull() ?: return
         if (pay <= 0 || receive <= 0) { priceText = ""; return }
         priceText = String.format("%.8f", pay / receive).trimEnd('0').trimEnd { it == '.' || it == ',' }
         if (priceText.isEmpty()) priceText = "0"
     }
 
     // Parse groth amounts
-    val payGroth = (payAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000
-    val receiveGroth = (receiveAmountText.toDoubleOrNull() ?: 0.0) * 100_000_000
+    val payGroth = (payAmountText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100_000_000
+    val receiveGroth = (receiveAmountText.replace(',', '.').toDoubleOrNull() ?: 0.0) * 100_000_000
 
     val canCreate = payGroth > 0 && receiveGroth > 0 &&
             sellAssetId != buyAssetId && payGroth.toLong() <= sellBalance && !creating
@@ -226,9 +226,9 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = priceText,
                         onValueChange = { raw ->
-                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
-                            val dotCount = filtered.count { it == '.' }
-                            if (dotCount > 1) return@OutlinedTextField
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' || c == ',' }
+                            val sepCount = filtered.count { it == '.' || it == ',' }
+                            if (sepCount > 1) return@OutlinedTextField
                             priceText = filtered
                             if (priceText.isNotEmpty() && payAmountText.isNotEmpty()) {
                                 recalcReceive()
@@ -283,9 +283,9 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = payAmountText,
                         onValueChange = { raw ->
-                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
-                            val dotCount = filtered.count { it == '.' }
-                            if (dotCount > 1) return@OutlinedTextField
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' || c == ',' }
+                            val sepCount = filtered.count { it == '.' || it == ',' }
+                            if (sepCount > 1) return@OutlinedTextField
                             payAmountText = filtered
                             if (payAmountText.isNotEmpty() && priceText.isNotEmpty()) {
                                 recalcReceive()
@@ -339,9 +339,9 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = receiveAmountText,
                         onValueChange = { raw ->
-                            val filtered = raw.filter { c -> c.isDigit() || c == '.' }
-                            val dotCount = filtered.count { it == '.' }
-                            if (dotCount > 1) return@OutlinedTextField
+                            val filtered = raw.filter { c -> c.isDigit() || c == '.' || c == ',' }
+                            val sepCount = filtered.count { it == '.' || it == ',' }
+                            if (sepCount > 1) return@OutlinedTextField
                             receiveAmountText = filtered
                             if (receiveAmountText.isNotEmpty() && priceText.isNotEmpty()) {
                                 recalcPrice()
@@ -369,7 +369,8 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             }
 
             // Rate bar (tappable to flip, default "1 BUY = X SELL")
-            if (priceText.toDoubleOrNull() != null && priceText.toDouble() > 0) {
+            val priceDouble = priceText.replace(',', '.').toDoubleOrNull()
+            if (priceDouble != null && priceDouble > 0) {
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.clickable { rateFlipped = !rateFlipped },
@@ -377,9 +378,9 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                 ) {
                     Text(
                         if (!rateFlipped) {
-                            "1 ${buyTicker()} = ${formatRate(priceText.toDouble())} ${sellTicker()}"
+                            "1 ${buyTicker()} = ${formatRate(priceDouble)} ${sellTicker()}"
                         } else {
-                            "1 ${sellTicker()} = ${formatRate(1.0 / priceText.toDouble())} ${buyTicker()}"
+                            "1 ${sellTicker()} = ${formatRate(1.0 / priceDouble)} ${buyTicker()}"
                         },
                         color = C.accent,
                         fontSize = 14.sp,

@@ -208,7 +208,7 @@ fun SendScreen(
     }
 
     val amountGroth = if (isUsdMode && currencyRate > 0) {
-        val fiatVal = amount.toDoubleOrNull() ?: 0.0
+        val fiatVal = amount.replace(',', '.').toDoubleOrNull() ?: 0.0
         (fiatVal / currencyRate * 100_000_000).toLong()
     } else Helpers.parseBeamToGroth(amount)
 
@@ -221,7 +221,7 @@ fun SendScreen(
 
     val amountError = when {
         amount.isEmpty() -> ""
-        (amount.toDoubleOrNull() ?: 0.0) <= 0.0 -> "Amount must be greater than 0"
+        (amount.replace(',', '.').toDoubleOrNull() ?: 0.0) <= 0.0 -> "Amount must be greater than 0"
         assetInsufficient -> "Insufficient $ticker balance"
         feeInsufficient -> "Insufficient BEAM for fee (need ${Helpers.formatBeam(fee)} BEAM)"
         beamInsufficient -> "Insufficient funds \u2014 need ${Helpers.formatBeam(amountGroth + fee - beamAvailable)} more BEAM"
@@ -548,10 +548,14 @@ fun SendScreen(
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { text ->
-                        val cleaned = text.replace(Regex("[^0-9.]"), "")
-                        val parts = cleaned.split(".")
-                        if (parts.size > 2) return@OutlinedTextField
-                        if (parts.size == 2 && parts[1].length > MAX_DECIMALS) return@OutlinedTextField
+                        val cleaned = text.replace(Regex("[^0-9.,]"), "")
+                        val sepCount = cleaned.count { it == '.' || it == ',' }
+                        if (sepCount > 1) return@OutlinedTextField
+                        val sep = cleaned.firstOrNull { it == '.' || it == ',' }
+                        if (sep != null) {
+                            val parts = cleaned.split(sep)
+                            if (parts.size == 2 && parts[1].length > MAX_DECIMALS) return@OutlinedTextField
+                        }
                         amount = cleaned
                     },
                     placeholder = { Text("0", color = C.textMuted) },
@@ -594,7 +598,7 @@ fun SendScreen(
 
             // Conversion display
             if (selectedAssetId == 0 && currencyRate > 0 && amount.isNotEmpty()) {
-                val displayVal = amount.toDoubleOrNull() ?: 0.0
+                val displayVal = amount.replace(',', '.').toDoubleOrNull() ?: 0.0
                 if (displayVal > 0) {
                     val convText = if (isUsdMode) {
                         "≈ ${Helpers.formatBeam(amountGroth)} BEAM"
@@ -629,7 +633,14 @@ fun SendScreen(
                         // Send All — BEAM: subtract fee; other assets: send full available
                         if (selectedAssetId == 0) {
                             val maxAmount = beamAvailable - fee
-                            if (maxAmount > 0) amount = Helpers.formatBeam(maxAmount)
+                            if (maxAmount > 0) {
+                                amount = if (isUsdMode && currencyRate > 0) {
+                                    val maxFiat = (maxAmount / 100_000_000.0) * currencyRate
+                                    String.format("%.2f", maxFiat).trimEnd('0').trimEnd { it == '.' || it == ',' }
+                                } else {
+                                    Helpers.formatBeam(maxAmount)
+                                }
+                            }
                         } else {
                             if (assetAvailable > 0) amount = Helpers.formatBeam(assetAvailable)
                         }

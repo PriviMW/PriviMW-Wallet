@@ -164,10 +164,10 @@ object Helpers {
         return String.format("%.8f", beam).trimEnd('0').trimEnd { it == '.' || it == ',' }
     }
 
-    /** Convert BEAM display string to groth. */
+    /** Convert BEAM display string to groth. Handles both '.' and ',' decimals. */
     fun parseBeamToGroth(beamStr: String): Long {
         return try {
-            (beamStr.toDouble() * 100_000_000).toLong()
+            (beamStr.replace(',', '.').toDouble() * 100_000_000).toLong()
         } catch (_: Exception) {
             0L
         }

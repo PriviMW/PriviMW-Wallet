@@ -508,7 +508,7 @@ object NativeTxApprovalDialog {
 
     private fun formatAmount(beamStr: String): String {
         return try {
-            val num = beamStr.toDouble()
+            val num = beamStr.replace(',', '.').toDouble()
             if (num == 0.0) "0"
             else String.format("%.8f", num).trimEnd('0').trimEnd { it == '.' || it == ',' }
         } catch (_: Exception) {

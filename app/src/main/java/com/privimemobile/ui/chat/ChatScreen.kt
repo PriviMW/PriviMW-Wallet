@@ -1092,7 +1092,7 @@ fun ChatScreen(
                 tipTokens = tokens
             }
 
-            val amountBeam = tipTokens.getOrNull(0)?.toDoubleOrNull()
+            val amountBeam = tipTokens.getOrNull(0)?.replace(',', '.')?.toDoubleOrNull()
             if (amountBeam == null || amountBeam <= 0) {
                 val usage = if (isGroupMode) "Usage: /tip @handle <amount> [asset_id] [message]"
                     else "Usage: /tip <amount> [asset_id] [message]"

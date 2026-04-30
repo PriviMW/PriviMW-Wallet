@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,11 +48,16 @@ fun AssetIcon(
     val drawableId = KNOWN_ASSET_ICONS[assetId]
         ?: FALLBACK_DRAWABLES[assetId % FALLBACK_DRAWABLES.size]
 
+    // BEAM logo is triangular + non-square (238×167) — scale down after clip so
+    // corners fit inside the full-size circle
+    val beamScale = if (assetId == 0) 0.88f else 1f
+
     Image(
         painter = painterResource(id = drawableId),
         contentDescription = ticker,
         modifier = modifier
             .size(size)
-            .clip(CircleShape),
+            .clip(CircleShape)
+            .graphicsLayer { scaleX = beamScale; scaleY = beamScale },
     )
 }

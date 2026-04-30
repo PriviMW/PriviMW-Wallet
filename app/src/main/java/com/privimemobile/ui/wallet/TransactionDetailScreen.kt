@@ -16,6 +16,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -284,11 +285,10 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     val caColor = if (isSpending) C.outgoing else C.incoming
                     val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else "BEAM"
                     if (displayAmount > 0) {
-                        Text(
+                        AutoSizeAmount(
                             text = "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
                             color = caColor,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
+                            maxFontSize = 28,
                         )
                         if (ca.assetId == 0 && rate > 0) {
                             val caFiat = formatFiatCurrent(displayAmount, rate)
@@ -311,11 +311,10 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
+                AutoSizeAmount(
                     text = "${Helpers.formatBeam(tx.amount)} $ticker",
                     color = C.text,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
+                    maxFontSize = 28,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -328,11 +327,9 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     isOutgoing -> "-"
                     else -> "+"
                 }
-                Text(
+                AutoSizeAmount(
                     text = "$sign${Helpers.formatBeam(tx.amount)} $ticker",
                     color = amountColor,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
                 )
                 // Fiat value in preferred currency
                 if (tx.assetId == 0 && rate > 0) {
@@ -717,6 +714,41 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun AutoSizeAmount(
+    text: String,
+    color: Color,
+    maxFontSize: Int = 32,
+    minFontSize: Int = 18,
+    fontWeight: FontWeight = FontWeight.Bold,
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        val density = LocalDensity.current
+        val availPx = with(density) { maxWidth.toPx() }
+        val pxPerChar = with(density) { (18.sp).toPx() }
+        val fitCount = (availPx / pxPerChar).toInt()
+        val fontSize = when {
+            text.length > (fitCount * 1.0f).toInt() -> minFontSize.sp
+            text.length > (fitCount * 0.82f).toInt() -> (minFontSize + 4).sp
+            text.length > (fitCount * 0.68f).toInt() -> (maxFontSize - 4).sp
+            else -> maxFontSize.sp
+        }
+
+        Text(
+            text = text,
+            color = color,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

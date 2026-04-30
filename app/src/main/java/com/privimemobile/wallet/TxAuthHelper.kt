@@ -12,6 +12,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -259,6 +260,17 @@ object TxAuthHelper {
 
         dialog.setContentView(overlay)
         dialog.setOnCancelListener { onRejected?.invoke() }
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        overlay.alpha = 0f
+        card.scaleX = 0.85f; card.scaleY = 0.85f; card.alpha = 0f
         dialog.show()
+
+        overlay.animate().alpha(1f).setDuration(200).start()
+        card.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(300).setStartDelay(50)
+            .setInterpolator(android.view.animation.OvershootInterpolator(0.8f))
+            .start()
     }
 }

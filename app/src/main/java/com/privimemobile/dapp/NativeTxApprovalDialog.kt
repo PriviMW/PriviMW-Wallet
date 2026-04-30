@@ -9,6 +9,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -258,7 +259,17 @@ object NativeTxApprovalDialog {
 
         dialog.setContentView(overlay)
         dialog.setOnCancelListener { reject(request) }
+
+        overlay.alpha = 0f
+        card.scaleX = 0.85f; card.scaleY = 0.85f; card.alpha = 0f
         dialog.show()
+
+        overlay.animate().alpha(1f).setDuration(200).start()
+        card.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(300).setStartDelay(50)
+            .setInterpolator(android.view.animation.OvershootInterpolator(0.8f))
+            .start()
 
         Log.d(TAG, "Showing native TX approval dialog")
     }
@@ -467,7 +478,18 @@ object NativeTxApprovalDialog {
 
         dialog.setContentView(overlay)
         dialog.setOnCancelListener { reject(request) }
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        overlay.alpha = 0f
+        card.scaleX = 0.85f; card.scaleY = 0.85f; card.alpha = 0f
         dialog.show()
+
+        overlay.animate().alpha(1f).setDuration(200).start()
+        card.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(300).setStartDelay(50)
+            .setInterpolator(android.view.animation.OvershootInterpolator(0.8f))
+            .start()
     }
 
     private fun approve(request: String) {

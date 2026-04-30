@@ -273,18 +273,8 @@ fun ChatsScreen(
         },
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
-        val chatListState = rememberLazyListState()
-        // Scroll to top every time this screen becomes visible (tab switch back, back navigation)
-        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        DisposableEffect(lifecycleOwner) {
-            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                    scope.launch { chatListState.scrollToItem(0) }
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-        }
+        // Non-saveable LazyListState — always starts at top, no flash on back navigation
+        val chatListState = remember { androidx.compose.foundation.lazy.LazyListState(0, 0) }
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ── Top bar ──

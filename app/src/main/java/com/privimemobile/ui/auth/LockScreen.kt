@@ -30,6 +30,7 @@ import com.privimemobile.R
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.SecureStorage
 import android.util.Log
+import androidx.compose.ui.res.stringResource
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +57,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
         // Brute-force protection: check lockout
         val lockoutSecs = SecureStorage.getLockoutRemaining()
         if (lockoutSecs > 0) {
-            error = "Too many attempts. Try again in ${lockoutSecs}s"
+            error = context.getString(R.string.lock_too_many_attempts, lockoutSecs)
             password = ""
             return
         }
@@ -67,8 +68,8 @@ fun LockScreen(onUnlocked: () -> Unit) {
             SecureStorage.recordFailedAttempt()
             val attempts = SecureStorage.getFailedAttempts()
             val newLockout = SecureStorage.getLockoutRemaining()
-            error = if (newLockout > 0) "Wrong password. Locked for ${newLockout}s ($attempts attempts)"
-                    else "Wrong password ($attempts/10 attempts)"
+            error = if (newLockout > 0) context.getString(R.string.lock_wrong_password_locked, newLockout, attempts)
+                    else context.getString(R.string.lock_wrong_password, attempts)
             password = ""
             return
         }
@@ -95,7 +96,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
             if (ok) {
                 onUnlocked()
             } else {
-                error = "Failed to open wallet"
+                error = context.getString(R.string.lock_failed_open)
                 password = ""
             }
         }
@@ -123,8 +124,8 @@ fun LockScreen(onUnlocked: () -> Unit) {
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Unlock PriviMW")
-            .setSubtitle("Authenticate to unlock your wallet")
-            .setNegativeButtonText("Use Password")
+            .setSubtitle(context.getString(R.string.lock_authenticate_subtitle))
+            .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
             .build()
 
         prompt.authenticate(promptInfo)
@@ -153,11 +154,11 @@ fun LockScreen(onUnlocked: () -> Unit) {
                 modifier = Modifier.size(48.dp),
             )
             Spacer(Modifier.width(12.dp))
-            Text("PriviMW", color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.app_name), color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Wallet on the Beam Privacy Blockchain",
+            stringResource(R.string.lock_tagline),
             color = C.textSecondary,
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
@@ -175,17 +176,17 @@ fun LockScreen(onUnlocked: () -> Unit) {
                     brush = androidx.compose.ui.graphics.SolidColor(C.accent)
                 ),
             ) {
-                Text("Unlock with Biometrics", color = C.accent, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.lock_biometric_unlock), color = C.accent, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(16.dp))
-            Text("or enter password", color = C.textSecondary, fontSize = 13.sp)
+            Text(stringResource(R.string.lock_or_enter_password), color = C.textSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(16.dp))
         }
 
         OutlinedTextField(
             value = password,
             onValueChange = { password = it; error = null },
-            label = { Text("Password") },
+            label = { Text(stringResource(R.string.general_password)) },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -225,7 +226,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
                     strokeWidth = 2.dp,
                 )
             } else {
-                Text("Unlock", color = C.textDark, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.general_unlock), color = C.textDark, fontWeight = FontWeight.Bold)
             }
         }
     }

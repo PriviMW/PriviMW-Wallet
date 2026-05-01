@@ -1,5 +1,6 @@
 package com.privimemobile.chat.group
 
+import android.content.Context
 import android.util.Log
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.ChatDatabase
@@ -19,6 +20,7 @@ import kotlinx.coroutines.*
 class GroupManager(
     private val db: ChatDatabase,
     private val scope: CoroutineScope,
+    private val context: Context,
 ) {
     private val TAG = "GroupManager"
 
@@ -73,7 +75,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "create_group", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, null, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, null, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     Log.d(TAG, "Create group TX submitted: $name txId=$txId")
@@ -105,7 +107,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "join_group", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -187,7 +189,7 @@ class GroupManager(
             mapOf("group_id" to groupId),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -216,7 +218,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -255,7 +257,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -292,7 +294,7 @@ class GroupManager(
         ShaderInvoker.tx("user", "update_group_info", args,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -320,7 +322,7 @@ class GroupManager(
             ),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {
@@ -347,7 +349,7 @@ class GroupManager(
             mapOf("group_id" to groupId),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {

@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +21,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
@@ -97,6 +100,7 @@ private data class PaymentProof(
 
 @Composable
 fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
+    val context = LocalContext.current
     val txJson by WalletEventBus.transactions.collectAsState(initial = "[]")
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
     val currency = CurrencyManager.getPreferredCurrency()
@@ -184,10 +188,10 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Transaction not found", color = C.error, fontSize = 16.sp)
+            Text(stringResource(R.string.error_tx_not_found), color = C.error, fontSize = 16.sp)
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = onBack) {
-                Text("Go Back", color = C.textSecondary)
+                Text(stringResource(R.string.general_back), color = C.textSecondary)
             }
         }
         return
@@ -209,17 +213,17 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
 
     val statusText = run {
         if (isOutgoing && isOnline && (tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS)) {
-            "Waiting for receiver"
+            stringResource(R.string.tx_status_waiting_receiver)
         } else if (tx.status == TxStatus.IN_PROGRESS && tx.minConfirmationsProgress.isNotEmpty()) {
-            "Confirming (${tx.minConfirmationsProgress})"
+            stringResource(R.string.tx_detail_confirming_progress, tx.minConfirmationsProgress)
         } else when (tx.status) {
-            TxStatus.PENDING -> "Pending"
-            TxStatus.IN_PROGRESS -> "In Progress"
-            TxStatus.CANCELLED -> "Cancelled"
-            TxStatus.COMPLETED -> "Completed"
-            TxStatus.FAILED -> "Failed"
-            TxStatus.REGISTERING -> "In Progress"
-            else -> "Unknown"
+            TxStatus.PENDING -> stringResource(R.string.tx_status_pending)
+            TxStatus.IN_PROGRESS -> stringResource(R.string.tx_status_in_progress)
+            TxStatus.CANCELLED -> stringResource(R.string.tx_status_cancelled)
+            TxStatus.COMPLETED -> stringResource(R.string.tx_status_completed)
+            TxStatus.FAILED -> stringResource(R.string.tx_status_failed)
+            TxStatus.REGISTERING -> stringResource(R.string.tx_status_in_progress)
+            else -> stringResource(R.string.general_unknown)
         }
     }
 
@@ -236,11 +240,11 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
 
     val addressTypeLabel = when {
         isSwapTx -> "Assets Swap"
-        tx.isPublicOffline -> "Public Offline"
-        tx.isMaxPrivacy -> "Max Privacy"
-        tx.isOffline -> "Offline"
-        tx.isShielded -> "Offline"
-        else -> "Regular"
+        tx.isPublicOffline -> stringResource(R.string.wallet_addr_public_offline)
+        tx.isMaxPrivacy -> stringResource(R.string.wallet_addr_max_privacy)
+        tx.isOffline -> stringResource(R.string.wallet_addr_offline)
+        tx.isShielded -> stringResource(R.string.wallet_addr_offline)
+        else -> stringResource(R.string.wallet_addr_regular)
     }
 
     val canHaveProof = isOutgoing && !isSelf &&
@@ -266,7 +270,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             onClick = onBack,
             modifier = Modifier.padding(start = 4.dp, top = 4.dp),
         ) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         // Amount header
@@ -306,7 +310,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 }
             } else if (isSelf) {
                 Text(
-                    text = "Self-transfer",
+                    text = stringResource(R.string.wallet_self_transfer),
                     color = C.textSecondary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -369,7 +373,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 color = badgeBg,
             ) {
                 Text(
-                    text = if (isSelf) "Self-transfer" else statusText,
+                    text = if (isSelf) stringResource(R.string.wallet_self_transfer) else statusText,
                     color = badgeTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,

@@ -1,5 +1,6 @@
 package com.privimemobile.chat.identity
 
+import android.content.Context
 import android.util.Log
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.ChatStateEntity
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.*
 class IdentityManager(
     private val db: ChatDatabase,
     private val scope: CoroutineScope,
+    private val context: Context,
 ) {
     private val TAG = "IdentityManager"
 
@@ -177,7 +179,7 @@ class IdentityManager(
             onReady = onTxReady,
             callback = { result ->
                 if (result.containsKey("error")) {
-                    val error = com.privimemobile.protocol.Helpers.extractError(result) ?: "Unknown error"
+                    val error = com.privimemobile.protocol.Helpers.extractError(result, context)
                     Log.e(TAG, "Register failed: $error")
                     onResult?.invoke(false, error)
                 } else {
@@ -214,7 +216,7 @@ class IdentityManager(
                 if (errorStr.contains("not found", ignoreCase = true) || errorStr.contains("no such", ignoreCase = true)) {
                     callback(true, null) // handle not found = available
                 } else {
-                    callback(null, com.privimemobile.protocol.Helpers.extractError(result))
+                    callback(null, com.privimemobile.protocol.Helpers.extractError(result, context))
                 }
                 return@invoke
             }
@@ -246,7 +248,7 @@ class IdentityManager(
                 ),
                 callback = { result ->
                     if (result.containsKey("error")) {
-                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                     } else {
                         val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                         if (txId != null) {
@@ -291,7 +293,7 @@ class IdentityManager(
             ShaderInvoker.tx("user", "update_profile", extra,
                 callback = { result ->
                     if (result.containsKey("error")) {
-                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                        onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                     } else {
                         val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                         if (txId != null) {
@@ -329,7 +331,7 @@ class IdentityManager(
         ShaderInvoker.tx("user", "release_handle", emptyMap(),
             callback = { result ->
                 if (result.containsKey("error")) {
-                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result))
+                    onResult?.invoke(false, com.privimemobile.protocol.Helpers.extractError(result, context))
                 } else {
                     val txId = result["txid"]?.toString() ?: result["txId"]?.toString()
                     if (txId != null) {

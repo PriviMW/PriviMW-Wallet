@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
@@ -127,29 +129,29 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
             if (txStatus == "confirmed") {
                 Text("\u2705", fontSize = 48.sp)
                 Spacer(Modifier.height(16.dp))
-                Text("Registration Complete!", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.register_complete), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                Text("@$submittedHandle is now yours", color = C.accent, fontSize = 16.sp)
+                Text(stringResource(R.string.register_handle_is_yours, submittedHandle), color = C.accent, fontSize = 16.sp)
             } else if (txStatus == "failed") {
                 Text("\u274C", fontSize = 48.sp)
                 Spacer(Modifier.height(16.dp))
-                Text("Registration Failed", color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.register_failed), color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                Text(error ?: "Transaction failed", color = C.textSecondary, fontSize = 14.sp)
+                Text(error ?: stringResource(R.string.register_transaction_failed), color = C.textSecondary, fontSize = 14.sp)
                 Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = { txSubmitted = false; registering = false; txStatus = "pending" },
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                ) { Text("Try Again", color = C.textDark, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.register_try_again), color = C.textDark, fontWeight = FontWeight.Bold) }
             } else {
                 CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
                 Spacer(Modifier.height(24.dp))
-                Text("Registering Handle", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.register_registering), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Text("@$submittedHandle", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.",
+                    stringResource(R.string.register_pending_message),
                     color = C.textSecondary, fontSize = 14.sp, textAlign = TextAlign.Center, lineHeight = 20.sp,
                 )
             }
@@ -164,11 +166,11 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         .verticalScroll(rememberScrollState())
         .padding(24.dp)
     ) {
-        TextButton(onClick = onBack) { Text("< Back", color = C.textSecondary) }
+        TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.textSecondary) }
         Spacer(Modifier.height(16.dp))
-        Text("Register Handle", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.register_title), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("Choose a unique handle for encrypted messaging on Beam", color = C.textSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.register_description), color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(32.dp))
 
         val handleBorderColor = when (handleStatus) {
@@ -177,7 +179,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         OutlinedTextField(
             value = handle,
             onValueChange = { val filtered = it.lowercase().filter { c -> c.isLetterOrDigit() || c == '_' }.take(32); handle = filtered; error = null },
-            label = { Text("Handle") },
+            label = { Text(stringResource(R.string.register_handle_label)) },
             prefix = { Text("@", color = C.accent) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -186,21 +188,21 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                 focusedLabelColor = C.accent, cursorColor = C.accent,
             ),
         )
-        Text("3-32 characters, letters, numbers, underscores", color = C.textMuted, fontSize = 11.sp,
+        Text(stringResource(R.string.register_handle_hint), color = C.textMuted, fontSize = 11.sp,
             modifier = Modifier.padding(start = 4.dp, top = 4.dp))
 
         when (handleStatus) {
-            "checking" -> Text("Checking availability...", color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
-            "available" -> Text("\u2713 @$handle is available", color = C.accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
-            "taken" -> Text("\u2717 @$handle is already taken", color = C.error, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
-            "error" -> Text("Could not check availability", color = C.warning, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "checking" -> Text(stringResource(R.string.register_checking), color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "available" -> Text(stringResource(R.string.register_handle_available, handle), color = C.accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "taken" -> Text(stringResource(R.string.register_handle_taken, handle), color = C.error, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+            "error" -> Text(stringResource(R.string.register_cannot_check), color = C.warning, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
         }
 
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = displayName,
             onValueChange = { if (it.length <= 40) { displayName = it; error = null } },
-            label = { Text("Display Name") },
+            label = { Text(stringResource(R.string.register_display_name_label)) },
             supportingText = { Text("${displayName.length}/40", color = C.textMuted, fontSize = 11.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -213,9 +215,9 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = C.card), modifier = Modifier.fillMaxWidth()) {
             Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Registration Fee", color = C.textSecondary, fontSize = 14.sp)
+                Text(stringResource(R.string.register_fee_label), color = C.textSecondary, fontSize = 14.sp)
                 Text(
-                    if (registrationFee > 0) "${Helpers.grothToBeam(registrationFee)} BEAM" else "Loading...",
+                    if (registrationFee > 0) "${Helpers.grothToBeam(registrationFee)} BEAM" else stringResource(R.string.general_loading),
                     color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -230,7 +232,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
         Button(
             onClick = {
                 when {
-                    handle.length < 3 -> error = "Handle must be at least 3 characters"
+                    handle.length < 3 -> error = context.getString(R.string.register_handle_too_short)
                     else -> {
                         registering = true
                         error = null
@@ -241,7 +243,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                         )) { addrResult ->
                             val walletId = Helpers.normalizeWalletId(addrResult["address"] as? String ?: "")
                             if (walletId == null) {
-                                error = "Failed to create SBBS address"
+                                error = context.getString(R.string.register_sbbs_failed)
                                 registering = false
                                 return@call
                             }
@@ -250,7 +252,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
                                     if (success) {
                                         txSubmitted = true
                                     } else {
-                                        error = errMsg ?: "Registration failed"
+                                        error = errMsg ?: context.getString(R.string.register_failed_generic)
                                         txSubmitted = true
                                         txStatus = "failed"
                                     }
@@ -268,7 +270,7 @@ fun RegisterScreen(onRegistered: () -> Unit, onBack: () -> Unit) {
             if (registering) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), color = C.textDark, strokeWidth = 2.dp)
             } else {
-                Text("Register", color = C.textDark, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.register_button), color = C.textDark, fontWeight = FontWeight.Bold)
             }
         }
     }

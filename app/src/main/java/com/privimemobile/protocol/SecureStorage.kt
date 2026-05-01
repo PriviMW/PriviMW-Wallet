@@ -30,6 +30,7 @@ object SecureStorage {
     const val KEY_PREFERRED_CURRENCY = "preferred_currency"
     const val KEY_CACHED_RATES = "cached_exchange_rates"
     const val KEY_CACHED_RATES_TS = "cached_exchange_rates_ts"
+    const val KEY_APP_LANGUAGE = "app_language"
 
     private var prefs: SharedPreferences? = null
 

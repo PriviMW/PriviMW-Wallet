@@ -31,6 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.privimemobile.R
 import com.privimemobile.ui.theme.C
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
@@ -163,7 +165,7 @@ fun AvatarPicker(
         AlertDialog(
             onDismissRequest = { showPreview = false },
             containerColor = C.card,
-            title = { Text("Confirm Profile Picture", color = C.text, fontWeight = FontWeight.SemiBold) },
+            title = { Text(stringResource(R.string.avatar_confirm_title), color = C.text, fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -181,7 +183,7 @@ fun AvatarPicker(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("This is how your profile picture will look", color = C.textSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.avatar_confirm_subtitle), color = C.textSecondary, fontSize = 13.sp)
                 }
             },
             confirmButton = {
@@ -192,14 +194,14 @@ fun AvatarPicker(
                         croppedResult = null; rawBitmap = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                ) { Text("Set Picture", color = C.textDark, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.avatar_set_picture), color = C.textDark, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showPreview = false
                     // Go back to crop
                     showCropScreen = true
-                }) { Text("Adjust", color = C.textSecondary) }
+                }) { Text(stringResource(R.string.avatar_adjust), color = C.textSecondary) }
             },
         )
     }
@@ -239,11 +241,11 @@ private fun AvatarCropDialog(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onCancel) {
-                    Text("Cancel", color = Color.White, fontSize = 16.sp)
+                    Text(stringResource(R.string.general_cancel), color = Color.White, fontSize = 16.sp)
                 }
-                Text("Move and Scale", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.avatar_move_and_scale), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 TextButton(onClick = onChooseAnother) {
-                    Text("Change", color = C.accent, fontSize = 16.sp)
+                    Text(stringResource(R.string.general_change), color = C.accent, fontSize = 16.sp)
                 }
             }
 
@@ -274,7 +276,7 @@ private fun AvatarCropDialog(
                     ) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Crop",
+                            contentDescription = stringResource(R.string.avatar_crop),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer(
@@ -368,7 +370,7 @@ private fun AvatarCropDialog(
                     shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.width(200.dp).height(48.dp),
                 ) {
-                    Text("Done", color = C.textDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.general_done), color = C.textDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

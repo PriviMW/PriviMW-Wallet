@@ -30,11 +30,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.AttachmentEntity
 import com.privimemobile.chat.transport.IpfsTransport
@@ -94,7 +96,7 @@ fun MediaGalleryScreen(
             title = { Text("Media & Files", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.general_back), tint = C.text)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
@@ -111,14 +113,14 @@ fun MediaGalleryScreen(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Media (${images.size})", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.chat_media_section, images.size), fontSize = 13.sp) },
                 selectedContentColor = C.accent,
                 unselectedContentColor = C.textSecondary,
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Files (${files.size})", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.chat_files_section, files.size), fontSize = 13.sp) },
                 selectedContentColor = C.accent,
                 unselectedContentColor = C.textSecondary,
             )
@@ -160,7 +162,7 @@ fun MediaGalleryScreen(
                                                 filePaths[cid] = downloaded
                                                 fullscreenImage = att
                                             } catch (_: Exception) {
-                                                Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.media_download_failed), Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     }
@@ -214,7 +216,7 @@ fun MediaGalleryScreen(
                                             }
                                             context.startActivity(intent)
                                         } catch (_: Exception) {
-                                            Toast.makeText(context, "No app to open this file", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.media_no_app_to_open), Toast.LENGTH_SHORT).show()
                                         }
                                     } else {
                                         scope.launch {
@@ -225,9 +227,9 @@ fun MediaGalleryScreen(
                                                     inlineData = att.inlineData,
                                                 )
                                                 filePaths[cid] = downloaded
-                                                Toast.makeText(context, "Downloaded", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.media_downloaded), Toast.LENGTH_SHORT).show()
                                             } catch (_: Exception) {
-                                                Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.media_download_failed), Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     }
@@ -351,7 +353,7 @@ fun MediaGalleryScreen(
                                     onClick = {
                                         scope.launch { ChatService.db?.messageDao()?.markDeletedById(att.messageId) }
                                         showDelMenu = false; fullscreenImage = null
-                                        Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.media_deleted), Toast.LENGTH_SHORT).show()
                                     },
                                 )
                                 if (isMine) {
@@ -379,7 +381,7 @@ fun MediaGalleryScreen(
                                                 }
                                             }
                                             showDelMenu = false; fullscreenImage = null
-                                            Toast.makeText(context, "Deleted for everyone", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.media_deleted_for_everyone), Toast.LENGTH_SHORT).show()
                                         },
                                     )
                                 }
@@ -418,8 +420,8 @@ private fun saveFileToDownloads(context: android.content.Context, srcPath: Strin
             val dest = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName)
             srcFile.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
         }
-        Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.media_saved_to_downloads, Toast.LENGTH_SHORT).show()
     } catch (_: Exception) {
-        Toast.makeText(context, "Save failed", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.media_save_failed, Toast.LENGTH_SHORT).show()
     }
 }

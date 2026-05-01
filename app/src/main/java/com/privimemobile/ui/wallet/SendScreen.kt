@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
@@ -222,10 +224,10 @@ fun SendScreen(
 
     val amountError = when {
         amount.isEmpty() -> ""
-        (amount.replace(',', '.').toDoubleOrNull() ?: 0.0) <= 0.0 -> "Amount must be greater than 0"
-        assetInsufficient -> "Insufficient $ticker balance"
-        feeInsufficient -> "Insufficient BEAM for fee (need ${Helpers.formatBeam(fee)} BEAM)"
-        beamInsufficient -> "Insufficient funds \u2014 need ${Helpers.formatBeam(amountGroth + fee - beamAvailable)} more BEAM"
+        (amount.replace(',', '.').toDoubleOrNull() ?: 0.0) <= 0.0 -> stringResource(R.string.send_amount_positive)
+        assetInsufficient -> stringResource(R.string.send_insufficient_balance, ticker)
+        feeInsufficient -> stringResource(R.string.send_insufficient_fee, Helpers.formatBeam(fee))
+        beamInsufficient -> stringResource(R.string.send_insufficient_funds, Helpers.formatBeam(amountGroth + fee - beamAvailable))
         else -> ""
     }
 
@@ -246,13 +248,13 @@ fun SendScreen(
             onClick = onBack,
             modifier = Modifier.padding(start = 4.dp, top = 4.dp),
         ) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             // === ADDRESS ===
             Text(
-                "SEND TO",
+                stringResource(R.string.send_section_to).uppercase(),
                 color = C.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -301,7 +303,7 @@ fun SendScreen(
                         validateAddress(trimmed) { validateReqId = it }
                     },
                     placeholder = {
-                        Text("Paste address or @handle", color = C.textMuted)
+                        Text(stringResource(R.string.send_address_placeholder), color = C.textMuted)
                     },
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -479,7 +481,7 @@ fun SendScreen(
 
             // === ASSET SELECTOR === (tappable, opens picker if multiple assets)
             Text(
-                "ASSET",
+                stringResource(R.string.send_section_asset).uppercase(),
                 color = C.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -501,7 +503,7 @@ fun SendScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(ticker, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Available: ${Helpers.formatBeam(assetAvailable)} $ticker",
+                        stringResource(R.string.send_available_balance, Helpers.formatBeam(assetAvailable), ticker),
                         color = C.textMuted,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 2.dp),
@@ -515,7 +517,7 @@ fun SendScreen(
             // Non-BEAM: show BEAM available for fee
             if (selectedAssetId != 0) {
                 Text(
-                    "BEAM available for fee: ${Helpers.formatBeam(beamAvailable)} BEAM",
+                    stringResource(R.string.send_beam_available_fee, Helpers.formatBeam(beamAvailable)),
                     color = C.textMuted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 6.dp),
@@ -526,7 +528,7 @@ fun SendScreen(
 
             // === AMOUNT ===
             Text(
-                "AMOUNT",
+                stringResource(R.string.send_section_amount).uppercase(),
                 color = C.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -776,7 +778,7 @@ fun SendScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "COMMENT",
+                    stringResource(R.string.send_section_comment).uppercase(),
                     color = C.textSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,

@@ -17,10 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.ContactEntity
 import com.privimemobile.protocol.Helpers
@@ -122,9 +124,9 @@ fun NewChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = C.text, modifier = Modifier.size(22.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.general_back), tint = C.text, modifier = Modifier.size(22.dp))
                 }
-                Text("New Chat", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.chat_new_chat), color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -216,11 +218,11 @@ fun NewChatScreen(
                             ChatService.groups.joinGroup(groupId) { success, error ->
                                 if (success) {
                                     android.widget.Toast.makeText(context,
-                                        if (needsApproval) "Join request sent!" else "Transaction submitted. Group will appear when confirmed.",
+                                        if (needsApproval) context.getString(R.string.new_chat_join_request_sent) else context.getString(R.string.create_group_tx_submitted),
                                         android.widget.Toast.LENGTH_LONG).show()
                                     onBack()
                                 } else {
-                                    android.widget.Toast.makeText(context, error ?: "Failed to join", android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(context, error ?: context.getString(R.string.new_chat_failed_to_join), android.widget.Toast.LENGTH_SHORT).show()
                                     onDone() // reset spinner on failure/cancel
                                 }
                             }

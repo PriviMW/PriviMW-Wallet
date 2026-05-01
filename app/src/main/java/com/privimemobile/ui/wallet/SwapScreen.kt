@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +29,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.*
@@ -125,7 +127,7 @@ fun SwapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Assets Swap", color = C.text) },
+                title = { Text(stringResource(R.string.swap_assets_label), color = C.text) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.bg),
                 windowInsets = WindowInsets(0),
             )
@@ -135,7 +137,7 @@ fun SwapScreen(
                 onClick = onCreateOffer,
                 containerColor = C.accent,
             ) {
-                Icon(Icons.Default.Add, "Create Offer", tint = C.bg)
+                Icon(Icons.Default.Add, stringResource(R.string.swap_create_offer), tint = C.bg)
             }
         },
         containerColor = C.bg,
@@ -146,7 +148,11 @@ fun SwapScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                listOf("All Offers" to allOffers.size, "My Offers" to myOffers.size, "History" to filteredHistory.size).forEachIndexed { idx, (label, count) ->
+                listOf(
+                    stringResource(R.string.swap_tab_all_offers) to allOffers.size,
+                    stringResource(R.string.swap_tab_my_offers) to myOffers.size,
+                    stringResource(R.string.swap_tab_history) to filteredHistory.size,
+                ).forEachIndexed { idx, (label, count) ->
                     Surface(
                         modifier = Modifier.clickable { selectedTab = idx },
                         shape = RoundedCornerShape(8.dp),
@@ -178,7 +184,7 @@ fun SwapScreen(
                             shape = RoundedCornerShape(16.dp),
                             color = if (filterAssetId == -1) C.accent.copy(alpha = 0.15f) else C.card,
                         ) {
-                            Text("All", color = if (filterAssetId == -1) C.accent else C.textSecondary,
+                            Text(stringResource(R.string.general_all), color = if (filterAssetId == -1) C.accent else C.textSecondary,
                                 fontSize = 12.sp, fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
@@ -212,7 +218,7 @@ fun SwapScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.SwapHoriz, null, tint = C.textMuted, modifier = Modifier.size(48.dp))
                             Spacer(Modifier.height(12.dp))
-                            Text("No swap history", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.swap_empty_history), color = C.textSecondary, fontSize = 13.sp)
                         }
                     }
                 } else {
@@ -249,13 +255,13 @@ fun SwapScreen(
                         Icon(Icons.Default.SwapHoriz, null, tint = C.textMuted, modifier = Modifier.size(48.dp))
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            if (selectedTab == 0) "No offers available" else "You have no active offers",
+                            if (selectedTab == 0) stringResource(R.string.swap_empty_offers) else stringResource(R.string.swap_empty_my_offers),
                             color = C.textSecondary,
                             fontSize = 15.sp,
                         )
                         if (selectedTab == 0) {
                             Spacer(Modifier.height(4.dp))
-                            Text("Create one with the + button", color = C.textMuted, fontSize = 13.sp)
+                            Text(stringResource(R.string.swap_empty_hint), color = C.textMuted, fontSize = 13.sp)
                         }
                     }
                 }
@@ -336,9 +342,9 @@ fun SwapScreen(
                 val sendTicker = order.sendSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.sendAssetId) }
                 prompt.authenticate(
                     BiometricPrompt.PromptInfo.Builder()
-                        .setTitle("Confirm Swap")
-                        .setSubtitle("Authenticate to swap ${Helpers.formatBeam(order.sendAmount)} $sendTicker")
-                        .setNegativeButtonText("Use Password")
+                        .setTitle(context.getString(R.string.swap_confirm_title))
+                        .setSubtitle(context.getString(R.string.swap_authenticate_message, Helpers.formatBeam(order.sendAmount), sendTicker))
+                        .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                         .build()
                 )
                 return
@@ -360,7 +366,7 @@ fun SwapScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.SwapHoriz, null, tint = C.accent, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Confirm Swap", color = C.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(stringResource(R.string.swap_confirm_title), color = C.text, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
             },
             text = {
@@ -374,7 +380,7 @@ fun SwapScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("You send", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.swap_confirm_you_send), color = C.textSecondary, fontSize = 13.sp)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.sendAssetId, ticker = sendTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
@@ -408,7 +414,7 @@ fun SwapScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("You receive", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.swap_confirm_you_receive), color = C.textSecondary, fontSize = 13.sp)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.receiveAssetId, ticker = receiveTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
@@ -432,10 +438,10 @@ fun SwapScreen(
                     }
                     var dialogRateFlipped by remember { mutableStateOf(false) }
                     val dialogRateText = if (!dialogRateFlipped) {
-                        "Rate: 1 $sendTicker = ${formatRate(order.rate)} $receiveTicker"
+                        stringResource(R.string.swap_rate_format, sendTicker, "${formatRate(order.rate)} $receiveTicker")
                     } else {
                         val inv = if (order.receiveAmount > 0) order.sendAmount.toDouble() / order.receiveAmount.toDouble() else 0.0
-                        "Rate: 1 $receiveTicker = ${formatRate(inv)} $sendTicker"
+                        stringResource(R.string.swap_rate_format, receiveTicker, "${formatRate(inv)} $sendTicker")
                     }
                     Row(
                         modifier = Modifier.clickable { dialogRateFlipped = !dialogRateFlipped },
@@ -445,7 +451,7 @@ fun SwapScreen(
                         Spacer(Modifier.width(4.dp))
                         Text("\u21C4", color = C.accent, fontSize = 12.sp)
                     }
-                    Text("Fee: 0.001 BEAM (paid by you)", color = C.textMuted, fontSize = 12.sp)
+                    Text(stringResource(R.string.swap_confirm_fee), color = C.textMuted, fontSize = 12.sp)
                 }
             },
             confirmButton = {
@@ -454,12 +460,12 @@ fun SwapScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                     shape = RoundedCornerShape(10.dp),
                 ) {
-                    Text("Confirm Swap", color = C.bg, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.swap_confirm_title), color = C.bg, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmOrder = null }) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
         )
@@ -474,16 +480,16 @@ fun SwapScreen(
                 modifier = Modifier.widthIn(max = 340.dp),
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    Text("Enter Password", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    Text(stringResource(R.string.send_confirm_enter_password), color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(4.dp))
-                    Text("Confirm your wallet password to swap", color = C.textSecondary, fontSize = 13.sp,
+                    Text(stringResource(R.string.swap_password_subtitle), color = C.textSecondary, fontSize = 13.sp,
                         modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(20.dp))
                     OutlinedTextField(
                         value = passwordInput,
                         onValueChange = { passwordInput = it; passwordError = "" },
-                        placeholder = { Text("Password") },
+                        placeholder = { Text(stringResource(R.string.general_password)) },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -503,13 +509,13 @@ fun SwapScreen(
                             onClick = { showPasswordDialog = false },
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(10.dp),
-                        ) { Text("Cancel", color = C.textSecondary) }
+                        ) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
                         Button(
                             onClick = {
                                 if (passwordInput.isNotBlank()) {
                                     val wallet = com.privimemobile.wallet.WalletManager.walletInstance
                                     if (wallet != null && !wallet.checkWalletPassword(passwordInput.trim())) {
-                                        passwordError = "Incorrect password"
+                                        passwordError = context.getString(R.string.tx_incorrect_password)
                                         return@Button
                                     }
                                     showPasswordDialog = false
@@ -519,7 +525,7 @@ fun SwapScreen(
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                        ) { Text("Confirm", color = C.bg, fontWeight = FontWeight.Bold) }
+                        ) { Text(stringResource(R.string.general_confirm), color = C.bg, fontWeight = FontWeight.Bold) }
                     }
                 }
             }
@@ -550,7 +556,7 @@ private fun SwapOfferCard(
                     modifier = Modifier.fillMaxSize().background(C.error.copy(alpha = 0.2f), RoundedCornerShape(12.dp)).padding(horizontal = 20.dp),
                     contentAlignment = Alignment.CenterEnd,
                 ) {
-                    Text("Remove", color = C.error, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.settings_remove), color = C.error, fontWeight = FontWeight.Bold)
                 }
             },
         ) {
@@ -581,7 +587,7 @@ private fun SwapOfferCardContent(
     val remainingSec = order.remainingSeconds()
     val remainingText = when {
         remainingSec < 0 -> "" // no expiry data
-        remainingSec == 0L -> "Expired"
+        remainingSec == 0L -> stringResource(R.string.swap_expired).trimEnd('.')
         remainingSec < 60 -> "${remainingSec}s"
         remainingSec < 3600 -> "${remainingSec / 60}m"
         else -> "${remainingSec / 3600}h ${(remainingSec % 3600) / 60}m"
@@ -622,10 +628,10 @@ private fun SwapOfferCardContent(
             // Rate (tappable to toggle) + expiry
             var rateFlipped by remember { mutableStateOf(false) }
             val rateText = if (!rateFlipped) {
-                "Rate: 1 $sendTicker = ${formatRate(order.rate)} $receiveTicker"
+                stringResource(R.string.swap_rate_format, sendTicker, "${formatRate(order.rate)} $receiveTicker")
             } else {
                 val inverseRate = if (order.receiveAmount > 0) order.sendAmount.toDouble() / order.receiveAmount.toDouble() else 0.0
-                "Rate: 1 $receiveTicker = ${formatRate(inverseRate)} $sendTicker"
+                stringResource(R.string.swap_rate_format, receiveTicker, "${formatRate(inverseRate)} $sendTicker")
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -659,10 +665,10 @@ private fun SwapOfferCardContent(
                 ) {
                     Text(
                         when {
-                            order.isAccepted -> "Accepted"
-                            order.isCanceled -> "Cancelled"
-                            order.isExpired -> "Expired"
-                            else -> "Active"
+                            order.isAccepted -> stringResource(R.string.swap_accepted)
+                            order.isCanceled -> stringResource(R.string.tx_filter_cancelled)
+                            order.isExpired -> stringResource(R.string.swap_expired).trimEnd('.')
+                            else -> stringResource(R.string.swap_active)
                         },
                         color = when {
                             order.isAccepted -> C.incoming
@@ -680,7 +686,7 @@ private fun SwapOfferCardContent(
                                 brush = androidx.compose.ui.graphics.SolidColor(C.error)
                             ),
                         ) {
-                            Text("Cancel", color = C.error, fontSize = 13.sp)
+                            Text(stringResource(R.string.general_cancel), color = C.error, fontSize = 13.sp)
                         }
                     }
                 }
@@ -697,9 +703,9 @@ private fun SwapOfferCardContent(
                     ),
                 ) {
                     if (!canAfford && order.isActive) {
-                        Text("Insufficient $sendTicker", color = C.textMuted, fontSize = 12.sp)
+                        Text(stringResource(R.string.swap_insufficient_format, sendTicker), color = C.textMuted, fontSize = 12.sp)
                     } else {
-                        Text("Accept Swap", color = C.bg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.swap_accept_btn), color = C.bg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -742,7 +748,7 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
                 modifier = Modifier.fillMaxSize().background(C.error.copy(alpha = 0.2f), RoundedCornerShape(12.dp)).padding(horizontal = 20.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                Text("Remove", color = C.error, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_remove), color = C.error, fontWeight = FontWeight.Bold)
             }
         },
     ) {
@@ -786,11 +792,11 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     val statusText = when (tx.status) {
-                        TxStatus.COMPLETED -> "Completed"
-                        TxStatus.CANCELLED -> "Cancelled"
-                        TxStatus.FAILED -> "Failed"
-                        TxStatus.PENDING -> "Pending"
-                        else -> "In Progress"
+                        TxStatus.COMPLETED -> stringResource(R.string.tx_filter_completed)
+                        TxStatus.CANCELLED -> stringResource(R.string.tx_filter_cancelled)
+                        TxStatus.FAILED -> stringResource(R.string.tx_filter_failed)
+                        TxStatus.PENDING -> stringResource(R.string.tx_filter_pending)
+                        else -> stringResource(R.string.swap_in_progress)
                     }
                     val statusColor = when (tx.status) {
                         TxStatus.COMPLETED -> C.incoming
@@ -806,7 +812,7 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
 
                 // Fee
                 if (tx.fee > 0) {
-                    Text("Fee: ${Helpers.formatBeam(tx.fee)} BEAM", color = C.textMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.swap_fee_format, Helpers.formatBeam(tx.fee)), color = C.textMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

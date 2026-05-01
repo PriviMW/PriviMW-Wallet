@@ -2,6 +2,7 @@ package com.privimemobile.wallet
 
 import android.app.Activity
 import android.app.Dialog
+import com.privimemobile.R
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -86,7 +87,7 @@ object TxAuthHelper {
      */
     fun authenticateBeforeAction(
         activity: Activity,
-        actionLabel: String = "Confirm Transaction",
+        actionLabel: String = "",
         onApproved: () -> Unit,
         onRejected: (() -> Unit)? = null,
     ) {
@@ -111,9 +112,9 @@ object TxAuthHelper {
     ) {
         val cancelSignal = CancellationSignal()
         val prompt = BiometricPromptApi.Builder(activity)
-            .setTitle("Approve Transaction")
-            .setSubtitle(actionLabel)
-            .setNegativeButton("Use Password", activity.mainExecutor) { _, _ ->
+            .setTitle(activity.getString(R.string.tx_approve_title))
+            .setSubtitle(actionLabel.ifEmpty { activity.getString(R.string.tx_authenticate_confirm) })
+            .setNegativeButton(activity.getString(R.string.lock_use_password_button), activity.mainExecutor) { _, _ ->
                 showPasswordPrompt(activity, actionLabel, onApproved, onRejected)
             }
             .build()
@@ -171,7 +172,7 @@ object TxAuthHelper {
         ))
 
         card.addView(TextView(activity).apply {
-            text = "Enter Password"
+            text = activity.getString(R.string.send_confirm_enter_password)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             typeface = Typeface.DEFAULT_BOLD
@@ -180,7 +181,7 @@ object TxAuthHelper {
         })
 
         card.addView(TextView(activity).apply {
-            text = actionLabel
+            text = actionLabel.ifEmpty { activity.getString(R.string.tx_approve_password_subtitle) }
             setTextColor(TEXT_SECONDARY)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER
@@ -188,7 +189,7 @@ object TxAuthHelper {
         })
 
         val passwordInput = EditText(activity).apply {
-            hint = "Password"
+            hint = activity.getString(R.string.general_password)
             setHintTextColor(0xFF557080.toInt())
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
@@ -210,7 +211,7 @@ object TxAuthHelper {
         card.addView(btnRow)
 
         val cancelBtn = TextView(activity).apply {
-            text = "Cancel"
+            text = activity.getString(R.string.general_cancel)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -231,7 +232,7 @@ object TxAuthHelper {
         })
 
         val confirmBtn = TextView(activity).apply {
-            text = "Confirm"
+            text = activity.getString(R.string.general_confirm)
             setTextColor(Color.parseColor("#032E49"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -249,7 +250,7 @@ object TxAuthHelper {
                     dialog.dismiss()
                     onApproved()
                 } else {
-                    Toast.makeText(activity, "Incorrect password", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, activity.getString(R.string.tx_incorrect_password), Toast.LENGTH_SHORT).show()
                     passwordInput.text.clear()
                 }
             }

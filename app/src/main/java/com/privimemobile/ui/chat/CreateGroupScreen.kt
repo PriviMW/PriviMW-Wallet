@@ -18,9 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.ui.theme.C
 
@@ -40,10 +42,10 @@ fun CreateGroupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Group", color = C.text) },
+                title = { Text(stringResource(R.string.chat_new_group), color = C.text) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.general_back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
@@ -161,7 +163,7 @@ fun CreateGroupScreen(
             Button(
                 onClick = {
                     if (groupName.isBlank()) {
-                        Toast.makeText(context, "Enter a group name", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, R.string.create_group_enter_name, Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     creating = true
@@ -171,7 +173,7 @@ fun CreateGroupScreen(
                     val syncState = com.privimemobile.wallet.WalletEventBus.syncProgress.value
                     val isSyncing = syncState.total > 0 && syncState.done < syncState.total
                     if (isSyncing) {
-                        Toast.makeText(context, "Wallet is syncing — transaction may take longer to process", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, R.string.create_group_syncing_warning, Toast.LENGTH_LONG).show()
                     }
                     ChatService.groups.createGroup(
                         name = groupName.trim(),
@@ -182,10 +184,10 @@ fun CreateGroupScreen(
                     ) { success, _, error ->
                         creating = false
                         if (success) {
-                            Toast.makeText(context, "Transaction submitted. Group will appear when confirmed.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, R.string.create_group_tx_submitted, Toast.LENGTH_LONG).show()
                             onGroupCreated()
                         } else {
-                            Toast.makeText(context, error ?: "Failed to create group", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, error ?: context.getString(R.string.create_group_failed), Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -199,7 +201,7 @@ fun CreateGroupScreen(
                 } else {
                     Icon(if (isPublic) Icons.Default.Public else Icons.Default.Lock, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Create ${if (isPublic) "Public" else "Private"} Group", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(if (isPublic) R.string.group_create_public else R.string.group_create_private), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

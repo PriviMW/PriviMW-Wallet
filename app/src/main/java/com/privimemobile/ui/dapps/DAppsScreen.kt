@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.privimemobile.R
 import com.privimemobile.dapp.DAppActivity
 import com.privimemobile.protocol.DApp
 import com.privimemobile.protocol.DAppManager
@@ -127,7 +129,7 @@ fun DAppsScreen(
                 }
                 if (updated) {
                     loadDApps()
-                    Toast.makeText(context, "${dapp.name} successfully updated", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.dapps_updated_toast, dapp.name), Toast.LENGTH_SHORT).show()
                 } else {
                     onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
                 }
@@ -167,14 +169,14 @@ fun DAppsScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "No DApps Installed",
+                        stringResource(R.string.dapps_empty_title),
                             color = C.text,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Browse the DApp Store to install decentralized apps",
+                        stringResource(R.string.dapps_empty_subtitle),
                             color = C.textSecondary,
                             fontSize = 14.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -187,7 +189,7 @@ fun DAppsScreen(
                             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                         ) {
                             Text(
-                                "Browse DApp Store",
+                            stringResource(R.string.dapps_empty_button),
                                 color = C.textDark,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
@@ -225,9 +227,9 @@ fun DAppsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Arrange DApps", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.dapps_arrange), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         TextButton(onClick = { editMode = false }) {
-                            Text("Done", color = C.accent, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.general_done), color = C.accent, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -375,7 +377,7 @@ fun DAppsScreen(
                 ),
             ) {
                 Text(
-                    "+ Get More DApps",
+                stringResource(R.string.dapps_get_more),
                     color = C.accent,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -393,10 +395,10 @@ fun DAppsScreen(
     if (uninstallTarget != null) {
         AlertDialog(
             onDismissRequest = { uninstallTarget = null },
-            title = { Text("Uninstall", color = C.text) },
+            title = { Text(stringResource(R.string.dapps_uninstall), color = C.text) },
             text = {
                 Text(
-                    "Remove ${uninstallTarget!!.name}?",
+                stringResource(R.string.dapps_remove_confirm, uninstallTarget!!.name),
                     color = C.textSecondary,
                 )
             },
@@ -409,12 +411,12 @@ fun DAppsScreen(
                         loadDApps()
                     },
                 ) {
-                    Text("Uninstall", color = C.error, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.dapps_uninstall), color = C.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { uninstallTarget = null }) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
             containerColor = C.card,

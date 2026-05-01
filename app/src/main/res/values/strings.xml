@@ -1,4 +1,1238 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PriviMW</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  GENERAL / SHARED  —  overlaps with Beam-UI `general-*` keys       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="general_beam" translatable="false">BEAM</string>
+    <string name="general_groth" translatable="false">GROTH</string>
+    <string name="general_ok">OK</string>
+    <string name="general_cancel">Cancel</string>
+    <string name="general_back">Back</string>
+    <string name="general_next">Next</string>
+    <string name="general_done">Done</string>
+    <string name="general_close">Close</string>
+    <string name="general_confirm">Confirm</string>
+    <string name="general_save">Save</string>
+    <string name="general_delete">Delete</string>
+    <string name="general_copy">Copy</string>
+    <string name="general_paste">Paste</string>
+    <string name="general_send">Send</string>
+    <string name="general_receive">Receive</string>
+    <string name="general_edit">Edit</string>
+    <string name="general_search">Search</string>
+    <string name="general_clear">Clear</string>
+    <string name="general_share">Share</string>
+    <string name="general_loading">Loading…</string>
+    <string name="general_amount">Amount</string>
+    <string name="general_fee">Transaction fee</string>
+    <string name="general_address">Address</string>
+    <string name="general_comment">Comment</string>
+    <string name="general_status">Status</string>
+    <string name="general_details">Details</string>
+    <string name="general_balance">Balance</string>
+    <string name="general_value">Value</string>
+    <string name="general_description">Description</string>
+    <string name="general_actions">Actions</string>
+    <string name="general_advanced">Advanced</string>
+    <string name="general_change">Change</string>
+    <string name="general_proceed">Proceed</string>
+    <string name="general_unlock">Unlock</string>
+    <string name="general_password">Password</string>
+    <string name="general_confirm_password">Confirm Password</string>
+    <string name="general_all">All</string>
+    <string name="general_none">None</string>
+    <string name="general_rescan">Rescan</string>
+    <string name="general_swap">Swap</string>
+    <string name="general_rate">Exchange rate</string>
+    <string name="general_coin">Coin</string>
+    <string name="general_source">Source</string>
+    <string name="general_date">Date</string>
+    <string name="general_time">Time</string>
+    <string name="general_name">Name</string>
+    <string name="general_type">Type</string>
+    <string name="general_from">From</string>
+    <string name="general_to">To</string>
+    <string name="general_unknown">Unknown</string>
+    <string name="general_optional">(optional)</string>
+    <string name="general_copied">Copied</string>
+    <string name="general_removed">Removed</string>
+    <string name="general_updated">Updated</string>
+    <string name="general_no_internet">No internet connection</string>
+    <string name="general_try_again">Try again</string>
+    <string name="general_show_in_folder">Show in folder</string>
+    <string name="general_open_in_explorer">Open in Blockchain Explorer</string>
+    <string name="general_select_all">Select All</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  AUTH / ONBOARDING  —  overlaps with Beam-UI `start-*` keys        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="auth_create_wallet">Create new wallet</string>
+    <string name="auth_restore_wallet">Restore wallet</string>
+    <string name="auth_welcome_title">Welcome to PriviMW</string>
+    <string name="auth_welcome_subtitle">Privacy-first wallet and messenger on Beam</string>
+    <string name="auth_choose_description">Create a new wallet or restore an existing one</string>
+    <string name="auth_creating_wallet">Creating wallet…</string>
+    <string name="auth_restoring_wallet">Restoring wallet…</string>
+    <string name="auth_generating_seed">Generating seed phrase…</string>
+    <string name="auth_create_password_message">Create a password to secure your wallet</string>
+    <string name="auth_confirm_seed_message">Write down your seed phrase on paper and keep it in a safe place</string>
+    <string name="auth_seed_warning_1">Do not let anyone see your seed phrase</string>
+    <string name="auth_seed_warning_2">Never type your seed phrase into password managers or cloud storage</string>
+    <string name="auth_seed_warning_3">Keep the copies of your seed phrase in a safe place</string>
+    <string name="auth_generate_seed_button">Generate seed phrase</string>
+    <string name="auth_i_understand">I understand</string>
+    <string name="auth_verify_seed_message">To ensure the seed phrase is written down correctly, please enter the requested words</string>
+    <string name="auth_enter_word">Enter word #%1$d</string>
+    <string name="auth_word_label">Word #%1$d</string>
+    <string name="auth_words_entered">%1$d/12 words entered</string>
+    <string name="auth_restore_seed_message">Type in or paste your 12-word seed phrase</string>
+    <string name="auth_invalid_seed_words">Invalid seed word(s) at position %1$s</string>
+    <string name="auth_password_placeholder">Enter password</string>
+    <string name="auth_confirm_password_placeholder">Confirm password</string>
+    <string name="auth_passwords_dont_match">Passwords do not match</string>
+    <string name="auth_password_very_weak">Very weak password</string>
+    <string name="auth_password_weak">Weak password</string>
+    <string name="auth_password_medium">Medium strength password</string>
+    <string name="auth_password_strong">Strong password</string>
+    <string name="auth_password_very_strong">Very strong password</string>
+    <string name="auth_caps_lock_warning">Caps lock is on!</string>
+    <string name="auth_setup_node_title">Setup node connectivity</string>
+    <string name="auth_node_integrated">Run integrated node (recommended)</string>
+    <string name="auth_node_random">Connect to random remote node</string>
+    <string name="auth_node_remote">Connect to specific remote node</string>
+    <string name="auth_node_port_label">Enter port to listen</string>
+    <string name="auth_node_peer_label">Peer</string>
+    <string name="auth_node_address_placeholder">Enter node address</string>
+    <string name="auth_node_port_placeholder">Enter port</string>
+    <string name="auth_create_password_btn">Create password</string>
+    <string name="auth_failed_to_open_wallet">Failed to open wallet</string>
+
+    <!-- Lock Screen -->
+    <string name="lock_enter_password">Enter your password to unlock</string>
+    <string name="lock_unlock_button">Unlock</string>
+    <string name="lock_use_biometric">Use biometric</string>
+    <string name="lock_biometric_unlock">Unlock with Biometrics</string>
+    <string name="lock_or_enter_password">or enter password</string>
+    <string name="lock_authenticate_subtitle">Authenticate to unlock your wallet</string>
+    <string name="lock_use_password_button">Use Password</string>
+    <string name="lock_tagline">Wallet on the Beam Privacy Blockchain</string>
+    <string name="lock_too_many_attempts">Too many attempts. Try again in %1$ds</string>
+    <string name="lock_wrong_password_locked">Wrong password. Locked for %1$ds (%2$d attempts)</string>
+    <string name="lock_wrong_password">Wrong password (%1$d/10 attempts)</string>
+    <string name="lock_failed_open">Failed to open wallet</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  WALLET  —  overlaps with Beam-UI `wallet-*`, `balance-*` keys     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="wallet_title">Wallet</string>
+    <string name="wallet_send_button">Send</string>
+    <string name="wallet_receive_button">Receive</string>
+    <string name="wallet_balance_title">Wallet Balance</string>
+    <string name="wallet_transactions_title">Transactions</string>
+    <string name="wallet_no_transactions">No transactions yet</string>
+    <string name="wallet_view_all_txs">View All (%1$d transactions)</string>
+    <string name="wallet_sync_progress">Syncing %1$d%% (%2$dk / %3$dk blocks)</string>
+    <string name="wallet_sync_percent">Syncing %1$d%%</string>
+    <string name="wallet_syncing">Syncing…</string>
+    <string name="wallet_connecting_node">Connecting to node…</string>
+    <string name="wallet_fallback_node">Fallback Node</string>
+    <string name="wallet_random_node">Random Node</string>
+    <string name="wallet_own_node">Own Node</string>
+    <string name="wallet_mobile_node">Mobile Node</string>
+    <string name="wallet_connected">Connected</string>
+    <string name="wallet_reconnecting">Reconnecting to own node…</string>
+    <string name="wallet_block_height">Block #%1$d</string>
+    <string name="wallet_mobile_syncing">Mobile syncing %1$d%% · Online via remote node</string>
+
+    <!-- Balance labels -->
+    <string name="balance_available">Available</string>
+    <string name="balance_maturing">Maturing</string>
+    <string name="balance_sending">Sending</string>
+    <string name="balance_receiving">Receiving</string>
+    <string name="balance_locked">Locked</string>
+    <string name="balance_shielded">Shielded</string>
+    <string name="balance_max_privacy_locked">Max Privacy (locked)</string>
+    <string name="balance_max_privacy">Max Privacy</string>
+    <string name="balance_change">Change</string>
+    <string name="balance_maximum_anonymity">Maximum anonymity</string>
+    <string name="balance_hidden_placeholder" translatable="false">••••</string>
+
+    <!-- Wallet Screen – section headers -->
+    <string name="wallet_other_assets_header">Other Assets</string>
+    <string name="wallet_syncing_blockchain">Syncing blockchain…</string>
+
+    <!-- Wallet Screen – TX type labels -->
+    <string name="wallet_self_transfer">Self-transfer</string>
+    <string name="wallet_sent_label">Sent</string>
+    <string name="wallet_received_label">Received</string>
+    <string name="wallet_dapp_label">DApp</string>
+    <string name="wallet_unknown_label">Unknown</string>
+
+    <!-- Wallet Screen – address type labels -->
+    <string name="wallet_addr_max_privacy">Max Privacy</string>
+    <string name="wallet_addr_public_offline">Public Offline</string>
+    <string name="wallet_addr_offline">Offline</string>
+    <string name="wallet_addr_regular">Regular</string>
+
+    <!-- Wallet Screen – accessibility -->
+    <string name="wallet_show_balance">Show balance</string>
+    <string name="wallet_hide_balance">Hide balance</string>
+
+    <!-- Wallet Screen – badge -->
+    <string name="wallet_id_badge">ID: %1$d</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SEND  —  overlaps with Beam-UI `send-*` keys                      -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="send_title">Send</string>
+    <string name="send_address_placeholder">Paste recipient address here</string>
+    <string name="send_amount_label">Amount to send</string>
+    <string name="send_remaining_label">Remaining</string>
+    <string name="send_beam_remaining">BEAM Remaining</string>
+    <string name="send_available_balance">Available: %1$s %2$s</string>
+    <string name="send_beam_available_fee">BEAM available for fee: %1$s BEAM</string>
+    <string name="send_section_to">Send to</string>
+    <string name="send_section_asset">Asset</string>
+    <string name="send_section_amount">Amount</string>
+    <string name="send_section_comment">Comment</string>
+    <string name="send_section_type">Transaction type</string>
+    <string name="send_type_label">Transaction type</string>
+    <string name="send_offline_mode">Send offline</string>
+    <string name="send_online_address_notice">Online address.</string>
+    <string name="send_offline_address_notice">Offline address.</string>
+    <string name="send_max_privacy_notice">Guarantees maximum anonymity set of up to 64K.</string>
+    <string name="send_offline_refund_notice">Make sure the address is correct — offline transactions cannot be refunded.</string>
+    <string name="send_add_comment">Add a comment</string>
+    <string name="send_insufficient_balance">Insufficient %1$s balance</string>
+    <string name="send_insufficient_fee">Insufficient BEAM for fee (need %1$s BEAM)</string>
+    <string name="send_insufficient_funds">Insufficient funds — need %1$s more BEAM</string>
+    <string name="send_sending_to">Sending to %1$s</string>
+    <string name="send_approx_amount">≈ %1$s BEAM</string>
+    <string name="send_validate_address">Validating address…</string>
+    <string name="send_amount_positive">Amount must be greater than 0</string>
+    <string name="receive_regular_tab">Regular</string>
+    <string name="receive_regular_desc">Default address. Sender can pay online or offline.</string>
+    <string name="receive_sbbs_tab" translatable="false">SBBS</string>
+    <string name="receive_sbbs_desc">Classic short address. Both wallets must be open simultaneously.</string>
+    <string name="receive_max_privacy_tab">Max Privacy</string>
+    <string name="receive_max_privacy_desc">Maximum anonymity. Sender does not need to be online.</string>
+    <string name="receive_regular_remote_desc">Sender can pay online or offline. Both transaction types supported.</string>
+    <string name="receive_fee_label">Fee: %1$s BEAM</string>
+    <string name="receive_generating">Generating…</string>
+    <string name="receive_copied">Copied!</string>
+    <string name="receive_my_address_label">My Address</string>
+    <string name="receive_generate_new_btn">Generate New</string>
+    <string name="receive_share_btn">Share</string>
+    <string name="receive_copy_btn">Copy</string>
+    <string name="receive_remote_node_notice">Connected to remote node. Only regular and SBBS addresses available.</string>
+    <string name="receive_fallback_notice">Fallback mode — using remote node. Limited address types.</string>
+    <string name="send_confirm_title">Confirm Transaction</string>
+    <string name="send_confirm_wallet_not_connected">Wallet not connected</string>
+    <string name="send_confirm_send_failed">Send failed</string>
+    <string name="send_confirm_biometric_title">Confirm with Biometrics</string>
+    <string name="send_confirm_enter_password">Enter Password</string>
+    <string name="send_confirm_approve_btn">Approve</string>
+    <string name="send_confirm_sending_to">Sending to</string>
+    <string name="send_confirm_tx_type">Transaction type</string>
+    <string name="send_confirm_back_edit">Back — Edit</string>
+    <string name="send_confirm_password_subtitle">Confirm your wallet password to send</string>
+    <string name="send_confirm_sbbs_warning">SBBS transaction — recipient must be online within 12 hours or the transaction will expire.</string>
+    <string name="send_confirm_irreversible_warning">Transactions cannot be reversed once confirmed.</string>
+    <string name="receive_no_address">No address</string>
+    <string name="receive_copy_btn_label">COPY</string>
+    <string name="receive_copy_btn_copied">COPIED</string>
+    <string name="receive_share_chooser">Share Address</string>
+    <string name="receive_generating_address">Generating address…</string>
+    <string name="tx_detail_failure_reasons" translatable="false">failure_reasons</string>
+    <string name="tx_history_export_toast_saved">Saved to Downloads/%1$s</string>
+    <string name="tx_history_export_toast_failed">Failed to save file</string>
+    <string name="tx_history_export_toast_error">Export failed: %1$s</string>
+    <string name="tx_history_export_dialog_desc">This will export all transaction history as a ZIP file containing:</string>
+    <string name="tx_history_export_dialog_save">The ZIP will be saved to your Downloads folder.</string>
+    <string name="tx_history_export_android10">Export requires Android 10+</string>
+    <string name="tx_history_export_no_wallet">Wallet not open</string>
+    <string name="tx_history_exporting">Exporting transaction history…</string>
+    <string name="send_invalid_address">Invalid address</string>
+    <string name="send_scan_qr">Scan QR code</string>
+    <string name="send_comment_hint">Comment (optional)</string>
+
+    <!-- Send Confirm -->
+    <string name="send_confirm_recipient">Recipient</string>
+    <string name="send_confirm_address_type">Address type</string>
+    <string name="send_confirm_authenticate">Authenticate to send %1$s %2$s</string>
+    <string name="send_confirm_sending">Sending transaction…</string>
+    <string name="send_confirm_success">Transaction sent!</string>
+    <string name="send_confirm_failed">Transaction failed</string>
+    <string name="send_confirm_amount_label">Amount</string>
+    <string name="send_confirm_fee_label">Transaction fee</string>
+    <string name="send_confirm_total_label">Total</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  RECEIVE  —  overlaps with Beam-UI `receive-*` keys                -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="receive_title">Receive</string>
+    <string name="receive_my_address">My address</string>
+    <string name="receive_requested_amount">Requested amount</string>
+    <string name="receive_generate_new">Generate new address</string>
+    <string name="receive_share_address">Share address</string>
+    <string name="receive_copy_address">Copy address</string>
+    <string name="receive_qr_code">QR Code</string>
+    <string name="receive_address_copied">Address copied to clipboard</string>
+    <string name="receive_max_anonymity_set">Maximum anonymity set</string>
+    <string name="receive_expires_30m">30 minutes</string>
+    <string name="receive_expires_1h">1 hour</string>
+    <string name="receive_expires_2h">2 hours</string>
+    <string name="receive_expires_6h">6 hours</string>
+    <string name="receive_expires_12h">12 hours</string>
+    <string name="receive_expires_never">No limit</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  TRANSACTIONS  —  overlaps with Beam-UI `tx-*`, `wallet-txs-*`     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="tx_history_title">Transaction History</string>
+    <string name="tx_filter_all">All</string>
+    <string name="tx_filter_sent">Sent</string>
+    <string name="tx_filter_received">Received</string>
+    <string name="tx_filter_in_progress">In progress</string>
+    <string name="tx_filter_completed">Completed</string>
+    <string name="tx_filter_cancelled">Cancelled</string>
+    <string name="tx_filter_failed">Failed</string>
+    <string name="tx_filter_pending">Pending</string>
+    <string name="tx_status_pending">pending</string>
+    <string name="tx_status_in_progress">in progress</string>
+    <string name="tx_status_completed">completed</string>
+    <string name="tx_status_failed">failed</string>
+    <string name="tx_status_cancelled">cancelled</string>
+    <string name="tx_status_expired">expired</string>
+    <string name="tx_status_received">received</string>
+    <string name="tx_status_sent">sent</string>
+    <string name="tx_status_confirming">confirming</string>
+    <string name="tx_status_waiting_sender">waiting for sender</string>
+    <string name="tx_status_waiting_receiver">waiting for receiver</string>
+    <string name="tx_status_in_progress_max">in progress (max anonymity)</string>
+    <string name="tx_status_sent_max">sent (max anonymity)</string>
+    <string name="tx_status_received_max">received (max anonymity)</string>
+    <string name="tx_status_in_progress_offline">in progress (offline)</string>
+    <string name="tx_status_sent_offline">sent (offline)</string>
+    <string name="tx_status_received_offline">received (offline)</string>
+    <string name="tx_status_sent_own">sent to own address</string>
+    <string name="tx_no_transactions_filter">No transactions to show</string>
+    <string name="tx_no_sent">There are no sent transactions yet.</string>
+    <string name="tx_no_received">There are no received transactions yet.</string>
+    <string name="tx_no_in_progress">There are no in progress transactions yet.</string>
+    <string name="tx_export_history">Export transaction history</string>
+    <string name="tx_search_placeholder">Search transactions…</string>
+    <string name="tx_clear_search">Clear search</string>
+    <string name="tx_delete_message">The transaction will be deleted. This operation can not be undone.</string>
+    <string name="tx_delete_title">Delete transaction</string>
+
+    <!-- Transaction Detail -->
+    <string name="tx_detail_title">Transaction Info</string>
+    <string name="tx_detail_general_info">General info</string>
+    <string name="tx_detail_date">Date</string>
+    <string name="tx_detail_sending_address">Sending address</string>
+    <string name="tx_detail_receiving_address">Receiving address</string>
+    <string name="tx_detail_sender_identity">Sender signature</string>
+    <string name="tx_detail_receiver_identity">Receiver signature</string>
+    <string name="tx_detail_tx_id">Transaction ID</string>
+    <string name="tx_detail_kernel_id" translatable="false">Kernel ID</string>
+    <string name="tx_detail_confirmation_status">Confirmation status</string>
+    <string name="tx_detail_confirming_progress">Confirming (%1$d)</string>
+    <string name="tx_detail_error">Error</string>
+    <string name="tx_detail_rate_notice">calculated with the exchange rate at the time of the transaction</string>
+    <string name="tx_detail_no_rate">exchange rate was not available at the time of the transaction</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  UTXO  —  overlaps with Beam-UI `utxo-*` keys                     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="utxo_title" translatable="false">UTXO</string>
+    <string name="utxo_maturity">Maturity</string>
+    <string name="utxo_status_available">Available</string>
+    <string name="utxo_status_maturing">Maturing (till block height %1$d)</string>
+    <string name="utxo_status_unavailable">Unavailable (mining result rollback)</string>
+    <string name="utxo_status_outgoing">In progress (outgoing)</string>
+    <string name="utxo_status_incoming">In progress (incoming)</string>
+    <string name="utxo_status_change">In progress (change)</string>
+    <string name="utxo_status_spent">Spent</string>
+    <string name="utxo_status_maturing_mp">Maturing (maximum anonymity %1$d%% unlinked)</string>
+    <string name="utxo_empty">Your UTXO list is empty</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  ADDRESSES  —  overlaps with Beam-UI `addresses-*`, `address-*`    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="addresses_title">Address Book</string>
+    <string name="addresses_active">My active addresses</string>
+    <string name="addresses_expired">My expired addresses</string>
+    <string name="addresses_contacts">Contacts</string>
+    <string name="addresses_empty">Your address book is empty</string>
+    <string name="addresses_contacts_empty">Your contact list is empty</string>
+    <string name="addresses_delete_warning_title">Delete address</string>
+    <string name="addresses_delete_warning_text">There is an active transaction that uses this address. Are you sure?</string>
+    <string name="addresses_show_qr">Show QR code</string>
+    <string name="addresses_edit_address">Edit address</string>
+    <string name="addresses_delete_address">Delete address</string>
+    <string name="addresses_delete_contact">Delete contact</string>
+    <string name="addresses_receive_funds">Receive funds</string>
+    <string name="addresses_newer_lib_warning">This address was generated by a newer Beam library version. Please update your wallet.</string>
+    <string name="addresses_newer_client_warning">This address was generated by a newer Beam client version. Please update your wallet.</string>
+    <string name="addresses_info_title">Address details</string>
+    <string name="addresses_type_label">Address type</string>
+    <string name="addresses_max_anonymity_title">Address details with max anonymity set</string>
+    <string name="addresses_regular_notice">Regular address includes both online and offline addresses.</string>
+    <string name="addresses_sbbs_address_label" translatable="false">SBBS Address (use for CEX withdrawals and mining)</string>
+    <string name="addresses_copy_and_close">Copy address and close</string>
+
+    <!-- Address types (non-translatable protocol terms) -->
+    <string name="addr_type_sbbs" translatable="false">SBBS (Online)</string>
+    <string name="addr_type_regular" translatable="false">Regular (Offline)</string>
+    <string name="addr_type_max_privacy" translatable="false">Max Privacy</string>
+    <string name="addr_type_public_offline" translatable="false">Public Offline</string>
+    <string name="addr_type_offline" translatable="false">Offline</string>
+    <string name="addr_type_online" translatable="false">Online</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  ASSET DETAIL                                                       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="asset_detail_title">Asset Info</string>
+    <string name="asset_id_label" translatable="false">Asset ID</string>
+    <string name="asset_id_value" translatable="false">ID: %1$d</string>
+    <string name="asset_name_label">Asset name</string>
+    <string name="asset_unit_label">Unit name</string>
+    <string name="asset_smallest_label">Smallest unit name</string>
+    <string name="asset_short_desc">Short description</string>
+    <string name="asset_long_desc">Long description</string>
+    <string name="asset_website">Website</string>
+    <string name="asset_whitepaper">Whitepaper</string>
+    <string name="asset_ca_id_label" translatable="false">Confidential Asset ID</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SWAP / DEX  —  overlaps with Beam-UI `swap-*`, `atomic-*`,        -->
+    <!--                          `assets-swap-*` keys                       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="swap_title">Swap</string>
+    <string name="swap_atomic_title" translatable="false">Atomic Swaps</string>
+    <string name="swap_assets_title" translatable="false">Assets Swaps</string>
+    <string name="swap_create_offer">Create Offer</string>
+    <string name="swap_accept_offer">Accept Offer</string>
+    <string name="swap_cancel_offer">Cancel Offer</string>
+    <string name="swap_cancel_offer_text">Are you sure you want to cancel your offer?</string>
+    <string name="swap_rate_label">Rate</string>
+    <string name="swap_rate_format">Rate: 1 %1$s = %2$s</string>
+    <string name="swap_send_amount">Send amount</string>
+    <string name="swap_receive_amount">Receive amount</string>
+    <string name="swap_expiration_time">Expiration time</string>
+    <string name="swap_expired">Expired.</string>
+    <string name="swap_connecting">Connecting…</string>
+    <string name="swap_authenticate_message">Authenticate to swap %1$s %2$s</string>
+    <string name="swap_no_offers">There are no active offers at the moment</string>
+    <string name="swap_no_my_offers">There are no offers yet.</string>
+    <string name="swap_no_transactions">There are no swap transactions yet.</string>
+    <string name="swap_active_offers_tab">Active offers</string>
+    <string name="swap_my_offers_tab">My offers</string>
+    <string name="swap_transactions_tab">Transactions</string>
+    <string name="swap_currency_na">%1$s is not connected. Please check your settings.</string>
+    <string name="swap_cannot_accept_own">You cannot accept your own offer</string>
+    <string name="swap_insufficient_funds">Insufficient funds to complete the swap</string>
+    <string name="swap_amount_below_fee">The swap amount must be greater than the transaction fee</string>
+    <string name="swap_same_assets_error">You can\'t create an offer with identical assets on both sides</string>
+    <string name="swap_token">Swap token</string>
+    <string name="swap_token_hint">Paste token or address here</string>
+    <string name="swap_copy_token">Copy token</string>
+    <string name="swap_token_details">Token details</string>
+    <string name="swap_fit_balance">Fit my current balance</string>
+    <string name="swap_confirm_create_title">Confirm asset swap creation</string>
+    <string name="swap_confirm_accept_title">Accept asset swap</string>
+
+    <!-- Swap/DEX — mobile-specific strings -->
+    <string name="swap_assets_label">Assets Swap</string>
+    <string name="swap_tab_all_offers">All Offers</string>
+    <string name="swap_tab_my_offers">My Offers</string>
+    <string name="swap_tab_history">History</string>
+    <string name="swap_empty_history">No swap history</string>
+    <string name="swap_empty_offers">No offers available</string>
+    <string name="swap_empty_my_offers">You have no active offers</string>
+    <string name="swap_empty_hint">Create one with the + button</string>
+    <string name="swap_confirm_title">Confirm Swap</string>
+    <string name="swap_confirm_you_send">You send</string>
+    <string name="swap_confirm_you_receive">You receive</string>
+    <string name="swap_confirm_fee">Fee: 0.001 BEAM (paid by you)</string>
+    <string name="swap_password_subtitle">Confirm your wallet password to swap</string>
+    <string name="swap_accepted">Accepted</string>
+    <string name="swap_active">Active</string>
+    <string name="swap_accept_btn">Accept Swap</string>
+    <string name="swap_insufficient_format">Insufficient %1$s</string>
+    <string name="swap_in_progress">In Progress</string>
+    <string name="swap_fee_format">Fee: %1$s BEAM</string>
+    <string name="swap_create_title">Create Swap Offer</string>
+    <string name="swap_buy_label">Buy</string>
+    <string name="swap_price_label">Unit Price</string>
+    <string name="swap_pay_label">Pay</string>
+    <string name="swap_receive_label">You\'ll Receive</string>
+    <string name="swap_expires_label">Expires in</string>
+    <string name="swap_rate_display">1 %1$s = %2$s %3$s</string>
+    <string name="swap_same_asset_error">Cannot swap the same asset</string>
+    <string name="swap_post_btn">Post Offer</string>
+    <string name="swap_create_fee">Fee: 0.001 BEAM (paid by the person who accepts your offer)</string>
+    <string name="swap_picker_buy">Buy Asset</string>
+    <string name="swap_picker_pay">Pay Asset</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  DAPPS  —  overlaps with Beam-UI `dapps-store-*`, `apps-*`,        -->
+    <!--                    `dapp-details-*`, `dnd-*` keys                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="dapps_title" translatable="false">DApps</string>
+    <string name="dapps_store_title">DApp Store</string>
+    <string name="dapps_installed_tab">Installed</string>
+    <string name="dapps_all_tab">All</string>
+    <string name="dapps_no_installed">You don\'t have any applications installed yet</string>
+    <string name="dapps_no_at_all">No applications yet</string>
+    <string name="dapps_publishers">Publishers</string>
+    <string name="dapps_loading_app">Please wait, %1$s is loading</string>
+    <string name="dapps_loading" translatable="false">Loading…</string>
+    <string name="dapps_install_title">Install DApp</string>
+    <string name="dapps_install_success">Congratulations! \'%1$s\' DApp is successfully installed.</string>
+    <string name="dapps_install_fail">Sorry, the installation failed. Please check the file and try again.</string>
+    <string name="dapps_uninstall">Uninstall</string>
+    <string name="dapps_uninstall_confirm">Are you sure you want to uninstall %1$s DApp?</string>
+    <string name="dapps_uninstall_success">%1$s DApp uninstalled.</string>
+    <string name="dapps_uninstall_fail">Something went wrong. Uninstall failed. Please try again.</string>
+    <string name="dapps_update">Update</string>
+    <string name="dapps_version_required">This DApp requires version %1$s of Beam Wallet or higher.</string>
+    <string name="dapps_dev_app_notice">This is your dev application</string>
+    <string name="dapps_app_details">Application details</string>
+    <string name="dapps_name">Name</string>
+    <string name="dapps_description">Description</string>
+    <string name="dapps_release_date">Release date</string>
+    <string name="dapps_version">Version</string>
+    <string name="dapps_publisher_key">Publisher key</string>
+    <string name="dapps_publisher_name">Publisher name</string>
+    <string name="dapps_category">Category</string>
+    <string name="dapps_load_file">Load a file</string>
+    <string name="dapps_drop_file">or just drop it here</string>
+    <string name="dapps_installed_toast">%1$s installed</string>
+    <string name="dapps_become_publisher">Become a publisher</string>
+    <string name="dapps_publisher_page">Publisher\'s page</string>
+    <string name="dapps_my_dapps_admin">My DApps – admin panel</string>
+    <string name="dapps_search_placeholder">Search DApps…</string>
+
+    <!-- DApp Store — mobile-specific strings (not from Beam-UI) -->
+    <string name="dapps_empty_title">No DApps Installed</string>
+    <string name="dapps_empty_subtitle">Browse the DApp Store to install decentralized apps</string>
+    <string name="dapps_empty_button">Browse DApp Store</string>
+    <string name="dapps_arrange">Arrange DApps</string>
+    <string name="dapps_get_more">+ Get More DApps</string>
+    <string name="dapps_remove_confirm">Remove %1$s?</string>
+    <string name="dapps_back_button"><![CDATA[< Back]]></string>
+    <string name="dapps_store_subtitle">Browse and install DApps from the Beam on-chain registry</string>
+    <string name="dapps_store_loading">Loading DApp Store…</string>
+    <string name="dapps_store_no_dapps">No additional DApps available</string>
+    <string name="dapps_store_empty_hint">Pull down to refresh or sideload a .dapp package</string>
+    <string name="dapps_no_download_source">No download source available</string>
+    <string name="dapps_install_failed_msg">Install failed: %1$s</string>
+    <string name="dapps_install_complete">DApp installed. Go back to open it.</string>
+    <string name="dapps_sideload_invalid">Please select a .dapp package file</string>
+    <string name="dapps_install_from_file">Install from File</string>
+    <string name="dapps_sideload_desc">Sideload a .dapp package from your device</string>
+    <string name="dapps_installed_label">Installed</string>
+    <string name="dapps_install_label">Install</string>
+    <string name="dapps_source_bundled">BUNDLED</string>
+    <string name="dapps_source_ipfs" translatable="false">IPFS</string>
+    <string name="dapps_publishers_subtitle">Enable or disable publishers to filter their DApps</string>
+    <string name="dapps_no_publishers">No publishers found</string>
+    <string name="dapps_sideloaded_name">Sideloaded DApp</string>
+
+    <!-- DApp in-app panel -->
+    <string name="dapp_close">Close DApp</string>
+    <string name="dapp_balance_tab">WALLET BALANCE</string>
+    <string name="dapp_tx_tab">%1$s TRANSACTIONS</string>
+    <string name="dapp_toggle_panel">Toggle panel</string>
+    <string name="dapp_no_other_assets">No other assets</string>
+    <string name="dapp_contract_call">Contract call</string>
+    <string name="dapp_asset_fallback">Asset #%1$d</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SETTINGS  —  overlaps with Beam-UI `settings-*`, `change-pwd-*`   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_general">General</string>
+    <string name="settings_wallet_section">Wallet</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_node_section">Node</string>
+    <string name="settings_privacy">Privacy</string>
+    <string name="settings_connectivity">Connectivity</string>
+    <string name="settings_utilities">Utilities</string>
+    <string name="settings_troubleshooting">Troubleshooting</string>
+    <string name="settings_resources">Resources</string>
+    <string name="settings_about">About</string>
+
+    <!-- Settings - General -->
+    <string name="settings_lock_screen">Lock screen</string>
+    <string name="settings_lock_never">Never</string>
+    <string name="settings_lock_1m">1 minute</string>
+    <string name="settings_lock_5m">5 minutes</string>
+    <string name="settings_lock_15m">15 minutes</string>
+    <string name="settings_lock_30m">30 minutes</string>
+    <string name="settings_lock_1h">1 hour</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_ask_password_on_send">Ask password on every Send</string>
+    <string name="settings_ask_pwd_confirm_title">Ask password on every Send</string>
+    <string name="settings_ask_pwd_confirm_message">Password verification is required to change this setting</string>
+    <string name="settings_confirmations">Minimum confirmations</string>
+    <string name="settings_amount_unit">Show amounts in</string>
+    <string name="settings_balance_hidden">Hide balance</string>
+
+    <!-- Settings - Notifications -->
+    <string name="settings_notif_wallet_updates">Wallet updates</string>
+    <string name="settings_notif_tx_status">Transaction status</string>
+    <string name="settings_notif_bg_service">Background service</string>
+
+    <!-- Settings - Node -->
+    <string name="settings_node_mode_label">Connection mode</string>
+    <string name="settings_node_integrated">Integrated node</string>
+    <string name="settings_node_remote">Remote node</string>
+    <string name="settings_node_random">Random node</string>
+    <string name="settings_node_address_label">Node address</string>
+    <string name="settings_node_address_placeholder">Please enter the address</string>
+    <string name="settings_node_port_label">Port</string>
+    <string name="settings_node_port_placeholder">Please enter the port</string>
+    <string name="settings_node_username">Username</string>
+    <string name="settings_node_password">Password</string>
+    <string name="settings_node_apply_changes">Apply changes</string>
+    <string name="settings_node_random_text">Random node address and port will be displayed after connecting.</string>
+    <string name="settings_node_invalid_port">Port is mandatory</string>
+    <string name="settings_peers_title">Peers</string>
+    <string name="settings_blockchain_height">Blockchain height</string>
+    <string name="settings_node_swapping_cannot_disconnect" translatable="false">Swap in progress, cannot disconnect node</string>
+
+    <!-- Settings - IPFS -->
+    <string name="settings_ipfs_title" translatable="false">IPFS Integrated Node</string>
+    <string name="settings_ipfs_swarm_port">Swarm Port</string>
+    <string name="settings_ipfs_location" translatable="false">IPFS repository location</string>
+    <string name="settings_ipfs_run_on">Run node on</string>
+    <string name="settings_ipfs_peers">IPFS Peers: %1$d</string>
+
+    <!-- Settings - Privacy -->
+    <string name="settings_privacy_max_anonymity">Maximum anonymity set size</string>
+    <string name="settings_privacy_mp_notice">Received coins can be spent immediately.</string>
+    <string name="settings_privacy_time_limit">Longest transaction time for maximum anonymity</string>
+    <string name="settings_privacy_no_limit">No limit</string>
+    <string name="settings_privacy_no_limit_comment">No limit (transaction can last indefinitely)</string>
+    <string name="settings_show_public_offline">Show public offline address</string>
+    <string name="settings_allow_beam_messenger">Allow access to Beam Messenger and DApps</string>
+
+    <!-- Settings - Security -->
+    <string name="settings_change_password">Change wallet password</string>
+    <string name="settings_old_password">Enter your current password</string>
+    <string name="settings_confirm_new_password">Confirm new password</string>
+    <string name="settings_password_changed">Password changed</string>
+    <string name="settings_old_password_empty">Please enter old password</string>
+    <string name="settings_new_password_empty">Please enter new password</string>
+    <string name="settings_confirm_password_empty">Please confirm new password</string>
+    <string name="settings_new_same_as_old">New password cannot be the same as old</string>
+    <string name="settings_confirm_password_fail">New password doesn\'t match the confirm password</string>
+    <string name="settings_old_password_fail">Current password is incorrect</string>
+    <string name="settings_show_owner_key">Show owner key</string>
+    <string name="settings_owner_key_message">Please notice, that knowing your owner key gives full control over your wallet funds.</string>
+    <string name="settings_owner_key_copy">Owner key copied</string>
+
+    <!-- Settings - Utilities -->
+    <string name="settings_show_utxo" translatable="false">Show UTXO</string>
+    <string name="settings_get_beam_faucet">Get Beams from Beam Community Faucet</string>
+    <string name="settings_rescan_blockchain">Rescan blockchain</string>
+    <string name="settings_rescan_confirmation">Rescan will sync transaction and UTXO data from the blockchain. This may take some time. Are you sure?</string>
+    <string name="settings_export_wallet">Export wallet data</string>
+    <string name="settings_import_wallet">Import wallet data</string>
+    <string name="settings_remove_wallet">Remove wallet</string>
+    <string name="settings_remove_wallet_confirm">Are you sure you want to remove this wallet? All local data will be deleted. Make sure you have your seed phrase backed up.</string>
+    <string name="settings_show_public_offline_address">Show public offline address</string>
+
+    <!-- Settings - About -->
+    <string name="settings_version">PriviMW v%1$s</string>
+    <string name="settings_lib_version">Beam library v%1$s</string>
+    <string name="settings_update_available">Version %1$s is available</string>
+    <string name="settings_update_current">Current: %1$s</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_report_problem">Report a problem</string>
+    <string name="settings_save_logs">Save wallet logs</string>
+    <string name="settings_documentation">Documentation</string>
+    <string name="settings_github">GitHub</string>
+    <string name="settings_beam_explorer">Beam Explorer</string>
+
+    <!-- Settings - Report Problem -->
+    <string name="settings_report_step1">1. Save wallet logs using the button below</string>
+    <string name="settings_report_step2">2. Send an email to %1$s or open a ticket on %2$s</string>
+    <string name="settings_report_step3">3. Don\'t forget to attach the log files.</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CHAT / MESSENGER  —  PriviMW-specific (no Beam-UI equivalent)     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="chat_title">Chats</string>
+    <string name="chat_new_chat">New Chat</string>
+    <string name="chat_new_group">New Group</string>
+    <string name="chat_search">Search</string>
+    <string name="chat_no_conversations">No conversations yet</string>
+    <string name="chat_no_results">No results for \"%1$s\"</string>
+    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_add_caption">Add a caption…</string>
+    <string name="chat_online">Online</string>
+    <string name="chat_typing">typing…</string>
+    <string name="chat_reply_to">Replying to</string>
+    <string name="chat_edited_label">(edited)</string>
+    <string name="chat_deleted_message">This message was deleted</string>
+    <string name="chat_disappearing_msg">Disappearing message</string>
+    <string name="chat_scheduled_msg">Scheduled message</string>
+    <string name="chat_fwd_from">Forwarded from</string>
+    <string name="chat_attach_file">Attach file</string>
+    <string name="chat_attach_gallery">Gallery</string>
+    <string name="chat_attach_document">Document</string>
+    <string name="chat_take_photo">Take photo</string>
+    <string name="chat_record_voice">Record voice</string>
+    <string name="chat_contact_info">Contact Info</string>
+    <string name="chat_block_user">Block User</string>
+    <string name="chat_unblock_user">Unblock User</string>
+    <string name="chat_clear_history">Clear History</string>
+    <string name="chat_delete_conversation">Delete Conversation</string>
+    <string name="chat_mute_notifications">Mute Notifications</string>
+    <string name="chat_unmute_notifications">Unmute Notifications</string>
+    <string name="chat_archive_chat">Archive Chat</string>
+    <string name="chat_unarchive_chat">Unarchive Chat</string>
+    <string name="chat_pin_conversation">Pin Conversation</string>
+    <string name="chat_unpin_conversation">Unpin Conversation</string>
+    <string name="chat_mark_unread">Mark as Unread</string>
+    <string name="chat_send_message">Send message</string>
+    <string name="chat_message_sent">Message sent</string>
+    <string name="chat_message_scheduled_for">Message scheduled for %1$s</string>
+    <string name="chat_resolving_address">Resolving address…</string>
+    <string name="chat_account_deleted_notice">This account has been deleted</string>
+
+    <!-- Chat actions / slash commands -->
+    <string name="chat_rename_confirm">Rename this chat</string>
+    <string name="chat_rename_hint">Enter a new name</string>
+    <string name="chat_tip_command">Tip BEAM</string>
+    <string name="chat_tip_sent">Tip sent! %1$s</string>
+
+    <!-- Chat forward -->
+    <string name="chat_forward_title">Forward Message</string>
+    <string name="chat_forward_to">Forward to</string>
+    <string name="chat_forward_sent">Forwarded %1$d message%2$s to @%3$s</string>
+
+    <!-- Chat selection mode -->
+    <string name="chat_selected_count">%1$d selected</string>
+    <string name="chat_delete_selected">Delete selected</string>
+    <string name="chat_forward_selected">Forward selected</string>
+
+    <!-- Chat file / image messages -->
+    <string name="chat_file_size_kb">%.1f KB</string>
+    <string name="chat_file_size_mb">%.1f MB</string>
+    <string name="chat_file_size_b">%1$d B</string>
+    <string name="chat_save_file">Save file</string>
+    <string name="chat_open_file">Open file</string>
+    <string name="chat_media_gallery">Media Gallery</string>
+    <string name="chat_media_section">Media (%1$d)</string>
+    <string name="chat_files_section">Files (%1$d)</string>
+
+    <!-- Chat message send status -->
+    <string name="chat_sending">Sending…</string>
+    <string name="chat_sent">Sent</string>
+    <string name="chat_delivered">Delivered</string>
+    <string name="chat_read">Read</string>
+    <string name="chat_failed_to_send">Failed to send</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  REGISTER / PROFILE  —  PriviMW-specific                           -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="register_title">Register Handle</string>
+    <string name="register_handle_label">Choose your handle</string>
+    <string name="register_handle_placeholder">@handle</string>
+    <string name="register_handle_available">@%1$s is available!</string>
+    <string name="register_handle_taken">@%1$s is already taken</string>
+    <string name="register_handle_invalid">Invalid handle. Use letters, numbers, and underscores (3–30 characters).</string>
+    <string name="register_checking">Checking…</string>
+    <string name="register_display_name_label">Display name</string>
+    <string name="register_display_name_placeholder">Your display name</string>
+    <string name="register_fee_label">Registration fee</string>
+    <string name="register_button">Register</string>
+    <string name="register_registering">Registering Handle</string>
+    <string name="register_pending_message">Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.</string>
+    <string name="register_success">Handle @%1$s registered!</string>
+    <string name="register_complete">Registration Complete!</string>
+    <string name="register_handle_is_yours">@%1$s is now yours</string>
+    <string name="register_failed">Registration Failed</string>
+    <string name="register_try_again">Try Again</string>
+    <string name="register_description">Choose a unique handle for encrypted messaging on Beam</string>
+    <string name="register_handle_hint">3-32 characters, letters, numbers, underscores</string>
+    <string name="register_cannot_check">Could not check availability</string>
+    <string name="register_handle_too_short">Handle must be at least 3 characters</string>
+    <string name="register_sbbs_failed">Failed to create SBBS address</string>
+    <string name="register_failed_generic">Registration failed</string>
+    <string name="register_transaction_failed">Transaction failed</string>
+    <string name="chats_encrypted_notice">End-to-end encrypted via SBBS</string>
+    <string name="chats_loading">Loading…</string>
+    <string name="chats_empty">No conversations yet</string>
+    <string name="chats_no_search_results">No results</string>
+    <string name="chats_tab_all">All</string>
+    <string name="chats_tab_unread">Unread</string>
+    <string name="chats_tab_groups">Groups</string>
+    <string name="chats_tab_dms">DMs</string>
+    <string name="chats_tab_archived">Archived</string>
+    <string name="chats_swipe_archive">Archive</string>
+    <string name="chats_swipe_unarchive">Unarchive</string>
+    <string name="chats_swipe_delete">Delete</string>
+    <string name="chats_swipe_mute">Mute</string>
+    <string name="chats_swipe_unmute">Unmute</string>
+    <string name="chats_swipe_pin">Pin</string>
+    <string name="chats_swipe_unpin">Unpin</string>
+    <string name="chats_swipe_read">Read</string>
+    <string name="chats_swipe_unread">Unread</string>
+    <string name="chats_confirm_delete">Delete conversation? This cannot be undone.</string>
+    <string name="chats_pull_to_refresh">Pull to refresh</string>
+    <string name="chats_search_placeholder">Search chats, handles, or groups…</string>
+    <string name="chats_tap_to_chat">Tap the pencil to start a chat</string>
+    <string name="chats_leave_group_title">Leave Group?</string>
+    <string name="chats_delete_chat_title">Delete Chat?</string>
+    <string name="chats_leave_group_confirm">Leave \"%1$s\"? You\'ll need an invite to rejoin.</string>
+    <string name="chats_delete_chat_confirm">Delete all messages with %1$s?</string>
+    <string name="chats_leave">Leave</string>
+    <string name="chats_leave_failed">Leave failed: %1$s</string>
+    <string name="chats_address_updated">Address Updated!</string>
+    <string name="chats_handle_ready">@%1$s is ready</string>
+    <string name="chats_update_failed">Update Failed</string>
+    <string name="chats_updating_address">Updating Address</string>
+    <string name="chats_updating_address_msg">Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.</string>
+    <string name="chats_welcome_back">Welcome Back</string>
+    <string name="chats_restored_notice">Your wallet was restored on a new device. Your messaging address needs to be updated so others can reach you.</string>
+    <string name="register_not_registered_title">Welcome to PriviMW Messenger</string>
+    <string name="register_not_registered_subtitle">Register a handle to start messaging</string>
+    <string name="register_not_registered_button">Register Handle</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  GROUP CHAT  —  PriviMW-specific                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="group_info_title">Group Info</string>
+    <string name="group_create_title">Create Group</string>
+    <string name="group_create_public">Create Public Group</string>
+    <string name="group_create_private">Create Private Group</string>
+    <string name="group_name_label">Group name</string>
+    <string name="group_name_placeholder">Enter group name</string>
+    <string name="group_description_label">Description</string>
+    <string name="group_description_placeholder">Enter group description (optional)</string>
+    <string name="group_join_password_label">Join password</string>
+    <string name="group_join_password_placeholder">Enter password (optional)</string>
+    <string name="group_max_members_label">Max members</string>
+    <string name="group_require_approval_label">Require admin approval to join</string>
+    <string name="group_create_button">Create Group</string>
+    <string name="group_creating">Creating group…</string>
+    <string name="group_created">Group created!</string>
+
+    <!-- Group Settings -->
+    <string name="group_members_count">Members (%1$d)</string>
+    <string name="group_banned_count">Banned Users (%1$d)</string>
+    <string name="group_edit_name">Edit group name</string>
+    <string name="group_edit_description">Edit group description</string>
+    <string name="group_change_avatar">Change group picture</string>
+    <string name="group_avatar_updated">Group picture updated</string>
+    <string name="group_you_updated_picture">You updated group picture</string>
+    <string name="group_member_role_owner">Owner</string>
+    <string name="group_member_role_admin">Admin</string>
+    <string name="group_member_role_member">Member</string>
+    <string name="group_promote_to_admin">Promote to Admin</string>
+    <string name="group_demote_to_member">Demote to Member</string>
+    <string name="group_remove_member">Remove Member</string>
+    <string name="group_ban_member">Ban Member</string>
+    <string name="group_unban_member">Unban Member</string>
+    <string name="group_transfer_ownership">Transfer Ownership</string>
+    <string name="group_leave_group">Leave Group</string>
+    <string name="group_delete_group">Delete Group</string>
+    <string name="group_delete_confirmation">Are you sure you want to delete this group? This action cannot be undone.</string>
+    <string name="group_leave_confirmation">Are you sure you want to leave this group?</string>
+    <string name="group_members_section">Members</string>
+    <string name="group_member_joined">%1$s joined the group</string>
+    <string name="group_member_left">%1$s left the group</string>
+    <string name="group_member_removed">%1$s was removed from the group</string>
+    <string name="group_promoted">%1$s is now an admin</string>
+    <string name="group_ownership_transferred">Group ownership transferred to %1$s</string>
+    <string name="group_description_changed">%1$s changed the group description</string>
+    <string name="group_name_changed">%1$s changed the group name to \"%2$s\"</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  VOICE MESSAGES  —  PriviMW-specific                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="voice_record_permission">Microphone permission is needed to record voice messages</string>
+    <string name="voice_slide_to_lock">Slide up to lock recording</string>
+    <string name="voice_release_to_send">Release</string>
+    <string name="voice_recording">Recording…</string>
+    <string name="voice_paused">Recording paused</string>
+    <string name="voice_preview">Voice preview</string>
+    <string name="voice_too_short">Voice message too short</string>
+    <string name="voice_too_large">Voice message too large (%1$dKB). Max is %2$dKB.</string>
+    <string name="voice_duration_seconds">%1$d:%2$02d</string>
+    <string name="voice_play_button">Play</string>
+    <string name="voice_pause_button">Pause</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  PAYMENT PROOF  —  overlaps with Beam-UI `payment-info-*` keys     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="payment_proof_title">Payment proof verification</string>
+    <string name="payment_proof_paste">Paste your payment proof here</string>
+    <string name="payment_proof_decode_fail">Cannot decode the proof. Invalid format.</string>
+    <string name="payment_proof_code">Code</string>
+    <string name="payment_proof_sender">Sender</string>
+    <string name="payment_proof_receiver">Receiver</string>
+    <string name="payment_proof_copy_details">Copy details</string>
+    <string name="payment_proof_label">Payment proof</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  NOTIFICATIONS  —  overlaps with Beam-UI `notification-*` keys     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="notif_tx_received">Transaction received</string>
+    <string name="notif_tx_sent">Transaction sent</string>
+    <string name="notif_tx_failed">Transaction failed</string>
+    <string name="notif_swap_completed">Atomic Swap offer completed</string>
+    <string name="notif_swap_failed">Atomic Swap offer failed</string>
+    <string name="notif_swap_expired">Atomic Swap offer expired</string>
+    <string name="notif_dex_completed">Assets Swaps transaction completed</string>
+    <string name="notif_dex_failed">Assets Swaps transaction failed</string>
+    <string name="notif_dex_expired">Assets Swaps transaction expired</string>
+    <string name="notif_contract_completed">DApp transaction completed</string>
+    <string name="notif_contract_failed">DApp transaction failed</string>
+    <string name="notif_contract_expired">DApp transaction expired</string>
+    <string name="notif_update_available">New version v%1$s is available</string>
+    <string name="notif_new_message">New message</string>
+    <string name="notif_unread_messages">%1$d unread message%2$s</string>
+    <string name="notif_channel_chat">Chat Messages</string>
+    <string name="notif_channel_tx">Transaction Updates</string>
+    <string name="notif_clear_all">Clear all</string>
+    <string name="notif_empty">There are no notifications yet</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  ERRORS  —  user-facing error toasts / dialogs                     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="error_unexpected">An unexpected error occurred. Please try again.</string>
+    <string name="error_connection_lost">Connection to node lost</string>
+    <string name="error_connection_timeout">Connection timed out</string>
+    <string name="error_node_unreachable">Node is unreachable</string>
+    <string name="error_time_not_synced">System time not synchronized. Please check your device time settings.</string>
+    <string name="error_wallet_db_locked">Wallet database is already opened</string>
+    <string name="error_wallet_location">Failed to access wallet data. Please check your storage permissions.</string>
+    <string name="error_no_seed">No seed phrase found. Please restore your wallet.</string>
+    <string name="error_invalid_password">Invalid password provided</string>
+    <string name="error_password_empty">Please enter your password</string>
+    <string name="error_sync_failed">Failed to sync with the blockchain. Please check your connection.</string>
+    <string name="error_abi_mismatch">Application version mismatch. Please update the app.</string>
+    <string name="error_tx_not_found">Transaction not found</string>
+    <string name="error_address_expired">Address is expired</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CONTACT INFO  —  PriviMW-specific                                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="contact_info_title">Contact Info</string>
+    <string name="contact_handle" translatable="false">@%1$s</string>
+    <string name="contact_wallet_id">Wallet ID</string>
+    <string name="contact_not_in_contacts">Not in your contacts</string>
+    <string name="contact_add_to_contacts">Add to Contacts</string>
+    <string name="contact_remove_from_contacts">Remove from Contacts</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SPLIT COINS  —  PriviMW-specific                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="split_coins_title">Split Coins</string>
+    <string name="split_coins_description">Split a large UTXO into smaller coins for better privacy and spendability.</string>
+    <string name="split_coins_count">Number of coins</string>
+    <string name="split_coins_fee">Estimated fee per coin</string>
+    <string name="split_coins_button">Split</string>
+    <string name="split_coins_authenticate">Authenticate to split into %1$d coins</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  QR SCANNER  —  PriviMW-specific                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="qr_scanner_title">Scan QR Code</string>
+    <string name="qr_scanner_instruction">Point your camera at a QR code</string>
+    <string name="qr_scanner_permission">Camera permission is needed to scan QR codes</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CURRENCY / FIAT                                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="currency_select">Select currency</string>
+    <string name="currency_search">Search currencies…</string>
+    <string name="currency_change_24h">24h change</string>
+    <string name="settings_section_privime">PriviMe</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_section_node">Node</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_section_utilities">Utilities</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_handle_label">Handle</string>
+    <string name="settings_display_name_label">Display Name</string>
+    <string name="settings_none_placeholder">(none)</string>
+    <string name="settings_registered_label">Registered</string>
+    <string name="settings_profile_picture">Profile Picture</string>
+    <string name="settings_tap_to_change">Tap to change</string>
+    <string name="settings_remove">Remove</string>
+    <string name="settings_edit_display_name">Edit Display Name</string>
+    <string name="settings_update">Update</string>
+    <string name="settings_update_messaging_addr">Update Messaging Address</string>
+    <string name="settings_update_messaging_addr_desc">Create a new SBBS address and update it on-chain</string>
+    <string name="settings_remove_handle">Remove Handle</string>
+    <string name="settings_remove_handle_desc">Unregister @%1$s and free it for others</string>
+    <string name="settings_remove_handle_title">Remove Handle?</string>
+    <string name="settings_remove_handle_confirm">This will unregister @%1$s from the blockchain. Your conversations will be lost and the handle will be available for others to claim.</string>
+    <string name="settings_not_registered">Not registered. Register a @handle in the Chats tab to use messaging.</string>
+    <string name="settings_theme_label">Theme</string>
+    <string name="settings_choose_theme">Choose Theme</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_amoled">AMOLED Black</string>
+    <string name="settings_theme_midnight">Midnight Blue</string>
+    <string name="settings_theme_emerald">Emerald</string>
+    <string name="settings_theme_purple">Purple Haze</string>
+    <string name="settings_theme_solar">Solar</string>
+    <string name="settings_theme_ocean">Ocean</string>
+    <string name="settings_choose_language">Choose Language</string>
+    <string name="settings_currency_label">Currency</string>
+    <string name="settings_choose_currency">Choose Currency</string>
+    <string name="settings_notif_wallet_updates_label">Wallet updates</string>
+    <string name="settings_notif_wallet_updates_desc">Notify when a new app version is available</string>
+    <string name="settings_notif_tx_status_label">Transaction status</string>
+    <string name="settings_notif_tx_status_desc">Receive notifications when transaction status changes</string>
+    <string name="settings_notif_bg_connection_label">Background connection</string>
+    <string name="settings_notif_bg_connection_desc">Keep wallet connected for instant message delivery</string>
+    <string name="settings_bg_service_started">Background service started</string>
+    <string name="settings_bg_service_stopped">Background service stopped</string>
+    <string name="settings_node_block_height">Block Height</string>
+    <string name="settings_node_network">Network</string>
+    <string name="settings_node_network_value">Mainnet</string>
+    <string name="settings_node_connection_mode">Connection Mode</string>
+    <string name="settings_node_mode_random">Random</string>
+    <string name="settings_node_mode_mobile">Mobile</string>
+    <string name="settings_node_mode_own">Own Node</string>
+    <string name="settings_mobile_node_active">Mobile Node Active</string>
+    <string name="settings_mobile_node_syncing">Mobile Node Syncing…</string>
+    <string name="settings_mobile_node_connecting">Mobile Node Connecting…</string>
+    <string name="settings_mobile_verifying">Verifying blockchain independently via FlyClient</string>
+    <string name="settings_mobile_usable_while_sync">App usable via remote node while syncing</string>
+    <string name="settings_mobile_node_title">Enable Mobile Node</string>
+    <string name="settings_mobile_node_desc">Mobile Node runs a lightweight FlyClient node on your device for maximum privacy. Your wallet verifies the blockchain independently without trusting any remote server.</string>
+    <string name="settings_mobile_tradeoffs">Trade-offs:</string>
+    <string name="settings_mobile_tradeoff_1">First sync may take several minutes</string>
+    <string name="settings_mobile_tradeoff_2">Uses more battery and mobile data</string>
+    <string name="settings_mobile_tradeoff_3">Send/receive and messaging work during sync</string>
+    <string name="settings_mobile_tradeoff_4">DApp and contract features are limited until sync completes</string>
+    <string name="settings_mobile_remote_fallback">Your wallet stays connected to a remote node while the mobile node syncs. Once synced, all traffic switches to your local node automatically.</string>
+    <string name="settings_enable">Enable</string>
+    <string name="settings_node_addr_placeholder">node-address:port</string>
+    <string name="settings_connect">Connect</string>
+    <string name="settings_ask_password_label">Ask for password on every Send</string>
+    <string name="settings_ask_password_desc">Require password confirmation for each transaction</string>
+    <string name="settings_disable_security_prompt">Enter your wallet password to disable this security setting.</string>
+    <string name="settings_biometric_unlock_label">Biometric unlock</string>
+    <string name="settings_biometric_unlock_unavailable">Biometric unlock (unavailable)</string>
+    <string name="settings_biometric_no_hardware">No biometric hardware found on this device</string>
+    <string name="settings_biometric_enabled_desc">Wallet unlocks automatically with biometrics</string>
+    <string name="settings_biometric_disabled_desc">Wallet requires password on every app launch</string>
+    <string name="settings_biometric_not_supported">This device does not support biometric authentication</string>
+    <string name="settings_biometric_pwd_not_found">Wallet password not found. Please try again.</string>
+    <string name="settings_biometric_cannot_prompt">Cannot show biometric prompt</string>
+    <string name="settings_biometric_enabled_toast">Biometric unlock enabled</string>
+    <string name="settings_biometric_enroll_failed">Biometric enrollment failed: %1$s</string>
+    <string name="settings_biometric_disabled_toast">Biometric unlock disabled</string>
+    <string name="settings_biometric_enable_title">Enable Biometric Unlock</string>
+    <string name="settings_biometric_enable_subtitle">Scan your fingerprint to enable biometric unlock</string>
+    <string name="settings_biometric_delete_title">Confirm Wallet Removal</string>
+    <string name="settings_biometric_delete_subtitle">Authenticate to delete wallet</string>
+    <string name="settings_max_privacy_desc">Maximum time funds are locked in Max Privacy transactions.</string>
+    <string name="settings_show_key">Show Key</string>
+    <string name="settings_incorrect_password">Incorrect password</string>
+    <string name="settings_change_password_label">Change password</string>
+    <string name="settings_current_password">Current password</string>
+    <string name="settings_new_password">New password</string>
+    <string name="settings_all_password_fields_required">All password fields are required</string>
+    <string name="settings_new_passwords_dont_match">New passwords don\'t match</string>
+    <string name="settings_password_too_short">Password must be at least 6 characters</string>
+    <string name="settings_current_password_incorrect">Current password is incorrect</string>
+    <string name="settings_password_changed_toast">Password changed successfully</string>
+    <string name="settings_export_wallet_label">Export wallet data</string>
+    <string name="settings_export_wallet_desc">Save wallet backup JSON to Downloads</string>
+    <string name="settings_import_wallet_label">Import wallet data</string>
+    <string name="settings_import_wallet_desc">Restore from a backup file</string>
+    <string name="settings_my_addresses_label">My addresses</string>
+    <string name="settings_my_addresses_desc">View, edit, and generate wallet addresses</string>
+    <string name="settings_show_utxo_desc">View unspent transaction outputs</string>
+    <string name="settings_rescan_desc">Re-sync all transactions from the chain</string>
+    <string name="settings_public_offline_desc">Your permanent offline receive address</string>
+    <string name="settings_shader_label">Shader</string>
+    <string name="settings_ipfs_label" translatable="false">IPFS</string>
+    <string name="settings_contract_label">Contract</string>
+    <string name="settings_lib_version_label">Lib Version</string>
+    <string name="settings_app_label">App</string>
+    <string name="settings_loaded">Loaded</string>
+    <string name="settings_not_loaded">Not loaded</string>
+    <string name="settings_online_status">Online</string>
+    <string name="settings_offline_status">Offline</string>
+    <string name="settings_checking">Checking…</string>
+    <string name="settings_check_updates_label">Check for Updates</string>
+    <string name="settings_latest_version_toast">You\'re on the latest version</string>
+    <string name="settings_update_available_title">Update Available</string>
+    <string name="settings_view_release">View Release</string>
+    <string name="settings_later">Later</string>
+    <string name="settings_progress_percent">%1$d%%</string>
+    <string name="settings_sync_progress">Syncing %1$d%% (%2$dk / %3$dk)</string>
+    <string name="settings_delete_wallet_warning">This will permanently delete your wallet from this device. Make sure you have backed up your seed phrase!</string>
+    <string name="settings_type_delete_confirm">Type DELETE to confirm:</string>
+    <string name="settings_type_delete_placeholder">Type DELETE</string>
+    <string name="settings_remove_wallet_btn">Remove Wallet</string>
+    <string name="settings_import_dialog_title">Import Wallet Data</string>
+    <string name="settings_import_dialog_text">Import wallet data from \"%1$s\"?\n\nThis will merge the backup into your current wallet.</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_importing">Importing wallet data…</string>
+    <string name="settings_exporting">Exporting wallet data…</string>
+    <string name="settings_requesting_public_addr">Requesting public address…</string>
+    <string name="settings_connected_to">Connected to %1$s</string>
+    <string name="settings_invalid_node_format">Invalid format. Use hostname:port</string>
+    <string name="settings_invalid_port">Invalid port number</string>
+    <string name="toast_profile_picture_updated">Profile picture updated</string>
+    <string name="toast_profile_picture_removed">Profile picture removed</string>
+    <string name="toast_tx_submitted_display_name">TX submitted. Display name will update when confirmed.</string>
+    <string name="toast_update_display_name_failed">Failed to update display name</string>
+    <string name="toast_tx_submitted_address">TX submitted. Address will update when confirmed.</string>
+    <string name="toast_update_address_failed">Failed</string>
+    <string name="toast_updating_address">Updating messaging address…</string>
+    <string name="toast_tx_submitted_remove_handle">TX submitted. Handle will be removed when confirmed.</string>
+    <string name="toast_remove_handle_failed">Failed to remove handle</string>
+    <string name="toast_transfer_groups_first">You must transfer ownership or delete %1$d group(s) first</string>
+    <string name="toast_wrong_password">Wrong password</string>
+    <string name="toast_mobile_node_enabled">Mobile node enabled — syncing in background</string>
+    <string name="toast_export_failed">Export failed: %1$s</string>
+    <string name="toast_import_failed">Import failed: %1$s</string>
+    <string name="toast_max_privacy_no_limit">Max privacy: no limit</string>
+    <string name="toast_max_privacy_hours">Max privacy: %1$dh</string>
+    <string name="toast_error_message">Error: %1$s</string>
+    <string name="toast_failed_connect">Failed to connect: %1$s</string>
+    <string name="settings_wallet_not_open">Wallet not open</string>
+    <string name="settings_ipfs_peers_label">IPFS Peers</string>
+    <string name="settings_registration_fee_label">Registration fee</string>
+    <string name="settings_show_owner_key_desc">Requires wallet password</string>
+    <string name="settings_export_tx_desc">Save ZIP with all TX types to Downloads</string>
+    <string name="settings_owner_key_title">Owner Key</string>
+    <string name="addresses_filter_favourites">Favourites</string>
+    <string name="addresses_filter_active">Active</string>
+    <string name="addresses_filter_expired">Expired</string>
+    <string name="addresses_no_addresses">No addresses found</string>
+    <string name="addresses_copied_toast">Address copied</string>
+    <string name="addresses_added_favourites">Added to favourites</string>
+    <string name="addresses_removed_favourites">Removed from favourites</string>
+    <string name="addresses_info_note">SBBS addresses used for online transactions and messaging. For offline/max-privacy receive addresses, use the Receive screen.</string>
+    <string name="utxo_total_label">Total UTXOs</string>
+    <string name="utxo_empty_waiting">No UTXOs yet — waiting for data…</string>
+    <string name="utxo_empty_filter">No UTXOs match this filter</string>
+    <string name="toast_rescan_started">Rescan started</string>
+    <string name="settings_public_offline_title">Public Offline Address</string>
+    <string name="utxo_filter_all">All</string>
+    <string name="utxo_filter_available">Available</string>
+    <string name="utxo_filter_maturing">Maturing</string>
+    <string name="utxo_filter_spent">Spent</string>
+    <string name="addresses_expired_label">Expired</string>
+    <string name="addresses_active_label">Active</string>
+    <string name="addresses_never_expires">Never expires</string>
+    <string name="addresses_expires_in">Expires in %1$s</string>
+    <string name="addresses_edit_label_title">Edit Label</string>
+    <string name="addresses_label_hint">Address label</string>
+    <string name="addresses_no_label">No label</string>
+    <string name="utxo_asset_id">Asset ID</string>
+    <string name="utxo_confirmed">Confirmed</string>
+    <string name="utxo_created_by">Created by</string>
+    <string name="avatar_confirm_title">Confirm Profile Picture</string>
+    <string name="avatar_confirm_subtitle">This is how your profile picture will look</string>
+    <string name="avatar_set_picture">Set Picture</string>
+    <string name="avatar_adjust">Adjust</string>
+    <string name="avatar_move_and_scale">Move and Scale</string>
+    <string name="avatar_crop">Crop</string>
+    <string name="tx_request_title">Transaction Request</string>
+    <string name="tx_reject">Reject</string>
+    <string name="tx_approve">Approve</string>
+    <string name="tx_approve_dapp">Approve DApp transaction</string>
+    <string name="tx_approve_title">Approve Transaction</string>
+    <string name="tx_authenticate_confirm">Authenticate to confirm</string>
+    <string name="tx_incorrect_password">Incorrect password</string>
+    <string name="dapp_insufficient_funds">Not enough funds to complete this transaction</string>
+    <string name="tx_approve_password_subtitle">Confirm your wallet password to approve this transaction</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  GROUP SETTINGS TOASTS  —  PriviMW-specific                        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="settings_toast_tx_name_update">TX submitted. Name will update when confirmed.</string>
+    <string name="settings_toast_name_update_failed">Failed to update name</string>
+    <string name="settings_toast_description_updated">Description updated</string>
+    <string name="settings_toast_invite_sent">Invite sent to @%1$s</string>
+    <string name="settings_toast_invite_failed">Failed to send invite</string>
+    <string name="settings_toast_promote_tx">TX submitted. @%1$s will be promoted when confirmed.</string>
+    <string name="settings_toast_demote_tx">TX submitted. @%1$s will be demoted when confirmed.</string>
+    <string name="settings_toast_remove_member_tx">TX submitted. @%1$s will be removed when confirmed.</string>
+    <string name="settings_toast_ban_tx">TX submitted. @%1$s will be banned when confirmed.</string>
+    <string name="settings_toast_unban_tx">TX submitted. @%1$s will be unbanned when confirmed.</string>
+    <string name="settings_toast_ownership_transferred">Ownership transferred to @%1$s</string>
+    <string name="settings_toast_left_group">Left group</string>
+    <string name="settings_toast_group_deleted">Group deleted</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  MEDIA GALLERY TOASTS  —  PriviMW-specific                         -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="media_download_failed">Download failed</string>
+    <string name="media_no_app_to_open">No app to open this file</string>
+    <string name="media_downloaded">Downloaded</string>
+    <string name="media_deleted">Deleted</string>
+    <string name="media_deleted_for_everyone">Deleted for everyone</string>
+    <string name="media_saved_to_downloads">Saved to Downloads</string>
+    <string name="media_save_failed">Save failed</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CREATE GROUP TOASTS  —  PriviMW-specific                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="create_group_enter_name">Enter a group name</string>
+    <string name="create_group_syncing_warning">Wallet is syncing — transaction may take longer to process</string>
+    <string name="create_group_tx_submitted">Transaction submitted. Group will appear when confirmed.</string>
+    <string name="create_group_failed">Failed to create group</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CREATE OFFER TOASTS  —  PriviMW-specific                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="offer_posted">Offer posted!</string>
+    <string name="offer_failed">Failed: %1$s</string>
+    <string name="offer_creating">Creating offer…</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CONTACT INFO TOASTS  —  PriviMW-specific                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="contact_copied_wallet_id">Copied wallet ID</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  NEW CHAT TOASTS  —  PriviMW-specific                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="new_chat_failed_to_join">Failed to join</string>
+    <string name="new_chat_join_request_sent">Join request sent!</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  DAPPS TOASTS  —  PriviMW-specific                                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="dapps_updated_toast">%1$s successfully updated</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SETTINGS TOASTS  —  PriviMW-specific                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="settings_file_empty">Selected file is empty</string>
+    <string name="settings_invalid_json">Invalid JSON file</string>
+    <string name="settings_file_read_failed">Failed to read file: %1$s</string>
+    <string name="settings_wallet_import_ok">Wallet data imported successfully</string>
+    <string name="settings_wallet_import_failed">Import failed — invalid or corrupt file</string>
+    <string name="settings_owner_key_copied_timed">Owner key copied! Clipboard clears in 30s</string>
+    <string name="tx_cancelled">Transaction cancelled</string>
+    <string name="tx_unknown_error">Unknown error</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  TIP TOASTS  —  PriviMW-specific                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="tip_cancelled">Tip cancelled</string>
+    <string name="tip_failed">Tip failed: %1$s</string>
 </resources>

@@ -30,6 +30,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.NodeReconnect
 import com.privimemobile.protocol.SecureStorage
@@ -305,23 +307,22 @@ fun WalletScreen(
     val isFallback = isInOwnMode && (WalletManager.walletInstance?.isConnectionTrusted() ?: true) == false && isConnected
 
     val nodeLabel = when (SecureStorage.getString("node_mode")) {
-        "own" -> if (isFallback) "Fallback Node" else "Own Node"
-        "mobile" -> "Mobile Node"
-        else -> "Random Node"
+        "own" -> if (isFallback) stringResource(R.string.wallet_fallback_node) else stringResource(R.string.wallet_own_node)
+        "mobile" -> stringResource(R.string.wallet_mobile_node)
+        else -> stringResource(R.string.wallet_random_node)
     }
 
-    val isMobileMode = nodeLabel == "Mobile Node"
+    val isMobileMode = SecureStorage.getString("node_mode") == "mobile"
     val statusText = when {
-        isFallback && isConnected -> "$nodeLabel · Block #${beamStatus.height}"
-        isFallback && !isConnected -> "$nodeLabel · Block #${beamStatus.height}"
-        !isConnected -> "Connecting to node..."
+        isFallback -> "$nodeLabel · ${stringResource(R.string.wallet_block_height, beamStatus.height)}"
+        !isConnected -> stringResource(R.string.wallet_connecting_node)
         isMobileMode && isSyncing && syncProgress.total > 0 ->
-            "Mobile syncing ${syncPercent}% \u00B7 Online via remote node"
+            stringResource(R.string.wallet_mobile_syncing, syncPercent)
         isSyncing && syncProgress.total > 0 ->
-            "Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks)"
-        isSyncing -> "Syncing..."
-        beamStatus.height > 0 -> "$nodeLabel \u00B7 Block #${beamStatus.height}"
-        else -> "$nodeLabel \u00B7 Connected"
+            stringResource(R.string.wallet_sync_progress, syncPercent, syncProgress.done / 1000, syncProgress.total / 1000)
+        isSyncing -> stringResource(R.string.wallet_syncing)
+        beamStatus.height > 0 -> "$nodeLabel \u00B7 ${stringResource(R.string.wallet_block_height, beamStatus.height)}"
+        else -> "$nodeLabel \u00B7 ${stringResource(R.string.wallet_connected)}"
     }
 
     val statusDotColor = when {
@@ -374,7 +375,7 @@ fun WalletScreen(
                                         .fillMaxWidth()
                                         .let { if (isFallback) it.clickable {
                                             NodeReconnect.reconnectOwnNode()
-                                            Toast.makeText(context, "Reconnecting to own node...", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.wallet_reconnecting), Toast.LENGTH_SHORT).show()
                                         } else it },
                                 ) {
                                     if (isFallback) {
@@ -516,7 +517,7 @@ fun WalletScreen(
                         } else {
                             // Rates not yet loaded — show loading placeholder
                             Text(
-                                text = "Loading...",
+                                text = stringResource(R.string.general_loading),
                                 color = C.textMuted,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -534,28 +535,28 @@ fun WalletScreen(
                                 val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
                                 if (beamStatus.sending > 0) {
                                     Text(
-                                        "Sending: ${masked(beamStatus.sending)}",
+                                        "${stringResource(R.string.balance_sending)}: ${masked(beamStatus.sending)}",
                                         color = C.textSecondary,
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.receiving > 0) {
                                     Text(
-                                        "Receiving: ${masked(beamStatus.receiving)}",
+                                        "${stringResource(R.string.balance_receiving)}: ${masked(beamStatus.receiving)}",
                                         color = C.accent,
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.maturing > 0) {
                                     Text(
-                                        "Locked: ${masked(beamStatus.maturing)}",
+                                        "${stringResource(R.string.balance_locked)}: ${masked(beamStatus.maturing)}",
                                         color = Color(0xFFFF9800),
                                         fontSize = 12.sp,
                                     )
                                 }
                                 if (beamStatus.maxPrivacy > 0) {
                                     Text(
-                                        "Max Privacy (locked): ${masked(beamStatus.maxPrivacy)}",
+                                        "${stringResource(R.string.balance_max_privacy_locked)}: ${masked(beamStatus.maxPrivacy)}",
                                         color = Color(0xFFFF9800),
                                         fontSize = 12.sp,
                                     )
@@ -576,7 +577,7 @@ fun WalletScreen(
                             ) {
                                 Text(">", color = C.textDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Send", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.general_send), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
                             Button(
                                 onClick = onReceive,
@@ -586,7 +587,7 @@ fun WalletScreen(
                             ) {
                                 Text("<", color = C.textDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Receive", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.general_receive), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -600,7 +601,7 @@ fun WalletScreen(
                     ) {
                         Icon(
                             imageVector = if (balanceHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (balanceHidden) "Show balance" else "Hide balance",
+                            contentDescription = if (balanceHidden) stringResource(R.string.wallet_show_balance) else stringResource(R.string.wallet_hide_balance),
                             tint = C.textSecondary,
                             modifier = Modifier.size(16.dp),
                         )
@@ -632,11 +633,11 @@ fun WalletScreen(
                                 beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0) {
                                 val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
                                 val subParts = mutableListOf<String>()
-                                if (beamStatus.sending > 0) subParts.add("Sending: ${masked(beamStatus.sending)}")
-                                if (beamStatus.receiving > 0) subParts.add("Receiving: ${masked(beamStatus.receiving)}")
-                                if (beamStatus.maturing > 0) subParts.add("Locked: ${masked(beamStatus.maturing)}")
-                                if (beamStatus.maxPrivacy > 0) subParts.add("Max Privacy: ${masked(beamStatus.maxPrivacy)}")
-                                if (beamStatus.shielded > 0) subParts.add("Shielded: ${masked(beamStatus.shielded)}")
+                                if (beamStatus.sending > 0) subParts.add("${stringResource(R.string.balance_sending)}: ${masked(beamStatus.sending)}")
+                                if (beamStatus.receiving > 0) subParts.add("${stringResource(R.string.balance_receiving)}: ${masked(beamStatus.receiving)}")
+                                if (beamStatus.maturing > 0) subParts.add("${stringResource(R.string.balance_locked)}: ${masked(beamStatus.maturing)}")
+                                if (beamStatus.maxPrivacy > 0) subParts.add("${stringResource(R.string.balance_max_privacy)}: ${masked(beamStatus.maxPrivacy)}")
+                                if (beamStatus.shielded > 0) subParts.add("${stringResource(R.string.balance_shielded)}: ${masked(beamStatus.shielded)}")
                                 Text(
                                     subParts.joinToString("  "),
                                     color = C.textSecondary,
@@ -672,7 +673,7 @@ fun WalletScreen(
             if (otherAssets.isNotEmpty()) {
                 item {
                     Text(
-                        "OTHER ASSETS",
+                        stringResource(R.string.wallet_other_assets_header).uppercase(),
                         color = C.textSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -706,7 +707,7 @@ fun WalletScreen(
                                         color = C.border,
                                     ) {
                                         Text(
-                                            "ID: ${asset.assetId}",
+                                            stringResource(R.string.wallet_id_badge, asset.assetId),
                                             color = C.textSecondary,
                                             fontSize = 11.sp,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -714,11 +715,11 @@ fun WalletScreen(
                                     }
                                 }
                                 val subParts = mutableListOf<String>()
-                                if (asset.sending > 0) subParts.add("Sending: ${masked(asset.sending)}")
-                                if (asset.receiving > 0) subParts.add("Receiving: ${masked(asset.receiving)}")
-                                if (asset.maturing > 0) subParts.add("Locked: ${masked(asset.maturing)}")
-                                if (asset.maxPrivacy > 0) subParts.add("Max Privacy: ${masked(asset.maxPrivacy)}")
-                                if (asset.shielded > 0) subParts.add("Shielded: ${masked(asset.shielded)}")
+                                if (asset.sending > 0) subParts.add("${stringResource(R.string.balance_sending)}: ${masked(asset.sending)}")
+                                if (asset.receiving > 0) subParts.add("${stringResource(R.string.balance_receiving)}: ${masked(asset.receiving)}")
+                                if (asset.maturing > 0) subParts.add("${stringResource(R.string.balance_locked)}: ${masked(asset.maturing)}")
+                                if (asset.maxPrivacy > 0) subParts.add("${stringResource(R.string.balance_max_privacy)}: ${masked(asset.maxPrivacy)}")
+                                if (asset.shielded > 0) subParts.add("${stringResource(R.string.balance_shielded)}: ${masked(asset.shielded)}")
                                 if (subParts.isNotEmpty()) {
                                     Text(
                                         subParts.joinToString("  "),
@@ -761,7 +762,7 @@ fun WalletScreen(
             // Transactions header
             item {
                 Text(
-                    "TRANSACTIONS",
+                    stringResource(R.string.wallet_transactions_title).uppercase(),
                     color = C.textSecondary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -778,7 +779,7 @@ fun WalletScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (isSyncing) "Syncing blockchain..." else "No transactions yet",
+                            if (isSyncing) stringResource(R.string.wallet_syncing_blockchain) else stringResource(R.string.wallet_no_transactions),
                             color = C.textMuted,
                             fontSize = 14.sp,
                         )
@@ -809,7 +810,7 @@ fun WalletScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "View All (${transactions.size} transactions)",
+                                    stringResource(R.string.wallet_view_all_txs, transactions.size),
                                     color = C.accent,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -843,14 +844,14 @@ internal fun TxCard(
     val isWaitingForReceiver = isSend && isOnlineTx &&
             (tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS)
     val statusText = when {
-        isWaitingForReceiver -> "Waiting for receiver"
-        tx.status == TxStatus.PENDING -> "Pending"
-        tx.status == TxStatus.IN_PROGRESS -> "In Progress"
-        tx.status == TxStatus.CANCELLED -> "Cancelled"
-        tx.status == TxStatus.COMPLETED -> "Completed"
-        tx.status == TxStatus.FAILED -> "Failed"
-        tx.status == TxStatus.REGISTERING -> "In Progress"
-        else -> "Unknown"
+        isWaitingForReceiver -> stringResource(R.string.tx_status_waiting_receiver).capitalize()
+        tx.status == TxStatus.PENDING -> stringResource(R.string.tx_status_pending).capitalize()
+        tx.status == TxStatus.IN_PROGRESS -> stringResource(R.string.tx_status_in_progress).capitalize()
+        tx.status == TxStatus.CANCELLED -> stringResource(R.string.tx_status_cancelled).capitalize()
+        tx.status == TxStatus.COMPLETED -> stringResource(R.string.tx_status_completed).capitalize()
+        tx.status == TxStatus.FAILED -> stringResource(R.string.tx_status_failed).capitalize()
+        tx.status == TxStatus.REGISTERING -> stringResource(R.string.tx_status_in_progress).capitalize()
+        else -> stringResource(R.string.wallet_unknown_label)
     }
 
     val isActive = tx.status == TxStatus.PENDING ||
@@ -866,17 +867,17 @@ internal fun TxCard(
 
     // Peer address / DApp name display
     val peerAddr = when {
-        tx.isDapps -> tx.appName ?: "DApp"
+        tx.isDapps -> tx.appName ?: stringResource(R.string.wallet_dapp_label)
         tx.peerId.isNotEmpty() -> {
             if (tx.peerId.length > 12)
                 "${tx.peerId.take(6)}...${tx.peerId.takeLast(6)}"
             else tx.peerId
         }
         else -> when {
-            tx.isMaxPrivacy -> "Max Privacy"
-            tx.isPublicOffline -> "Public Offline"
-            tx.isOffline || tx.isShielded -> "Offline"
-            else -> "Regular"
+            tx.isMaxPrivacy -> stringResource(R.string.wallet_addr_max_privacy)
+            tx.isPublicOffline -> stringResource(R.string.wallet_addr_public_offline)
+            tx.isOffline || tx.isShielded -> stringResource(R.string.wallet_addr_offline)
+            else -> stringResource(R.string.wallet_addr_regular)
         }
     }
 
@@ -934,10 +935,10 @@ internal fun TxCard(
                 Text(
                     buildString {
                         when {
-                            tx.isDapps -> append(tx.appName ?: "DApp")
-                            isSelfTx -> append("Self-transfer")
-                            isSend -> append("Sent")
-                            else -> append("Received")
+                            tx.isDapps -> append(tx.appName ?: stringResource(R.string.wallet_dapp_label))
+                            isSelfTx -> append(stringResource(R.string.wallet_self_transfer))
+                            isSend -> append(stringResource(R.string.wallet_sent_label))
+                            else -> append(stringResource(R.string.wallet_received_label))
                         }
                         if (tx.message.isNotEmpty()) append(" - ${tx.message}")
                     },
@@ -1024,6 +1025,8 @@ internal fun TxCard(
         }
     }
 }
+
+private fun String.capitalize(): String = replaceFirstChar { it.uppercaseChar() }
 
 private val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
 private fun formatDate(timestamp: Long): String {

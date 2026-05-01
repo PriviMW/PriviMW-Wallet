@@ -1,6 +1,7 @@
 package com.privimemobile
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.ui.theme.C
 import androidx.lifecycle.lifecycleScope
+import com.privimemobile.protocol.LocaleHelper
 import com.privimemobile.protocol.ProtocolStartup
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.WalletApi
@@ -51,6 +53,10 @@ class MainActivity : FragmentActivity() {
     val pendingDeepLink: StateFlow<String?> = _pendingDeepLink.asStateFlow()
 
     fun consumeDeepLink() { _pendingDeepLink.value = null }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.applyLocale(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

@@ -15,10 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
@@ -140,7 +142,7 @@ fun AssetDetailScreen(
             .padding(16.dp),
     ) {
         TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         // === Asset Card ===
@@ -164,7 +166,7 @@ fun AssetDetailScreen(
                                     color = C.border,
                                 ) {
                                     Text(
-                                        "ID: $assetId",
+                                        stringResource(R.string.asset_id_value, assetId),
                                         color = C.textSecondary,
                                         fontSize = 11.sp,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -188,7 +190,7 @@ fun AssetDetailScreen(
                             ),
                         ) {
                             Text(
-                                "Split",
+                                stringResource(R.string.split_coins_button),
                                 color = C.accent,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -210,7 +212,7 @@ fun AssetDetailScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Available", color = C.textSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.balance_available), color = C.textSecondary, fontSize = 13.sp)
                     Column(horizontalAlignment = Alignment.End) {
                         val balText = "${Helpers.formatBeam(totalAvailable)} $assetName"
                         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
@@ -246,20 +248,20 @@ fun AssetDetailScreen(
 
                 if (assetStatus.available > 0 && assetStatus.shielded > 0) {
                     BalanceRow("  Regular", "${Helpers.formatBeam(assetStatus.available)} $assetName")
-                    BalanceRow("  Shielded", "${Helpers.formatBeam(assetStatus.shielded)} $assetName")
+                    BalanceRow("  ${stringResource(R.string.balance_shielded)}", "${Helpers.formatBeam(assetStatus.shielded)} $assetName")
                 }
                 if (assetStatus.maturing > 0) {
-                    val lockLabel = if (lockHours > 0) "Locked (min ${lockHours}h)" else "Locked"
+                    val lockLabel = if (lockHours > 0) "${stringResource(R.string.balance_locked)} (min ${lockHours}h)" else stringResource(R.string.balance_locked)
                     BalanceRow(lockLabel, "${Helpers.formatBeam(assetStatus.maturing)} $assetName", locked = true)
                 }
                 if (assetStatus.maxPrivacy > 0) {
-                    BalanceRow("Max Privacy (locked)", "${Helpers.formatBeam(assetStatus.maxPrivacy)} $assetName", locked = true)
+                    BalanceRow(stringResource(R.string.balance_max_privacy_locked), "${Helpers.formatBeam(assetStatus.maxPrivacy)} $assetName", locked = true)
                 }
                 if (assetStatus.sending > 0) {
-                    BalanceRow("Sending", "${Helpers.formatBeam(assetStatus.sending)} $assetName", outgoing = true)
+                    BalanceRow(stringResource(R.string.balance_sending), "${Helpers.formatBeam(assetStatus.sending)} $assetName", outgoing = true)
                 }
                 if (assetStatus.receiving > 0) {
-                    BalanceRow("Receiving", "${Helpers.formatBeam(assetStatus.receiving)} $assetName", incoming = true)
+                    BalanceRow(stringResource(R.string.balance_receiving), "${Helpers.formatBeam(assetStatus.receiving)} $assetName", incoming = true)
                 }
             }
         }
@@ -276,7 +278,7 @@ fun AssetDetailScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
             ) {
-                Text("Send", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.general_send), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             Button(
                 onClick = onReceive,
@@ -284,7 +286,7 @@ fun AssetDetailScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.incoming),
             ) {
-                Text("Receive", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.general_receive), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -314,17 +316,17 @@ fun AssetDetailScreen(
                 val isSelf = tx.selfTx
                 val amountColor = if (isFailed) C.textSecondary else if (isSelf) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
                 val peerAddr = when {
-                    tx.isDapps -> tx.appName ?: "DApp"
+                    tx.isDapps -> tx.appName ?: stringResource(R.string.wallet_dapp_label)
                     isSelf -> "Self"
                     tx.peerId.isNotEmpty() -> if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
                     else -> "—"
                 }
                 val addrType = when {
                     tx.isDapps -> ""
-                    tx.isMaxPrivacy -> "Max Privacy"
-                    tx.isPublicOffline -> "Public Offline"
-                    tx.isOffline || tx.isShielded -> "Offline"
-                    else -> "Regular"
+                    tx.isMaxPrivacy -> stringResource(R.string.wallet_addr_max_privacy)
+                    tx.isPublicOffline -> stringResource(R.string.wallet_addr_public_offline)
+                    tx.isOffline || tx.isShielded -> stringResource(R.string.wallet_addr_offline)
+                    else -> stringResource(R.string.wallet_addr_regular)
                 }
 
                 Card(
@@ -353,11 +355,11 @@ fun AssetDetailScreen(
                             Text(
                                 buildString {
                                     if (tx.isDapps) {
-                                        append(tx.appName ?: "DApp")
+                                        append(tx.appName ?: stringResource(R.string.wallet_dapp_label))
                                     } else if (isSelf) {
-                                        append("Self-transfer")
+                                        append(stringResource(R.string.wallet_self_transfer))
                                     } else {
-                                        append(if (tx.sender) "Sent" else "Received")
+                                        append(if (tx.sender) stringResource(R.string.wallet_sent_label) else stringResource(R.string.wallet_received_label))
                                     }
                                     if (tx.message.isNotEmpty()) append(" · ${tx.message}")
                                 },

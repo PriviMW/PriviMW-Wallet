@@ -1,4 +1,4 @@
-package com.privimemobile.ui.wallet
+﻿package com.privimemobile.ui.wallet
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.*
@@ -97,11 +99,11 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                     expireMinutes = pending.expireMinutes,
                 )
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    Toast.makeText(context, "Offer posted!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, R.string.offer_posted, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.offer_failed, e.message), Toast.LENGTH_SHORT).show()
                 }
             }
             creating = false
@@ -158,10 +160,10 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Create Swap Offer", color = C.text) },
+                title = { Text(stringResource(R.string.swap_create_title), color = C.text) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = C.text)
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.general_back), tint = C.text)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.bg),
@@ -179,7 +181,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(16.dp))
 
             // ---- BUY ASSET ----
-            Text("Buy", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.swap_buy_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -209,7 +211,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(12.dp))
 
             // ---- UNIT PRICE CARD ----
-            Text("Unit Price", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.swap_price_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -252,7 +254,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(12.dp))
 
             // ---- PAY ----
-            Text("Pay", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.swap_pay_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -313,7 +315,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             }
 
             // ---- YOU'LL RECEIVE ----
-            Text("You'll Receive", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.swap_receive_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -365,7 +367,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
             // Same asset warning
             if (sellAssetId == buyAssetId) {
                 Spacer(Modifier.height(8.dp))
-                Text("Cannot swap the same asset", color = C.error, fontSize = 12.sp)
+                Text(stringResource(R.string.swap_same_asset_error), color = C.error, fontSize = 12.sp)
             }
 
             // Rate bar (tappable to flip, default "1 BUY = X SELL")
@@ -378,9 +380,9 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                 ) {
                     Text(
                         if (!rateFlipped) {
-                            "1 ${buyTicker()} = ${formatRate(priceDouble)} ${sellTicker()}"
+                            stringResource(R.string.swap_rate_display, buyTicker(), formatRate(priceDouble).toString(), sellTicker())
                         } else {
-                            "1 ${sellTicker()} = ${formatRate(1.0 / priceDouble)} ${buyTicker()}"
+                            stringResource(R.string.swap_rate_display, sellTicker(), formatRate(1.0 / priceDouble).toString(), buyTicker())
                         },
                         color = C.accent,
                         fontSize = 14.sp,
@@ -393,7 +395,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
 
             // Expiry selector
             Spacer(Modifier.height(16.dp))
-            Text("Expires in", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.swap_expires_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(30 to "30m", 60 to "1h", 120 to "2h", 360 to "6h", 720 to "12h").forEach { (min, label) ->
@@ -442,13 +444,13 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                 if (creating) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = C.bg, strokeWidth = 2.dp)
                 } else {
-                    Text("Post Offer", color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.swap_post_btn), color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             Spacer(Modifier.height(16.dp))
             Text(
-                "Fee: 0.001 BEAM (paid by the person who accepts your offer)",
+                stringResource(R.string.swap_create_fee),
                 color = C.textMuted,
                 fontSize = 11.sp,
             )
@@ -459,7 +461,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         // ---- Asset picker dialogs ----
         if (showBuyPicker) {
             AssetPickerDialog(
-                title = "Buy Asset",
+                title = stringResource(R.string.swap_picker_buy),
                 assets = supportedBuyAssets,
                 selectedId = buyAssetId,
                 assetInfoCache = assetInfoCache,
@@ -478,7 +480,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
 
         if (showSellPicker) {
             AssetPickerDialog(
-                title = "Pay Asset",
+                title = stringResource(R.string.swap_picker_pay),
                 assets = availableAssets,
                 selectedId = sellAssetId,
                 assetInfoCache = assetInfoCache,

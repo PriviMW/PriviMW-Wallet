@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.privimemobile.R
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.SecureStorage
@@ -431,7 +432,7 @@ private fun CreatePasswordScreen(
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
+        TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
         Spacer(Modifier.height(8.dp))
         Text("Create Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(24.dp))
@@ -535,7 +536,7 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
                 brush = androidx.compose.ui.graphics.SolidColor(C.accent)
             ),
         ) {
-            Text("Back", color = C.accent, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.general_back), color = C.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -636,7 +637,7 @@ private fun RestoreSeedScreen(
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
     ) {
-        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
+        TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
         Text("Restore Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text("Enter your 12-word seed phrase. Type each word — suggestions will appear.",
@@ -767,7 +768,7 @@ private fun RestorePasswordScreen(
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) { Text("Back", color = C.accent) }
+        TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
         Spacer(Modifier.height(8.dp))
         Text("Set Password", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))

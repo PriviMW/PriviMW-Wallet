@@ -25,9 +25,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.launch
@@ -119,10 +121,10 @@ fun ContactInfoScreen(
     ) {
         // Top bar — flush with status bar
         TopAppBar(
-            title = { Text("Contact Info", color = C.text) },
+            title = { Text(stringResource(R.string.contact_info_title), color = C.text) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.general_back), tint = C.text)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
@@ -154,7 +156,7 @@ fun ContactInfoScreen(
 
             // Wallet ID (copyable)
             if (!walletId.isNullOrEmpty()) {
-                InfoSection("Wallet ID") {
+                InfoSection(stringResource(R.string.contact_wallet_id)) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = C.card,
@@ -163,7 +165,7 @@ fun ContactInfoScreen(
                             .clickable {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("wallet_id", walletId))
-                                Toast.makeText(context, "Copied wallet ID", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.contact_copied_wallet_id, Toast.LENGTH_SHORT).show()
                             },
                     ) {
                         Row(
@@ -217,7 +219,7 @@ fun ContactInfoScreen(
             }
 
             // Settings
-            InfoSection("Settings") {
+            InfoSection(stringResource(R.string.settings_title)) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = C.card,
@@ -308,12 +310,12 @@ fun ContactInfoScreen(
                     showDeleteConfirm = false
                     onDeleteChat()
                 }) {
-                    Text("Delete", color = C.error, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.general_delete), color = C.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
         )

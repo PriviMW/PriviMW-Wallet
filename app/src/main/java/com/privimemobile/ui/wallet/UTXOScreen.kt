@@ -19,8 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
@@ -51,11 +53,11 @@ private data class Utxo(
     val isShielded: Boolean,
 )
 
-private enum class UtxoFilter(val label: String) {
-    ALL("All"),
-    AVAILABLE("Available"),
-    MATURING("Maturing"),
-    SPENT("Spent"),
+private enum class UtxoFilter(@androidx.annotation.StringRes val labelResId: Int) {
+    ALL(R.string.utxo_filter_all),
+    AVAILABLE(R.string.utxo_filter_available),
+    MATURING(R.string.utxo_filter_maturing),
+    SPENT(R.string.utxo_filter_spent),
 }
 
 @Composable
@@ -116,7 +118,7 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
             .background(C.bg),
     ) {
         TextButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         // Summary card
@@ -129,11 +131,11 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummaryItem("Available", Helpers.formatBeam(scopeAvailable), C.text, Modifier.weight(1f))
+                SummaryItem(stringResource(R.string.balance_available), Helpers.formatBeam(scopeAvailable), C.text, Modifier.weight(1f))
                 Box(Modifier.width(1.dp).height(32.dp).background(C.border))
-                SummaryItem("Maturing", Helpers.formatBeam(scopeMaturing), C.warning, Modifier.weight(1f))
+                SummaryItem(stringResource(R.string.balance_maturing), Helpers.formatBeam(scopeMaturing), C.warning, Modifier.weight(1f))
                 Box(Modifier.width(1.dp).height(32.dp).background(C.border))
-                SummaryItem("Total UTXOs", scopeUtxos.size.toString(), C.text, Modifier.weight(1f))
+                SummaryItem(stringResource(R.string.utxo_total_label), scopeUtxos.size.toString(), C.text, Modifier.weight(1f))
             }
         }
 
@@ -179,7 +181,7 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
         ) {
             UtxoFilter.entries.forEach { f ->
                 FilterChip(
-                    label = f.label,
+                    label = stringResource(f.labelResId),
                     selected = filter == f,
                     onClick = { filter = f },
                 )
@@ -193,8 +195,8 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (utxos.isEmpty()) "No UTXOs yet — waiting for data..."
-                    else "No UTXOs match this filter",
+                    text = if (utxos.isEmpty()) stringResource(R.string.utxo_empty_waiting)
+                    else stringResource(R.string.utxo_empty_filter),
                     color = C.textSecondary,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
@@ -321,19 +323,19 @@ private fun UtxoCard(utxo: Utxo) {
             // Detail rows
             Spacer(Modifier.height(4.dp))
             if (utxo.assetId != 0) {
-                UtxoDetailRow("Asset ID", "#${utxo.assetId}")
+                UtxoDetailRow(stringResource(R.string.utxo_asset_id), "#${utxo.assetId}")
             }
             if (utxo.isShielded) {
-                UtxoDetailRow("Type", "Shielded")
+                UtxoDetailRow(stringResource(R.string.general_type), "Shielded")
             }
             if (utxo.maturity > 0) {
-                UtxoDetailRow("Maturity", "Block #${utxo.maturity}")
+                UtxoDetailRow(stringResource(R.string.utxo_maturity), "Block #${utxo.maturity}")
             }
             if (utxo.confirmHeight > 0) {
-                UtxoDetailRow("Confirmed", "Block #${utxo.confirmHeight}")
+                UtxoDetailRow(stringResource(R.string.utxo_confirmed), stringResource(R.string.wallet_block_height, utxo.confirmHeight))
             }
             if (utxo.createTxId.isNotEmpty()) {
-                UtxoDetailRow("Created by", Helpers.truncateKey(utxo.createTxId, 6, 6))
+                UtxoDetailRow(stringResource(R.string.utxo_created_by), Helpers.truncateKey(utxo.createTxId, 6, 6))
             }
             if (utxo.spentTxId.isNotEmpty()) {
                 UtxoDetailRow("Spent by", Helpers.truncateKey(utxo.spentTxId, 6, 6))

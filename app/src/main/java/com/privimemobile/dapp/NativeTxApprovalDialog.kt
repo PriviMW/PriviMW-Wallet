@@ -1,6 +1,7 @@
 package com.privimemobile.dapp
 
 import android.app.Dialog
+import com.privimemobile.R
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -100,7 +101,7 @@ object NativeTxApprovalDialog {
 
         // Title
         card.addView(TextView(activity).apply {
-            text = "Transaction Request"
+            text = activity.getString(R.string.tx_request_title)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             typeface = Typeface.DEFAULT_BOLD
@@ -145,7 +146,7 @@ object NativeTxApprovalDialog {
         }
 
         if (spending.isNotEmpty()) {
-            details.addView(sectionLabel(activity, "SENDING", dp))
+            details.addView(sectionLabel(activity, activity.getString(R.string.balance_sending).uppercase(), dp))
             for ((amount, asset) in spending) {
                 details.addView(TextView(activity).apply {
                     text = "-$amount $asset"
@@ -158,7 +159,7 @@ object NativeTxApprovalDialog {
         }
 
         if (receiving.isNotEmpty()) {
-            details.addView(sectionLabel(activity, "RECEIVING", dp))
+            details.addView(sectionLabel(activity, activity.getString(R.string.balance_receiving).uppercase(), dp))
             for ((amount, asset) in receiving) {
                 details.addView(TextView(activity).apply {
                     text = "+$amount $asset"
@@ -171,7 +172,7 @@ object NativeTxApprovalDialog {
         }
 
         if (fee != "0") {
-            details.addView(sectionLabel(activity, "FEE", dp))
+            details.addView(sectionLabel(activity, activity.getString(R.string.general_fee).uppercase(), dp))
             details.addView(TextView(activity).apply {
                 text = "${formatAmount(fee)} BEAM"
                 setTextColor(TEXT_SECONDARY)
@@ -180,7 +181,7 @@ object NativeTxApprovalDialog {
         }
 
         if (comment.isNotEmpty()) {
-            details.addView(sectionLabel(activity, "DETAILS", dp))
+            details.addView(sectionLabel(activity, activity.getString(R.string.general_details).uppercase(), dp))
             details.addView(TextView(activity).apply {
                 text = comment
                 setTextColor(TEXT_SECONDARY)
@@ -191,7 +192,7 @@ object NativeTxApprovalDialog {
 
         if (!isEnough) {
             details.addView(TextView(activity).apply {
-                text = "Not enough funds to complete this transaction"
+                text = activity.getString(R.string.dapp_insufficient_funds)
                 setTextColor(ERROR_COLOR)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -208,7 +209,7 @@ object NativeTxApprovalDialog {
 
         // Reject button
         val rejectBtn = TextView(activity).apply {
-            text = "Reject"
+            text = activity.getString(R.string.tx_reject)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -231,7 +232,7 @@ object NativeTxApprovalDialog {
         // Approve button
         if (isEnough) {
             val approveBtn = TextView(activity).apply {
-                text = "Approve"
+                text = activity.getString(R.string.tx_approve)
                 setTextColor(Color.parseColor("#032E49"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -246,7 +247,7 @@ object NativeTxApprovalDialog {
                     dialog.dismiss()
                     com.privimemobile.wallet.TxAuthHelper.authenticateBeforeAction(
                         activity = activity,
-                        actionLabel = "Approve DApp transaction",
+                        actionLabel = activity.getString(R.string.tx_approve_dapp),
                         onApproved = { approve(request) },
                         onRejected = { reject(request) },
                     )
@@ -325,9 +326,9 @@ object NativeTxApprovalDialog {
     private fun showBiometricPrompt(activity: android.app.Activity, request: String, txDialog: Dialog) {
         val cancelSignal = CancellationSignal()
         val prompt = BiometricPromptApi.Builder(activity)
-            .setTitle("Approve Transaction")
-            .setSubtitle("Authenticate to confirm")
-            .setNegativeButton("Use Password", activity.mainExecutor) { _, _ ->
+            .setTitle(activity.getString(R.string.tx_approve_title))
+            .setSubtitle(activity.getString(R.string.tx_authenticate_confirm))
+            .setNegativeButton(activity.getString(R.string.lock_use_password_button), activity.mainExecutor) { _, _ ->
                 // Biometric cancelled — fall back to password
                 txDialog.dismiss()
                 showPasswordPrompt(activity, request)
@@ -389,7 +390,7 @@ object NativeTxApprovalDialog {
         ))
 
         card.addView(TextView(activity).apply {
-            text = "Enter Password"
+            text = activity.getString(R.string.send_confirm_enter_password)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             typeface = Typeface.DEFAULT_BOLD
@@ -398,7 +399,7 @@ object NativeTxApprovalDialog {
         })
 
         card.addView(TextView(activity).apply {
-            text = "Confirm your wallet password to approve this transaction"
+            text = activity.getString(R.string.tx_approve_password_subtitle)
             setTextColor(TEXT_SECONDARY)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER
@@ -406,7 +407,7 @@ object NativeTxApprovalDialog {
         })
 
         val passwordInput = EditText(activity).apply {
-            hint = "Password"
+            hint = activity.getString(R.string.general_password)
             setHintTextColor(0xFF557080.toInt())
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
@@ -428,7 +429,7 @@ object NativeTxApprovalDialog {
         card.addView(btnRow)
 
         val cancelBtn = TextView(activity).apply {
-            text = "Cancel"
+            text = activity.getString(R.string.general_cancel)
             setTextColor(TEXT_COLOR)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -449,7 +450,7 @@ object NativeTxApprovalDialog {
         })
 
         val confirmBtn = TextView(activity).apply {
-            text = "Confirm"
+            text = activity.getString(R.string.general_confirm)
             setTextColor(Color.parseColor("#032E49"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -467,7 +468,7 @@ object NativeTxApprovalDialog {
                     dialog.dismiss()
                     approve(request)
                 } else {
-                    Toast.makeText(activity, "Incorrect password", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, activity.getString(R.string.tx_incorrect_password), Toast.LENGTH_SHORT).show()
                     passwordInput.text.clear()
                 }
             }

@@ -10,10 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.MessageEntity
 import com.privimemobile.ui.theme.C
@@ -71,7 +73,7 @@ fun SearchScreen(
         modifier = Modifier.fillMaxSize().background(C.bg).padding(16.dp),
     ) {
         TextButton(onClick = onBack) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
         Spacer(Modifier.height(8.dp))
         Text("Search Messages", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -100,7 +102,7 @@ fun SearchScreen(
 
         if (results.isEmpty() && query.isNotBlank() && !searching) {
             Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-                Text("No results for \"$query\"", color = C.textMuted, fontSize = 14.sp)
+                Text(stringResource(R.string.chat_no_results, query), color = C.textMuted, fontSize = 14.sp)
             }
         }
 
@@ -144,7 +146,7 @@ private fun SearchResultCard(msg: MessageEntity, handle: String, isGroup: Boolea
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    if (isGroup) "\uD83D\uDC65 @$handle" else if (handle.isNotEmpty()) "@$handle" else "Unknown",
+                    if (isGroup) "\uD83D\uDC65 @$handle" else if (handle.isNotEmpty()) "@$handle" else stringResource(R.string.general_unknown),
                     color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 )
                 Text(

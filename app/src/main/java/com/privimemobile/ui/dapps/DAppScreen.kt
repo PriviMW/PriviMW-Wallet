@@ -27,12 +27,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mw.beam.beamwallet.core.Api
+import com.privimemobile.R
 import com.privimemobile.dapp.BeamDAppWebView
 import com.privimemobile.dapp.DAppResponseRouter
 import com.privimemobile.dapp.NativeTxApprovalDialog
@@ -223,7 +225,7 @@ fun DAppScreen(
                 DAppWebViewHolder.destroy()
                 onBack()
             }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close DApp", tint = C.text)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.dapp_close), tint = C.text)
             }
             Text(
                 dappName,
@@ -269,7 +271,7 @@ fun DAppScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Tab buttons
-                val tabs = listOf("WALLET BALANCE", "${ dappName.uppercase() } TRANSACTIONS")
+                val tabs = listOf(stringResource(R.string.dapp_balance_tab), stringResource(R.string.dapp_tx_tab, dappName.uppercase()))
                 tabs.forEachIndexed { idx, label ->
                     Text(
                         label,
@@ -288,7 +290,7 @@ fun DAppScreen(
                 Spacer(Modifier.weight(1f))
                 Icon(
                     if (panelExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Toggle",
+                    contentDescription = stringResource(R.string.dapp_toggle_panel),
                     tint = C.textSecondary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -333,13 +335,13 @@ private fun BalancePanel(
         val otherAssets = assetBalanceMap.filter { it.key != 0 && (it.value.available + it.value.shielded) > 0 }
         items(otherAssets.entries.toList(), key = { it.key }) { (assetId, bal) ->
             val info = assetInfoMap[assetId]
-            val name = info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #$assetId"
+            val name = info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: stringResource(R.string.dapp_asset_fallback, assetId)
             BalanceRow(assetId = assetId, name = name, available = bal.available + bal.shielded)
         }
         if (otherAssets.isEmpty()) {
             item {
                 Text(
-                    "No other assets",
+                    stringResource(R.string.dapp_no_other_assets),
                     color = C.textMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -374,7 +376,7 @@ private fun TransactionsPanel(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("No transactions yet", color = C.textMuted, fontSize = 13.sp)
+            Text(stringResource(R.string.wallet_no_transactions), color = C.textMuted, fontSize = 13.sp)
         }
         return
     }
@@ -420,7 +422,7 @@ private fun DAppTxRow(tx: TxItem, assetInfoMap: Map<Int, com.privimemobile.walle
         // Description + time
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                tx.message.ifEmpty { tx.appName ?: "Contract call" },
+                tx.message.ifEmpty { tx.appName ?: stringResource(R.string.dapp_contract_call) },
                 color = C.text,
                 fontSize = 13.sp,
                 maxLines = 1,
@@ -447,7 +449,7 @@ private fun DAppTxRow(tx: TxItem, assetInfoMap: Map<Int, com.privimemobile.walle
                     }
                     val caTicker = if (ca.assetId != 0) {
                         val info = assetInfoMap[ca.assetId]
-                        info?.unitName?.ifEmpty { null } ?: "Asset #${ca.assetId}"
+                        info?.unitName?.ifEmpty { null } ?: stringResource(R.string.dapp_asset_fallback, ca.assetId)
                     } else "BEAM"
                     if (displayAmount > 0) {
                         Text(

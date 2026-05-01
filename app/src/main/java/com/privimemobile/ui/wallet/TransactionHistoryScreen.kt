@@ -35,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.WalletEventBus
 import com.privimemobile.wallet.WalletManager
@@ -87,12 +89,12 @@ fun TransactionHistoryScreen(
                 val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 if (uri != null) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(baos.toByteArray()) }
-                    Toast.makeText(context, "Saved to Downloads/$zipFilename", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.tx_history_export_toast_saved, zipFilename), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.tx_history_export_toast_failed), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Throwable) {
-                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.tx_history_export_toast_error, e.message), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -188,10 +190,10 @@ fun TransactionHistoryScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.general_back), tint = C.text)
             }
             Text(
-                "Transaction History",
+                stringResource(R.string.tx_history_title),
                 color = C.text,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -212,7 +214,7 @@ fun TransactionHistoryScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No transactions yet",
+                    stringResource(R.string.wallet_no_transactions),
                     color = C.textMuted,
                     fontSize = 14.sp,
                 )
@@ -237,11 +239,11 @@ fun TransactionHistoryScreen(
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
             containerColor = C.card,
-            title = { Text("Export Transaction History", color = C.text, fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.tx_export_history), color = C.text, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text(
-                        "This will export all transaction history as a ZIP file containing:",
+                        stringResource(R.string.tx_history_export_dialog_desc),
                         color = C.textSecondary,
                         fontSize = 14.sp,
                     )
@@ -251,7 +253,7 @@ fun TransactionHistoryScreen(
                     Text("  • contracts_transactions.csv", color = C.textSecondary, fontSize = 13.sp)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "The ZIP will be saved to your Downloads folder.",
+                        stringResource(R.string.tx_history_export_dialog_save),
                         color = C.textSecondary,
                         fontSize = 14.sp,
                     )
@@ -262,20 +264,20 @@ fun TransactionHistoryScreen(
                     onClick = {
                         showExportDialog = false
                         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                            Toast.makeText(context, "Export requires Android 10+", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.tx_history_export_android10), Toast.LENGTH_SHORT).show()
                         } else {
                             try {
                                 WalletManager.walletInstance?.exportTxHistoryToCsv()
-                                    ?: run { Toast.makeText(context, "Wallet not open", Toast.LENGTH_SHORT).show(); return@Button }
-                                Toast.makeText(context, "Exporting transaction history...", Toast.LENGTH_SHORT).show()
+                                    ?: run { Toast.makeText(context, context.getString(R.string.tx_history_export_no_wallet), Toast.LENGTH_SHORT).show(); return@Button }
+                                Toast.makeText(context, context.getString(R.string.tx_history_exporting), Toast.LENGTH_SHORT).show()
                             } catch (e: Throwable) {
-                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.tx_history_export_toast_error, e.message ?: ""), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 ) {
-                    Text("Export", color = Color(0xFF032E49), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.tx_export_history), color = Color(0xFF032E49), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -283,7 +285,7 @@ fun TransactionHistoryScreen(
                     onClick = { showExportDialog = false },
                     border = BorderStroke(1.dp, C.border),
                 ) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
         )

@@ -22,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.protocol.AvailableDApp
 import com.privimemobile.protocol.DAppManager
 import com.privimemobile.protocol.DAppStore
@@ -111,7 +113,7 @@ fun DAppStoreBrowseScreen(
         } catch (_: Exception) { null }
 
         if (fileName != null && !fileName.endsWith(".dapp")) {
-            message = "Please select a .dapp package file"
+            message = context.getString(R.string.dapps_sideload_invalid)
             return@rememberLauncherForActivityResult
         }
 
@@ -151,10 +153,10 @@ fun DAppStoreBrowseScreen(
                         context,
                         guid,
                         zipData,
-                        fileName?.removeSuffix(".dapp") ?: "Sideloaded DApp",
+                        fileName?.removeSuffix(".dapp") ?: context.getString(R.string.dapps_sideloaded_name),
                     )
                 }
-                message = "DApp installed. Go back to open it."
+                message = context.getString(R.string.dapps_install_complete)
                 loadAvailable()
             } catch (e: Exception) {
                 message = "Install failed: ${e.message ?: "Unknown error"}"
@@ -176,7 +178,7 @@ fun DAppStoreBrowseScreen(
                 onClick = onBack,
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
             ) {
-                Text("< Back", color = C.textSecondary)
+                Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
             }
 
             Row(
@@ -187,7 +189,7 @@ fun DAppStoreBrowseScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "DApp Store",
+                    stringResource(R.string.dapps_store_title),
                     color = C.text,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
@@ -195,14 +197,14 @@ fun DAppStoreBrowseScreen(
                 IconButton(onClick = onOpenPublishers) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Publishers",
+                        contentDescription = stringResource(R.string.dapps_publishers),
                         tint = C.textSecondary,
                     )
                 }
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                "Browse and install DApps from the Beam on-chain registry",
+            stringResource(R.string.dapps_store_subtitle),
                 color = C.textSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -224,7 +226,7 @@ fun DAppStoreBrowseScreen(
                         strokeWidth = 2.dp,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Loading DApp Store...", color = C.textSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.dapps_store_loading), color = C.textSecondary, fontSize = 13.sp)
                 }
             }
 
@@ -251,13 +253,13 @@ fun DAppStoreBrowseScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                "No additional DApps available",
+                            stringResource(R.string.dapps_store_no_dapps),
                                 color = C.textSecondary,
                                 fontSize = 15.sp,
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                "Pull down to refresh or sideload a .dapp package",
+                            stringResource(R.string.dapps_store_empty_hint),
                                 color = C.textSecondary.copy(alpha = 0.7f),
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center,
@@ -298,7 +300,7 @@ fun DAppStoreBrowseScreen(
                                                 dapp.name,
                                             )
                                         }
-                                        message = "${dapp.name} installed"
+                                        message = context.getString(R.string.dapps_installed_toast, dapp.name)
                                         loadAvailable()
                                     } else if (dapp.ipfsCid.isNotEmpty()) {
                                         // Download from IPFS
@@ -312,13 +314,13 @@ fun DAppStoreBrowseScreen(
                                                 dapp.icon,
                                             )
                                         }
-                                        message = "${dapp.name} installed"
+                                        message = context.getString(R.string.dapps_installed_toast, dapp.name)
                                         loadAvailable()
                                     } else {
-                                        message = "No download source available"
+                                        message = context.getString(R.string.dapps_no_download_source)
                                     }
                                 } catch (e: Exception) {
-                                    message = "Install failed: ${e.message ?: "Unknown error"}"
+                                    message = context.getString(R.string.dapps_install_failed_msg, e.message ?: "Unknown error")
                                 }
                                 installing = null
                             }
@@ -388,13 +390,13 @@ private fun SideloadCard(installing: Boolean, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Install from File",
+                stringResource(R.string.dapps_install_from_file),
                     color = C.text,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Sideload a .dapp package from your device",
+                stringResource(R.string.dapps_sideload_desc),
                     color = C.textSecondary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp),
@@ -512,7 +514,7 @@ private fun DAppStoreCard(
                     )
                 }
                 Text(
-                    text = if (dapp.bundledAsset.isNotEmpty()) "BUNDLED" else "IPFS",
+                    text = if (dapp.bundledAsset.isNotEmpty()) stringResource(R.string.dapps_source_bundled) else stringResource(R.string.dapps_source_ipfs),
                     color = C.accent,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -541,9 +543,9 @@ private fun DAppStoreCard(
                 } else {
                     Text(
                         when {
-                            hasUpdate -> "Update"
-                            isInstalled -> "Installed"
-                            else -> "Install"
+                            hasUpdate -> stringResource(R.string.dapps_update)
+                            isInstalled -> stringResource(R.string.dapps_installed_label)
+                            else -> stringResource(R.string.dapps_install_label)
                         },
                         color = if (isInstalled && !hasUpdate) C.textSecondary else C.textDark,
                         fontSize = 14.sp,

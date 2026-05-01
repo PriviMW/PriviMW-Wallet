@@ -150,11 +150,12 @@ object ChatService {
         ChatNotificationManager.init(context)
         com.privimemobile.wallet.TxNotificationManager.init(context)
         com.privimemobile.wallet.TxNotificationManager.startObserving(scope)
-        identity = IdentityManager(db!!, scope)
+        val localeContext = com.privimemobile.protocol.LocaleHelper.applyLocale(context.applicationContext)
+        identity = IdentityManager(db!!, scope, localeContext)
         contacts = ContactManager(db!!, scope)
         processor = MessageProcessor(db!!, contacts, scope)
         sbbs = SbbsTransport(db!!, processor, scope)
-        groups = com.privimemobile.chat.group.GroupManager(db!!, scope)
+        groups = com.privimemobile.chat.group.GroupManager(db!!, scope, localeContext)
         pendingTxs = com.privimemobile.chat.group.PendingTxManager(db!!, scope)
 
         // Initialize chat_state row + migrate legacy SharedPreferences data

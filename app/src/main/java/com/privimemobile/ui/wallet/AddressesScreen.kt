@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
@@ -45,11 +47,11 @@ private data class WalletAddress(
     val identity: String,
 )
 
-private enum class AddressFilter(val label: String) {
-    ALL("All"),
-    FAVOURITES("Favourites"),
-    ACTIVE("Active"),
-    EXPIRED("Expired"),
+private enum class AddressFilter(@androidx.annotation.StringRes val labelResId: Int) {
+    ALL(R.string.general_all),
+    FAVOURITES(R.string.addresses_filter_favourites),
+    ACTIVE(R.string.addresses_filter_active),
+    EXPIRED(R.string.addresses_filter_expired),
 }
 
 private fun getFavourites(context: android.content.Context): Set<String> {
@@ -132,7 +134,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                 onClick = onBack,
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
             ) {
-                Text("< Back", color = C.textSecondary)
+                Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
             }
 
             // Filter tabs
@@ -141,7 +143,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 AddressFilter.entries.forEach { f ->
-                    val label = if (f == AddressFilter.ALL) "All (${ownAddresses.size})" else f.label
+                    val label = if (f == AddressFilter.ALL) "${stringResource(R.string.general_all)} (${ownAddresses.size})" else stringResource(f.labelResId)
                     Surface(
                         modifier = Modifier.clickable { filter = f },
                         shape = RoundedCornerShape(8.dp),
@@ -177,7 +179,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                 .padding(vertical = 40.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("No addresses found", color = C.textSecondary, fontSize = 14.sp)
+                            Text(stringResource(R.string.addresses_no_addresses), color = C.textSecondary, fontSize = 14.sp)
                         }
                     }
                 } else {
@@ -190,7 +192,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             isFavourite = addr.walletID in favourites,
                             onCopy = {
                                 clipboard.setText(AnnotatedString(addr.walletID))
-                                snackMessage = "Address copied"
+                                snackMessage = context.getString(R.string.addresses_copied_toast)
                             },
                             onEdit = {
                                 editingAddress = addr
@@ -205,7 +207,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             onToggleFavourite = {
                                 val added = toggleFavourite(context, addr.walletID)
                                 favourites = getFavourites(context)
-                                snackMessage = if (added) "Added to favourites" else "Removed from favourites"
+                                snackMessage = if (added) context.getString(R.string.addresses_added_favourites) else context.getString(R.string.addresses_removed_favourites)
                             },
                         )
                     }
@@ -229,8 +231,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             .background(C.accent),
                     )
                     Text(
-                        "SBBS addresses used for online transactions and messaging. " +
-                                "For offline/max-privacy receive addresses, use the Receive screen.",
+                        stringResource(R.string.addresses_info_note),
                         color = C.textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
@@ -276,7 +277,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(
-                        "Edit Label",
+                        stringResource(R.string.addresses_edit_label_title),
                         color = C.text,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -298,7 +299,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                     OutlinedTextField(
                         value = editLabel,
                         onValueChange = { editLabel = it },
-                        label = { Text("Address label") },
+                        label = { Text(stringResource(R.string.addresses_label_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -328,7 +329,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                 brush = androidx.compose.ui.graphics.SolidColor(C.border)
                             ),
                         ) {
-                            Text("Cancel", color = C.textSecondary, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.general_cancel), color = C.textSecondary, fontWeight = FontWeight.SemiBold)
                         }
                         Button(
                             onClick = {
@@ -348,7 +349,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                         ) {
-                            Text("Save", color = C.textDark, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.general_save), color = C.textDark, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -398,7 +399,7 @@ private fun AddressCard(
                         .padding(end = 2.dp),
                 )
                 Text(
-                    text = addr.label.ifEmpty { "No label" },
+                    text = addr.label.ifEmpty { stringResource(R.string.addresses_no_label) },
                     color = if (expired) C.text.copy(alpha = 0.5f) else C.text,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -469,7 +470,7 @@ private fun AddressCard(
                         brush = androidx.compose.ui.graphics.SolidColor(C.border)
                     ),
                 ) {
-                    Text("Copy", color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.general_copy), color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = onEdit,
@@ -482,7 +483,7 @@ private fun AddressCard(
                         brush = androidx.compose.ui.graphics.SolidColor(C.border)
                     ),
                 ) {
-                    Text("Edit", color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.general_edit), color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = onDelete,
@@ -495,20 +496,21 @@ private fun AddressCard(
                         brush = androidx.compose.ui.graphics.SolidColor(Color(0x4DFF6B6B))
                     ),
                 ) {
-                    Text("Delete", color = C.error, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.general_delete), color = C.error, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
     }
 }
 
+@Composable
 private fun getExpiryText(addr: WalletAddress, now: Long): String {
-    if (addr.duration == 0L) return "Never expires"
+    if (addr.duration == 0L) return stringResource(R.string.addresses_never_expires)
     val expiresAt = addr.createTime + addr.duration
-    if (expiresAt < now) return "Expired"
+    if (expiresAt < now) return stringResource(R.string.addresses_expired_label)
     val hoursLeft = ((expiresAt - now) / 3600).toInt() + 1
-    return if (hoursLeft < 24) "${hoursLeft}h left"
-    else "${(hoursLeft + 23) / 24}d left"
+    return if (hoursLeft < 24) stringResource(R.string.addresses_expires_in, "${hoursLeft}h")
+    else stringResource(R.string.addresses_expires_in, "${(hoursLeft + 23) / 24}d")
 }
 
 private val addrDateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())

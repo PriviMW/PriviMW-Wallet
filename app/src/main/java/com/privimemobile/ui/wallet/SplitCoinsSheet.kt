@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.ui.theme.C
@@ -217,7 +219,7 @@ fun SplitCoinsSheet(
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
                     .setTitle("Confirm Split")
                     .setSubtitle("Authenticate to split $assetTicker coins")
-                    .setNegativeButtonText("Use Password")
+                    .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                     .build()
 
                 prompt.authenticate(promptInfo)
@@ -610,7 +612,7 @@ fun SplitCoinsSheet(
 
                         // Fee row
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Transaction fee", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.general_fee), color = C.textSecondary, fontSize = 13.sp)
                             Text("${Helpers.formatBeam(splitResult?.fee ?: 0)} BEAM", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
 
@@ -681,7 +683,7 @@ fun SplitCoinsSheet(
                         brush = androidx.compose.ui.graphics.SolidColor(C.border)
                     ),
                 ) {
-                    Text("Back — Edit", color = C.textSecondary, fontSize = 15.sp)
+                    Text(stringResource(R.string.send_confirm_back_edit), color = C.textSecondary, fontSize = 15.sp)
                 }
                 } // end confirm Column
             }
@@ -698,14 +700,14 @@ fun SplitCoinsSheet(
                 modifier = Modifier.widthIn(max = 340.dp),
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    Text("Enter Password", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.send_confirm_enter_password), color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     Text("Confirm your wallet password to split coins", color = C.textSecondary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(20.dp))
                     OutlinedTextField(
                         value = passwordInput,
                         onValueChange = { passwordInput = it; passwordError = "" },
-                        placeholder = { Text("Password") },
+                        placeholder = { Text(stringResource(R.string.general_password)) },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -731,7 +733,7 @@ fun SplitCoinsSheet(
                                 brush = androidx.compose.ui.graphics.SolidColor(C.border)
                             ),
                         ) {
-                            Text("Cancel", color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.general_cancel), color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                         Button(
                             onClick = {
@@ -752,7 +754,7 @@ fun SplitCoinsSheet(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                         ) {
-                            Text("Confirm", color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.general_confirm), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

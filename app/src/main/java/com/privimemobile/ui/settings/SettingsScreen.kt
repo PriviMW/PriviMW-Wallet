@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,12 +41,14 @@ import androidx.compose.ui.unit.sp
 import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.protocol.Config
 import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.LocaleHelper
 import com.privimemobile.protocol.NodeReconnect
 // Old ProtocolStartup removed — using ChatService for identity
 import com.privimemobile.protocol.ProtocolStorage
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.ShaderInvoker
 import com.privimemobile.protocol.WalletApi
+import com.privimemobile.R
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.BackgroundService
 import com.privimemobile.wallet.CurrencyManager
@@ -146,9 +149,9 @@ fun SettingsScreen(
         val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
         if (uri != null) {
             context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
-            toast("Saved to Downloads/$filename")
+            toast(context.getString(R.string.tx_history_export_toast_saved, filename))
         } else {
-            toast("Failed to save file")
+            toast(context.getString(R.string.tx_history_export_toast_failed))
         }
     }
 
@@ -162,7 +165,7 @@ fun SettingsScreen(
             val content = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
             inputStream?.close()
             if (content.trim().isEmpty()) {
-                toast("Selected file is empty")
+                toast(context.getString(R.string.settings_file_empty))
                 return@rememberLauncherForActivityResult
             }
             // Validate it's valid JSON
@@ -172,7 +175,7 @@ fun SettingsScreen(
                 try {
                     org.json.JSONArray(content)
                 } catch (_: Exception) {
-                    toast("Invalid JSON file")
+                    toast(context.getString(R.string.settings_invalid_json))
                     return@rememberLauncherForActivityResult
                 }
             }
@@ -190,7 +193,7 @@ fun SettingsScreen(
             importFileContent = content
             showImportConfirm = true
         } catch (e: Exception) {
-            toast("Failed to read file: ${e.message}")
+            toast(context.getString(R.string.settings_file_read_failed, e.message ?: ""))
         }
     }
 
@@ -212,7 +215,7 @@ fun SettingsScreen(
                 val filename = "privimw-backup-$date.json"
                 saveToDownloads(filename, "application/json", event.data.toByteArray())
             } catch (e: Throwable) {
-                toast("Export failed: ${e.message}")
+                toast(context.getString(R.string.toast_export_failed, e.message))
             }
         }
     }
@@ -241,7 +244,7 @@ fun SettingsScreen(
                 }
                 saveToDownloads(zipFilename, "application/zip", baos.toByteArray())
             } catch (e: Throwable) {
-                toast("Export failed: ${e.message}")
+                toast(context.getString(R.string.toast_export_failed, e.message))
             }
         }
     }
@@ -250,8 +253,8 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         WalletEventBus.walletEvent.collect { event ->
             when (event) {
-                "import_ok" -> toast("Wallet data imported successfully")
-                "import_failed" -> toast("Import failed — invalid or corrupt file")
+                "import_ok" -> toast(context.getString(R.string.settings_wallet_import_ok))
+                "import_failed" -> toast(context.getString(R.string.settings_wallet_import_failed))
             }
         }
     }
@@ -283,11 +286,11 @@ fun SettingsScreen(
         (syncProgress.done.toFloat() / syncProgress.total * 100).toInt().coerceAtMost(100) else 0
 
     val syncStatus = when {
-        !nodeConn.connected -> if (walletStatus.height > 0) "Reconnecting..." else "Connecting..."
+        !nodeConn.connected -> if (walletStatus.height > 0) stringResource(R.string.wallet_reconnecting) else stringResource(R.string.wallet_connecting_node)
         isSyncing && syncProgress.total > 0 ->
-            "Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k)"
-        isSyncing -> "Syncing..."
-        else -> "Connected"
+            stringResource(R.string.settings_sync_progress, syncPercent, syncProgress.done / 1000, syncProgress.total / 1000)
+        isSyncing -> stringResource(R.string.wallet_syncing)
+        else -> stringResource(R.string.wallet_connected)
     }
 
     Column(
@@ -297,22 +300,22 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text("Settings", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.settings_title), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
 
         // ========== PRIVIME PROFILE ==========
-        SectionTitle("PRIVIME")
+        SectionTitle(stringResource(R.string.settings_section_privime))
         SettingsCard {
             if (chatState?.myHandle != null) {
-                SettingsRow("Handle", "@${chatState!!.myHandle}")
-                SettingsRow("Display Name", chatState!!.myDisplayName?.ifEmpty { "(none)" } ?: "(none)")
-                SettingsRow("Wallet ID", Helpers.truncateKey(chatState!!.myWalletId ?: ""))
-                SettingsRow("Registered", "Block #${chatState!!.myRegisteredHeight}")
+                SettingsRow(stringResource(R.string.settings_handle_label), "@${chatState!!.myHandle}")
+                SettingsRow(stringResource(R.string.settings_display_name_label), chatState!!.myDisplayName?.ifEmpty { stringResource(R.string.settings_none_placeholder) } ?: stringResource(R.string.settings_none_placeholder))
+                SettingsRow(stringResource(R.string.contact_wallet_id), Helpers.truncateKey(chatState!!.myWalletId ?: ""))
+                SettingsRow(stringResource(R.string.settings_registered_label), stringResource(R.string.wallet_block_height, chatState!!.myRegisteredHeight))
 
                 HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
                 // Profile Picture (above display name)
-                Text("Profile Picture", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(R.string.settings_profile_picture), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(vertical = 8.dp))
                 var avatarUploading by remember { mutableStateOf(false) }
                 var avatarVersion by remember { mutableStateOf(0) }
@@ -329,7 +332,7 @@ fun SettingsScreen(
                     ) { result ->
                         java.io.File(context.filesDir, "my_avatar.webp").writeBytes(result.bytes)
                         avatarVersion++
-                        toast("Profile picture updated")
+                        toast(context.getString(R.string.toast_profile_picture_updated))
                         scope.launch {
                             com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(result.hashHex)
                             distributeAvatarToContacts(context, result.bytes, result.hashHex)
@@ -337,19 +340,19 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.width(16.dp))
                     Column {
-                        Text("Tap to change", color = C.textSecondary, fontSize = 13.sp)
+                        Text(stringResource(R.string.settings_tap_to_change), color = C.textSecondary, fontSize = 13.sp)
                         if (avatarUploading) {
                             Spacer(Modifier.height(4.dp))
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
                         }
                         if (chatState?.myAvatarCid != null) {
                             Spacer(Modifier.height(4.dp))
-                            Text("Remove", color = C.error, fontSize = 13.sp,
+                            Text(stringResource(R.string.settings_remove), color = C.error, fontSize = 13.sp,
                                 modifier = Modifier.clickable {
                                     java.io.File(context.filesDir, "my_avatar.webp").delete()
                                     avatarVersion++
                                     scope.launch { com.privimemobile.chat.ChatService.db?.chatStateDao()?.updateAvatarHash(null) }
-                                    toast("Profile picture removed")
+                                    toast(context.getString(R.string.toast_profile_picture_removed))
                                 })
                         }
                     }
@@ -367,14 +370,14 @@ fun SettingsScreen(
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Edit Display Name", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.settings_edit_display_name), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
                 if (showEditName) {
                     var updating by remember { mutableStateOf(false) }
                     OutlinedTextField(
                         value = newDisplayName,
                         onValueChange = { if (it.toByteArray(Charsets.UTF_8).size <= 64) newDisplayName = it },
-                        label = { Text("Display Name") },
+                        label = { Text(stringResource(R.string.settings_display_name_label)) },
                         supportingText = { Text("${newDisplayName.toByteArray(Charsets.UTF_8).size}/64 bytes", color = C.textMuted, fontSize = 11.sp) },
                         singleLine = true,
                         enabled = !updating,
@@ -391,9 +394,9 @@ fun SettingsScreen(
                             com.privimemobile.chat.ChatService.identity.updateDisplayName(newDisplayName.trim()) { success, err ->
                                 updating = false
                                 if (success) {
-                                    toast("TX submitted. Display name will update when confirmed.")
+                                    toast(context.getString(R.string.toast_tx_submitted_display_name))
                                     showEditName = false
-                                } else toast(err ?: "Failed to update display name")
+                                } else toast(err ?: context.getString(R.string.toast_update_display_name_failed))
                             }
                         },
                         enabled = !updating && newDisplayName.trim() != (chatState?.myDisplayName ?: ""),
@@ -402,7 +405,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (updating) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.textDark, strokeWidth = 2.dp)
-                        else Text("Update", color = C.textDark, fontWeight = FontWeight.Bold)
+                        else Text(stringResource(R.string.settings_update), color = C.textDark, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -418,25 +421,26 @@ fun SettingsScreen(
                                     if (addr != null) {
                                         val normalized = Helpers.normalizeWalletId(addr) ?: addr
                                         com.privimemobile.chat.ChatService.identity.updateMessagingAddress(normalized) { success, err ->
-                                            if (success) toast("TX submitted. Address will update when confirmed.") else toast(err ?: "Failed")
+                                            if (success) toast(context.getString(R.string.toast_tx_submitted_address)) else toast(err ?: context.getString(R.string.toast_update_address_failed))
                                         }
                                     }
                                 }
-                                toast("Updating messaging address...")
+                                toast(context.getString(R.string.toast_updating_address))
                             }
                         }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
-                        Text("Update Messaging Address", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Create a new SBBS address and update it on-chain",
+                        Text(stringResource(R.string.settings_update_messaging_addr), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.settings_update_messaging_addr_desc),
                             color = C.textMuted, fontSize = 12.sp)
                     }
                 }
 
                 // Remove Handle
                 var showRemoveConfirm by remember { mutableStateOf(false) }
+                val myHandle = chatState!!.myHandle ?: ""
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -446,8 +450,8 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
-                        Text("Remove Handle", color = C.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Unregister @${chatState!!.myHandle} and free it for others",
+                        Text(stringResource(R.string.settings_remove_handle), color = C.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.settings_remove_handle_desc, myHandle),
                             color = C.textMuted, fontSize = 12.sp)
                     }
                 }
@@ -455,10 +459,9 @@ fun SettingsScreen(
                     var removing by remember { mutableStateOf(false) }
                     AlertDialog(
                         onDismissRequest = { if (!removing) showRemoveConfirm = false },
-                        title = { Text("Remove Handle?", color = C.text) },
+                        title = { Text(stringResource(R.string.settings_remove_handle_title), color = C.text) },
                         text = {
-                            Text("This will unregister @${chatState!!.myHandle} from the blockchain. " +
-                                "Your conversations will be lost and the handle will be available for others to claim.",
+                            Text(stringResource(R.string.settings_remove_handle_confirm, myHandle),
                                 color = C.textSecondary)
                         },
                         confirmButton = {
@@ -471,14 +474,14 @@ fun SettingsScreen(
                                             ?.filter { it.myRole == 2 } ?: emptyList()
                                         if (createdGroups.isNotEmpty()) {
                                             removing = false
-                                            toast("You must transfer ownership or delete ${createdGroups.size} group(s) first")
+                                            toast(context.getString(R.string.toast_transfer_groups_first, createdGroups.size))
                                             return@launch
                                         }
                                         com.privimemobile.chat.ChatService.identity.releaseHandle { success, err ->
                                             removing = false
                                             showRemoveConfirm = false
-                                            if (success) toast("TX submitted. Handle will be removed when confirmed.")
-                                            else toast(err ?: "Failed to remove handle")
+                                            if (success) toast(context.getString(R.string.toast_tx_submitted_remove_handle))
+                                            else toast(err ?: context.getString(R.string.toast_remove_handle_failed))
                                         }
                                     }
                                 },
@@ -486,26 +489,26 @@ fun SettingsScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = C.error),
                             ) {
                                 if (removing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.text, strokeWidth = 2.dp)
-                                else Text("Remove", color = C.text, fontWeight = FontWeight.Bold)
+                                else Text(stringResource(R.string.settings_remove), color = C.text, fontWeight = FontWeight.Bold)
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showRemoveConfirm = false }, enabled = !removing) {
-                                Text("Cancel", color = C.textSecondary)
+                                Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                             }
                         },
                         containerColor = C.card,
                     )
                 }
             } else {
-                Text("Not registered. Register a @handle in the Chats tab to use messaging.\nRegistration fee: ${if (registrationFee > 0) "${com.privimemobile.protocol.Helpers.grothToBeam(registrationFee)} BEAM" else "loading..."}",
+                Text(stringResource(R.string.settings_not_registered) + "\nRegistration fee: ${if (registrationFee > 0) "${com.privimemobile.protocol.Helpers.grothToBeam(registrationFee)} BEAM" else "loading..."}",
                     color = C.textSecondary, fontSize = 13.sp, lineHeight = 20.sp,
                     modifier = Modifier.padding(vertical = 8.dp))
             }
         }
 
         // ========== APPEARANCE ==========
-        SectionTitle("APPEARANCE")
+        SectionTitle(stringResource(R.string.settings_section_appearance))
         SettingsCard {
             val currentTheme = C.currentThemeKey(context)
             var showThemePicker by remember { mutableStateOf(false) }
@@ -517,18 +520,18 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Theme", color = C.text, fontSize = 15.sp)
-                Text(com.privimemobile.ui.theme.THEME_NAMES[currentTheme] ?: "Dark", color = C.accent, fontSize = 15.sp)
+                Text(stringResource(R.string.settings_theme_label), color = C.text, fontSize = 15.sp)
+                Text(C.themeDisplayName(currentTheme, context), color = C.accent, fontSize = 15.sp)
             }
             if (showThemePicker) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { showThemePicker = false },
                     containerColor = C.card,
-                    title = { Text("Choose Theme", color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+                    title = { Text(stringResource(R.string.settings_choose_theme), color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
                     text = {
                         Column {
                             com.privimemobile.ui.theme.ALL_THEMES.keys.toList().forEach { key ->
-                                val name = com.privimemobile.ui.theme.THEME_NAMES[key] ?: key
+                                val name = C.themeDisplayName(key, context)
                                 val colors = com.privimemobile.ui.theme.ALL_THEMES[key]!!
                                 val isSelected = key == currentTheme
                                 Row(
@@ -575,6 +578,69 @@ fun SettingsScreen(
                 )
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
+            // Language picker
+            var showLanguagePicker by remember { mutableStateOf(false) }
+            val currentLanguage = remember { LocaleHelper.getSelectedLanguageDisplay() }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLanguagePicker = true }
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_language), color = C.text, fontSize = 15.sp)
+                Text(currentLanguage, color = C.accent, fontSize = 15.sp)
+            }
+            if (showLanguagePicker) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showLanguagePicker = false },
+                    containerColor = C.card,
+                    title = { Text(stringResource(R.string.settings_choose_language), color = C.text, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        ) {
+                            LocaleHelper.supportedLanguages.forEach { (code, name) ->
+                                val isSelected = code == LocaleHelper.getSelectedLanguage()
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (code != LocaleHelper.getSelectedLanguage()) {
+                                                LocaleHelper.setLanguage(code)
+                                                showLanguagePicker = false
+                                                // Delay recreate so dialog dismiss animation finishes
+                                                // before the activity restarts. Prevents focus issues
+                                                // on the lock screen after restart.
+                                                android.os.Handler(context.mainLooper).postDelayed({
+                                                    (context as? android.app.Activity)?.recreate()
+                                                }, 350)
+                                            } else {
+                                                showLanguagePicker = false
+                                            }
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        name,
+                                        color = if (isSelected) C.accent else C.text,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (isSelected) {
+                                        Text("✓", color = C.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+            HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
             // Currency picker
             var showCurrencyPicker by remember { mutableStateOf(false) }
             val currentCurrency = CurrencyManager.getPreferredCurrency()
@@ -586,14 +652,14 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Currency", color = C.text, fontSize = 15.sp)
+                Text(stringResource(R.string.settings_currency_label), color = C.text, fontSize = 15.sp)
                 Text("${currentCurrency.uppercase()} (${CurrencyManager.getLabel(currentCurrency)})", color = C.accent, fontSize = 15.sp)
             }
             if (showCurrencyPicker) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { showCurrencyPicker = false },
                     containerColor = C.card,
-                    title = { Text("Choose Currency", color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+                    title = { Text(stringResource(R.string.settings_choose_currency), color = C.text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
                     text = {
                         Column(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -639,41 +705,41 @@ fun SettingsScreen(
         }
 
         // ========== NOTIFICATIONS ==========
-        SectionTitle("NOTIFICATIONS")
+        SectionTitle(stringResource(R.string.settings_section_notifications))
         SettingsCard {
-            SettingsToggle("Wallet updates", "Notify when a new app version is available", walletUpdatesNotif) {
+            SettingsToggle(stringResource(R.string.settings_notif_wallet_updates_label), stringResource(R.string.settings_notif_wallet_updates_desc), walletUpdatesNotif) {
                 walletUpdatesNotif = it
                 SecureStorage.putBoolean("wallet_updates_notif", it)
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsToggle("Transaction status", "Receive notifications when transaction status changes", txStatusNotif) {
+            SettingsToggle(stringResource(R.string.settings_notif_tx_status_label), stringResource(R.string.settings_notif_tx_status_desc), txStatusNotif) {
                 txStatusNotif = it
                 SecureStorage.putBoolean("tx_status_notif", it)
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsToggle("Background connection", "Keep wallet connected for instant message delivery", bgServiceEnabled) {
+            SettingsToggle(stringResource(R.string.settings_notif_bg_connection_label), stringResource(R.string.settings_notif_bg_connection_desc), bgServiceEnabled) {
                 bgServiceEnabled = it
                 SecureStorage.putBoolean("bg_service_enabled", it)
                 if (it) {
                     context.startForegroundService(Intent(context, BackgroundService::class.java))
-                    toast("Background service started")
+                    toast(context.getString(R.string.settings_bg_service_started))
                 } else {
                     context.stopService(Intent(context, BackgroundService::class.java))
-                    toast("Background service stopped")
+                    toast(context.getString(R.string.settings_bg_service_stopped))
                 }
             }
         }
 
         // ========== NODE ==========
-        SectionTitle("NODE")
+        SectionTitle(stringResource(R.string.settings_section_node))
         SettingsCard {
-            SettingsRow("Status", syncStatus,
+            SettingsRow(stringResource(R.string.general_status), syncStatus,
                 valueColor = if (nodeConn.connected) Color(0xFF4CAF50) else C.error)
-            SettingsRow("Block Height",
+            SettingsRow(stringResource(R.string.settings_node_block_height),
                 if (walletStatus.height > 0) "#${walletStatus.height}" else "-")
-            SettingsRow("Network", "Mainnet")
+            SettingsRow(stringResource(R.string.settings_node_network), stringResource(R.string.settings_node_network_value))
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
-            Text("Connection Mode", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.settings_node_connection_mode), color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             var showMobileNodeDisclaimer by remember { mutableStateOf(false) }
             Row(
@@ -682,7 +748,7 @@ fun SettingsScreen(
                     .clip(RoundedCornerShape(8.dp))
                     .border(1.dp, C.border, RoundedCornerShape(8.dp)),
             ) {
-                listOf("random" to "Random", "mobile" to "Mobile", "own" to "Own Node").forEach { (mode, label) ->
+                listOf("random" to stringResource(R.string.settings_node_mode_random), "mobile" to stringResource(R.string.settings_node_mode_mobile), "own" to stringResource(R.string.settings_node_mode_own)).forEach { (mode, label) ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -699,7 +765,7 @@ fun SettingsScreen(
                                         wallet?.changeNodeAddress(selectedNode)
                                         wallet?.enableBodyRequests(false)
                                         SecureStorage.storeNodeAddress(selectedNode)
-                                        toast("Connected to $selectedNode")
+                                        toast(context.getString(R.string.settings_connected_to, selectedNode))
                                     }
                                     "mobile" -> {
                                         showNodeInput = false
@@ -745,9 +811,9 @@ fun SettingsScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                if (isSynced) "Mobile Node Active"
-                                else if (isSyncing) "Mobile Node Syncing..."
-                                else "Mobile Node Connecting...",
+                                if (isSynced) stringResource(R.string.settings_mobile_node_active)
+                                else if (isSyncing) stringResource(R.string.settings_mobile_node_syncing)
+                                else stringResource(R.string.settings_mobile_node_connecting),
                                 color = if (isSynced) Color(0xFF66BB6A) else Color(0xFFFFA726),
                                 fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                             )
@@ -762,14 +828,14 @@ fun SettingsScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("${syncPercent}%", color = C.textSecondary, fontSize = 11.sp)
+                                Text(stringResource(R.string.settings_progress_percent, syncPercent), color = C.textSecondary, fontSize = 11.sp)
                                 Text("${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k blocks", color = C.textMuted, fontSize = 11.sp)
                             }
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (isSynced) "Verifying blockchain independently via FlyClient"
-                            else "App usable via remote node while syncing",
+                            if (isSynced) stringResource(R.string.settings_mobile_verifying)
+                            else stringResource(R.string.settings_mobile_usable_while_sync),
                             color = C.textMuted, fontSize = 11.sp,
                         )
                     }
@@ -785,23 +851,23 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Security, null, tint = C.accent, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Enable Mobile Node", color = C.text, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.settings_mobile_node_title), color = C.text, fontWeight = FontWeight.Bold)
                         }
                     },
                     text = {
                         Column {
                             Text(
-                                "Mobile Node runs a lightweight FlyClient node on your device for maximum privacy. Your wallet verifies the blockchain independently without trusting any remote server.",
+                                stringResource(R.string.settings_mobile_node_desc),
                                 color = C.text, fontSize = 14.sp, lineHeight = 20.sp,
                             )
                             Spacer(Modifier.height(12.dp))
-                            Text("Trade-offs:", color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.settings_mobile_tradeoffs), color = C.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(4.dp))
                             listOf(
-                                "First sync may take several minutes",
-                                "Uses more battery and mobile data",
-                                "Send/receive and messaging work during sync",
-                                "DApp and contract features are limited until sync completes",
+                                stringResource(R.string.settings_mobile_tradeoff_1),
+                                stringResource(R.string.settings_mobile_tradeoff_2),
+                                stringResource(R.string.settings_mobile_tradeoff_3),
+                                stringResource(R.string.settings_mobile_tradeoff_4),
                             ).forEach { point ->
                                 Row(modifier = Modifier.padding(vertical = 2.dp)) {
                                     Text("\u2022 ", color = C.textSecondary, fontSize = 13.sp)
@@ -815,7 +881,7 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
-                                    "Your wallet stays connected to a remote node while the mobile node syncs. Once synced, all traffic switches to your local node automatically.",
+                                    stringResource(R.string.settings_mobile_remote_fallback),
                                     color = Color(0xFF66BB6A), fontSize = 12.sp, lineHeight = 17.sp,
                                     modifier = Modifier.padding(10.dp),
                                 )
@@ -837,15 +903,15 @@ fun SettingsScreen(
                                 SecureStorage.storeNodeAddress(selectedNode)
                                 // Enable body requests (FlyClient mobile protocol)
                                 wallet?.enableBodyRequests(true)
-                                toast("Mobile node enabled — syncing in background")
+                                toast(context.getString(R.string.toast_mobile_node_enabled))
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                             shape = RoundedCornerShape(8.dp),
-                        ) { Text("Enable", color = C.textDark, fontWeight = FontWeight.Bold) }
+                        ) { Text(stringResource(R.string.settings_enable), color = C.textDark, fontWeight = FontWeight.Bold) }
                     },
                     dismissButton = {
                         TextButton(onClick = { showMobileNodeDisclaimer = false }) {
-                            Text("Cancel", color = C.textSecondary)
+                            Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                         }
                     },
                 )
@@ -856,7 +922,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = nodeInput,
                     onValueChange = { nodeInput = it },
-                    placeholder = { Text("node-address:port") },
+                    placeholder = { Text(stringResource(R.string.settings_node_addr_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -866,7 +932,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showNodeInput = false; nodeMode = SecureStorage.getString("node_mode") ?: "random" }, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                     Button(
                         onClick = {
@@ -874,12 +940,12 @@ fun SettingsScreen(
                             if (addr.isNotEmpty()) {
                                 val parts = addr.split(":")
                                 if (parts.size != 2) {
-                                    toast("Invalid format. Use hostname:port")
+                                    toast(context.getString(R.string.settings_invalid_node_format))
                                     return@Button
                                 }
                                 val port = parts[1].toIntOrNull()
                                 if (port == null || port !in 1..65535) {
-                                    toast("Invalid port number")
+                                    toast(context.getString(R.string.settings_invalid_port))
                                     return@Button
                                 }
                                 try {
@@ -890,27 +956,27 @@ fun SettingsScreen(
                                     SecureStorage.putString("own_node_address", addr)
                                     SecureStorage.storeNodeAddress(addr)
                                     showNodeInput = false
-                                    toast("Connected to $addr")
+                                    toast(context.getString(R.string.settings_connected_to, addr))
                                 } catch (e: Exception) {
-                                    toast("Failed to connect: ${e.message}")
+                                    toast(context.getString(R.string.toast_failed_connect, e.message))
                                 }
                             }
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                     ) {
-                        Text("Connect", color = C.textDark, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.settings_connect), color = C.textDark, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
         // ========== PRIVACY ==========
-        SectionTitle("PRIVACY")
+        SectionTitle(stringResource(R.string.settings_section_privacy))
         SettingsCard {
             var showAuthForAskPass by remember { mutableStateOf(false) }
-            SettingsToggle("Ask for password on every Send",
-                "Require password confirmation for each transaction", askPasswordOnSend) {
+            SettingsToggle(stringResource(R.string.settings_ask_password_label),
+                stringResource(R.string.settings_ask_password_desc), askPasswordOnSend) {
                 if (!it) {
                     // Disabling security — require auth first
                     showAuthForAskPass = true
@@ -924,15 +990,15 @@ fun SettingsScreen(
                 AlertDialog(
                     onDismissRequest = { showAuthForAskPass = false },
                     containerColor = C.card,
-                    title = { Text("Confirm Password", color = C.text) },
+                    title = { Text(stringResource(R.string.general_confirm_password), color = C.text) },
                     text = {
                         Column {
-                            Text("Enter your wallet password to disable this security setting.", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.settings_disable_security_prompt), color = C.textSecondary, fontSize = 13.sp)
                             Spacer(Modifier.height(12.dp))
                             OutlinedTextField(
                                 value = authPass,
                                 onValueChange = { authPass = it },
-                                label = { Text("Password") },
+                                label = { Text(stringResource(R.string.general_password)) },
                                 visualTransformation = PasswordVisualTransformation(),
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -950,13 +1016,13 @@ fun SettingsScreen(
                                 askPasswordOnSend = false
                                 SecureStorage.putBoolean(SecureStorage.KEY_ASK_PASSWORD_ON_SEND, false)
                                 showAuthForAskPass = false
-                            } else { toast("Wrong password") }
+                            } else { toast(context.getString(R.string.toast_wrong_password)) }
                         }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
-                            Text("Confirm", color = C.bg)
+                            Text(stringResource(R.string.general_confirm), color = C.bg)
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showAuthForAskPass = false }) { Text("Cancel", color = C.textSecondary) }
+                        TextButton(onClick = { showAuthForAskPass = false }) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
                     },
                 )
             }
@@ -969,28 +1035,28 @@ fun SettingsScreen(
             }
 
             SettingsToggle(
-                label = if (biometricAvailable) "Biometric unlock" else "Biometric unlock (unavailable)",
+                label = if (biometricAvailable) stringResource(R.string.settings_biometric_unlock_label) else stringResource(R.string.settings_biometric_unlock_unavailable),
                 desc = when {
-                    !biometricAvailable -> "No biometric hardware found on this device"
-                    biometricsEnabled -> "Wallet unlocks automatically with biometrics"
-                    else -> "Wallet requires password on every app launch"
+                    !biometricAvailable -> stringResource(R.string.settings_biometric_no_hardware)
+                    biometricsEnabled -> stringResource(R.string.settings_biometric_enabled_desc)
+                    else -> stringResource(R.string.settings_biometric_disabled_desc)
                 },
                 checked = biometricsEnabled,
                 onCheckedChange = { enabling ->
                     if (enabling) {
                         // Enabling: verify fingerprint first before storing
                         if (!biometricAvailable) {
-                            toast("This device does not support biometric authentication")
+                            toast(context.getString(R.string.settings_biometric_not_supported))
                             return@SettingsToggle
                         }
                         val storedPass = SecureStorage.getWalletPassword()
                         if (storedPass.isNullOrEmpty()) {
-                            toast("Wallet password not found. Please try again.")
+                            toast(context.getString(R.string.settings_biometric_pwd_not_found))
                             return@SettingsToggle
                         }
                         val activity = context as? FragmentActivity
                         if (activity == null) {
-                            toast("Cannot show biometric prompt")
+                            toast(context.getString(R.string.settings_biometric_cannot_prompt))
                             return@SettingsToggle
                         }
                         val executor = ContextCompat.getMainExecutor(context)
@@ -999,12 +1065,12 @@ fun SettingsScreen(
                                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                                     biometricsEnabled = true
                                     SecureStorage.putBoolean(SecureStorage.KEY_FINGERPRINT_ENABLED, true)
-                                    toast("Biometric unlock enabled")
+                                    toast(context.getString(R.string.settings_biometric_enabled_toast))
                                 }
                                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                                     if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
                                         errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                                        toast("Biometric enrollment failed: $errString")
+                                        toast(context.getString(R.string.settings_biometric_enroll_failed, errString))
                                     }
                                     // Don't enable — user cancelled or error
                                 }
@@ -1013,16 +1079,16 @@ fun SettingsScreen(
                                 }
                             })
                         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                            .setTitle("Enable Biometric Unlock")
-                            .setSubtitle("Scan your fingerprint to enable biometric unlock")
-                            .setNegativeButtonText("Cancel")
+                            .setTitle(context.getString(R.string.settings_biometric_enable_title))
+                            .setSubtitle(context.getString(R.string.settings_biometric_enable_subtitle))
+                            .setNegativeButtonText(context.getString(R.string.general_cancel))
                             .build()
                         prompt.authenticate(promptInfo)
                     } else {
                         // Disabling: no confirmation needed
                         biometricsEnabled = false
                         SecureStorage.putBoolean(SecureStorage.KEY_FINGERPRINT_ENABLED, false)
-                        toast("Biometric unlock disabled")
+                        toast(context.getString(R.string.settings_biometric_disabled_toast))
                     }
                 },
                 disabled = !biometricAvailable,
@@ -1030,12 +1096,12 @@ fun SettingsScreen(
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
             // Max privacy time limit — functional (matches RN)
-            Text("Longest transaction time for maximum anonymity", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text("Maximum time funds are locked in Max Privacy transactions.",
+            Text(stringResource(R.string.settings_privacy_time_limit), color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.settings_max_privacy_desc),
                 color = C.textMuted, fontSize = 12.sp)
             Spacer(Modifier.height(8.dp))
             OptionRow(
-                options = listOf("No limit" to 0, "24h" to 24, "72h" to 72),
+                options = listOf(stringResource(R.string.settings_privacy_no_limit) to 0, "24h" to 24, "72h" to 72),
                 selected = maxPrivacyHours,
                 onSelect = { hours ->
                     try {
@@ -1043,25 +1109,25 @@ fun SettingsScreen(
                         maxPrivacyHours = hours
                         SecureStorage.putInt("max_privacy_hours", hours)
                         WalletManager.walletInstance?.getWalletStatus()
-                        toast(if (hours == 0) "Max privacy: no limit" else "Max privacy: ${hours}h")
+                        toast(if (hours == 0) context.getString(R.string.toast_max_privacy_no_limit) else context.getString(R.string.toast_max_privacy_hours, hours))
                     } catch (e: Exception) {
-                        toast("Error: ${e.message}")
+                        toast(context.getString(R.string.toast_error_message, e.message))
                     }
                 },
             )
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
             // Show Owner Key — with password input (matches RN)
-            SettingsAction("Show owner key", "Requires wallet password") { showOwnerKey = !showOwnerKey }
+            SettingsAction(stringResource(R.string.settings_show_owner_key), stringResource(R.string.settings_show_owner_key_desc)) { showOwnerKey = !showOwnerKey }
             if (showOwnerKey) {
                 Spacer(Modifier.height(8.dp))
-                PasswordField(ownerKeyPass, { ownerKeyPass = it }, "Enter wallet password")
+                PasswordField(ownerKeyPass, { ownerKeyPass = it }, stringResource(R.string.general_password))
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         showOwnerKey = false; ownerKeyPass = ""
                     }, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                     Button(
                         onClick = {
@@ -1069,7 +1135,7 @@ fun SettingsScreen(
                             if (wallet != null && ownerKeyPass.isNotEmpty()) {
                                 val valid = wallet.checkWalletPassword(ownerKeyPass)
                                 if (!valid) {
-                                    toast("Incorrect password")
+                                    toast(context.getString(R.string.settings_incorrect_password))
                                 } else {
                                     val key = wallet.exportOwnerKey(ownerKeyPass)
                                     if (key.isNotEmpty()) {
@@ -1083,48 +1149,48 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                     ) {
-                        Text("Show Key", color = C.textDark, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.settings_show_key), color = C.textDark, fontWeight = FontWeight.Bold)
                     }
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 8.dp))
 
             // Change password
-            SettingsAction("Change password") { showChangePassword = !showChangePassword }
+            SettingsAction(stringResource(R.string.settings_change_password_label)) { showChangePassword = !showChangePassword }
             if (showChangePassword) {
                 Spacer(Modifier.height(8.dp))
-                PasswordField(currentPass, { currentPass = it }, "Current password")
+                PasswordField(currentPass, { currentPass = it }, stringResource(R.string.settings_current_password))
                 Spacer(Modifier.height(8.dp))
-                PasswordField(newPass, { newPass = it }, "New password")
+                PasswordField(newPass, { newPass = it }, stringResource(R.string.settings_new_password))
                 Spacer(Modifier.height(8.dp))
-                PasswordField(confirmPass, { confirmPass = it }, "Confirm new password")
+                PasswordField(confirmPass, { confirmPass = it }, stringResource(R.string.settings_confirm_new_password))
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         showChangePassword = false
                         currentPass = ""; newPass = ""; confirmPass = ""
                     }, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                     Button(
                         onClick = {
                             when {
                                 currentPass.isEmpty() || newPass.isEmpty() || confirmPass.isEmpty() ->
-                                    toast("All password fields are required")
-                                newPass != confirmPass -> toast("New passwords don't match")
-                                newPass.length < 6 -> toast("Password must be at least 6 characters")
+                                    toast(context.getString(R.string.settings_all_password_fields_required))
+                                newPass != confirmPass -> toast(context.getString(R.string.settings_new_passwords_dont_match))
+                                newPass.length < 6 -> toast(context.getString(R.string.settings_password_too_short))
                                 else -> {
                                     val wallet = WalletManager.walletInstance
                                     if (wallet != null) {
                                         val valid = wallet.checkWalletPassword(currentPass)
                                         if (!valid) {
-                                            toast("Current password is incorrect")
+                                            toast(context.getString(R.string.settings_current_password_incorrect))
                                         } else {
                                             wallet.changeWalletPassword(newPass)
                                             SecureStorage.storeWalletPassword(newPass)
                                             showChangePassword = false
                                             currentPass = ""; newPass = ""; confirmPass = ""
-                                            toast("Password changed successfully")
+                                            toast(context.getString(R.string.settings_password_changed_toast))
                                         }
                                     }
                                 }
@@ -1133,49 +1199,49 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                     ) {
-                        Text("Change", color = C.textDark, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.general_change), color = C.textDark, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
         // ========== UTILITIES ==========
-        SectionTitle("UTILITIES")
+        SectionTitle(stringResource(R.string.settings_section_utilities))
         SettingsCard {
-            SettingsAction("Export wallet data", "Save wallet backup JSON to Downloads") {
+            SettingsAction(stringResource(R.string.settings_export_wallet_label), stringResource(R.string.settings_export_wallet_desc)) {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                    toast("Export requires Android 10+")
+                    toast(context.getString(R.string.tx_history_export_android10))
                 } else {
                     try {
                         WalletManager.walletInstance?.exportDataToJson()
-                        toast("Exporting wallet data...")
+                        toast(context.getString(R.string.settings_exporting))
                     } catch (e: Throwable) {
-                        toast("Export failed: ${e.message}")
+                        toast(context.getString(R.string.toast_export_failed, e.message))
                     }
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Import wallet data", "Restore from a backup file") {
+            SettingsAction(stringResource(R.string.settings_import_wallet_label), stringResource(R.string.settings_import_wallet_desc)) {
                 importLauncher.launch("*/*")
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Export transaction history", "Save ZIP with all TX types to Downloads") {
+            SettingsAction(stringResource(R.string.tx_export_history), stringResource(R.string.settings_export_tx_desc)) {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                    toast("Export requires Android 10+")
+                    toast(context.getString(R.string.tx_history_export_android10))
                 } else {
                     try {
                         WalletManager.walletInstance?.exportTxHistoryToCsv()
-                            ?: run { toast("Wallet not open"); return@SettingsAction }
-                        toast("Exporting transaction history...")
+                            ?: run { toast(context.getString(R.string.settings_wallet_not_open)); return@SettingsAction }
+                        toast(context.getString(R.string.tx_history_exporting))
                     } catch (e: Throwable) {
-                        toast("Export failed: ${e.message}")
+                        toast(context.getString(R.string.toast_export_failed, e.message))
                     }
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("My addresses", "View, edit, and generate wallet addresses") { onNavigateAddresses() }
+            SettingsAction(stringResource(R.string.settings_my_addresses_label), stringResource(R.string.settings_my_addresses_desc)) { onNavigateAddresses() }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Show UTXO", "View unspent transaction outputs") { onNavigateUtxo() }
+            SettingsAction(stringResource(R.string.settings_show_utxo), stringResource(R.string.settings_show_utxo_desc)) { onNavigateUtxo() }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
 
             // Rescan with progress (matches RN)
@@ -1187,9 +1253,9 @@ fun SettingsScreen(
                     }
                     .padding(vertical = 12.dp),
             ) {
-                Text("Rescan", color = C.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.general_rescan), color = C.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 if (isSyncing) {
-                    Text("Syncing ${syncPercent}% (${syncProgress.done / 1000}k / ${syncProgress.total / 1000}k)",
+                    Text(stringResource(R.string.settings_sync_progress, syncPercent, syncProgress.done / 1000, syncProgress.total / 1000),
                         color = C.accent, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                     Spacer(Modifier.height(6.dp))
                     LinearProgressIndicator(
@@ -1202,38 +1268,38 @@ fun SettingsScreen(
                         trackColor = C.border,
                     )
                 } else {
-                    Text("Re-sync all transactions from the chain",
+                    Text(stringResource(R.string.settings_rescan_desc),
                         color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction("Show public offline address", "Your permanent offline receive address") {
+            SettingsAction(stringResource(R.string.settings_show_public_offline_address), stringResource(R.string.settings_public_offline_desc)) {
                 try {
                     WalletManager.walletInstance?.getPublicAddress()
-                    toast("Requesting public address...")
+                    toast(context.getString(R.string.settings_requesting_public_addr))
                 } catch (e: Exception) {
-                    toast("Error: ${e.message}")
+                    toast(context.getString(R.string.toast_error_message, e.message))
                 }
             }
         }
 
         // ========== ABOUT ==========
-        SectionTitle("ABOUT")
+        SectionTitle(stringResource(R.string.settings_section_about))
         SettingsCard {
             val shaderLoaded = remember { ShaderInvoker.hasShaderBytes() }
-            SettingsRow("Shader", if (shaderLoaded) "Loaded" else "Not loaded",
+            SettingsRow(stringResource(R.string.settings_shader_label), if (shaderLoaded) stringResource(R.string.settings_loaded) else stringResource(R.string.settings_not_loaded),
                 valueColor = if (shaderLoaded) Color(0xFF4CAF50) else C.error)
-            SettingsRow("IPFS",
-                when (ipfsStatus) { "online" -> "Online"; "offline" -> "Offline"; else -> "Checking..." },
+            SettingsRow(stringResource(R.string.settings_ipfs_label),
+                when (ipfsStatus) { "online" -> stringResource(R.string.settings_online_status); "offline" -> stringResource(R.string.settings_offline_status); else -> stringResource(R.string.settings_checking) },
                 valueColor = when (ipfsStatus) { "online" -> Color(0xFF4CAF50); "offline" -> C.error; else -> C.textSecondary })
-            SettingsRow("IPFS Peers", if (ipfsPeers >= 0) "$ipfsPeers" else "N/A",
+            SettingsRow(stringResource(R.string.settings_ipfs_peers_label), if (ipfsPeers >= 0) "$ipfsPeers" else "N/A",
                 valueColor = if (ipfsPeers > 0) Color(0xFF4CAF50) else if (ipfsPeers == 0) C.error else C.textSecondary)
-            SettingsRow("Contract", Helpers.truncateKey(Config.PRIVIME_CID))
-            SettingsRow("Lib Version", libVersion)
+            SettingsRow(stringResource(R.string.settings_contract_label), Helpers.truncateKey(Config.PRIVIME_CID))
+            SettingsRow(stringResource(R.string.settings_lib_version_label), libVersion)
             val appVersion = try {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
             } catch (_: Exception) { "1.0.0" }
-            SettingsRow("App", "PriviMW v$appVersion")
+            SettingsRow(stringResource(R.string.settings_app_label), stringResource(R.string.settings_version, appVersion ?: ""))
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             var checkingUpdate by remember { mutableStateOf(false) }
             var showUpdateDialog by remember { mutableStateOf<com.privimemobile.wallet.UpdateChecker.UpdateInfo?>(null) }
@@ -1249,7 +1315,7 @@ fun SettingsScreen(
                                 if (info != null) {
                                     showUpdateDialog = info
                                 } else {
-                                    toast("You're on the latest version")
+                                    toast(context.getString(R.string.settings_latest_version_toast))
                                 }
                             }
                         }
@@ -1258,7 +1324,7 @@ fun SettingsScreen(
                 color = Color.Transparent,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Check for Updates", color = C.accent, fontSize = 15.sp)
+                    Text(stringResource(R.string.settings_check_updates_label), color = C.accent, fontSize = 15.sp)
                     if (checkingUpdate) {
                         Spacer(Modifier.width(8.dp))
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
@@ -1269,12 +1335,12 @@ fun SettingsScreen(
                 AlertDialog(
                     onDismissRequest = { showUpdateDialog = null },
                     containerColor = C.card,
-                    title = { Text("Update Available", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                    title = { Text(stringResource(R.string.settings_update_available_title), color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
                     text = {
                         Column {
-                            Text("Version ${showUpdateDialog!!.latestVersion} is available", color = C.text, fontSize = 16.sp)
+                            Text(stringResource(R.string.settings_update_available, showUpdateDialog!!.latestVersion), color = C.text, fontSize = 16.sp)
                             Spacer(Modifier.height(4.dp))
-                            Text("Current: ${showUpdateDialog!!.currentVersion}", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.settings_update_current, showUpdateDialog!!.currentVersion), color = C.textSecondary, fontSize = 13.sp)
                         }
                     },
                     confirmButton = {
@@ -1283,12 +1349,12 @@ fun SettingsScreen(
                             context.startActivity(intent)
                             showUpdateDialog = null
                         }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
-                            Text("View Release", color = C.bg)
+                            Text(stringResource(R.string.settings_view_release), color = C.bg)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showUpdateDialog = null }) {
-                            Text("Later", color = C.textSecondary)
+                            Text(stringResource(R.string.settings_later), color = C.textSecondary)
                         }
                     },
                 )
@@ -1309,7 +1375,7 @@ fun SettingsScreen(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.padding(16.dp),
                 ) {
-                    Text("Remove wallet", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.settings_remove_wallet), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         } else {
@@ -1322,15 +1388,15 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("This will permanently delete your wallet from this device. Make sure you have backed up your seed phrase!",
+                    Text(stringResource(R.string.settings_delete_wallet_warning),
                         color = C.error, fontSize = 14.sp, lineHeight = 20.sp)
                     Spacer(Modifier.height(12.dp))
-                    Text("Type DELETE to confirm:", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.settings_type_delete_confirm), color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = deleteConfirmText,
                         onValueChange = { deleteConfirmText = it },
-                        placeholder = { Text("Type DELETE") },
+                        placeholder = { Text(stringResource(R.string.settings_type_delete_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -1342,7 +1408,7 @@ fun SettingsScreen(
                         OutlinedButton(
                             onClick = { showDeleteWallet = false; deleteConfirmText = "" },
                             shape = RoundedCornerShape(8.dp),
-                        ) { Text("Cancel", color = C.textSecondary) }
+                        ) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
                         Button(
                             onClick = {
                                 if (deleteConfirmText.trim() == "DELETE") {
@@ -1394,9 +1460,9 @@ fun SettingsScreen(
                                             }
                                         )
                                         val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                                            .setTitle("Confirm Wallet Removal")
-                                            .setSubtitle("Authenticate to delete wallet")
-                                            .setNegativeButtonText("Use Password")
+                                            .setTitle(context.getString(R.string.settings_biometric_delete_title))
+                                            .setSubtitle(context.getString(R.string.settings_biometric_delete_subtitle))
+                                            .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                                             .build()
                                         prompt.authenticate(promptInfo)
                                     } else {
@@ -1425,7 +1491,7 @@ fun SettingsScreen(
                                     strokeWidth = 2.dp,
                                 )
                             } else {
-                                Text("Remove Wallet", color = C.text, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.settings_remove_wallet_btn), color = C.text, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1444,10 +1510,10 @@ fun SettingsScreen(
                 importFileContent = ""
                 importFileName = ""
             },
-            title = { Text("Import Wallet Data", color = C.text) },
+            title = { Text(stringResource(R.string.settings_import_dialog_title), color = C.text) },
             text = {
                 Text(
-                    "Import wallet data from \"$importFileName\"?\n\nThis will merge the backup into your current wallet.",
+                    stringResource(R.string.settings_import_dialog_text, importFileName),
                     color = C.textSecondary,
                 )
             },
@@ -1456,9 +1522,9 @@ fun SettingsScreen(
                     onClick = {
                         try {
                             WalletManager.walletInstance?.importDataFromJson(importFileContent)
-                            toast("Importing wallet data...")
+                            toast(context.getString(R.string.settings_importing))
                         } catch (e: Throwable) {
-                            toast("Import failed: ${e.message}")
+                            toast(context.getString(R.string.toast_import_failed, e.message))
                         }
                         showImportConfirm = false
                         importFileContent = ""
@@ -1467,7 +1533,7 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 ) {
-                    Text("Import", color = C.textDark, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.settings_import), color = C.textDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1479,7 +1545,7 @@ fun SettingsScreen(
                     },
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
             containerColor = C.card,
@@ -1491,7 +1557,7 @@ fun SettingsScreen(
     if (ownerKeyResult.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { ownerKeyResult = "" },
-            title = { Text("Owner Key", color = C.text) },
+            title = { Text(stringResource(R.string.settings_owner_key_title), color = C.text) },
             text = {
                 androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
@@ -1507,7 +1573,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         clipboard.setText(AnnotatedString(ownerKeyResult))
-                        toast("Owner key copied! Clipboard clears in 30s")
+                        toast(context.getString(R.string.settings_owner_key_copied_timed))
                         scope.launch {
                             delay(30000)
                             clipboard.setText(AnnotatedString(""))
@@ -1517,7 +1583,7 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 ) {
-                    Text("Copy", color = C.textDark, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.general_copy), color = C.textDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1525,7 +1591,7 @@ fun SettingsScreen(
                     onClick = { ownerKeyResult = "" },
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Close", color = C.textSecondary)
+                    Text(stringResource(R.string.general_close), color = C.textSecondary)
                 }
             },
             containerColor = C.card,
@@ -1537,10 +1603,10 @@ fun SettingsScreen(
     if (showRescanConfirm) {
         AlertDialog(
             onDismissRequest = { showRescanConfirm = false },
-            title = { Text("Rescan", color = C.text) },
+            title = { Text(stringResource(R.string.general_rescan), color = C.text) },
             text = {
                 Text(
-                    "This will rescan the blockchain for your transactions. This may take a while.",
+                    stringResource(R.string.settings_rescan_confirmation),
                     color = C.textSecondary,
                 )
             },
@@ -1549,12 +1615,12 @@ fun SettingsScreen(
                     onClick = {
                         showRescanConfirm = false
                         WalletManager.walletInstance?.rescan()
-                        toast("Rescan started")
+                        toast(context.getString(R.string.toast_rescan_started))
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 ) {
-                    Text("Rescan", color = C.textDark, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.general_rescan), color = C.textDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1562,7 +1628,7 @@ fun SettingsScreen(
                     onClick = { showRescanConfirm = false },
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
             containerColor = C.card,
@@ -1574,7 +1640,7 @@ fun SettingsScreen(
     if (publicAddress.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { publicAddress = "" },
-            title = { Text("Public Offline Address", color = C.text) },
+            title = { Text(stringResource(R.string.settings_public_offline_title), color = C.text) },
             text = {
                 androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
@@ -1590,13 +1656,13 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         clipboard.setText(AnnotatedString(publicAddress))
-                        toast("Address copied to clipboard")
+                        toast(context.getString(R.string.receive_address_copied))
                         publicAddress = ""
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                 ) {
-                    Text("Copy", color = C.textDark, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.general_copy), color = C.textDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1604,7 +1670,7 @@ fun SettingsScreen(
                     onClick = { publicAddress = "" },
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Close", color = C.textSecondary)
+                    Text(stringResource(R.string.general_close), color = C.textSecondary)
                 }
             },
             containerColor = C.card,
@@ -1631,7 +1697,7 @@ fun SettingsScreen(
                     onClick = { ipfsTestTitle = ""; ipfsTestResult = "" },
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Close", color = C.textSecondary)
+                    Text(stringResource(R.string.general_close), color = C.textSecondary)
                 }
             },
             containerColor = C.card,

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import com.privimemobile.R
 
 /** Theme definitions — all screens reference C.xxx which updates reactively on theme change. */
 data class ThemeColors(
@@ -302,5 +303,18 @@ object C {
     fun currentThemeKey(context: Context): String {
         return context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             .getString("theme", "dark") ?: "dark"
+    }
+
+    /** Get localized theme display name. */
+    fun themeDisplayName(key: String, context: Context): String = when (key) {
+        "dark" -> context.getString(R.string.settings_theme_dark)
+        "light" -> context.getString(R.string.settings_theme_light)
+        "amoled" -> context.getString(R.string.settings_theme_amoled)
+        "midnight" -> context.getString(R.string.settings_theme_midnight)
+        "emerald" -> context.getString(R.string.settings_theme_emerald)
+        "purple" -> context.getString(R.string.settings_theme_purple)
+        "solar" -> context.getString(R.string.settings_theme_solar)
+        "ocean" -> context.getString(R.string.settings_theme_ocean)
+        else -> key
     }
 }

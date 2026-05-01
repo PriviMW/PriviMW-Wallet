@@ -18,19 +18,19 @@ object Helpers {
         else -> "Unknown error"
     }
 
-    fun extractError(r: Map<String, Any?>?): String {
-        if (r == null) return "Unknown error"
+    fun extractError(r: Map<String, Any?>?, context: android.content.Context? = null): String {
+        if (r == null) return context?.getString(com.privimemobile.R.string.error_unexpected) ?: "Unknown error"
         val error = r["error"]
         if (error is Map<*, *>) {
             val code = (error["code"] as? Number)?.toInt()
-            if (code == -32021) return "Transaction cancelled"
+            if (code == -32021) return context?.getString(com.privimemobile.R.string.tx_cancelled) ?: "Transaction cancelled"
             return (error["message"] as? String) ?: error.toString()
         }
         if (error is String) {
-            if (error.contains("-32021") || error.contains("rejected by user")) return "Transaction cancelled"
+            if (error.contains("-32021") || error.contains("rejected by user")) return context?.getString(com.privimemobile.R.string.tx_cancelled) ?: "Transaction cancelled"
             return error
         }
-        return (r["message"] as? String) ?: "Unknown error"
+        return (r["message"] as? String) ?: context?.getString(com.privimemobile.R.string.error_unexpected) ?: "Unknown error"
     }
 
     // === Wallet ID handling (ports normalizeWalletId, shortWalletId) ===

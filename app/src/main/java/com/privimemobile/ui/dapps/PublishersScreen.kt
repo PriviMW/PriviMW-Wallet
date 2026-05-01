@@ -10,10 +10,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.privimemobile.R
 import com.privimemobile.protocol.DAppStore
 import com.privimemobile.protocol.Publisher
 import com.privimemobile.ui.theme.C
@@ -58,11 +60,11 @@ fun PublishersScreen(
             onClick = onBack,
             modifier = Modifier.padding(start = 4.dp, top = 4.dp),
         ) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         Text(
-            "Publishers",
+            stringResource(R.string.dapps_publishers),
             color = C.text,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -70,7 +72,7 @@ fun PublishersScreen(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Enable or disable publishers to filter their DApps",
+        stringResource(R.string.dapps_publishers_subtitle),
             color = C.textSecondary,
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -90,7 +92,7 @@ fun PublishersScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No publishers found",
+                stringResource(R.string.dapps_no_publishers),
                     color = C.textSecondary,
                     fontSize = 15.sp,
                 )

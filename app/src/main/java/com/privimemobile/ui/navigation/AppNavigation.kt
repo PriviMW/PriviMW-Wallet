@@ -35,7 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.privimemobile.MainActivity
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -44,6 +46,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.privimemobile.R
 import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
 import com.privimemobile.ui.wallet.SendScreen
@@ -75,15 +78,15 @@ import com.privimemobile.ui.settings.SettingsScreen
  */
 enum class Tab(
     val route: String,
-    val label: String,
+    @StringRes val labelResId: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
 ) {
-    WALLET("wallet", "Wallet", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet),
-    CHATS("chats", "Chats", Icons.Filled.Chat, Icons.Outlined.Chat),
-    DAPPS("dapps", "DApps", Icons.Filled.Apps, Icons.Outlined.Apps),
-    SWAP("swap_tab", "Swap", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
-    SETTINGS("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
+    WALLET("wallet", R.string.wallet_title, Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet),
+    CHATS("chats", R.string.chat_title, Icons.Filled.Chat, Icons.Outlined.Chat),
+    DAPPS("dapps", R.string.dapps_title, Icons.Filled.Apps, Icons.Outlined.Apps),
+    SWAP("swap_tab", R.string.swap_title, Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
+    SETTINGS("settings", R.string.settings_title, Icons.Filled.Settings, Icons.Outlined.Settings),
 }
 
 @Composable
@@ -166,10 +169,10 @@ fun AppNavigation() {
                             icon = {
                                 Icon(
                                     imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                    contentDescription = tab.label,
+                                    contentDescription = stringResource(tab.labelResId),
                                 )
                             },
-                            label = { Text(tab.label) },
+                            label = { Text(stringResource(tab.labelResId)) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = C.accent,
                                 selectedTextColor = C.accent,

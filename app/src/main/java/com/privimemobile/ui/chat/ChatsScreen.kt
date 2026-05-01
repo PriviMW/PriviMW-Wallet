@@ -60,6 +60,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.*
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.ChatStateEntity
 import com.privimemobile.chat.db.entities.ContactEntity
@@ -286,9 +288,9 @@ fun ChatsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Chats", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.chat_title), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(8.dp))
-                                Text("End-to-end encrypted via SBBS", color = C.textSecondary, fontSize = 10.sp)
+                                Text(stringResource(R.string.chats_encrypted_notice), color = C.textSecondary, fontSize = 10.sp)
                             }
                             IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
                                 Icon(
@@ -305,7 +307,7 @@ fun ChatsScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search chats, handles, or groups...", color = C.textMuted, fontSize = 14.sp) },
+                            placeholder = { Text(stringResource(R.string.chats_search_placeholder), color = C.textMuted, fontSize = 14.sp) },
                             leadingIcon = {
                                 Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(18.dp))
                             },
@@ -341,7 +343,7 @@ fun ChatsScreen(
                 }
 
                 // ── Tab bar (All / Unread / Groups / DMs / Archived) ──
-                val tabLabels = listOf("All", "Unread", "Groups", "DMs", "Archived")
+                val tabLabelRes = listOf(R.string.chats_tab_all, R.string.chats_tab_unread, R.string.chats_tab_groups, R.string.chats_tab_dms, R.string.chats_tab_archived)
                 val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 } + groups.count { !it.archived && it.unreadCount > 0 }
                 val groupsTotal = groups.count { !it.archived }
                 val dmsTotal = dms.count { !it.archived }
@@ -354,7 +356,8 @@ fun ChatsScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    tabLabels.forEachIndexed { idx, label ->
+                    tabLabelRes.forEachIndexed { idx, labelRes ->
+                        val label = stringResource(labelRes)
                         val badge = when (idx) {
                             1 -> if (unreadTotal > 0) " ($unreadTotal)" else ""
                             2 -> if (groupsTotal > 0) " ($groupsTotal)" else ""
@@ -399,11 +402,11 @@ fun ChatsScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             if (searchQuery.isNotBlank()) {
-                                Text("No results for \"$searchQuery\"", color = C.textSecondary, fontSize = 15.sp)
+                                Text(stringResource(R.string.chat_no_results, searchQuery), color = C.textSecondary, fontSize = 15.sp)
                             } else {
-                                Text("No conversations yet", color = C.textSecondary, fontSize = 16.sp)
+                                Text(stringResource(R.string.chats_empty), color = C.textSecondary, fontSize = 16.sp)
                                 Spacer(Modifier.height(6.dp))
-                                Text("Tap the pencil to start a chat", color = C.textMuted, fontSize = 13.sp)
+                                Text(stringResource(R.string.chats_tap_to_chat), color = C.textMuted, fontSize = 13.sp)
                             }
                         }
                     }
@@ -489,8 +492,8 @@ fun ChatsScreen(
                                 AlertDialog(
                                     onDismissRequest = { showDeleteConfirmItem = false },
                                     containerColor = C.card,
-                                    title = { Text(if (isGrp) "Leave Group?" else "Delete Chat?", color = C.text, fontWeight = FontWeight.SemiBold) },
-                                    text = { Text(if (isGrp) "Leave \"$name\"? You'll need an invite to rejoin." else "Delete all messages with $name?", color = C.textSecondary) },
+                                    title = { Text(stringResource(if (isGrp) R.string.chats_leave_group_title else R.string.chats_delete_chat_title), color = C.text, fontWeight = FontWeight.SemiBold) },
+                                    text = { Text(stringResource(if (isGrp) R.string.chats_leave_group_confirm else R.string.chats_delete_chat_confirm, name), color = C.textSecondary) },
                                     confirmButton = {
                                         TextButton(onClick = {
                                             showDeleteConfirmItem = false
@@ -501,7 +504,7 @@ fun ChatsScreen(
                                                         if (!success) {
                                                             android.widget.Toast.makeText(
                                                                 context,
-                                                                "Leave failed: ${error ?: "Transaction failed"}",
+                                                                context.getString(R.string.chats_leave_failed, error ?: context.getString(R.string.register_transaction_failed)),
                                                                 android.widget.Toast.LENGTH_LONG
                                                             ).show()
                                                         } else {
@@ -523,11 +526,11 @@ fun ChatsScreen(
                                                     ChatService.db?.contactDao()?.deleteByHandle(handle)
                                                 }
                                             }
-                                        }) { Text(if (isGrp) "Leave" else "Delete", color = C.error, fontWeight = FontWeight.Bold) }
+                                        }) { Text(stringResource(if (isGrp) R.string.chats_leave else R.string.general_delete), color = C.error, fontWeight = FontWeight.Bold) }
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { showDeleteConfirmItem = false }) {
-                                            Text("Cancel", color = C.textSecondary)
+                                            Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                         }
                                     },
                                 )
@@ -976,16 +979,16 @@ private fun NotRegisteredLanding(onRegister: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Encrypted Messaging", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.register_not_registered_title), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Text(
-            "Register a @handle to start sending and receiving encrypted messages on Beam.",
+            stringResource(R.string.register_not_registered_subtitle),
             color = C.textSecondary, fontSize = 14.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "End-to-end encrypted via SBBS",
+            stringResource(R.string.chats_encrypted_notice),
             color = C.textSecondary.copy(alpha = 0.6f), fontSize = 11.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
@@ -995,7 +998,7 @@ private fun NotRegisteredLanding(onRegister: () -> Unit) {
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("Register Handle", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.register_not_registered_button), color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1079,29 +1082,29 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
             if (txStatus == "confirmed") {
                 Text("\u2705", fontSize = 48.sp)
                 Spacer(Modifier.height(16.dp))
-                Text("Address Updated!", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.chats_address_updated), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                Text("@${chatState.myHandle} is ready", color = C.accent, fontSize = 16.sp)
+                Text(stringResource(R.string.chats_handle_ready, chatState.myHandle ?: ""), color = C.accent, fontSize = 16.sp)
             } else if (txStatus == "failed") {
                 Text("\u274C", fontSize = 48.sp)
                 Spacer(Modifier.height(16.dp))
-                Text("Update Failed", color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.chats_update_failed), color = C.error, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                Text(errorMsg ?: "Transaction failed", color = C.textSecondary, fontSize = 14.sp)
+                Text(errorMsg ?: stringResource(R.string.register_transaction_failed), color = C.textSecondary, fontSize = 14.sp)
                 Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = { updating = false; txStatus = "pending"; errorMsg = null },
                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                ) { Text("Try Again", color = C.textDark, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.register_try_again), color = C.textDark, fontWeight = FontWeight.Bold) }
             } else {
                 CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
                 Spacer(Modifier.height(24.dp))
-                Text("Updating Address", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.chats_updating_address), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Text("@${chatState.myHandle}", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.",
+                    stringResource(R.string.chats_updating_address_msg),
                     color = C.textSecondary, fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
                 )
@@ -1120,12 +1123,12 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Welcome Back", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.chats_welcome_back), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text("@${chatState.myHandle}", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(16.dp))
         Text(
-            "Your wallet was restored on a new device. Your messaging address needs to be updated so others can reach you.",
+            stringResource(R.string.chats_restored_notice),
             color = C.textSecondary, fontSize = 14.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
         )

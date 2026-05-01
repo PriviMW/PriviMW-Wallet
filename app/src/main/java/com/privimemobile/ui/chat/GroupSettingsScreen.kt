@@ -20,11 +20,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.asImageBitmap
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.GroupEntity
 import com.privimemobile.chat.db.entities.GroupMemberEntity
@@ -69,10 +71,10 @@ fun GroupSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Group Info", color = C.text) },
+                title = { Text(stringResource(R.string.group_info_title), color = C.text) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = C.text)
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.general_back), tint = C.text)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = C.card),
@@ -108,7 +110,7 @@ fun GroupSettingsScreen(
                             val dir = java.io.File(context.filesDir, "group_avatars").also { it.mkdirs() }
                             java.io.File(dir, "$groupId.webp").writeBytes(result.bytes)
                             groupAvatarVersion++
-                            Toast.makeText(context, "Group picture updated", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.group_avatar_updated), Toast.LENGTH_SHORT).show()
                             // Broadcast to all members via SBBS
                             scope.launch {
                                 val ts = System.currentTimeMillis() / 1000
@@ -117,10 +119,10 @@ fun GroupSettingsScreen(
                                 val dedupKey = "$ts:info_update:avatar:$groupId".hashCode().toString(16)
                                 ChatService.db?.messageDao()?.insert(com.privimemobile.chat.db.entities.MessageEntity(
                                     conversationId = convId, timestamp = ts,
-                                    senderHandle = myHandle, text = "You updated group picture",
+                                    senderHandle = myHandle, text = context.getString(R.string.group_you_updated_picture),
                                     type = "group_service", sent = true, sbbsDedupKey = dedupKey,
                                 ))
-                                ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "You updated group picture")
+                                ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, context.getString(R.string.group_you_updated_picture))
                                 // Broadcast
                                 val base64 = android.util.Base64.encodeToString(result.bytes, android.util.Base64.NO_WRAP)
                                 val payload = mapOf(
@@ -202,17 +204,17 @@ fun GroupSettingsScreen(
                                         // Submit on-chain TX — SBBS broadcast + local update happens after TX confirms
                                         ChatService.groups.updateGroupInfo(groupId, name = trimmed) { success, _ ->
                                             if (success) {
-                                                android.widget.Toast.makeText(context, "TX submitted. Name will update when confirmed.", android.widget.Toast.LENGTH_LONG).show()
+                                                android.widget.Toast.makeText(context, context.getString(R.string.settings_toast_tx_name_update), android.widget.Toast.LENGTH_LONG).show()
                                             } else {
-                                                android.widget.Toast.makeText(context, "Failed to update name", android.widget.Toast.LENGTH_SHORT).show()
+                                                android.widget.Toast.makeText(context, context.getString(R.string.settings_toast_name_update_failed), android.widget.Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     }
                                     showNameDialog = false
-                                }) { Text("Save", color = C.accent) }
+                                }) { Text(stringResource(R.string.general_save), color = C.accent) }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showNameDialog = false }) { Text("Cancel", color = C.textSecondary) }
+                                TextButton(onClick = { showNameDialog = false }) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
                             },
                         )
                     }
@@ -246,7 +248,7 @@ fun GroupSettingsScreen(
                     Icon(Icons.Default.Info, null, tint = C.textSecondary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Description", color = C.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.general_description), color = C.textSecondary, fontSize = 12.sp)
                         Text(
                             desc?.ifEmpty { "No description" } ?: "No description",
                             color = if (desc.isNullOrEmpty()) C.textMuted else C.text,
@@ -300,12 +302,12 @@ fun GroupSettingsScreen(
                                     )
                                     ChatService.groups.sendGroupPayload(groupId, infoPayload)
                                 }
-                                Toast.makeText(context, "Description updated", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.settings_toast_description_updated), Toast.LENGTH_SHORT).show()
                                 showDescDialog = false
-                            }) { Text("Save", color = C.accent) }
+                            }) { Text(stringResource(R.string.general_save), color = C.accent) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showDescDialog = false }) { Text("Cancel", color = C.textSecondary) }
+                            TextButton(onClick = { showDescDialog = false }) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
                         },
                     )
                 }
@@ -321,7 +323,7 @@ fun GroupSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Members (${members.size})",
+                        stringResource(R.string.group_members_count, members.size),
                         color = C.accent,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -394,10 +396,10 @@ fun GroupSettingsScreen(
                                                             val sent = ChatService.groups.sendGroupInvite(groupId, contact.handle)
                                                             addLoading = false
                                                             if (sent) {
-                                                                Toast.makeText(context, "Invite sent to @${contact.handle}", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.settings_toast_invite_sent, contact.handle), Toast.LENGTH_SHORT).show()
                                                                 showAddDialog = false
                                                             } else {
-                                                                Toast.makeText(context, "Failed to send invite", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.settings_toast_invite_failed), Toast.LENGTH_SHORT).show()
                                                             }
                                                         }
                                                     } else Modifier)
@@ -415,7 +417,7 @@ fun GroupSettingsScreen(
                                                     Text("@${contact.handle}", color = C.textSecondary, fontSize = 12.sp)
                                                 }
                                                 if (isMember) {
-                                                    Text("Member", color = C.textMuted, fontSize = 12.sp)
+                                                    Text(stringResource(R.string.group_member_role_member), color = C.textMuted, fontSize = 12.sp)
                                                 }
                                             }
                                         }
@@ -423,7 +425,7 @@ fun GroupSettingsScreen(
                                 },
                                 confirmButton = {},
                                 dismissButton = {
-                                    TextButton(onClick = { showAddDialog = false; searchJob?.cancel() }) { Text("Close", color = C.textSecondary) }
+                                    TextButton(onClick = { showAddDialog = false; searchJob?.cancel() }) { Text(stringResource(R.string.general_close), color = C.textSecondary) }
                                 },
                             )
                         }
@@ -440,26 +442,26 @@ fun GroupSettingsScreen(
                     callerIsAdmin = isAdmin,
                     onPromote = {
                         ChatService.groups.setMemberRole(groupId, member.handle, 1) { s, e ->
-                            if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be promoted when confirmed.", Toast.LENGTH_LONG).show()
-                            else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                            if (s) Toast.makeText(context, context.getString(R.string.settings_toast_promote_tx, member.handle), Toast.LENGTH_LONG).show()
+                            else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDemote = {
                         ChatService.groups.setMemberRole(groupId, member.handle, 0) { s, e ->
-                            if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be demoted when confirmed.", Toast.LENGTH_LONG).show()
-                            else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                            if (s) Toast.makeText(context, context.getString(R.string.settings_toast_demote_tx, member.handle), Toast.LENGTH_LONG).show()
+                            else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onRemove = {
                         ChatService.groups.removeMember(groupId, member.handle, ban = false) { s, e ->
-                            if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be removed when confirmed.", Toast.LENGTH_LONG).show()
-                            else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                            if (s) Toast.makeText(context, context.getString(R.string.settings_toast_remove_member_tx, member.handle), Toast.LENGTH_LONG).show()
+                            else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onBan = {
                         ChatService.groups.removeMember(groupId, member.handle, ban = true) { s, e ->
-                            if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be banned when confirmed.", Toast.LENGTH_LONG).show()
-                            else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                            if (s) Toast.makeText(context, context.getString(R.string.settings_toast_ban_tx, member.handle), Toast.LENGTH_LONG).show()
+                            else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onTap = { onContactInfo(member.handle) },
@@ -471,7 +473,7 @@ fun GroupSettingsScreen(
                 item {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Banned Users (${bannedMembers.size})",
+                        stringResource(R.string.group_banned_count, bannedMembers.size),
                         color = Color(0xFFEF5350), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
@@ -488,8 +490,8 @@ fun GroupSettingsScreen(
                         onBan = {},
                         onUnban = {
                             ChatService.groups.removeMember(groupId, member.handle, ban = false, isUnban = true) { s, e ->
-                                if (s) Toast.makeText(context, "TX submitted. @${member.handle} will be unbanned when confirmed.", Toast.LENGTH_LONG).show()
-                                else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                                if (s) Toast.makeText(context, context.getString(R.string.settings_toast_unban_tx, member.handle), Toast.LENGTH_LONG).show()
+                                else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                             }
                         },
                         onTap = {},
@@ -526,14 +528,14 @@ fun GroupSettingsScreen(
                     ) {
                         Icon(Icons.Default.SwapHoriz, null, tint = Color(0xFFFFA726), modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
-                        Text("Transfer Ownership", color = Color(0xFFFFA726), fontSize = 15.sp)
+                        Text(stringResource(R.string.group_transfer_ownership), color = Color(0xFFFFA726), fontSize = 15.sp)
                     }
                     if (showTransferDialog) {
                         val admins = members.filter { it.role == 1 }
                         AlertDialog(
                             onDismissRequest = { showTransferDialog = false },
                             containerColor = C.card,
-                            title = { Text("Transfer Ownership", color = C.text) },
+                            title = { Text(stringResource(R.string.group_transfer_ownership), color = C.text) },
                             text = {
                                 Column {
                                     if (admins.isEmpty()) {
@@ -548,12 +550,12 @@ fun GroupSettingsScreen(
                                                     .clickable {
                                                         ChatService.groups.transferOwnership(groupId, admin.handle) { s, e ->
                                                             if (s) {
-                                                                Toast.makeText(context, "Ownership transferred to @${admin.handle}", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.settings_toast_ownership_transferred, admin.handle), Toast.LENGTH_SHORT).show()
                                                                 scope.launch {
                                                                     ChatService.groups.refreshGroupMembers(groupId)
                                                                     ChatService.groups.sendGroupService(groupId, "ownership_transferred", admin.handle)
                                                                 }
-                                                            } else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                                                            } else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                                                         }
                                                         showTransferDialog = false
                                                     }
@@ -569,7 +571,7 @@ fun GroupSettingsScreen(
                                 }
                             },
                             confirmButton = {},
-                            dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("Cancel", color = C.textSecondary) } },
+                            dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) } },
                         )
                     }
                 }
@@ -584,14 +586,14 @@ fun GroupSettingsScreen(
                         onClick = {
                             ChatService.groups.leaveGroup(groupId) { s, e ->
                                 if (s) {
-                                    Toast.makeText(context, "Left group", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.settings_toast_left_group), Toast.LENGTH_SHORT).show()
                                     onDeleteGroup()
-                                } else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                                } else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     ) {
-                        Text("Leave Group", color = Color(0xFFEF5350), fontSize = 16.sp)
+                        Text(stringResource(R.string.group_leave_group), color = Color(0xFFEF5350), fontSize = 16.sp)
                     }
                 }
             }
@@ -602,14 +604,14 @@ fun GroupSettingsScreen(
                         onClick = {
                             ChatService.groups.deleteGroup(groupId) { s, e ->
                                 if (s) {
-                                    Toast.makeText(context, "Group deleted", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.settings_toast_group_deleted), Toast.LENGTH_SHORT).show()
                                     onDeleteGroup()
-                                } else Toast.makeText(context, e ?: "Failed", Toast.LENGTH_SHORT).show()
+                                } else Toast.makeText(context, e ?: context.getString(R.string.toast_update_address_failed), Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     ) {
-                        Text("Delete Group", color = Color(0xFFEF5350), fontSize = 16.sp)
+                        Text(stringResource(R.string.group_delete_group), color = Color(0xFFEF5350), fontSize = 16.sp)
                     }
                 }
             }
@@ -690,7 +692,7 @@ private fun MemberRow(
         // Role badge
         val roleText = when (member.role) {
             2 -> "Creator"
-            1 -> "Admin"
+            1 -> stringResource(R.string.group_member_role_admin)
             3 -> "Banned"
             else -> null
         }
@@ -723,13 +725,13 @@ private fun MemberRow(
             if (callerIsCreator) {
                 if (member.role == 0) {
                     DropdownMenuItem(
-                        text = { Text("Promote to Admin") },
+                        text = { Text(stringResource(R.string.group_promote_to_admin)) },
                         onClick = { showMenu = false; actionPending = true; onPromote() },
                     )
                 }
                 if (member.role == 1) {
                     DropdownMenuItem(
-                        text = { Text("Demote to Member") },
+                        text = { Text(stringResource(R.string.group_demote_to_member)) },
                         onClick = { showMenu = false; actionPending = true; onDemote() },
                     )
                 }

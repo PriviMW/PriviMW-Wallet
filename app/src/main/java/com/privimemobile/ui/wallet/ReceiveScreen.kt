@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.SecureStorage
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
@@ -221,7 +223,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                 .align(Alignment.Start)
                 .padding(start = 4.dp, top = 4.dp),
         ) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         Column(
@@ -346,7 +348,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         ) {
                             CircularProgressIndicator(color = C.accent)
                             Spacer(Modifier.height(12.dp))
-                            Text("Generating address\u2026", color = C.textSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.receive_generating_address), color = C.textSecondary, fontSize = 13.sp)
                         }
                     }
                 } else if (currentAddress != null) {
@@ -377,7 +379,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxSize(),
                         ) {
-                            Text("No address", color = C.textMuted, fontSize = 14.sp)
+                            Text(stringResource(R.string.receive_no_address), color = C.textMuted, fontSize = 14.sp)
                         }
                     }
                 }
@@ -431,7 +433,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         ),
                     ) {
                         Text(
-                            if (copied) "\u2713  COPIED" else "COPY",
+                            if (copied) stringResource(R.string.receive_copy_btn_copied) else stringResource(R.string.receive_copy_btn_label),
                             color = C.textDark,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -448,7 +450,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         border = BorderStroke(1.dp, C.border),
                     ) {
                         Text(
-                            "New address",
+                            stringResource(R.string.receive_generate_new_btn),
                             color = C.textSecondary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -463,7 +465,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, currentAddress)
                         }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share Address"))
+                        context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.receive_share_chooser)))
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -479,7 +481,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "SHARE ADDRESS",
+                        stringResource(R.string.receive_share_btn).uppercase(),
                         color = C.accent,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,

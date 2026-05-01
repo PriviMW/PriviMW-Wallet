@@ -108,6 +108,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.*
 import com.privimemobile.ui.components.VoiceMessageBubble
 import com.privimemobile.ui.components.MicButton
@@ -1240,9 +1242,14 @@ fun ChatScreen(
                         "comment" to txComment,
                     ))
                     if (txResult.containsKey("error")) {
-                        val errMsg = (txResult["error"] as? Map<*, *>)?.get("message") as? String
-                            ?: txResult["error"]?.toString() ?: "Send failed"
-                        withContext(Dispatchers.Main) { Toast.makeText(context, "Tip failed: $errMsg", Toast.LENGTH_LONG).show() }
+                        val errMsg = Helpers.extractError(txResult, context)
+                        val tipCancelled = errMsg == context.getString(R.string.tx_cancelled)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context,
+                                if (tipCancelled) context.getString(R.string.tip_cancelled) else context.getString(R.string.tip_failed, errMsg),
+                                if (tipCancelled) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+                            ).show()
+                        }
                         return@launch
                     }
 
@@ -1289,12 +1296,13 @@ fun ChatScreen(
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        val msg = e.message ?: "Send failed"
-                        if (msg.contains("cancel", ignoreCase = true) || msg.contains("rejected", ignoreCase = true)) {
-                            Toast.makeText(context, "Tip cancelled", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Tip failed: $msg", Toast.LENGTH_LONG).show()
-                        }
+                        val errorMap = mapOf("error" to mapOf("message" to (e.message ?: "Send failed")))
+                        val errMsg = Helpers.extractError(errorMap, context)
+                        val tipCancelled = errMsg == context.getString(R.string.tx_cancelled)
+                        Toast.makeText(context,
+                            if (tipCancelled) context.getString(R.string.tip_cancelled) else context.getString(R.string.tip_failed, errMsg),
+                            if (tipCancelled) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
@@ -1689,7 +1697,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = C.text, modifier = Modifier.size(22.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.general_back), tint = C.text, modifier = Modifier.size(22.dp))
                 }
                 if (isGroupMode) {
                     // Group avatar — custom image or default icon
@@ -4583,7 +4591,7 @@ fun ChatScreen(
                         },
                         dismissButton = {
                             TextButton(onClick = { selectedDateMillis = null }) {
-                                Text("Back", color = C.textSecondary)
+                                Text(stringResource(R.string.general_back), color = C.textSecondary)
                             }
                         },
                     )

@@ -28,6 +28,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
@@ -82,7 +84,7 @@ fun SendConfirmScreen(
     fun executeSend() {
         val wallet = com.privimemobile.wallet.WalletManager.walletInstance
         if (wallet == null) {
-            error = "Wallet not connected"
+            error = context.getString(R.string.send_confirm_wallet_not_connected)
             return
         }
         sending = true
@@ -93,7 +95,7 @@ fun SendConfirmScreen(
             onApproved()
         } catch (e: Exception) {
             sending = false
-            error = e.message ?: "Send failed"
+            error = e.message ?: context.getString(R.string.send_confirm_send_failed)
         }
     }
 
@@ -144,9 +146,9 @@ fun SendConfirmScreen(
                 )
 
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Confirm Transaction")
-                    .setSubtitle("Authenticate to send ${Helpers.formatBeam(amountGroth)} $ticker")
-                    .setNegativeButtonText("Use Password")
+                    .setTitle(context.getString(R.string.send_confirm_title))
+                    .setSubtitle(context.getString(R.string.send_confirm_authenticate, Helpers.formatBeam(amountGroth), ticker))
+                    .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                     .build()
 
                 prompt.authenticate(promptInfo)
@@ -171,12 +173,12 @@ fun SendConfirmScreen(
             onClick = onRejected,
             modifier = Modifier.padding(start = 4.dp, top = 4.dp),
         ) {
-            Text("< Back", color = C.textSecondary)
+            Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
 
         // Header
         Text(
-            "SEND CONFIRMATION",
+            stringResource(R.string.send_confirm_title).uppercase(),
             color = C.textSecondary,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -198,7 +200,7 @@ fun SendConfirmScreen(
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 // Sending to — show front + back so user can verify both ends
-                ConfirmRow("Sending to") {
+                ConfirmRow(stringResource(R.string.send_confirm_sending_to)) {
                     val displayAddr = if (address.length > 30) {
                         "${address.take(14)}...${address.takeLast(14)}"
                     } else address
@@ -215,7 +217,7 @@ fun SendConfirmScreen(
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Transaction type
-                ConfirmRow("Transaction type") {
+                ConfirmRow(stringResource(R.string.send_confirm_tx_type)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -237,7 +239,7 @@ fun SendConfirmScreen(
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Amount
-                ConfirmRow("Amount") {
+                ConfirmRow(stringResource(R.string.general_amount)) {
                     Column(horizontalAlignment = Alignment.End) {
                         val amtText = "${Helpers.formatBeam(amountGroth)} $ticker"
                         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
@@ -271,7 +273,7 @@ fun SendConfirmScreen(
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Fee
-                ConfirmRow("Transaction fee") {
+                ConfirmRow(stringResource(R.string.general_fee)) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             "${Helpers.formatBeam(fee)} BEAM",
@@ -285,7 +287,7 @@ fun SendConfirmScreen(
                 HorizontalDivider(color = C.border, thickness = 1.dp)
 
                 // Total — for BEAM: amount + fee. For other assets: show both separately
-                ConfirmRow("Total") {
+                ConfirmRow(stringResource(R.string.send_confirm_total_label)) {
                     if (assetId == 0) {
                         Column(horizontalAlignment = Alignment.End) {
                             val totalText = "${Helpers.formatBeam(amountGroth + fee)} BEAM"
@@ -355,7 +357,7 @@ fun SendConfirmScreen(
                 // Comment
                 if (comment.isNotEmpty()) {
                     HorizontalDivider(color = C.border, thickness = 1.dp)
-                    ConfirmRow("Comment") {
+                    ConfirmRow(stringResource(R.string.general_comment)) {
                         Text(
                             comment,
                             color = C.textSecondary,
@@ -386,7 +388,7 @@ fun SendConfirmScreen(
                             .background(C.warning),
                     )
                     Text(
-                        "SBBS transaction \u2014 recipient must be online within 12 hours or the transaction will expire.",
+                        stringResource(R.string.send_confirm_sbbs_warning),
                         color = C.warning,
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
@@ -412,7 +414,7 @@ fun SendConfirmScreen(
                             .background(C.warning),
                     )
                     Text(
-                        "Transactions cannot be reversed once confirmed.",
+                        stringResource(R.string.send_confirm_irreversible_warning),
                         color = C.textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
@@ -463,7 +465,7 @@ fun SendConfirmScreen(
                     )
                 } else {
                     Text(
-                        "SEND",
+                        stringResource(R.string.general_send).uppercase(),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -485,7 +487,7 @@ fun SendConfirmScreen(
                 ),
             ) {
                 Text(
-                    "Back \u2014 Edit",
+                    stringResource(R.string.send_confirm_back_edit),
                     color = C.textSecondary,
                     fontSize = 15.sp,
                 )
@@ -503,7 +505,7 @@ fun SendConfirmScreen(
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(
-                        "Enter Password",
+                        stringResource(R.string.send_confirm_enter_password),
                         color = C.text,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -512,7 +514,7 @@ fun SendConfirmScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Confirm your wallet password to send",
+                        stringResource(R.string.send_confirm_password_subtitle),
                         color = C.textSecondary,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -525,7 +527,7 @@ fun SendConfirmScreen(
                             passwordInput = it
                             passwordError = ""
                         },
-                        placeholder = { Text("Password") },
+                        placeholder = { Text(stringResource(R.string.general_password)) },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -558,7 +560,7 @@ fun SendConfirmScreen(
                                 brush = androidx.compose.ui.graphics.SolidColor(C.border)
                             ),
                         ) {
-                            Text("Cancel", color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.general_cancel), color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                         Button(
                             onClick = {
@@ -567,7 +569,7 @@ fun SendConfirmScreen(
                                     if (wallet != null) {
                                         val valid = wallet.checkWalletPassword(passwordInput.trim())
                                         if (!valid) {
-                                            passwordError = "Incorrect password"
+                                            passwordError = context.getString(R.string.error_invalid_password)
                                             return@Button
                                         }
                                     }
@@ -581,7 +583,7 @@ fun SendConfirmScreen(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
                         ) {
-                            Text("Confirm", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.general_confirm), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

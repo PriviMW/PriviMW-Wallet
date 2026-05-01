@@ -624,22 +624,20 @@ fun ChatScreen(
         }
     }
 
-    // Clear unread state only when the user transitions to the bottom (scrolls from >2 to <=2).
-    // Using a transition guard instead of hasScrolledInitially avoids edge cases on re-entry
-    // where the list starts at index 0 (restored position) and would clear immediately.
-    var prevFirstVisible by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    // Clear unread divider when user is at the bottom and can see all messages.
+    // Use hasScrolledInitially to avoid clearing during the initial scroll animation
+    // (which would cause a flash before the list settles at its target position).
     LaunchedEffect(listState.firstVisibleItemIndex, messages) {
         val current = listState.firstVisibleItemIndex
-        if (current <= 2 && prevFirstVisible > 2 && prevFirstVisible != Int.MAX_VALUE && messages.isNotEmpty()) {
+        if (current <= 2 && messages.isNotEmpty() && hasScrolledInitially) {
             lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
-            chatBadgeFloors.remove(convKey) // cleared at bottom, next re-entry starts fresh
+            chatBadgeFloors.remove(convKey)
             chatInitialUnread.remove(convKey)
             badgeFloor = Int.MAX_VALUE
             if (initialUnreadCount != null && initialUnreadCount!! > 0) {
                 initialUnreadCount = 0
             }
         }
-        prevFirstVisible = current
     }
 
     // Find the index in the reversed list of the last (oldest) unread received message.

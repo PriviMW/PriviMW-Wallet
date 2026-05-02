@@ -17,7 +17,7 @@ object LocaleHelper {
     /** Language codes we support (matches values-XX resource directories). */
     val supportedLanguages = listOf(
         "" to "System Default",   // empty = follow device
-        "zh" to "中文",
+        "zh" to "简体中文",
         "es" to "Español",
         "ru" to "Русский",
         "be" to "Беларуская",

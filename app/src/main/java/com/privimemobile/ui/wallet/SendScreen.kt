@@ -49,10 +49,11 @@ private sealed class AddrType {
     data object MaxPrivacy : AddrType()
 }
 
+@Composable
 private fun addrTypeLabel(type: AddrType?): String = when (type) {
-    is AddrType.Sbbs -> "SBBS (Online)"
-    is AddrType.Regular -> "Regular (Offline)"
-    is AddrType.MaxPrivacy -> "Max Privacy"
+    is AddrType.Sbbs -> stringResource(R.string.send_addr_type_sbbs)
+    is AddrType.Regular -> stringResource(R.string.send_addr_type_regular)
+    is AddrType.MaxPrivacy -> stringResource(R.string.send_addr_type_max_privacy)
     null -> ""
 }
 
@@ -404,7 +405,7 @@ fun SendScreen(
                     modifier = Modifier.padding(top = 6.dp),
                 ) {
                     Text(
-                        "Sending to $resolvedHandle",
+                        stringResource(R.string.send_sending_to_handle, resolvedHandle ?: ""),
                         color = C.accent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -424,7 +425,7 @@ fun SendScreen(
                         color = C.accent,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Resolving handle...", color = C.textSecondary, fontSize = 12.sp)
+                    Text(stringResource(R.string.send_resolving_handle), color = C.textSecondary, fontSize = 12.sp)
                 }
             }
 
@@ -432,7 +433,7 @@ fun SendScreen(
             when {
                 validatingAddr -> {
                     Text(
-                        "Validating...",
+                        stringResource(R.string.send_validating),
                         color = C.textSecondary,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 6.dp),
@@ -440,7 +441,7 @@ fun SendScreen(
                 }
                 addressValid == false && address.trim().length >= 20 -> {
                     Text(
-                        "Invalid address",
+                        stringResource(R.string.send_invalid_address),
                         color = C.error,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 6.dp),
@@ -468,7 +469,7 @@ fun SendScreen(
                         )
                         if (addrType is AddrType.Sbbs) {
                             Text(
-                                "  \u00B7 Both wallets must be online",
+                                stringResource(R.string.send_sbbs_warning),
                                 color = C.warning,
                                 fontSize = 11.sp,
                             )
@@ -627,7 +628,7 @@ fun SendScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Available: ${Helpers.formatBeam(assetAvailable)} $ticker",
+                    stringResource(R.string.send_available_prefix, Helpers.formatBeam(assetAvailable), ticker),
                     color = C.textMuted,
                     fontSize = 13.sp,
                 )
@@ -651,7 +652,7 @@ fun SendScreen(
                     enabled = assetAvailable > 0,
                 ) {
                     Text(
-                        "SEND ALL",
+                        stringResource(R.string.send_all),
                         color = if (beamAvailable > 0) C.outgoing else C.outgoing.copy(alpha = 0.35f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -685,7 +686,7 @@ fun SendScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "SEND MODE",
+                            stringResource(R.string.send_mode),
                             color = C.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -696,13 +697,13 @@ fun SendScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             SendModeTab(
-                                label = "Offline",
+                                label = stringResource(R.string.send_mode_offline),
                                 selected = sendOffline,
                                 modifier = Modifier.weight(1f),
                                 onClick = { sendOffline = true },
                             )
                             SendModeTab(
-                                label = "Online",
+                                label = stringResource(R.string.send_mode_online),
                                 selected = !sendOffline,
                                 modifier = Modifier.weight(1f),
                                 onClick = { sendOffline = false },
@@ -710,8 +711,8 @@ fun SendScreen(
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            if (sendOffline) "Recipient does not need to be online"
-                            else "Both wallets must be online within 12h",
+                            if (sendOffline) stringResource(R.string.send_mode_offline_desc)
+                            else stringResource(R.string.send_mode_online_desc),
                             color = C.textMuted,
                             fontSize = 11.sp,
                         )
@@ -744,15 +745,15 @@ fun SendScreen(
                     ) {
                         Column {
                             Text(
-                                "TRANSACTION FEE",
+                                stringResource(R.string.send_transaction_fee),
                                 color = C.textSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.8.sp,
                             )
                             Text(
-                                if (addrType is AddrType.Sbbs || !sendOffline) "Online \u2014 lower fee"
-                                else "Offline \u2014 higher fee",
+                                if (addrType is AddrType.Sbbs || !sendOffline) stringResource(R.string.send_fee_online_desc)
+                                else stringResource(R.string.send_fee_offline_desc),
                                 color = C.textMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 3.dp),
@@ -800,7 +801,7 @@ fun SendScreen(
                     value = comment,
                     onValueChange = { if (it.length <= 1024) comment = it },
                     placeholder = {
-                        Text("Local note (not sent on-chain)", color = C.textMuted)
+                        Text(stringResource(R.string.send_comment_placeholder), color = C.textMuted)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -847,7 +848,7 @@ fun SendScreen(
                 ),
             ) {
                 Text(
-                    "NEXT",
+                    stringResource(R.string.send_next),
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -869,7 +870,7 @@ fun SendScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        "SELECT ASSET",
+                        stringResource(R.string.send_select_asset),
                         color = C.textSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,

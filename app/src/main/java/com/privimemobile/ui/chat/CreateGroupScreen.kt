@@ -72,7 +72,7 @@ fun CreateGroupScreen(
                 Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
             Text(
-                "Set group icon later in Group Info",
+                stringResource(R.string.create_group_icon_hint),
                 color = C.textMuted, fontSize = 12.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
@@ -83,7 +83,7 @@ fun CreateGroupScreen(
             OutlinedTextField(
                 value = groupName,
                 onValueChange = { if (it.length <= 32) groupName = it },
-                label = { Text("Group Name *") },
+                label = { Text(stringResource(R.string.create_group_name_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 supportingText = { Text("${groupName.length}/32", color = C.textMuted) },
@@ -97,7 +97,7 @@ fun CreateGroupScreen(
             HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
             // Group type selector — card-style
-            Text("Group Type", color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.create_group_type_label), color = C.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
 
             // Public option
             Surface(
@@ -113,8 +113,8 @@ fun CreateGroupScreen(
                     Icon(Icons.Default.Public, null, tint = if (isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Public", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                        Text("Anyone can find and join this group", color = C.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.create_group_public_label), color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.create_group_public_desc), color = C.textSecondary, fontSize = 12.sp)
                     }
                     RadioButton(selected = isPublic, onClick = { isPublic = true }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))
                 }
@@ -134,8 +134,8 @@ fun CreateGroupScreen(
                     Icon(Icons.Default.Lock, null, tint = if (!isPublic) C.accent else C.textSecondary, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Private", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                        Text("Only people with an invite can join", color = C.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.create_group_private_label), color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.create_group_private_desc), color = C.textSecondary, fontSize = 12.sp)
                     }
                     RadioButton(selected = !isPublic, onClick = { isPublic = false }, colors = RadioButtonDefaults.colors(selectedColor = C.accent))
                 }
@@ -150,7 +150,7 @@ fun CreateGroupScreen(
                         Icon(Icons.Default.Lock, null, tint = C.accent, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Private groups are protected by a password. When you invite someone, the password is shared automatically via encrypted SBBS.",
+                            stringResource(R.string.create_group_private_info),
                             color = C.textSecondary, fontSize = 12.sp, lineHeight = 16.sp,
                         )
                     }

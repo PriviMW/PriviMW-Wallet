@@ -314,6 +314,7 @@ fun SwapScreen(
     fun executeSwap() {
         val order = confirmOrder ?: return
         SwapManager.acceptOffer(order)
+        android.widget.Toast.makeText(context, R.string.swap_accept_submitted, android.widget.Toast.LENGTH_SHORT).show()
         confirmOrder = null
     }
 

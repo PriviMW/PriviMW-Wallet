@@ -125,7 +125,13 @@
     <string name="tx_detail_sending_address">กำลังส่งที่อยู่</string>
     <string name="tx_detail_receiving_address">ที่อยู่ที่ใช้รับโอน</string>
     <string name="tx_detail_tx_id">ID ของธุรกรรม</string>
+    <string name="tx_detail_kernel_id">Kernel ID</string>
     <string name="tx_detail_error">ผิดพลาด</string>
+    <string name="tx_detail_address_type">ประเภทของที่อยู่</string>
+    <string name="tx_failure_expired">หมดอายุ</string>
+    <string name="tx_tab_general">ทั่วไป</string>
+    <string name="tx_tab_payment_proof">Payment proof</string>
+    <string name="tx_proof_amount">จำนวน</string>
     <string name="utxo_maturity">ใช้งานได้เมื่อ</string>
     <string name="utxo_status_available">พร้อมใช้งาน</string>
     <string name="utxo_status_spent">จ่ายออกแล้ว</string>
@@ -158,6 +164,8 @@
     <string name="swap_token">โทเค็นแลกเปลี่ยน</string>
     <string name="swap_copy_token">คัดลอกโทเค็น</string>
     <string name="swap_fit_balance">พอดีกับยอดคงเหลือของฉัน</string>
+    <string name="swap_tab_my_offers">ข้อเสนอของฉัน</string>
+    <string name="swap_in_progress">อยู่ระหว่างดำเนินการ</string>
     <string name="dapps_all_tab">ทั้งหมด</string>
     <string name="dapps_name">ชื่อ</string>
     <string name="settings_title">การตั้งค่า</string>
@@ -223,6 +231,7 @@
     <string name="settings_section_privacy">ความเป็นส่วนตัว</string>
     <string name="settings_section_utilities">ยูทิลิตี้</string>
     <string name="settings_currency_label">สกุลเงิน</string>
+    <string name="currency_btc">Bitcoin</string>
     <string name="settings_notif_tx_status_label">สถานะของธุรกรรม</string>
     <string name="settings_change_password_label">เปลี่ยนรหัสผ่าน</string>
     <string name="settings_export_wallet_label">ส่งออกข้อมูลกระเป๋า</string>
@@ -238,15 +247,15 @@
     <string name="utxo_filter_maturing">รอการปลด</string>
     <string name="utxo_filter_spent">จ่ายออกแล้ว</string>
     <string name="addresses_expired_label">หมดอายุ</string>
+    <string name="utxo_label_available">พร้อมใช้งาน</string>
+    <string name="utxo_label_maturing">รอการปลด</string>
+    <string name="utxo_label_spent">จ่ายออกแล้ว</string>
+    <string name="utxo_label_unknown">ไม่ทราบ</string>
+    <string name="send_mode_offline">ออฟไลน์</string>
+    <string name="send_mode_online">ออนไลน์</string>
+    <string name="send_transaction_fee">ค่าธรรมเนียมธุรกรรม</string>
+    <string name="send_next">ถัดไป</string>
+    <string name="receive_tab_regular">ปกติ</string>
+    <string name="new_chat_contacts">รายชื่อผู้ติดต่อ</string>
     <string name="tx_cancelled">ธุรกรรมได้ถูกยกเลิก</string>
-    <string name="balance_max_privacy">ความเป็นส่วนตัวสูงสุด</string>
-    <string name="wallet_other_assets_header">สินทรัพย์อื่นๆ</string>
-    <string name="wallet_syncing_blockchain">กำลังซิงค์บล็อกเชน…</string>
-    <string name="wallet_self_transfer">โอนให้ตัวเอง</string>
-    <string name="wallet_dapp_label">DApp</string>
-    <string name="wallet_addr_max_privacy">ความเป็นส่วนตัวสูงสุด</string>
-    <string name="wallet_show_balance">แสดงยอดเงิน</string>
-    <string name="wallet_hide_balance">ซ่อนยอดเงิน</string>
-    <string name="wallet_id_badge">ID: %1$d</string>
-    <string name="wallet_random_node">โหนดแบบสุ่ม</string>
 </resources>

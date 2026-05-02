@@ -653,7 +653,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.settings_currency_label), color = C.text, fontSize = 15.sp)
-                Text("${currentCurrency.uppercase()} (${CurrencyManager.getLabel(currentCurrency)})", color = C.accent, fontSize = 15.sp)
+                Text("${currentCurrency.uppercase()} (${stringResource(CurrencyManager.getLabelResId(currentCurrency))})", color = C.accent, fontSize = 15.sp)
             }
             if (showCurrencyPicker) {
                 androidx.compose.material3.AlertDialog(
@@ -665,8 +665,9 @@ fun SettingsScreen(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
                             CurrencyManager.SUPPORTED.forEach { (code, pair) ->
-                                val (label, symbol) = pair
+                                val (_, symbol) = pair
                                 val isSelected = code == currentCurrency
+                                val currencyName = stringResource(CurrencyManager.getLabelResId(code))
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -686,7 +687,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        label,
+                                        currencyName,
                                         color = if (isSelected) C.accent else C.text,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         fontSize = 15.sp,

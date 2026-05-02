@@ -307,7 +307,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Available: ${Helpers.formatBeam(sellBalance)} ${sellTicker()}",
+                        "${stringResource(R.string.balance_available)}: ${Helpers.formatBeam(sellBalance)} ${sellTicker()}",
                         color = if (payGroth.toLong() > sellBalance) C.error else C.textMuted,
                         fontSize = 12.sp,
                     )
@@ -431,7 +431,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                         expireMinutes = expireMinutes,
                     )
                     WalletManager.walletInstance?.generateNewAddress()
-                    Toast.makeText(context, "Creating offer...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, R.string.offer_creating, Toast.LENGTH_SHORT).show()
                 },
                 enabled = canCreate,
                 modifier = Modifier.fillMaxWidth().height(52.dp),

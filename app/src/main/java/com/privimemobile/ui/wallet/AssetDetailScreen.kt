@@ -247,7 +247,7 @@ fun AssetDetailScreen(
                 }
 
                 if (assetStatus.available > 0 && assetStatus.shielded > 0) {
-                    BalanceRow("  Regular", "${Helpers.formatBeam(assetStatus.available)} $assetName")
+                    BalanceRow("  ${stringResource(R.string.wallet_addr_regular)}", "${Helpers.formatBeam(assetStatus.available)} $assetName")
                     BalanceRow("  ${stringResource(R.string.balance_shielded)}", "${Helpers.formatBeam(assetStatus.shielded)} $assetName")
                 }
                 if (assetStatus.maturing > 0) {
@@ -293,7 +293,7 @@ fun AssetDetailScreen(
         // === Transaction History ===
         Spacer(Modifier.height(24.dp))
         Text(
-            "TRANSACTIONS",
+            stringResource(R.string.wallet_transactions_title).uppercase(),
             color = C.textSecondary,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -306,7 +306,7 @@ fun AssetDetailScreen(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No transactions for this asset", color = C.textMuted, fontSize = 14.sp)
+                Text(stringResource(R.string.asset_no_transactions), color = C.textMuted, fontSize = 14.sp)
             }
         } else {
             assetTxs.forEach { tx ->
@@ -317,7 +317,7 @@ fun AssetDetailScreen(
                 val amountColor = if (isFailed) C.textSecondary else if (isSelf) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
                 val peerAddr = when {
                     tx.isDapps -> tx.appName ?: stringResource(R.string.wallet_dapp_label)
-                    isSelf -> "Self"
+                    isSelf -> stringResource(R.string.wallet_self_label)
                     tx.peerId.isNotEmpty() -> if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
                     else -> "—"
                 }
@@ -438,9 +438,9 @@ fun AssetDetailScreen(
                             Text(
                                 if (isFailed) {
                                     when (tx.status) {
-                                        TxStatus.FAILED -> "Failed"
-                                        TxStatus.CANCELLED -> "Cancelled"
-                                        else -> "Failed"
+                                        TxStatus.FAILED -> stringResource(R.string.tx_status_failed).replaceFirstChar { it.uppercase() }
+                                        TxStatus.CANCELLED -> stringResource(R.string.tx_status_cancelled).replaceFirstChar { it.uppercase() }
+                                        else -> stringResource(R.string.tx_status_failed).replaceFirstChar { it.uppercase() }
                                     }
                                 } else formatTxDate(tx.createTime),
                                 color = when {

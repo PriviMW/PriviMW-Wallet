@@ -76,13 +76,13 @@ fun SearchScreen(
             Text(stringResource(R.string.dapps_back_button), color = C.textSecondary)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Search Messages", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.search_messages_title), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = query,
             onValueChange = { query = it; doSearch(it) },
-            placeholder = { Text("Search...", color = C.textMuted) },
+            placeholder = { Text(stringResource(R.string.search_placeholder), color = C.textMuted) },
             trailingIcon = {
                 if (searching) {
                     CircularProgressIndicator(Modifier.size(20.dp), color = C.accent, strokeWidth = 2.dp)
@@ -110,7 +110,7 @@ fun SearchScreen(
             items(results, key = { it.id }) { msg ->
                 val convKey = convMap[msg.conversationId] ?: ""
                 val isGroupResult = convKey.startsWith("g_")
-                val handle = if (isGroupResult) msg.senderHandle ?: "group" else convKey.removePrefix("@")
+                val handle = if (isGroupResult) msg.senderHandle ?: stringResource(R.string.search_group_fallback) else convKey.removePrefix("@")
                 SearchResultCard(
                     msg = msg,
                     handle = handle,
@@ -161,7 +161,7 @@ private fun SearchResultCard(msg: MessageEntity, handle: String, isGroup: Boolea
                 maxLines = 3, overflow = TextOverflow.Ellipsis,
             )
             if (msg.sent) {
-                Text("You", color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(stringResource(R.string.search_sender_you), color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
             }
         }
     }

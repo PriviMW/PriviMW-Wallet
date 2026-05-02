@@ -326,10 +326,10 @@ private fun UtxoCard(utxo: Utxo) {
                 UtxoDetailRow(stringResource(R.string.utxo_asset_id), "#${utxo.assetId}")
             }
             if (utxo.isShielded) {
-                UtxoDetailRow(stringResource(R.string.general_type), "Shielded")
+                UtxoDetailRow(stringResource(R.string.general_type), stringResource(R.string.balance_shielded))
             }
             if (utxo.maturity > 0) {
-                UtxoDetailRow(stringResource(R.string.utxo_maturity), "Block #${utxo.maturity}")
+                UtxoDetailRow(stringResource(R.string.utxo_maturity), stringResource(R.string.wallet_block_height, utxo.maturity))
             }
             if (utxo.confirmHeight > 0) {
                 UtxoDetailRow(stringResource(R.string.utxo_confirmed), stringResource(R.string.wallet_block_height, utxo.confirmHeight))
@@ -338,7 +338,7 @@ private fun UtxoCard(utxo: Utxo) {
                 UtxoDetailRow(stringResource(R.string.utxo_created_by), Helpers.truncateKey(utxo.createTxId, 6, 6))
             }
             if (utxo.spentTxId.isNotEmpty()) {
-                UtxoDetailRow("Spent by", Helpers.truncateKey(utxo.spentTxId, 6, 6))
+                UtxoDetailRow(stringResource(R.string.utxo_spent_by), Helpers.truncateKey(utxo.spentTxId, 6, 6))
             }
         }
     }
@@ -363,15 +363,16 @@ private fun utxoStatusColor(status: Int): Color = when (status) {
     else -> C.textSecondary
 }
 
+@Composable
 private fun utxoStatusLabel(status: Int): String = when (status) {
-    UtxoStatus.AVAILABLE -> "Available"
-    UtxoStatus.MATURING -> "Maturing"
-    UtxoStatus.UNAVAILABLE -> "Unavailable"
-    UtxoStatus.OUTGOING -> "Outgoing"
-    UtxoStatus.INCOMING -> "Incoming"
-    UtxoStatus.SPENT -> "Spent"
-    UtxoStatus.CONSUMED -> "Consumed"
-    else -> "Unknown"
+    UtxoStatus.AVAILABLE -> stringResource(R.string.utxo_label_available)
+    UtxoStatus.MATURING -> stringResource(R.string.utxo_label_maturing)
+    UtxoStatus.UNAVAILABLE -> stringResource(R.string.utxo_label_unavailable)
+    UtxoStatus.OUTGOING -> stringResource(R.string.utxo_label_outgoing)
+    UtxoStatus.INCOMING -> stringResource(R.string.utxo_label_incoming)
+    UtxoStatus.SPENT -> stringResource(R.string.utxo_label_spent)
+    UtxoStatus.CONSUMED -> stringResource(R.string.utxo_label_consumed)
+    else -> stringResource(R.string.utxo_label_unknown)
 }
 
 private fun parseUtxos(arr: JSONArray): List<Utxo> {

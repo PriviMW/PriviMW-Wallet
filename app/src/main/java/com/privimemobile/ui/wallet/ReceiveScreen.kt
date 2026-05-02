@@ -52,22 +52,22 @@ import org.json.JSONObject
 
 private data class TabInfo(
     val key: String,
-    val label: String,
-    val desc: String,
-    val fee: String,
+    @androidx.annotation.StringRes val labelResId: Int,
+    @androidx.annotation.StringRes val descResId: Int,
+    val feeGroth: Long,
 )
 
 // Tabs when connected to own node (offline + sbbs + max privacy)
 private val OWN_NODE_TABS = listOf(
-    TabInfo("offline", "Regular", "Default address. Sender can pay online or offline.", "Fee: 0.011 BEAM"),
-    TabInfo("sbbs", "SBBS", "Classic short address. Both wallets must be open simultaneously.", "Fee: 0.001 BEAM"),
-    TabInfo("max_privacy", "Max Privacy", "Maximum anonymity. Sender does not need to be online.", "Fee: 0.011 BEAM"),
+    TabInfo("offline", R.string.receive_tab_regular, R.string.receive_desc_regular_default, 1_100_000L),
+    TabInfo("sbbs", R.string.receive_tab_sbbs, R.string.receive_desc_sbbs, 100_000L),
+    TabInfo("max_privacy", R.string.receive_tab_max_privacy, R.string.receive_desc_max_privacy, 1_100_000L),
 )
 
 // Tabs when connected to remote node (regular + sbbs only)
 private val REMOTE_NODE_TABS = listOf(
-    TabInfo("regular", "Regular", "Sender can pay online or offline. Both transaction types supported.", "Fee: 0.011 BEAM"),
-    TabInfo("sbbs", "SBBS", "Classic short address. Both wallets must be open simultaneously.", "Fee: 0.001 BEAM"),
+    TabInfo("regular", R.string.receive_tab_regular, R.string.receive_desc_regular_remote, 1_100_000L),
+    TabInfo("sbbs", R.string.receive_tab_sbbs, R.string.receive_desc_sbbs, 100_000L),
 )
 
 @Composable
@@ -253,7 +253,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         color = if (selected) C.bg else Color.Transparent,
                     ) {
                         Text(
-                            tab.label,
+                            stringResource(tab.labelResId),
                             color = if (selected) C.accent else C.textSecondary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -268,14 +268,14 @@ fun ReceiveScreen(onBack: () -> Unit) {
 
             // Type description
             Text(
-                currentTab.desc,
+                stringResource(currentTab.descResId),
                 color = C.textMuted,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 18.sp,
             )
             Text(
-                currentTab.fee,
+                stringResource(R.string.receive_fee_regular_format, com.privimemobile.protocol.Helpers.formatBeam(currentTab.feeGroth)),
                 color = C.textSecondary,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
@@ -293,9 +293,9 @@ fun ReceiveScreen(onBack: () -> Unit) {
                 ) {
                     Text(
                         if (lockHours > 0)
-                            "Funds will be locked for a minimum of ${lockHours}h. Longer lock time = stronger privacy. You can change this in Settings."
+                            stringResource(R.string.receive_max_privacy_locked, lockHours)
                         else
-                            "Funds will be locked indefinitely for maximum privacy. Set a time limit in Settings to control when funds become available.",
+                            stringResource(R.string.receive_max_privacy_indefinite),
                         color = Color(0xFFFF9800),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -317,9 +317,9 @@ fun ReceiveScreen(onBack: () -> Unit) {
                 ) {
                     Text(
                         if (isFallback)
-                            "Connected to public node (own node unreachable) \u2014 only online transactions supported"
+                            stringResource(R.string.receive_fallback_warning)
                         else
-                            "Connected to remote node \u2014 only online transactions are supported. Offline and Max Privacy addresses require your own node.",
+                            stringResource(R.string.receive_remote_node_warning),
                         color = if (isFallback) Color(0xFFFFA726) else Color(0xFFFFC107),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -361,7 +361,7 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         if (qrBitmap != null) {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = "QR Code",
+                                contentDescription = stringResource(R.string.qr_scanner_title),
                                 modifier = Modifier
                                     .padding(18.dp)
                                     .size(200.dp),

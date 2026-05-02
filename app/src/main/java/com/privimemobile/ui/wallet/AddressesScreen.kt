@@ -341,7 +341,7 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                                     WalletManager.walletInstance?.getAddresses(true)
                                 } catch (_: Exception) {}
                                 editingAddress = null
-                                snackMessage = "Label updated"
+                                snackMessage = context.getString(R.string.addresses_label_updated)
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -438,7 +438,7 @@ private fun AddressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "Created ${formatAddrTimestamp(addr.createTime)}",
+                    stringResource(R.string.addresses_created, formatAddrTimestamp(addr.createTime)),
                     color = C.textSecondary.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                 )

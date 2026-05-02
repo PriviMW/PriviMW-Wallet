@@ -1,5 +1,6 @@
 package com.privimemobile.wallet
 
+import com.privimemobile.R
 import com.privimemobile.protocol.SecureStorage
 
 /**
@@ -51,6 +52,32 @@ object CurrencyManager {
 
     fun getSymbol(currency: String): String = CURRENCY_MAP[currency.lowercase()]?.second ?: "$"
     fun getLabel(currency: String): String = CURRENCY_MAP[currency.lowercase()]?.first ?: currency.uppercase()
+
+    /** Returns string resource ID for the currency's display name. */
+    fun getLabelResId(currency: String): Int {
+        val id = CURRENCY_LABEL_RES_IDS[currency.lowercase()]
+        return id ?: android.R.string.unknownName
+    }
+
+    private val CURRENCY_LABEL_RES_IDS = mapOf(
+        "usd" to R.string.currency_usd, "eur" to R.string.currency_eur,
+        "gbp" to R.string.currency_gbp, "sgd" to R.string.currency_sgd,
+        "btc" to R.string.currency_btc, "eth" to R.string.currency_eth,
+        "jpy" to R.string.currency_jpy, "cad" to R.string.currency_cad,
+        "aud" to R.string.currency_aud, "cny" to R.string.currency_cny,
+        "krw" to R.string.currency_krw, "inr" to R.string.currency_inr,
+        "brl" to R.string.currency_brl, "chf" to R.string.currency_chf,
+        "hkd" to R.string.currency_hkd, "nzd" to R.string.currency_nzd,
+        "mxn" to R.string.currency_mxn, "rub" to R.string.currency_rub,
+        "sek" to R.string.currency_sek, "nok" to R.string.currency_nok,
+        "dkk" to R.string.currency_dkk, "pln" to R.string.currency_pln,
+        "thb" to R.string.currency_thb, "idr" to R.string.currency_idr,
+        "php" to R.string.currency_php, "vnd" to R.string.currency_vnd,
+        "try" to R.string.currency_try, "aed" to R.string.currency_aed,
+        "sar" to R.string.currency_sar, "zar" to R.string.currency_zar,
+        "ars" to R.string.currency_ars, "clp" to R.string.currency_clp,
+        "twd" to R.string.currency_twd,
+    )
 
     fun getPreferredCurrency(): String {
         return SecureStorage.getString(KEY_PREFERRED_CURRENCY, "usd") ?: "usd"

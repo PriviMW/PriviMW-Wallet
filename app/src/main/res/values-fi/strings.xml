@@ -120,7 +120,12 @@
     <string name="tx_detail_sending_address">Lähettäjän osoite</string>
     <string name="tx_detail_receiving_address">Vastaanottajan osoite</string>
     <string name="tx_detail_tx_id">Tapahtuman ID</string>
+    <string name="tx_detail_kernel_id">Kernel ID</string>
     <string name="tx_detail_error">Virhe</string>
+    <string name="tx_failure_expired">vanhentunut</string>
+    <string name="tx_tab_general">Yleiset</string>
+    <string name="tx_tab_payment_proof">Maksutodistus</string>
+    <string name="tx_proof_amount">Summa</string>
     <string name="utxo_maturity">Erääntymishetki</string>
     <string name="utxo_status_available">Käytettävissä</string>
     <string name="utxo_status_spent">Käytetty</string>
@@ -150,6 +155,8 @@
     <string name="swap_token">Swap-tunniste</string>
     <string name="swap_copy_token">Kopioi tunniste</string>
     <string name="swap_fit_balance">Omaan saldoon sopivat</string>
+    <string name="swap_tab_my_offers">Omat tarjoukset</string>
+    <string name="swap_in_progress">Käsittelyssä</string>
     <string name="dapps_all_tab">Kaikki</string>
     <string name="dapps_name">Nimi</string>
     <string name="settings_title">Asetukset</string>
@@ -206,6 +213,7 @@
     <string name="settings_section_privacy">Yksityisyys</string>
     <string name="settings_section_utilities">Ominaisuudet</string>
     <string name="settings_currency_label">Valuutta</string>
+    <string name="currency_btc">Bitcoin</string>
     <string name="settings_change_password_label">Vaihda salasana</string>
     <string name="settings_export_wallet_label">Vie lompakon tiedot</string>
     <string name="settings_import_wallet_label">Tuo lompakon tiedot</string>
@@ -220,15 +228,15 @@
     <string name="utxo_filter_maturing">Odottaa</string>
     <string name="utxo_filter_spent">Käytetty</string>
     <string name="addresses_expired_label">vanhentunut</string>
+    <string name="utxo_label_available">Käytettävissä</string>
+    <string name="utxo_label_maturing">Odottaa</string>
+    <string name="utxo_label_spent">Käytetty</string>
+    <string name="utxo_label_unknown">tuntematon</string>
+    <string name="send_mode_offline">Offline-tilassa</string>
+    <string name="send_mode_online">Yhdistetty</string>
+    <string name="send_transaction_fee">Siirtomaksu</string>
+    <string name="send_next">Seuraava</string>
+    <string name="receive_tab_regular">Normaali</string>
+    <string name="new_chat_contacts">Yhteystiedot</string>
     <string name="tx_cancelled">Maksutapahtuma peruutettu</string>
-    <string name="balance_max_privacy">Maks. yksityisyys</string>
-    <string name="wallet_other_assets_header">Muut varat</string>
-    <string name="wallet_syncing_blockchain">Synkronoidaan lohkoketjua…</string>
-    <string name="wallet_self_transfer">Oma siirto</string>
-    <string name="wallet_dapp_label">DApp</string>
-    <string name="wallet_addr_max_privacy">Maks. yksityisyys</string>
-    <string name="wallet_show_balance">Näytä saldo</string>
-    <string name="wallet_hide_balance">Piilota saldo</string>
-    <string name="wallet_id_badge">ID: %1$d</string>
-    <string name="wallet_random_node">Satunnainen solmu</string>
 </resources>

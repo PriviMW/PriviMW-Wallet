@@ -110,7 +110,11 @@
     <string name="tx_detail_sending_address">Gönderici adresleri</string>
     <string name="tx_detail_receiving_address">Alıcı adresleri</string>
     <string name="tx_detail_tx_id">İşlem Kimliği</string>
+    <string name="tx_detail_kernel_id">Kernel Kimliği</string>
     <string name="tx_detail_error">Hata</string>
+    <string name="tx_failure_expired">süresi doldu</string>
+    <string name="tx_tab_payment_proof">Ödeme kanıtı</string>
+    <string name="tx_proof_amount">Miktar</string>
     <string name="utxo_maturity">Olgunluk</string>
     <string name="utxo_status_available">Mevcut</string>
     <string name="utxo_status_spent">Harcanan</string>
@@ -126,6 +130,7 @@
     <string name="addresses_info_title">Adres detayları</string>
     <string name="swap_title">Takas</string>
     <string name="swap_transactions_tab">İşlemler</string>
+    <string name="swap_in_progress">Devam etmekte</string>
     <string name="dapps_all_tab">Tümü</string>
     <string name="dapps_name">İsim</string>
     <string name="settings_title">Ayarlar</string>
@@ -184,15 +189,15 @@
     <string name="utxo_filter_maturing">Olgunlaştırılıyor</string>
     <string name="utxo_filter_spent">Harcanan</string>
     <string name="addresses_expired_label">süresi doldu</string>
+    <string name="utxo_label_available">Mevcut</string>
+    <string name="utxo_label_maturing">Olgunlaştırılıyor</string>
+    <string name="utxo_label_spent">Harcanan</string>
+    <string name="utxo_label_unknown">bilinmiyor</string>
+    <string name="send_mode_offline">Çevrımdışı</string>
+    <string name="send_mode_online">Çevrimiçi</string>
+    <string name="send_transaction_fee">İşlem ücreti</string>
+    <string name="send_next">İleri</string>
+    <string name="receive_tab_regular">Normal</string>
+    <string name="new_chat_contacts">Bağlantılar</string>
     <string name="tx_cancelled">İşlem iptal edildi</string>
-    <string name="balance_max_privacy">Maks. gizlilik</string>
-    <string name="wallet_other_assets_header">Diğer varlıklar</string>
-    <string name="wallet_syncing_blockchain">Blok zinciri senkronize ediliyor…</string>
-    <string name="wallet_self_transfer">Kendine transfer</string>
-    <string name="wallet_dapp_label">DApp</string>
-    <string name="wallet_addr_max_privacy">Maks. gizlilik</string>
-    <string name="wallet_show_balance">Bakiyeyi göster</string>
-    <string name="wallet_hide_balance">Bakiyeyi gizle</string>
-    <string name="wallet_id_badge">ID: %1$d</string>
-    <string name="wallet_random_node">Rastgele düğüm</string>
 </resources>

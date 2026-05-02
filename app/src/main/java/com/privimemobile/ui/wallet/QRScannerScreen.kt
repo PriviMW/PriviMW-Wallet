@@ -3,6 +3,8 @@ package com.privimemobile.ui.wallet
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
+import com.privimemobile.R
 import com.google.zxing.BarcodeFormat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -30,6 +32,7 @@ fun parseBeamQr(raw: String): String {
 @Composable
 fun QRScannerScreen(onScanned: (String) -> Unit, onBack: () -> Unit) {
     val launched = remember { mutableStateOf(false) }
+    val qrPrompt = stringResource(R.string.qr_scanner_prompt)
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         val raw = result.contents
@@ -49,7 +52,7 @@ fun QRScannerScreen(onScanned: (String) -> Unit, onBack: () -> Unit) {
             launched.value = true
             val options = ScanOptions().apply {
                 setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                setPrompt("Point camera at a Beam QR code")
+                setPrompt(qrPrompt)
                 setBeepEnabled(false)
                 setOrientationLocked(true)
                 setCaptureActivity(PortraitCaptureActivity::class.java)

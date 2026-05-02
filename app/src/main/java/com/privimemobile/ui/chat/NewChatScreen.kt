@@ -134,7 +134,7 @@ fun NewChatScreen(
         OutlinedTextField(
             value = input,
             onValueChange = { onInputChange(it) },
-            placeholder = { Text("Search handles or groups...", color = C.textMuted, fontSize = 14.sp) },
+            placeholder = { Text(stringResource(R.string.new_chat_search_placeholder), color = C.textMuted, fontSize = 14.sp) },
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(20.dp))
             },
@@ -163,14 +163,14 @@ fun NewChatScreen(
             if (onChainNew.isNotEmpty()) {
                 item {
                     Text(
-                        "ON-CHAIN RESULTS",
+                        stringResource(R.string.new_chat_onchain_results),
                         color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.5.sp,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
                     )
                 }
                 items(onChainNew, key = { "onchain_${it.handle}" }) { contact ->
-                    ContactRow(contact, tag = "New") { openChat(contact.handle, contact.walletId, contact.displayName) }
+                    ContactRow(contact, tag = stringResource(R.string.new_chat_tag_new)) { openChat(contact.handle, contact.walletId, contact.displayName) }
                 }
             }
 
@@ -178,7 +178,7 @@ fun NewChatScreen(
             if (localMatches.isNotEmpty()) {
                 item {
                     Text(
-                        if (query.isNotEmpty()) "CONTACTS" else "YOUR CONTACTS",
+                        if (query.isNotEmpty()) stringResource(R.string.new_chat_contacts) else stringResource(R.string.new_chat_your_contacts),
                         color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.5.sp,
                         modifier = Modifier.padding(start = 16.dp, top = if (onChainNew.isNotEmpty()) 16.dp else 4.dp, bottom = 8.dp),
@@ -193,7 +193,7 @@ fun NewChatScreen(
             if (groupResults.isNotEmpty()) {
                 item {
                     Text(
-                        "PUBLIC GROUPS",
+                        stringResource(R.string.new_chat_public_groups),
                         color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.5.sp,
                         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
@@ -235,8 +235,8 @@ fun NewChatScreen(
             if (localMatches.isEmpty() && onChainNew.isEmpty() && groupResults.isEmpty() && !searching) {
                 item {
                     Text(
-                        if (query.isNotEmpty()) "No handles found for \"$query\""
-                        else "Search for a @handle to start chatting",
+                        if (query.isNotEmpty()) stringResource(R.string.new_chat_no_results_format, query)
+                        else stringResource(R.string.new_chat_empty_prompt),
                         color = C.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
                     )
@@ -323,13 +323,13 @@ private fun GroupSearchRow(
             Column(Modifier.weight(1f)) {
                 Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "$memberCount members · by @$creator",
+                    stringResource(R.string.new_chat_group_members_format, memberCount, creator),
                     color = C.textSecondary, fontSize = 13.sp,
                 )
             }
             Spacer(Modifier.width(8.dp))
             if (alreadyMember) {
-                Text("Joined", color = C.textMuted, fontSize = 13.sp)
+                Text(stringResource(R.string.new_chat_joined), color = C.textMuted, fontSize = 13.sp)
             } else {
             Button(
                 onClick = {
@@ -346,7 +346,7 @@ private fun GroupSearchRow(
                     CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
                     Text(
-                        if (needsApproval) "Request" else "Join",
+                        if (needsApproval) stringResource(R.string.new_chat_request_button) else stringResource(R.string.new_chat_join_button),
                         fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     )
                 }

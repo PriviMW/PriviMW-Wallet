@@ -37,25 +37,25 @@ import java.util.*
 // Uses TxStatus from WalletScreen.kt (internal visibility)
 
 private val FAILURE_REASONS = mapOf(
-    1 to "Invalid peer signature",
-    2 to "Cancelled",
-    3 to "Kernel not found",
-    4 to "Expired",
-    5 to "Cannot get proof",
-    6 to "No inputs",
-    7 to "Invalid or missing asset info",
-    8 to "Invalid asset amount",
-    9 to "Fee too small",
-    10 to "Insufficient funds",
-    11 to "Asset locked",
-    12 to "Register fail",
-    13 to "No such asset",
-    14 to "Asset OI limit exceeded",
-    15 to "Asset not visible",
-    16 to "Asset invalid lifetime",
-    17 to "Transaction limits exceeded",
-    18 to "Not enough privacy",
-    19 to "Limit exceeded",
+    1 to R.string.tx_failure_invalid_signature,
+    2 to R.string.tx_status_cancelled,
+    3 to R.string.tx_failure_kernel_not_found,
+    4 to R.string.tx_failure_expired,
+    5 to R.string.tx_failure_cannot_get_proof,
+    6 to R.string.tx_failure_no_inputs,
+    7 to R.string.tx_failure_invalid_asset_info,
+    8 to R.string.tx_failure_invalid_asset_amount,
+    9 to R.string.tx_failure_fee_too_small,
+    10 to R.string.tx_failure_insufficient_funds,
+    11 to R.string.tx_failure_asset_locked,
+    12 to R.string.tx_failure_register_fail,
+    13 to R.string.tx_failure_no_such_asset,
+    14 to R.string.tx_failure_asset_oi_limit,
+    15 to R.string.tx_failure_asset_not_visible,
+    16 to R.string.tx_failure_asset_invalid_lifetime,
+    17 to R.string.tx_failure_tx_limits_exceeded,
+    18 to R.string.tx_failure_not_enough_privacy,
+    19 to R.string.tx_failure_limit_exceeded,
 )
 
 /** Full transaction detail model. */
@@ -239,7 +239,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             (tx.contractAssets.size >= 2 && tx.contractAssets.any { it.sending > 0 } && tx.contractAssets.any { it.receiving > 0 })
 
     val addressTypeLabel = when {
-        isSwapTx -> "Assets Swap"
+        isSwapTx -> stringResource(R.string.tx_detail_assets_swap)
         tx.isPublicOffline -> stringResource(R.string.wallet_addr_public_offline)
         tx.isMaxPrivacy -> stringResource(R.string.wallet_addr_max_privacy)
         tx.isOffline -> stringResource(R.string.wallet_addr_offline)
@@ -250,13 +250,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
     val canHaveProof = isOutgoing && !isSelf &&
             tx.status == TxStatus.COMPLETED && tx.kernelId.isNotEmpty()
 
-    val failureMsg = FAILURE_REASONS[tx.failureReason] ?: ""
+    val failureMsg = FAILURE_REASONS[tx.failureReason]?.let { stringResource(it) } ?: ""
 
     val ticker = assetTicker(tx.assetId)
 
     fun copyToClipboard(label: String, value: String) {
         clipboard.setText(AnnotatedString(value))
-        snackMessage = "$label copied"
+        snackMessage = context.getString(R.string.tx_copied_format, label)
     }
 
     Column(
@@ -393,13 +393,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     .padding(4.dp),
             ) {
                 TabItem(
-                    label = "GENERAL",
+                    label = stringResource(R.string.tx_tab_general),
                     selected = activeTab == 0,
                     modifier = Modifier.weight(1f),
                     onClick = { activeTab = 0 },
                 )
                 TabItem(
-                    label = "PAYMENT PROOF",
+                    label = stringResource(R.string.tx_tab_payment_proof),
                     selected = activeTab == 1,
                     modifier = Modifier.weight(1f),
                     onClick = {
@@ -440,7 +440,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                         )
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                "FAILURE REASON",
+                                stringResource(R.string.tx_failure_reason_header),
                                 color = C.error,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -462,11 +462,11 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = C.card),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    DetailRow("Date", fullTimestamp(tx.createTime))
-                    DetailRow("Address type", addressTypeLabel, valueColor = C.accent)
+                    DetailRow(stringResource(R.string.tx_detail_date), fullTimestamp(tx.createTime))
+                    DetailRow(stringResource(R.string.tx_detail_address_type), addressTypeLabel, valueColor = C.accent)
                     if (tx.message.isNotEmpty()) {
                         DetailRow(
-                            if (isSwapTx) "Comment" else if (tx.isDapps) "Description" else "Comment",
+                            if (isSwapTx) stringResource(R.string.general_comment) else if (tx.isDapps) stringResource(R.string.tx_detail_description) else stringResource(R.string.general_comment),
                             tx.message,
                         )
                     }
@@ -474,76 +474,79 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                         // Asset Swap TX — show addresses, fee, asset IDs
                         if (tx.senderAddress.isNotEmpty()) {
                             DetailRow(
-                                "Sending address",
+                                stringResource(R.string.tx_detail_sending_address),
                                 tx.senderAddress,
                                 mono = true,
-                                onCopy = { copyToClipboard("Sending address", tx.senderAddress) },
+                                onCopy = { copyToClipboard(context.getString(R.string.tx_detail_sending_address), tx.senderAddress) },
                             )
                         }
                         if (tx.receiverAddress.isNotEmpty()) {
                             DetailRow(
-                                "Receiving address",
+                                stringResource(R.string.tx_detail_receiving_address),
                                 tx.receiverAddress,
                                 mono = true,
-                                onCopy = { copyToClipboard("Receiving address", tx.receiverAddress) },
+                                onCopy = { copyToClipboard(context.getString(R.string.tx_detail_receiving_address), tx.receiverAddress) },
                             )
                         }
-                        DetailRow("Transaction fee", "${Helpers.formatBeam(tx.fee)} BEAM")
+                        DetailRow(stringResource(R.string.general_fee), "${Helpers.formatBeam(tx.fee)} BEAM")
                         // Show asset IDs for each swapped asset
                         tx.contractAssets.forEach { ca ->
                             if (ca.assetId != 0) {
-                                DetailRow("Confidential asset ID", "${ca.assetId}")
+                                DetailRow(stringResource(R.string.tx_detail_confidential_asset_id), "${ca.assetId}")
                             }
                         }
                     } else if (tx.isDapps) {
                         // DApp TX — show DApp name and contract CIDs instead of addresses
-                        DetailRow("DApp Name", tx.appName ?: "Unknown DApp")
+                        DetailRow(stringResource(R.string.tx_detail_dapp_name), tx.appName ?: stringResource(R.string.tx_detail_unknown_dapp))
                         if (!tx.contractCids.isNullOrEmpty()) {
                             DetailRow(
-                                "Contract ID",
+                                stringResource(R.string.tx_detail_contract_id),
                                 tx.contractCids,
                                 mono = true,
-                                onCopy = { copyToClipboard("Contract ID", tx.contractCids) },
+                                onCopy = { copyToClipboard(context.getString(R.string.tx_detail_contract_id), tx.contractCids) },
                             )
                         }
                     } else {
                         // Regular TX — show sender/receiver addresses
+                        val sendAddrLabel = stringResource(R.string.tx_detail_sending_address)
+                        val recvAddrLabel = stringResource(R.string.tx_detail_receiving_address)
+                        val addrLabel = stringResource(R.string.addresses_label_hint)
                         DetailRow(
-                            label = if (isOutgoing) "Sending address" else "Receiving address",
+                            label = if (isOutgoing) sendAddrLabel else recvAddrLabel,
                             value = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
                                 .ifEmpty { tx.myId }.ifEmpty { "--" },
                             mono = true,
                             onCopy = {
                                 val v = (if (isOutgoing) tx.senderAddress else tx.receiverAddress)
                                     .ifEmpty { tx.myId }
-                                if (v.isNotEmpty()) copyToClipboard("Address", v)
+                                if (v.isNotEmpty()) copyToClipboard(addrLabel, v)
                             },
                         )
                         DetailRow(
-                            label = if (isOutgoing) "Receiver address" else "Sender address",
+                            label = if (isOutgoing) recvAddrLabel else sendAddrLabel,
                             value = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
                                 .ifEmpty { tx.peerId }.ifEmpty { "--" },
                             mono = true,
                             onCopy = {
                                 val v = (if (isOutgoing) tx.receiverAddress else tx.senderAddress)
                                     .ifEmpty { tx.peerId }
-                                if (v.isNotEmpty()) copyToClipboard("Address", v)
+                                if (v.isNotEmpty()) copyToClipboard(addrLabel, v)
                             },
                         )
                     }
-                    DetailRow("Fee", "${Helpers.formatBeam(tx.fee)} BEAM")
+                    DetailRow(stringResource(R.string.general_fee), "${Helpers.formatBeam(tx.fee)} BEAM")
                     DetailRow(
-                        label = "Transaction ID",
+                        label = stringResource(R.string.tx_detail_tx_id),
                         value = tx.txId,
                         mono = true,
-                        onCopy = { copyToClipboard("Transaction ID", tx.txId) },
+                        onCopy = { copyToClipboard(context.getString(R.string.tx_detail_tx_id), tx.txId) },
                     )
                     if (tx.kernelId.isNotEmpty()) {
                         DetailRow(
-                            label = "Kernel ID",
+                            label = stringResource(R.string.tx_detail_kernel_id),
                             value = tx.kernelId,
                             mono = true,
-                            onCopy = { copyToClipboard("Kernel ID", tx.kernelId) },
+                            onCopy = { copyToClipboard(context.getString(R.string.tx_detail_kernel_id), tx.kernelId) },
                             showBorder = false,
                         )
                     }
@@ -572,7 +575,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             brush = androidx.compose.ui.graphics.SolidColor(C.error)
                         ),
                     ) {
-                        Text("Cancel Transaction", color = C.error, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.tx_cancel_transaction), color = C.error, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 if (isDone) {
@@ -593,7 +596,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                         ),
                     ) {
                         Text(
-                            "Delete from History",
+                            stringResource(R.string.tx_delete_from_history),
                             color = C.textSecondary,
                             fontWeight = FontWeight.Medium,
                         )
@@ -623,7 +626,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             CircularProgressIndicator(color = C.accent, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                "Fetching payment proof...",
+                                stringResource(R.string.tx_proof_fetching),
                                 color = C.textSecondary,
                                 fontSize = 13.sp,
                             )
@@ -639,7 +642,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             color = if (p.isValid) Color(0x1A25D4D0) else Color(0x14FF6B6B),
                         ) {
                             Text(
-                                text = if (p.isValid) "Payment proof is valid" else "Proof not available or invalid",
+                                text = if (p.isValid) stringResource(R.string.tx_proof_valid) else stringResource(R.string.tx_proof_invalid),
                                 color = if (p.isValid) C.online else C.error,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
@@ -648,38 +651,42 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             )
                         }
 
+                        val senderSigLabel = stringResource(R.string.tx_proof_sender_signature)
+                        val receiverSigLabel = stringResource(R.string.tx_proof_receiver_signature)
                         DetailRow(
-                            label = "Sender wallet signature",
+                            label = senderSigLabel,
                             value = p.senderId.ifEmpty { "--" },
                             mono = true,
                             onCopy = if (p.senderId.isNotEmpty()) {
-                                { copyToClipboard("Sender signature", p.senderId) }
+                                { copyToClipboard(senderSigLabel, p.senderId) }
                             } else null,
                         )
                         DetailRow(
-                            label = "Receiver wallet signature",
+                            label = receiverSigLabel,
                             value = p.receiverId.ifEmpty { "--" },
                             mono = true,
                             onCopy = if (p.receiverId.isNotEmpty()) {
-                                { copyToClipboard("Receiver signature", p.receiverId) }
+                                { copyToClipboard(receiverSigLabel, p.receiverId) }
                             } else null,
                         )
                         val proofTicker = assetTicker(p.assetId)
-                        DetailRow("Amount", "${Helpers.formatBeam(p.amount)} $proofTicker")
+                        DetailRow(stringResource(R.string.tx_proof_amount), "${Helpers.formatBeam(p.amount)} $proofTicker")
+                        val kernelIdLabel = stringResource(R.string.tx_detail_kernel_id)
                         DetailRow(
-                            label = "Kernel ID",
+                            label = kernelIdLabel,
                             value = p.kernelId.ifEmpty { "--" },
                             mono = true,
                             onCopy = if (p.kernelId.isNotEmpty()) {
-                                { copyToClipboard("Kernel ID", p.kernelId) }
+                                { copyToClipboard(kernelIdLabel, p.kernelId) }
                             } else null,
                         )
                         if (p.rawProof.isNotEmpty()) {
+                            val proofCodeLabel = stringResource(R.string.tx_proof_proof_code)
                             DetailRow(
-                                label = "Proof code",
+                                label = proofCodeLabel,
                                 value = p.rawProof,
                                 mono = true,
-                                onCopy = { copyToClipboard("Proof code", p.rawProof) },
+                                onCopy = { copyToClipboard(proofCodeLabel, p.rawProof) },
                                 showBorder = false,
                             )
                         }
@@ -691,7 +698,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                "Payment proof not available for this transaction.",
+                                stringResource(R.string.tx_proof_not_available),
                                 color = C.textSecondary,
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center,
@@ -827,7 +834,7 @@ private fun DetailRow(
                 )
                 if (onCopy != null) {
                     Text(
-                        "tap to copy",
+                        stringResource(R.string.general_tap_to_copy),
                         color = C.textSecondary.copy(alpha = 0.5f),
                         fontSize = 10.sp,
                         modifier = Modifier.padding(top = 2.dp),

@@ -139,7 +139,7 @@ fun SplitCoinsSheet(
     fun executeSplit() {
         val result = splitResult
         if (result == null || result.coins.isEmpty() || result.coins.first() <= 0) {
-            errorMsg = "Amount too small to split"
+            errorMsg = context.getString(R.string.split_amount_too_small)
             isExecuting = false
             return
         }
@@ -182,7 +182,7 @@ fun SplitCoinsSheet(
                 isExecuting = false
                 onDismiss()
             } catch (e: Exception) {
-                errorMsg = e.message ?: "Split failed"
+                errorMsg = e.message ?: context.getString(R.string.split_failed)
                 isExecuting = false
             }
         }
@@ -217,8 +217,8 @@ fun SplitCoinsSheet(
                 )
 
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Confirm Split")
-                    .setSubtitle("Authenticate to split $assetTicker coins")
+                    .setTitle(context.getString(R.string.split_auth_title))
+                    .setSubtitle(context.getString(R.string.split_auth_subtitle_format, assetTicker))
                     .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                     .build()
 
@@ -280,14 +280,14 @@ fun SplitCoinsSheet(
                     }
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Transaction Submitted",
+                        stringResource(R.string.split_submitted_title),
                         color = C.text,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Your coins are being split. The balance will update shortly.",
+                        stringResource(R.string.split_submitted_message),
                         color = C.textSecondary,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -319,9 +319,9 @@ fun SplitCoinsSheet(
                     if (!isConfirm) {
                 // ═══════════ CONFIG STAGE ═══════════
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("Split $assetTicker", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.split_title_format, assetTicker), color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
-                Text("Create smaller coins to prevent transaction failures", color = C.textSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.split_description), color = C.textSecondary, fontSize = 13.sp)
 
                 // Recommendation banner
                 if (recommendation != null && recommendation.severity == SplitCoinsAnalyzer.Severity.CRITICAL) {
@@ -346,7 +346,7 @@ fun SplitCoinsSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        Text("Total Available", color = C.textSecondary, fontSize = 13.sp)
+                        Text(stringResource(R.string.split_total_available), color = C.textSecondary, fontSize = 13.sp)
                         Column(horizontalAlignment = Alignment.End) {
                             val splitBalText = "${Helpers.formatBeam(totalAvailable)} $assetTicker"
                             BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
@@ -374,7 +374,7 @@ fun SplitCoinsSheet(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    Text("CURRENT COINS", color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                    Text(stringResource(R.string.split_current_coins), color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                     Spacer(Modifier.height(8.dp))
 
                     // Bar chart
@@ -399,12 +399,11 @@ fun SplitCoinsSheet(
                     // Summary line
                     Spacer(Modifier.height(6.dp))
                     val summary = buildString {
-                        append("${assetUtxos.size} coin")
-                        if (assetUtxos.size != 1) append("s")
+                        append(if (assetUtxos.size == 1) stringResource(R.string.split_coin_summary_one, assetUtxos.size) else stringResource(R.string.split_coin_summary_other, assetUtxos.size))
                         if (assetUtxos.size > 1) {
                             val largest = assetUtxos.maxOf { it.amount }
                             if (largest != totalAvailable) {
-                                append(" · Largest ${Helpers.formatBeam(largest)} $assetTicker")
+                                append(stringResource(R.string.split_largest_format, Helpers.formatBeam(largest), assetTicker))
                             }
                         }
                     }
@@ -464,7 +463,7 @@ fun SplitCoinsSheet(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
-                                        "+${assetUtxos.size - 4} more",
+                                        stringResource(R.string.split_n_more_format, assetUtxos.size - 4),
                                         color = C.textSecondary,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
@@ -477,7 +476,7 @@ fun SplitCoinsSheet(
 
                 // Split count selector
                 Spacer(Modifier.height(20.dp))
-                Text("SPLIT INTO", color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                Text(stringResource(R.string.split_into), color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                 Spacer(Modifier.height(8.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -517,7 +516,7 @@ fun SplitCoinsSheet(
                 // Preview
                 if (splitResult != null) {
                     Spacer(Modifier.height(20.dp))
-                    Text("PREVIEW", color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                    Text(stringResource(R.string.split_preview), color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                     Spacer(Modifier.height(8.dp))
 
                     Surface(shape = RoundedCornerShape(10.dp), color = C.bg) {
@@ -527,18 +526,18 @@ fun SplitCoinsSheet(
                             val remainderAmount = splitResult.coins.last()
 
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("${equalCount}x equal", color = C.textSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.split_equal_format, equalCount), color = C.textSecondary, fontSize = 13.sp)
                                 Text("${Helpers.formatBeam(equalAmount)} $assetTicker", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("1x remainder", color = C.textSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.split_remainder), color = C.textSecondary, fontSize = 13.sp)
                                 Text("${Helpers.formatBeam(remainderAmount)} $assetTicker", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
 
                             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 6.dp))
 
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Fee", color = C.textSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.general_fee), color = C.textSecondary, fontSize = 13.sp)
                                 Text("${Helpers.formatBeam(splitResult.fee)} BEAM", color = C.textSecondary, fontSize = 13.sp)
                             }
                         }
@@ -568,16 +567,16 @@ fun SplitCoinsSheet(
                     enabled = splitResult != null && splitResult.coins.first() > 0,
                     interactionSource = reviewInteraction,
                 ) {
-                    Text("Review Split", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.split_review_button), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
                 } // end scrollable Column
 
             } else {
                 // ═══════════ CONFIRM STAGE ═══════════
                 Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Confirm Split", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.split_confirm_title), color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
-                Text("Review the details before confirming", color = C.textSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.split_confirm_description), color = C.textSecondary, fontSize = 13.sp)
 
                 // Summary card
                 Spacer(Modifier.height(16.dp))
@@ -587,10 +586,10 @@ fun SplitCoinsSheet(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             // Before
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("BEFORE", color = C.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text(stringResource(R.string.split_before), color = C.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                                 Spacer(Modifier.height(6.dp))
                                 Text("${assetUtxos.size}", color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                                Text(if (assetUtxos.size == 1) "coin" else "coins", color = C.textSecondary, fontSize = 12.sp)
+                                Text(if (assetUtxos.size == 1) stringResource(R.string.split_coin_label) else stringResource(R.string.split_coins_label), color = C.textSecondary, fontSize = 12.sp)
                                 Spacer(Modifier.height(4.dp))
                                 Text("${Helpers.formatBeam(totalAvailable)} $assetTicker", color = C.textSecondary, fontSize = 11.sp)
                             }
@@ -599,10 +598,10 @@ fun SplitCoinsSheet(
 
                             // After
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("AFTER", color = C.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                                Text(stringResource(R.string.split_after), color = C.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                                 Spacer(Modifier.height(6.dp))
                                 Text("$splitCount", color = C.accent, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                                Text("coins", color = C.accent, fontSize = 12.sp)
+                                Text(stringResource(R.string.split_coins_label), color = C.accent, fontSize = 12.sp)
                                 Spacer(Modifier.height(4.dp))
                                 Text("${Helpers.formatBeam(splitResult?.coins?.sum() ?: 0)} $assetTicker", color = C.accent, fontSize = 11.sp)
                             }
@@ -618,7 +617,7 @@ fun SplitCoinsSheet(
 
                         if (isBeam) {
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Total cost", color = C.textSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.split_total_cost), color = C.textSecondary, fontSize = 13.sp)
                                 Text(
                                     "${Helpers.formatBeam(totalAvailable)} $assetTicker",
                                     color = C.text,
@@ -634,7 +633,7 @@ fun SplitCoinsSheet(
                 Spacer(Modifier.height(12.dp))
                 Surface(shape = RoundedCornerShape(8.dp), color = C.warning.copy(alpha = 0.08f)) {
                     Text(
-                        "This creates an on-chain transaction. A fee will be deducted from your balance.",
+                        stringResource(R.string.split_warning),
                         color = C.textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
@@ -667,9 +666,9 @@ fun SplitCoinsSheet(
                     if (isExecuting) {
                         CircularProgressIndicator(modifier = Modifier.size(22.dp), color = C.textDark, strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("Splitting...", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.split_splitting), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     } else {
-                        Text("Confirm & Split", color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.split_confirm_button), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -702,7 +701,7 @@ fun SplitCoinsSheet(
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(stringResource(R.string.send_confirm_enter_password), color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
-                    Text("Confirm your wallet password to split coins", color = C.textSecondary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.split_password_subtitle), color = C.textSecondary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(20.dp))
                     OutlinedTextField(
                         value = passwordInput,
@@ -742,7 +741,7 @@ fun SplitCoinsSheet(
                                     if (wallet != null) {
                                         val valid = wallet.checkWalletPassword(passwordInput.trim())
                                         if (!valid) {
-                                            passwordError = "Incorrect password"
+                                            passwordError = context.getString(R.string.tx_incorrect_password)
                                             return@Button
                                         }
                                     }

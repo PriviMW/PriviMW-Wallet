@@ -169,6 +169,8 @@
     <string name="wallet_received_label">Received</string>
     <string name="wallet_dapp_label">DApp</string>
     <string name="wallet_unknown_label">Unknown</string>
+    <string name="wallet_self_label">Self</string>
+    <string name="asset_no_transactions">No transactions for this asset</string>
 
     <!-- Wallet Screen – address type labels -->
     <string name="wallet_addr_max_privacy">Max Privacy</string>
@@ -337,12 +339,58 @@
     <string name="tx_detail_sender_identity">Sender signature</string>
     <string name="tx_detail_receiver_identity">Receiver signature</string>
     <string name="tx_detail_tx_id">Transaction ID</string>
-    <string name="tx_detail_kernel_id" translatable="false">Kernel ID</string>
+    <string name="tx_detail_kernel_id">Kernel ID</string>
     <string name="tx_detail_confirmation_status">Confirmation status</string>
     <string name="tx_detail_confirming_progress">Confirming (%1$d)</string>
     <string name="tx_detail_error">Error</string>
     <string name="tx_detail_rate_notice">calculated with the exchange rate at the time of the transaction</string>
     <string name="tx_detail_no_rate">exchange rate was not available at the time of the transaction</string>
+    <string name="tx_detail_dapp_name">DApp Name</string>
+    <string name="tx_detail_unknown_dapp">Unknown DApp</string>
+    <string name="tx_detail_contract_id">Contract ID</string>
+    <string name="tx_detail_confidential_asset_id">Confidential asset ID</string>
+    <string name="tx_detail_address_type">Address type</string>
+    <string name="tx_detail_description">Description</string>
+    <string name="tx_detail_assets_swap">Assets Swap</string>
+
+    <!-- TX Failure Reasons -->
+    <string name="tx_failure_invalid_signature">Invalid peer signature</string>
+    <string name="tx_failure_kernel_not_found">Kernel not found</string>
+    <string name="tx_failure_expired">Expired</string>
+    <string name="tx_failure_cannot_get_proof">Cannot get proof</string>
+    <string name="tx_failure_no_inputs">No inputs</string>
+    <string name="tx_failure_invalid_asset_info">Invalid or missing asset info</string>
+    <string name="tx_failure_invalid_asset_amount">Invalid asset amount</string>
+    <string name="tx_failure_fee_too_small">Fee too small</string>
+    <string name="tx_failure_insufficient_funds">Insufficient funds</string>
+    <string name="tx_failure_asset_locked">Asset locked</string>
+    <string name="tx_failure_register_fail">Register fail</string>
+    <string name="tx_failure_no_such_asset">No such asset</string>
+    <string name="tx_failure_asset_oi_limit">Asset OI limit exceeded</string>
+    <string name="tx_failure_asset_not_visible">Asset not visible</string>
+    <string name="tx_failure_asset_invalid_lifetime">Asset invalid lifetime</string>
+    <string name="tx_failure_tx_limits_exceeded">Transaction limits exceeded</string>
+    <string name="tx_failure_not_enough_privacy">Not enough privacy</string>
+    <string name="tx_failure_limit_exceeded">Limit exceeded</string>
+
+    <!-- TX Tabs + Buttons -->
+    <string name="tx_tab_general">GENERAL</string>
+    <string name="tx_tab_payment_proof">PAYMENT PROOF</string>
+    <string name="tx_failure_reason_header">FAILURE REASON</string>
+    <string name="tx_cancel_transaction">Cancel Transaction</string>
+    <string name="tx_delete_from_history">Delete from History</string>
+
+    <!-- Payment Proof -->
+    <string name="tx_proof_fetching">Fetching payment proof…</string>
+    <string name="tx_proof_valid">Payment proof is valid</string>
+    <string name="tx_proof_invalid">Proof not available or invalid</string>
+    <string name="tx_proof_not_available">Payment proof not available for this transaction.</string>
+    <string name="tx_proof_sender_signature">Sender wallet signature</string>
+    <string name="tx_proof_receiver_signature">Receiver wallet signature</string>
+    <string name="tx_proof_amount">Amount</string>
+    <string name="tx_proof_proof_code">Proof code</string>
+    <string name="tx_copied_format">%1$s copied</string>
+    <string name="general_tap_to_copy">tap to copy</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  UTXO  —  overlaps with Beam-UI `utxo-*` keys                     -->
@@ -638,7 +686,7 @@
     <string name="settings_owner_key_copy">Owner key copied</string>
 
     <!-- Settings - Utilities -->
-    <string name="settings_show_utxo" translatable="false">Show UTXO</string>
+    <string name="settings_show_utxo">Show UTXO</string>
     <string name="settings_get_beam_faucet">Get Beams from Beam Community Faucet</string>
     <string name="settings_rescan_blockchain">Rescan blockchain</string>
     <string name="settings_rescan_confirmation">Rescan will sync transaction and UTXO data from the blockchain. This may take some time. Are you sure?</string>
@@ -993,6 +1041,41 @@
     <string name="settings_choose_language">Choose Language</string>
     <string name="settings_currency_label">Currency</string>
     <string name="settings_choose_currency">Choose Currency</string>
+
+    <!-- Currency Names — shown in currency picker -->
+    <string name="currency_usd">US Dollar</string>
+    <string name="currency_eur">Euro</string>
+    <string name="currency_gbp">British Pound</string>
+    <string name="currency_sgd">Singapore Dollar</string>
+    <string name="currency_btc">Bitcoin</string>
+    <string name="currency_eth">Ethereum</string>
+    <string name="currency_jpy">Japanese Yen</string>
+    <string name="currency_cad">Canadian Dollar</string>
+    <string name="currency_aud">Australian Dollar</string>
+    <string name="currency_cny">Chinese Yuan</string>
+    <string name="currency_krw">South Korean Won</string>
+    <string name="currency_inr">Indian Rupee</string>
+    <string name="currency_brl">Brazilian Real</string>
+    <string name="currency_chf">Swiss Franc</string>
+    <string name="currency_hkd">Hong Kong Dollar</string>
+    <string name="currency_nzd">New Zealand Dollar</string>
+    <string name="currency_mxn">Mexican Peso</string>
+    <string name="currency_rub">Russian Ruble</string>
+    <string name="currency_sek">Swedish Krona</string>
+    <string name="currency_nok">Norwegian Krone</string>
+    <string name="currency_dkk">Danish Krone</string>
+    <string name="currency_pln">Polish Zloty</string>
+    <string name="currency_thb">Thai Baht</string>
+    <string name="currency_idr">Indonesian Rupiah</string>
+    <string name="currency_php">Philippine Peso</string>
+    <string name="currency_vnd">Vietnamese Dong</string>
+    <string name="currency_try">Turkish Lira</string>
+    <string name="currency_aed">UAE Dirham</string>
+    <string name="currency_sar">Saudi Riyal</string>
+    <string name="currency_zar">South African Rand</string>
+    <string name="currency_ars">Argentine Peso</string>
+    <string name="currency_clp">Chilean Peso</string>
+    <string name="currency_twd">Taiwan Dollar</string>
     <string name="settings_notif_wallet_updates_label">Wallet updates</string>
     <string name="settings_notif_wallet_updates_desc">Notify when a new app version is available</string>
     <string name="settings_notif_tx_status_label">Transaction status</string>
@@ -1140,9 +1223,20 @@
     <string name="addresses_edit_label_title">Edit Label</string>
     <string name="addresses_label_hint">Address label</string>
     <string name="addresses_no_label">No label</string>
+    <string name="addresses_label_updated">Label updated</string>
+    <string name="addresses_created">Created %1$s</string>
     <string name="utxo_asset_id">Asset ID</string>
     <string name="utxo_confirmed">Confirmed</string>
     <string name="utxo_created_by">Created by</string>
+    <string name="utxo_spent_by">Spent by</string>
+    <string name="utxo_label_available">Available</string>
+    <string name="utxo_label_maturing">Maturing</string>
+    <string name="utxo_label_unavailable">Unavailable</string>
+    <string name="utxo_label_outgoing">Outgoing</string>
+    <string name="utxo_label_incoming">Incoming</string>
+    <string name="utxo_label_spent">Spent</string>
+    <string name="utxo_label_consumed">Consumed</string>
+    <string name="utxo_label_unknown">Unknown</string>
     <string name="avatar_confirm_title">Confirm Profile Picture</string>
     <string name="avatar_confirm_subtitle">This is how your profile picture will look</string>
     <string name="avatar_set_picture">Set Picture</string>
@@ -1158,6 +1252,109 @@
     <string name="tx_incorrect_password">Incorrect password</string>
     <string name="dapp_insufficient_funds">Not enough funds to complete this transaction</string>
     <string name="tx_approve_password_subtitle">Confirm your wallet password to approve this transaction</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SEND / RECEIVE  —  added 2026-05                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="send_addr_type_sbbs">SBBS (Online)</string>
+    <string name="send_addr_type_regular">Regular (Offline)</string>
+    <string name="send_addr_type_max_privacy">Max Privacy</string>
+    <string name="send_sending_to_handle">Sending to %1$s</string>
+    <string name="send_resolving_handle">Resolving handle…</string>
+    <string name="send_validating">Validating…</string>
+    <string name="send_sbbs_warning">Both wallets must be online</string>
+    <string name="send_available_prefix">Available: %1$s %2$s</string>
+    <string name="send_all">SEND ALL</string>
+    <string name="send_mode">SEND MODE</string>
+    <string name="send_mode_offline">Offline</string>
+    <string name="send_mode_online">Online</string>
+    <string name="send_mode_offline_desc">Recipient does not need to be online</string>
+    <string name="send_mode_online_desc">Both wallets must be online within 12h</string>
+    <string name="send_transaction_fee">TRANSACTION FEE</string>
+    <string name="send_fee_online_desc">Online — lower fee</string>
+    <string name="send_fee_offline_desc">Offline — higher fee</string>
+    <string name="send_comment_placeholder">Local note (not sent on-chain)</string>
+    <string name="send_next">NEXT</string>
+    <string name="send_select_asset">SELECT ASSET</string>
+    <!-- Receive -->
+    <string name="receive_tab_regular">Regular</string>
+    <string name="receive_tab_sbbs">SBBS</string>
+    <string name="receive_tab_max_privacy">Max Privacy</string>
+    <string name="receive_desc_regular_default">Default address. Sender can pay online or offline.</string>
+    <string name="receive_desc_sbbs">Classic short address. Both wallets must be open simultaneously.</string>
+    <string name="receive_desc_max_privacy">Maximum anonymity. Sender does not need to be online.</string>
+    <string name="receive_desc_regular_remote">Sender can pay online or offline. Both transaction types supported.</string>
+    <string name="receive_fee_regular_format">Fee: %1$s BEAM</string>
+    <string name="receive_max_privacy_locked">Funds will be locked for a minimum of %1$dh. Longer lock time = stronger privacy. You can change this in Settings.</string>
+    <string name="receive_max_privacy_indefinite">Funds will be locked indefinitely for maximum privacy. Set a time limit in Settings to control when funds become available.</string>
+    <string name="receive_remote_node_warning">Connected to remote node — only online transactions are supported. Offline and Max Privacy addresses require your own node.</string>
+    <string name="receive_fallback_warning">Connected to public node (own node unreachable) — only online transactions supported</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  QR SCANNER / SPLIT COINS  —  added 2026-05                         -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="qr_scanner_prompt">Point camera at a Beam QR code</string>
+    <!-- Split -->
+    <string name="split_title_format">Split %1$s</string>
+    <string name="split_description">Create smaller coins to prevent transaction failures</string>
+    <string name="split_total_available">Total Available</string>
+    <string name="split_current_coins">CURRENT COINS</string>
+    <string name="split_coin_summary_one">%1$d coin</string>
+    <string name="split_coin_summary_other">%1$d coins</string>
+    <string name="split_largest_format"> · Largest %1$s %2$s</string>
+    <string name="split_n_more_format">+%1$d more</string>
+    <string name="split_into">SPLIT INTO</string>
+    <string name="split_preview">PREVIEW</string>
+    <string name="split_equal_format">%1$dx equal</string>
+    <string name="split_remainder">1x remainder</string>
+    <string name="split_review_button">Review Split</string>
+    <string name="split_confirm_title">Confirm Split</string>
+    <string name="split_confirm_description">Review the details before confirming</string>
+    <string name="split_before">BEFORE</string>
+    <string name="split_after">AFTER</string>
+    <string name="split_coins_label">coins</string>
+    <string name="split_coin_label">coin</string>
+    <string name="split_total_cost">Total cost</string>
+    <string name="split_warning">This creates an on-chain transaction. A fee will be deducted from your balance.</string>
+    <string name="split_splitting">Splitting…</string>
+    <string name="split_confirm_button">Confirm &amp; Split</string>
+    <string name="split_amount_too_small">Amount too small to split</string>
+    <string name="split_failed">Split failed</string>
+    <string name="split_auth_title">Confirm Split</string>
+    <string name="split_auth_subtitle_format">Authenticate to split %1$s coins</string>
+    <string name="split_password_subtitle">Confirm your wallet password to split coins</string>
+    <string name="split_submitted_title">Transaction Submitted</string>
+    <string name="split_submitted_message">Your coins are being split. The balance will update shortly.</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  NEW CHAT / CREATE GROUP / SEARCH  —  added 2026-05                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="new_chat_search_placeholder">Search handles or groups…</string>
+    <string name="new_chat_onchain_results">ON-CHAIN RESULTS</string>
+    <string name="new_chat_tag_new">New</string>
+    <string name="new_chat_contacts">CONTACTS</string>
+    <string name="new_chat_your_contacts">YOUR CONTACTS</string>
+    <string name="new_chat_public_groups">PUBLIC GROUPS</string>
+    <string name="new_chat_no_results_format">No handles found for \"%1$s\"</string>
+    <string name="new_chat_empty_prompt">Search for a @handle to start chatting</string>
+    <string name="new_chat_group_members_format">%1$d members · by @%2$s</string>
+    <string name="new_chat_joined">Joined</string>
+    <string name="new_chat_request_button">Request</string>
+    <string name="new_chat_join_button">Join</string>
+    <!-- Create Group -->
+    <string name="create_group_icon_hint">Set group icon later in Group Info</string>
+    <string name="create_group_name_label">Group Name *</string>
+    <string name="create_group_type_label">Group Type</string>
+    <string name="create_group_public_label">Public</string>
+    <string name="create_group_public_desc">Anyone can find and join this group</string>
+    <string name="create_group_private_label">Private</string>
+    <string name="create_group_private_desc">Only people with an invite can join</string>
+    <string name="create_group_private_info">Private groups are protected by a password. When you invite someone, the password is shared automatically via encrypted SBBS.</string>
+    <!-- Search Messages -->
+    <string name="search_messages_title">Search Messages</string>
+    <string name="search_placeholder">Search…</string>
+    <string name="search_sender_you">You</string>
+    <string name="search_group_fallback">group</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  GROUP SETTINGS TOASTS  —  PriviMW-specific                        -->
@@ -1201,6 +1398,7 @@
     <string name="offer_posted">Offer posted!</string>
     <string name="offer_failed">Failed: %1$s</string>
     <string name="offer_creating">Creating offer…</string>
+    <string name="swap_accept_submitted">Swap submitted</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  CONTACT INFO TOASTS  —  PriviMW-specific                          -->

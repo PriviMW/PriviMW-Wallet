@@ -112,7 +112,11 @@
     <string name="tx_detail_sending_address">Đang gửi địa chỉ</string>
     <string name="tx_detail_receiving_address">Đang nhận địa chỉ</string>
     <string name="tx_detail_tx_id">ID giao dịch</string>
+    <string name="tx_detail_kernel_id">ID hạt nhân</string>
     <string name="tx_detail_error">Lỗi</string>
+    <string name="tx_failure_expired">đã hết hạn</string>
+    <string name="tx_tab_payment_proof">Bằng chứng thanh toán</string>
+    <string name="tx_proof_amount">Số tiền</string>
     <string name="utxo_maturity">Đáo hạn</string>
     <string name="utxo_status_available">Có sẵn</string>
     <string name="utxo_status_spent">Dành ra</string>
@@ -133,6 +137,7 @@
     <string name="swap_receive_amount">Nhận số tiền</string>
     <string name="swap_active_offers_tab">Đề nghị có hiệu lực</string>
     <string name="swap_transactions_tab">Giao dịch</string>
+    <string name="swap_in_progress">Trong quá trình</string>
     <string name="dapps_all_tab">Tất cả</string>
     <string name="dapps_name">Tên</string>
     <string name="settings_title">Cài đặt</string>
@@ -180,6 +185,7 @@
     <string name="error_address_expired">Địa chỉ hết hạn</string>
     <string name="settings_section_notifications">Thông báo</string>
     <string name="settings_section_node">Nút</string>
+    <string name="currency_btc">Bitcoin</string>
     <string name="settings_change_password_label">Thay đổi mật khẩu</string>
     <string name="settings_online_status">Trực tuyến</string>
     <string name="settings_offline_status">Ngoại tuyến</string>
@@ -191,15 +197,15 @@
     <string name="utxo_filter_maturing">Đáo hạn</string>
     <string name="utxo_filter_spent">Dành ra</string>
     <string name="addresses_expired_label">đã hết hạn</string>
+    <string name="utxo_label_available">Có sẵn</string>
+    <string name="utxo_label_maturing">Đáo hạn</string>
+    <string name="utxo_label_spent">Dành ra</string>
+    <string name="utxo_label_unknown">chưa xác định</string>
+    <string name="send_mode_offline">Ngoại tuyến</string>
+    <string name="send_mode_online">Trực tuyến</string>
+    <string name="send_transaction_fee">Phí giao dịch</string>
+    <string name="send_next">Tiếp</string>
+    <string name="receive_tab_regular">Thông thường</string>
+    <string name="new_chat_contacts">Liên hệ</string>
     <string name="tx_cancelled">Giao dịch đã huỷ</string>
-    <string name="balance_max_privacy">Riêng tư tối đa</string>
-    <string name="wallet_other_assets_header">Tài sản khác</string>
-    <string name="wallet_syncing_blockchain">Đang đồng bộ blockchain…</string>
-    <string name="wallet_self_transfer">Tự chuyển</string>
-    <string name="wallet_dapp_label">DApp</string>
-    <string name="wallet_addr_max_privacy">Riêng tư tối đa</string>
-    <string name="wallet_show_balance">Hiển thị số dư</string>
-    <string name="wallet_hide_balance">Ẩn số dư</string>
-    <string name="wallet_id_badge">ID: %1$d</string>
-    <string name="wallet_random_node">Nút ngẫu nhiên</string>
 </resources>

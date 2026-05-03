@@ -307,8 +307,8 @@ fun SettingsScreen(
         SectionTitle(stringResource(R.string.settings_section_privime))
         SettingsCard {
             if (chatState?.myHandle != null) {
-                SettingsRow(stringResource(R.string.settings_handle_label), "@${chatState!!.myHandle}")
                 SettingsRow(stringResource(R.string.settings_display_name_label), chatState!!.myDisplayName?.ifEmpty { stringResource(R.string.settings_none_placeholder) } ?: stringResource(R.string.settings_none_placeholder))
+                SettingsRow(stringResource(R.string.settings_handle_label), "@${chatState!!.myHandle}")
                 SettingsRow(stringResource(R.string.contact_wallet_id), Helpers.truncateKey(chatState!!.myWalletId ?: ""))
                 SettingsRow(stringResource(R.string.settings_registered_label), stringResource(R.string.wallet_block_height, chatState!!.myRegisteredHeight))
 

@@ -164,9 +164,17 @@ fun ChatsScreen(
     val conversations by ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
-    // Group list — observe from Room DAO
-    val groups by ChatService.db?.groupDao()?.observeAll()
-        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
+    // Group list — pre-load from DB, then observe reactive updates
+    var groups by remember { mutableStateOf<List<com.privimemobile.chat.db.entities.GroupEntity>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        // Pre-load from DB first so the list always has existing groups on first render
+        val existingGroups = ChatService.db?.groupDao()?.getAllGroups() ?: emptyList()
+        groups = existingGroups
+        // Then observe reactive updates (Room may emit synchronously on start)
+        ChatService.db?.groupDao()?.observeAll()?.collect { updatedGroups ->
+            groups = updatedGroups
+        }
+    }
 
     // Refresh groups on mount and when identity becomes available
     LaunchedEffect(isRegistered) {

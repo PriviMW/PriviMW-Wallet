@@ -306,7 +306,7 @@ fun ChatScreen(
     val resolvedName = if (isGroupMode) {
         group?.name ?: "Group"
     } else {
-        displayName.ifEmpty { contact?.displayName?.ifEmpty { null } ?: "@$handle" }
+        displayName.ifEmpty { conv?.displayName?.ifEmpty { null } ?: "@$handle" }
     }
     val resolvedWalletId = contact?.walletId
     val isDeletedAccount = contact?.isDeleted == true

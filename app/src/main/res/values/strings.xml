@@ -856,6 +856,14 @@
     <string name="register_not_registered_subtitle">Register a handle to start messaging</string>
     <string name="register_not_registered_button">Register Handle</string>
 
+    <!-- Re-Register (restored wallet) -->
+    <string name="chats_reregister_keep_name">Keep "%1$s"</string>
+    <string name="chats_reregister_change_name">Change display name</string>
+    <string name="chats_reregister_name_placeholder">Display name (optional)</string>
+    <string name="chats_reregister_info">Your @handle is safe on-chain. Previous conversations cannot be restored as messages are stored locally. A small fee applies.</string>
+    <string name="chats_reregister_no_beam">You need BEAM to pay the transaction fee.</string>
+    <string name="chats_reregister_button">Update Messaging Address</string>
+
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  GROUP CHAT  —  PriviMW-specific                                   -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
@@ -954,6 +962,33 @@
     <string name="notif_channel_tx">Transaction Updates</string>
     <string name="notif_clear_all">Clear all</string>
     <string name="notif_empty">There are no notifications yet</string>
+    <string name="notif_reaction_with_text">Reacted %1$s to "%2$s"</string>
+    <string name="notif_reaction_emoji_only">Reacted to your message: %1$s</string>
+    <string name="notif_summary_title">PriviMe</string>
+    <string name="notif_channel_messages">Messages</string>
+    <string name="notif_channel_messages_desc">New chat messages</string>
+    <string name="notif_channel_tips">Tips</string>
+    <string name="notif_channel_tips_desc">Received BEAM tips</string>
+    <string name="notif_channel_files">Files</string>
+    <string name="notif_channel_files_desc">Received files and images</string>
+    <string name="notif_channel_group">PriviMe Chat</string>
+    <string name="notif_tx_title_receiving">Receiving</string>
+    <string name="notif_tx_title_received">Received</string>
+    <string name="notif_tx_title_sent">Sent</string>
+    <string name="notif_tx_title_failed">Failed</string>
+    <string name="notif_tx_title_cancelled">Cancelled</string>
+    <string name="notif_tx_title_transaction">Transaction</string>
+    <string name="notif_tx_dapp_default">DApp</string>
+    <string name="notif_tx_summary_title">PriviMW Transactions</string>
+    <string name="notif_tx_summary_text">%1$d updates</string>
+    <string name="notif_tx_channel_name">Transactions</string>
+    <string name="notif_tx_channel_desc">Transaction status updates</string>
+    <string name="notif_tx_processing">Processing: %1$s</string>
+    <string name="notif_tx_receiving_format">Receiving %1$s %2$s…</string>
+    <string name="notif_tx_received_format">Received %1$s %2$s</string>
+    <string name="notif_tx_sent_format">Sent %1$s %2$s</string>
+    <string name="notif_tx_failed_format">%1$s %2$s %3$s failed</string>
+    <string name="notif_tx_cancelled_format">%1$s %2$s %3$s cancelled</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  ERRORS  —  user-facing error toasts / dialogs                     -->

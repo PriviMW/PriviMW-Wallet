@@ -53,6 +53,13 @@ object TxNotificationManager {
     private const val FAILED = 4
     private const val REGISTERING = 5
 
+    // Action codes for notifyTx (locale-independent)
+    private const val ACTION_RECEIVING = 0
+    private const val ACTION_SENT = 1
+    private const val ACTION_RECEIVED = 2
+    private const val ACTION_FAILED = 3
+    private const val ACTION_CANCELLED = 4
+
     fun init(context: Context) {
         appContext = context.applicationContext
         createChannel()
@@ -121,14 +128,14 @@ object TxNotificationManager {
                     // New TX appeared
                     if (!tx.sender && tx.status <= IN_PROGRESS) {
                         // New incoming TX — notify "Receiving..."
-                        notifyTx(tx, "Receiving")
+                        notifyTx(tx, ACTION_RECEIVING)
                     }
                 } else if (prevStatus != tx.status) {
                     // Status changed
                     when (tx.status) {
-                        COMPLETED -> notifyTx(tx, if (tx.sender) "Sent" else "Received")
-                        FAILED -> notifyTx(tx, "Failed")
-                        CANCELLED -> notifyTx(tx, "Cancelled")
+                        COMPLETED -> notifyTx(tx, if (tx.sender) ACTION_SENT else ACTION_RECEIVED)
+                        FAILED -> notifyTx(tx, ACTION_FAILED)
+                        CANCELLED -> notifyTx(tx, ACTION_CANCELLED)
                     }
                 }
 
@@ -139,7 +146,7 @@ object TxNotificationManager {
         }
     }
 
-    private fun notifyTx(tx: TxSnapshot, action: String) {
+    private fun notifyTx(tx: TxSnapshot, action: Int) {
         // Deduplicate: don't re-notify for same txId + action
         val key = "${tx.txId}:$action"
         if (!notifiedTxIds.add(key)) return
@@ -158,7 +165,7 @@ object TxNotificationManager {
 
         // For DApp contract TXs, sender flag is inverted (positive amount = spending but sender=false)
         val isOutgoing = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
-        val dappName = if (tx.isDapps) tx.appName ?: "DApp" else null
+        val dappName = if (tx.isDapps) tx.appName ?: appContext.getString(R.string.notif_tx_dapp_default) else null
 
         // Build per-asset breakdown for DApp TXs (e.g., "-10.0 BEAM, +50.0 BEAMX")
         val assetBreakdown = if (dappName != null && tx.contractAssets.isNotEmpty()) {
@@ -177,21 +184,27 @@ object TxNotificationManager {
         val line = if (dappName != null) {
             // DApp TX: use "processing/completed/failed" instead of "receiving/sent"
             when (action) {
-                "Receiving" -> "Processing: $amountDisplay"
-                "Received", "Sent" -> if (hasBreakdown) amountDisplay
-                    else "${if (isOutgoing) "Spent" else "Received"}: $amountDisplay"
-                "Failed" -> "Failed: $amountDisplay"
-                "Cancelled" -> "Cancelled: $amountDisplay"
+                ACTION_RECEIVING -> appContext.getString(R.string.notif_tx_processing, amountDisplay)
+                ACTION_RECEIVED, ACTION_SENT -> if (hasBreakdown) amountDisplay
+                    else appContext.getString(
+                        if (isOutgoing) R.string.notif_tx_title_sent else R.string.notif_tx_title_received
+                    ) + ": $amountDisplay"
+                ACTION_FAILED -> appContext.getString(R.string.notif_tx_title_failed) + ": $amountDisplay"
+                ACTION_CANCELLED -> appContext.getString(R.string.notif_tx_title_cancelled) + ": $amountDisplay"
                 else -> amountDisplay
             }
         } else {
             // Regular TX: standard format
             when (action) {
-                "Receiving" -> "Receiving $amountStr $ticker..."
-                "Received" -> "Received $amountStr $ticker"
-                "Sent" -> "Sent $amountStr $ticker"
-                "Failed" -> "${if (isOutgoing) "Send" else "Receive"} $amountStr $ticker failed"
-                "Cancelled" -> "${if (isOutgoing) "Send" else "Receive"} $amountStr $ticker cancelled"
+                ACTION_RECEIVING -> appContext.getString(R.string.notif_tx_receiving_format, amountStr, ticker)
+                ACTION_RECEIVED -> appContext.getString(R.string.notif_tx_received_format, amountStr, ticker)
+                ACTION_SENT -> appContext.getString(R.string.notif_tx_sent_format, amountStr, ticker)
+                ACTION_FAILED -> appContext.getString(R.string.notif_tx_failed_format,
+                    if (isOutgoing) appContext.getString(R.string.notif_tx_title_sent) else appContext.getString(R.string.notif_tx_title_received),
+                    amountStr, ticker)
+                ACTION_CANCELLED -> appContext.getString(R.string.notif_tx_cancelled_format,
+                    if (isOutgoing) appContext.getString(R.string.notif_tx_title_sent) else appContext.getString(R.string.notif_tx_title_received),
+                    amountStr, ticker)
                 else -> "$amountStr $ticker"
             }
         }
@@ -209,14 +222,13 @@ object TxNotificationManager {
         )
 
         // Title: DApp name or direction
-        val title = when {
-            dappName != null -> dappName
-            action == "Receiving" -> "Receiving"
-            action == "Received" -> "Received"
-            action == "Sent" -> "Sent"
-            action == "Failed" -> "Failed"
-            action == "Cancelled" -> "Cancelled"
-            else -> "Transaction"
+        val title = dappName ?: when (action) {
+            ACTION_RECEIVING -> appContext.getString(R.string.notif_tx_title_receiving)
+            ACTION_RECEIVED -> appContext.getString(R.string.notif_tx_title_received)
+            ACTION_SENT -> appContext.getString(R.string.notif_tx_title_sent)
+            ACTION_FAILED -> appContext.getString(R.string.notif_tx_title_failed)
+            ACTION_CANCELLED -> appContext.getString(R.string.notif_tx_title_cancelled)
+            else -> appContext.getString(R.string.notif_tx_title_transaction)
         }
 
         // Individual notification per TX — grouped under app
@@ -240,8 +252,8 @@ object TxNotificationManager {
         if (activeNotifCount > 1) {
             val summary = NotificationCompat.Builder(appContext, CHANNEL_TX)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("PriviMW Transactions")
-                .setContentText("$activeNotifCount updates")
+                .setContentTitle(appContext.getString(R.string.notif_tx_summary_title))
+                .setContentText(appContext.getString(R.string.notif_tx_summary_text, activeNotifCount))
                 .setGroup(GROUP_ID)
                 .setGroupSummary(true)
                 .setAutoCancel(true)
@@ -272,9 +284,9 @@ object TxNotificationManager {
         // Reuse the shared "PriviMe Chat" channel group (created by ChatNotificationManager)
         // so all notifications appear under one PriviMW header in the pulldown
         nm.createNotificationChannel(NotificationChannel(
-            CHANNEL_TX, "Transactions", NotificationManager.IMPORTANCE_DEFAULT
+            CHANNEL_TX, appContext.getString(R.string.notif_tx_channel_name), NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Transaction status updates"
+            description = appContext.getString(R.string.notif_tx_channel_desc)
             group = GROUP_ID
             setShowBadge(false)
         })

@@ -204,6 +204,11 @@
     <string name="payment_proof_copy_details">Kopioi tiedot</string>
     <string name="payment_proof_label">Maksutodistus</string>
     <string name="notif_tx_failed">Ostotapahtuma epäonnistui</string>
+    <string name="notif_tx_title_received">Vastaanotettu</string>
+    <string name="notif_tx_title_sent">Lähetetty</string>
+    <string name="notif_tx_title_failed">Epäonnistui</string>
+    <string name="notif_tx_title_transaction">Tapahtuma</string>
+    <string name="notif_tx_channel_name">Tapahtumat</string>
     <string name="error_connection_timeout">Yhteyden muodostaminen epäonnistui</string>
     <string name="error_node_unreachable">Palvelimeen (node) ei saada yhteyttä</string>
     <string name="error_invalid_password">Virheellinen salasana</string>

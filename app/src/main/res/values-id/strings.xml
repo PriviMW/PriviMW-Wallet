@@ -330,6 +330,11 @@
     <string name="notif_contract_failed">Transaksi DApp gagal</string>
     <string name="notif_contract_expired">Transaksi DApp kedaluwarsa</string>
     <string name="notif_clear_all">hapus semua</string>
+    <string name="notif_tx_title_received">Diterima</string>
+    <string name="notif_tx_title_sent">Dikirim</string>
+    <string name="notif_tx_title_failed">Gagal</string>
+    <string name="notif_tx_title_transaction">Transaksi</string>
+    <string name="notif_tx_channel_name">Transaksi</string>
     <string name="error_connection_timeout">Koneksi berakhir</string>
     <string name="error_node_unreachable">Node tidak dapat dijangkau</string>
     <string name="error_wallet_db_locked">Basis data dompet sudah dibuka</string>

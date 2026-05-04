@@ -330,6 +330,11 @@
     <string name="notif_contract_failed">Збой транзакцыі DApp</string>
     <string name="notif_contract_expired">Тэрмін дзеяння транзакцыі DApp скончыўся</string>
     <string name="notif_clear_all">ачысціць усё</string>
+    <string name="notif_tx_title_received">Атрымана</string>
+    <string name="notif_tx_title_sent">Адпраўлена</string>
+    <string name="notif_tx_title_failed">Не атрымалася</string>
+    <string name="notif_tx_title_transaction">Транзакцыя</string>
+    <string name="notif_tx_channel_name">Транзакцыі</string>
     <string name="error_connection_timeout">Перавышаны час чакання</string>
     <string name="error_node_unreachable">Вузел недаступны</string>
     <string name="error_wallet_db_locked">База дадзеных кашалька ўжо адчынена</string>

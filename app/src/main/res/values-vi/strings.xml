@@ -179,6 +179,11 @@
     <string name="payment_proof_copy_details">Sao chép chi tiết</string>
     <string name="payment_proof_label">Bằng chứng thanh toán</string>
     <string name="notif_tx_failed">Giao dịch thất bại</string>
+    <string name="notif_tx_title_received">Đã nhận</string>
+    <string name="notif_tx_title_sent">Đã gửi</string>
+    <string name="notif_tx_title_failed">Thất bại</string>
+    <string name="notif_tx_title_transaction">Giao dịch</string>
+    <string name="notif_tx_channel_name">Giao dịch</string>
     <string name="error_connection_timeout">Kết nối quá hạn</string>
     <string name="error_node_unreachable">Nút không thể truy cập được</string>
     <string name="error_invalid_password">Mật khẩu không hợp lệ đã được cung cấp</string>

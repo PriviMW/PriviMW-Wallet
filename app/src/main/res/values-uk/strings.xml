@@ -330,6 +330,11 @@
     <string name="notif_contract_failed">Помилка транзакції DApp</string>
     <string name="notif_contract_expired">Операція DApp закінчилася</string>
     <string name="notif_clear_all">очистити все</string>
+    <string name="notif_tx_title_received">Отримано</string>
+    <string name="notif_tx_title_sent">Надіслано</string>
+    <string name="notif_tx_title_failed">Збій</string>
+    <string name="notif_tx_title_transaction">Транзакція</string>
+    <string name="notif_tx_channel_name">Транзакції</string>
     <string name="error_connection_timeout">Минув час очікування підключення</string>
     <string name="error_node_unreachable">Вузол недоступний</string>
     <string name="error_wallet_db_locked">База даних гаманця вже відкрита</string>

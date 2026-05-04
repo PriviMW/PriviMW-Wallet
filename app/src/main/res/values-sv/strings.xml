@@ -242,6 +242,11 @@
     <string name="notif_swap_failed">Atomic Swap erbjudande misslyckades</string>
     <string name="notif_swap_expired">Atomic Swap erbjudande löpte ut</string>
     <string name="notif_clear_all">rensa allt</string>
+    <string name="notif_tx_title_received">Mottaget</string>
+    <string name="notif_tx_title_sent">Skickat</string>
+    <string name="notif_tx_title_failed">Misslyckades</string>
+    <string name="notif_tx_title_transaction">Transaktion</string>
+    <string name="notif_tx_channel_name">Transaktioner</string>
     <string name="error_connection_timeout">Anslutningen gjorde time-out</string>
     <string name="error_node_unreachable">Nod är onåbar</string>
     <string name="error_invalid_password">Felaktigt lösenord angivit</string>

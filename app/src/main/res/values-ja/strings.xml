@@ -323,6 +323,11 @@
     <string name="notif_contract_failed">DApp トランザクションが失敗しました。</string>
     <string name="notif_contract_expired">DApp トランザクションが期限切れになりました</string>
     <string name="notif_clear_all">すべてクリア</string>
+    <string name="notif_tx_title_received">受取済</string>
+    <string name="notif_tx_title_sent">送信済</string>
+    <string name="notif_tx_title_failed">失敗</string>
+    <string name="notif_tx_title_transaction">トランザクション</string>
+    <string name="notif_tx_channel_name">トランザクション</string>
     <string name="error_connection_timeout">接続がタイムアウトしました</string>
     <string name="error_node_unreachable">ノードに到達できません</string>
     <string name="error_wallet_db_locked">ウォレットデータベースは既に開かれています</string>

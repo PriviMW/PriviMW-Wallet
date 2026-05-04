@@ -322,6 +322,11 @@
     <string name="notif_contract_failed">DApp transactie mislukt</string>
     <string name="notif_contract_expired">DApp transactie verlopen</string>
     <string name="notif_clear_all">alles wissen</string>
+    <string name="notif_tx_title_received">Ontvangen</string>
+    <string name="notif_tx_title_sent">Verzonden</string>
+    <string name="notif_tx_title_failed">Mislukt</string>
+    <string name="notif_tx_title_transaction">Transactie</string>
+    <string name="notif_tx_channel_name">Transacties</string>
     <string name="error_connection_timeout">Verbinding time-out</string>
     <string name="error_node_unreachable">Node is onbereikbaar</string>
     <string name="error_wallet_db_locked">Wallet database is al geopend</string>

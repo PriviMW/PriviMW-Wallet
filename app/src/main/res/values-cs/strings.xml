@@ -264,6 +264,11 @@
     <string name="notif_swap_failed">Nabídka směny selhala</string>
     <string name="notif_swap_expired">Platnost směny vypršela</string>
     <string name="notif_clear_all">vymazat vše</string>
+    <string name="notif_tx_title_received">Přijato</string>
+    <string name="notif_tx_title_sent">Odesláno</string>
+    <string name="notif_tx_title_failed">Selhalo</string>
+    <string name="notif_tx_title_transaction">Transakce</string>
+    <string name="notif_tx_channel_name">Platby</string>
     <string name="error_connection_timeout">Časový limit připojení vypršel</string>
     <string name="error_node_unreachable">Přístupový bod Node je nedostupný</string>
     <string name="error_invalid_password">Zadáno neplatné heslo</string>

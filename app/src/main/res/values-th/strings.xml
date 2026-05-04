@@ -222,6 +222,11 @@
     <string name="payment_proof_label">Payment proof</string>
     <string name="notif_tx_failed">การทำธุรกรรมล้มเหลว</string>
     <string name="notif_clear_all">ล้างทั้งหมด</string>
+    <string name="notif_tx_title_received">ได้​รับ​แล้ว</string>
+    <string name="notif_tx_title_sent">ส่งแล้ว</string>
+    <string name="notif_tx_title_failed">ล้มเหลว</string>
+    <string name="notif_tx_title_transaction">รายการธุรกรรม</string>
+    <string name="notif_tx_channel_name">ธุรกรรม</string>
     <string name="error_connection_timeout">หมดเวลาการเชื่อมต่อ</string>
     <string name="error_node_unreachable">ติดต่อ Node ไม่ได้</string>
     <string name="error_invalid_password">รหัสผ่านไม่ถูกต้อง</string>

@@ -137,10 +137,10 @@ fun ChatsScreen(
             ) {
                 CircularProgressIndicator(color = C.accent, modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
                 Spacer(Modifier.height(24.dp))
-                Text("Registering Handle", color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.register_registering), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Your handle is being registered on the Beam blockchain. This usually takes about 1 minute.",
+                    stringResource(R.string.register_pending_message),
                     color = C.textSecondary, fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 20.sp,
                 )
@@ -1013,6 +1013,7 @@ private fun NotRegisteredLanding(onRegister: () -> Unit) {
 
 @Composable
 private fun ReRegisterLanding(chatState: ChatStateEntity) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val currentDisplayName = chatState.myDisplayName ?: ""
     var displayName by remember { mutableStateOf(currentDisplayName) }
     var useExistingName by remember { mutableStateOf(currentDisplayName.isNotEmpty()) }
@@ -1143,7 +1144,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
 
         // Display name option
         Spacer(Modifier.height(16.dp))
-        Text("Display Name", color = C.textSecondary, fontSize = 12.sp)
+        Text(stringResource(R.string.register_display_name_label), color = C.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.height(6.dp))
         if (currentDisplayName.isNotEmpty()) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1152,7 +1153,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                     onClick = { useExistingName = true; displayName = currentDisplayName },
                     colors = RadioButtonDefaults.colors(selectedColor = C.accent, unselectedColor = C.textSecondary),
                 )
-                Text("Keep \"$currentDisplayName\"", color = C.text, fontSize = 14.sp,
+                Text(stringResource(R.string.chats_reregister_keep_name, currentDisplayName), color = C.text, fontSize = 14.sp,
                     modifier = Modifier.clickable { useExistingName = true; displayName = currentDisplayName })
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1161,7 +1162,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                     onClick = { useExistingName = false; displayName = "" },
                     colors = RadioButtonDefaults.colors(selectedColor = C.accent, unselectedColor = C.textSecondary),
                 )
-                Text("Change display name", color = C.text, fontSize = 14.sp,
+                Text(stringResource(R.string.chats_reregister_change_name), color = C.text, fontSize = 14.sp,
                     modifier = Modifier.clickable { useExistingName = false; displayName = "" })
             }
         }
@@ -1170,7 +1171,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
             OutlinedTextField(
                 value = displayName,
                 onValueChange = { if (it.length <= 32) displayName = it },
-                placeholder = { Text("Display name (optional)", color = C.textSecondary) },
+                placeholder = { Text(stringResource(R.string.chats_reregister_name_placeholder), color = C.textSecondary) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = C.text, unfocusedTextColor = C.text,
                     cursorColor = C.accent, focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
@@ -1188,7 +1189,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFFC107)),
         ) {
             Text(
-                "Your @handle is safe on-chain. Previous conversations cannot be restored as messages are stored locally. A small fee applies.",
+                stringResource(R.string.chats_reregister_info),
                 color = Color(0xFFFFC107), fontSize = 12.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 17.sp,
                 modifier = Modifier.padding(12.dp),
@@ -1206,7 +1207,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFF6B6B)),
             ) {
                 Text(
-                    "You need BEAM to pay the transaction fee.",
+                    stringResource(R.string.chats_reregister_no_beam),
                     color = C.error, fontSize = 12.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 17.sp,
                     modifier = Modifier.padding(12.dp),
@@ -1236,7 +1237,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                             }
                         }
                     } else {
-                        errorMsg = "Failed to create SBBS address"
+                        errorMsg = context.getString(R.string.register_sbbs_failed)
                         txStatus = "failed"
                     }
                 }
@@ -1249,7 +1250,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                 disabledContainerColor = C.accent.copy(alpha = 0.3f),
             ),
         ) {
-            Text("Update Messaging Address", color = C.textDark, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(stringResource(R.string.chats_reregister_button), color = C.textDark, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
     }
 }

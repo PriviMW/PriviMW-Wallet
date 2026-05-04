@@ -195,6 +195,11 @@
     <string name="payment_proof_copy_details">세부사항 복사하기</string>
     <string name="payment_proof_label">지불 증명</string>
     <string name="notif_tx_failed">거래 실패</string>
+    <string name="notif_tx_title_received">받음</string>
+    <string name="notif_tx_title_sent">보냄</string>
+    <string name="notif_tx_title_failed">실패</string>
+    <string name="notif_tx_title_transaction">거래내역</string>
+    <string name="notif_tx_channel_name">거래내역</string>
     <string name="error_connection_timeout">연결 시간 초과</string>
     <string name="error_node_unreachable">노드에 연결할 수 없습니다</string>
     <string name="error_invalid_password">유효하지 않은 비밀번호가 제공 되었습니다</string>

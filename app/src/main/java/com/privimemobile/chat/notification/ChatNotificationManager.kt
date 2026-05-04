@@ -110,9 +110,9 @@ object ChatNotificationManager {
             // and the reaction. This keeps the DM title as the contact's name, not the reactor's.
             val lastEntry = if (history.isNotEmpty()) history.removeAt(history.size - 1) else null
             val reactionText = if (reactedMessageText != null) {
-                "Reacted $reactionEmoji to \"$reactedMessageText\""
+                appContext.getString(R.string.notif_reaction_with_text, reactionEmoji, reactedMessageText)
             } else {
-                "Reacted to your message: $reactionEmoji"
+                appContext.getString(R.string.notif_reaction_emoji_only, reactionEmoji)
             }
             if (lastEntry != null) {
                 // Re-add the original message first
@@ -305,8 +305,8 @@ object ChatNotificationManager {
 
         val summary = NotificationCompat.Builder(appContext, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("PriviMe")
-            .setContentText("$totalUnread unread message${if (totalUnread > 1) "s" else ""}")
+            .setContentTitle(appContext.getString(R.string.notif_summary_title))
+            .setContentText(appContext.getString(R.string.notif_unread_messages, totalUnread, if (totalUnread > 1) "s" else ""))
             .setNumber(totalUnread)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -343,32 +343,32 @@ object ChatNotificationManager {
 
         // Channel group
         nm.createNotificationChannelGroup(
-            NotificationChannelGroup(GROUP_ID, "PriviMe Chat")
+            NotificationChannelGroup(GROUP_ID, appContext.getString(R.string.notif_channel_group))
         )
 
         // Messages channel
         nm.createNotificationChannel(NotificationChannel(
-            CHANNEL_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH
+            CHANNEL_MESSAGES, appContext.getString(R.string.notif_channel_messages), NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "New chat messages"
+            description = appContext.getString(R.string.notif_channel_messages_desc)
             group = GROUP_ID
             setShowBadge(true)
         })
 
         // Tips channel
         nm.createNotificationChannel(NotificationChannel(
-            CHANNEL_TIPS, "Tips", NotificationManager.IMPORTANCE_HIGH
+            CHANNEL_TIPS, appContext.getString(R.string.notif_channel_tips), NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Received BEAM tips"
+            description = appContext.getString(R.string.notif_channel_tips_desc)
             group = GROUP_ID
             setShowBadge(true)
         })
 
         // Files channel
         nm.createNotificationChannel(NotificationChannel(
-            CHANNEL_FILES, "Files", NotificationManager.IMPORTANCE_DEFAULT
+            CHANNEL_FILES, appContext.getString(R.string.notif_channel_files), NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Received files and images"
+            description = appContext.getString(R.string.notif_channel_files_desc)
             group = GROUP_ID
             setShowBadge(true)
         })

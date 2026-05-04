@@ -330,6 +330,11 @@
     <string name="notif_contract_failed">La transaction DApp a échoué</string>
     <string name="notif_contract_expired">Transaction DApp expirée</string>
     <string name="notif_clear_all">tout effacer</string>
+    <string name="notif_tx_title_received">Reçu</string>
+    <string name="notif_tx_title_sent">Envoyé</string>
+    <string name="notif_tx_title_failed">Échouées</string>
+    <string name="notif_tx_title_transaction">Transaction</string>
+    <string name="notif_tx_channel_name">Transactions</string>
     <string name="error_connection_timeout">La connexion a expiré</string>
     <string name="error_node_unreachable">Le nœud est inaccessible</string>
     <string name="error_wallet_db_locked">La base de données du portefeuille est déjà ouverte</string>

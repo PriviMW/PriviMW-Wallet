@@ -172,6 +172,11 @@
     <string name="payment_proof_copy_details">Detayları kopyala</string>
     <string name="payment_proof_label">Ödeme kanıtı</string>
     <string name="notif_tx_failed">İşlem başarısız</string>
+    <string name="notif_tx_title_received">Alındı</string>
+    <string name="notif_tx_title_sent">Gönderildi</string>
+    <string name="notif_tx_title_failed">Hata</string>
+    <string name="notif_tx_title_transaction">İşlem</string>
+    <string name="notif_tx_channel_name">İşlemler</string>
     <string name="error_connection_timeout">Bağlantı zaman aşımına uğradı</string>
     <string name="error_node_unreachable">Noda ulaşılamıyor</string>
     <string name="error_invalid_password">Yanlış şifre girildi</string>

@@ -47,6 +47,7 @@ fun AssetDetailScreen(
     onSend: () -> Unit = {},
     onReceive: () -> Unit = {},
     onTxDetail: (String) -> Unit = {},
+    onViewAll: () -> Unit = {},
 ) {
     // Per-asset balance — from persistent map + live updates
     var assetStatus by remember {
@@ -309,7 +310,8 @@ fun AssetDetailScreen(
                 Text(stringResource(R.string.asset_no_transactions), color = C.textMuted, fontSize = 14.sp)
             }
         } else {
-            assetTxs.forEach { tx ->
+            val previewCount = 10
+            assetTxs.take(previewCount).forEach { tx ->
                 val effectiveOut = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !tx.sender else tx.sender
                 val isPending = tx.status == TxStatus.PENDING || tx.status == TxStatus.IN_PROGRESS || tx.status == TxStatus.REGISTERING
                 val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
@@ -455,6 +457,29 @@ fun AssetDetailScreen(
                                 modifier = Modifier.padding(top = 2.dp),
                             )
                         }
+                    }
+                }
+            }
+            if (assetTxs.size > previewCount) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(C.card)
+                        .clickable { onViewAll() }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.wallet_view_all_txs, assetTxs.size),
+                            color = C.accent,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("→", color = C.accent, fontSize = 14.sp)
                     }
                 }
             }

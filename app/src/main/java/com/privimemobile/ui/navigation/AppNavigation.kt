@@ -57,6 +57,7 @@ import com.privimemobile.ui.wallet.TransactionHistoryScreen
 import com.privimemobile.ui.wallet.UTXOScreen
 import com.privimemobile.ui.wallet.AddressesScreen
 import com.privimemobile.ui.wallet.AssetDetailScreen
+import com.privimemobile.ui.wallet.AssetTxHistoryScreen
 import com.privimemobile.ui.wallet.QRScannerScreen
 import com.privimemobile.ui.dapps.DAppScreen
 import com.privimemobile.ui.dapps.DAppStoreBrowseScreen
@@ -309,10 +310,30 @@ fun AppNavigation() {
                     onSend = { navController.navigate("send?assetId=$assetId") },
                     onReceive = { navController.navigate("receive") },
                     onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                    onViewAll = { navController.navigate("asset_tx_history/$assetId") },
                 )
             }
-            composable("utxos") {
-                UTXOScreen(onBack = { navController.popBackStack() })
+            composable(
+                "asset_tx_history/{assetId}",
+                arguments = listOf(navArgument("assetId") { type = NavType.IntType }),
+            ) { backStackEntry ->
+                val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
+                AssetTxHistoryScreen(
+                    assetId = assetId,
+                    onBack = { navController.popBackStack() },
+                    onTxDetail = { txId -> navController.navigate("tx_detail/$txId") },
+                    onUtxos = { id -> navController.navigate("utxos?assetId=$id") },
+                )
+            }
+            composable(
+                "utxos?assetId={assetId}",
+                arguments = listOf(navArgument("assetId") { type = NavType.IntType; defaultValue = 0 }),
+            ) { backStackEntry ->
+                val assetId = backStackEntry.arguments?.getInt("assetId") ?: 0
+                UTXOScreen(
+                    onBack = { navController.popBackStack() },
+                    initialAssetId = assetId,
+                )
             }
             composable("addresses") {
                 AddressesScreen(onBack = { navController.popBackStack() })

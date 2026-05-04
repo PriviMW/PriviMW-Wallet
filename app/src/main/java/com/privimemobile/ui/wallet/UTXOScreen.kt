@@ -55,9 +55,9 @@ private enum class UtxoFilter(@androidx.annotation.StringRes val labelResId: Int
 }
 
 @Composable
-fun UTXOScreen(onBack: () -> Unit = {}) {
+fun UTXOScreen(onBack: () -> Unit = {}, initialAssetId: Int = 0) {
     var filter by remember { mutableStateOf(UtxoFilter.ALL) }
-    var selectedAsset by remember { mutableIntStateOf(0) } // default to BEAM
+    var selectedAsset by remember { mutableIntStateOf(initialAssetId) }
 
     // Fetch UTXOs via get_utxo API (returns both regular + shielded in one call)
     var utxos by remember { mutableStateOf<List<Utxo>>(emptyList()) }
@@ -100,9 +100,11 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
         utxos.map { it.assetId }.distinct().sorted()
     }
 
-    // Reset selected asset if it no longer exists
+    // Reset selected asset if it no longer exists (skip if initialAssetId still valid)
     LaunchedEffect(assetIds) {
-        if (selectedAsset !in assetIds) {
+        if (initialAssetId > 0 && initialAssetId in assetIds) {
+            if (selectedAsset != initialAssetId) selectedAsset = initialAssetId
+        } else if (selectedAsset !in assetIds) {
             selectedAsset = 0
         }
     }

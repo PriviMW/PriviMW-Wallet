@@ -270,7 +270,7 @@ fun GroupSettingsScreen(
                             OutlinedTextField(
                                 value = newDesc,
                                 onValueChange = { if (it.length <= 200) newDesc = it },
-                                placeholder = { Text(stringResource(R.string.group_description_placeholder), color = C.textMuted) },
+                                placeholder = { Text(stringResource(R.string.group_edit_description_placeholder), color = C.textMuted) },
                                 maxLines = 4,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = C.accent, unfocusedBorderColor = C.border,

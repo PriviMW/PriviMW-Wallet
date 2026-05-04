@@ -1255,7 +1255,7 @@
     <string name="group_private_label">Приватная группа</string>
     <string name="group_no_description">Нет описания</string>
     <string name="group_edit_description_title">Редактировать описание</string>
-    <string name="group_description_placeholder">Описание группы...</string>
+    <string name="group_edit_description_placeholder">Описание группы...</string>
     <string name="group_updated_description">Вы обновили описание группы</string>
     <string name="group_add_member_button">Добавить</string>
     <string name="group_add_member_title">Добавить участника</string>

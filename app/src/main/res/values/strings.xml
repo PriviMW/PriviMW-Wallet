@@ -1496,7 +1496,7 @@
     <string name="group_private_label">Private Group</string>
     <string name="group_no_description">No description</string>
     <string name="group_edit_description_title">Edit Description</string>
-    <string name="group_description_placeholder">Group description...</string>
+    <string name="group_edit_description_placeholder">Group description...</string>
     <string name="group_updated_description">You updated group description</string>
     <string name="group_add_member_button">Add</string>
     <string name="group_add_member_title">Add Member</string>

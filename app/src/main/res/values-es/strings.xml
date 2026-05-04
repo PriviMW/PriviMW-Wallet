@@ -1252,7 +1252,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="group_private_label">Grupo privado</string>
     <string name="group_no_description">Sin descripción</string>
     <string name="group_edit_description_title">Editar descripción</string>
-    <string name="group_description_placeholder">Descripción del grupo...</string>
+    <string name="group_edit_description_placeholder">Descripción del grupo...</string>
     <string name="group_updated_description">Actualizaste la descripción del grupo</string>
     <string name="group_add_member_button">Añadir</string>
     <string name="group_add_member_title">Añadir miembro</string>

@@ -1255,7 +1255,7 @@
     <string name="group_private_label">私密群组</string>
     <string name="group_no_description">暂无描述</string>
     <string name="group_edit_description_title">编辑描述</string>
-    <string name="group_description_placeholder">群组描述…</string>
+    <string name="group_edit_description_placeholder">群组描述…</string>
     <string name="group_updated_description">您更新了群组描述</string>
     <string name="group_add_member_button">添加</string>
     <string name="group_add_member_title">添加成员</string>

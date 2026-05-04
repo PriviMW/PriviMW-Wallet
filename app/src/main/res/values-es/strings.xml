@@ -232,6 +232,7 @@
     <string name="send_confirm_failed">Transacción fallada</string>
     <string name="send_confirm_amount_label">Cantidad</string>
     <string name="send_confirm_fee_label">Tarifa de la transacción</string>
+    <string name="send_confirm_fee_format">+ %1$s BEAM (comisión)</string>
     <string name="send_confirm_total_label">Total</string>
     <string name="receive_title">Recibe</string>
     <string name="receive_my_address">Mi dirección</string>
@@ -1028,6 +1029,9 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="utxo_total_label">Total de UTXOs</string>
     <string name="utxo_empty_waiting">Sin UTXOs aún — esperando datos…</string>
     <string name="utxo_empty_filter">Ningún UTXO coincide con este filtro</string>
+    <string name="utxo_mp_pool">Pool de Máxima Privacidad</string>
+    <string name="utxo_mp_locked">Máxima Privacidad Bloqueada</string>
+    <string name="utxo_mp_no_individual">No se generan registros de monedas individuales para Máxima Privacidad</string>
     <string name="toast_rescan_started">Reescaneo iniciado</string>
     <string name="settings_public_offline_title">Dirección pública offline</string>
     <string name="utxo_filter_all">Todas</string>
@@ -1105,7 +1109,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="qr_scanner_prompt">Apunta la cámara a un código QR de Beam</string>
     <string name="split_title_format">Dividir %1$s</string>
     <string name="split_description">Crea monedas más pequeñas para evitar fallos en las transacciones</string>
-    <string name="split_total_available">Total Disponible</string>
+    <string name="split_total_available">Balance Regular</string>
     <string name="split_current_coins">MONEDAS ACTUALES</string>
     <string name="split_coin_summary_one">%1$d moneda</string>
     <string name="split_coin_summary_other">%1$d monedas</string>

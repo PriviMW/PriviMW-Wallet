@@ -865,9 +865,12 @@ internal fun TxCard(
         else -> C.textSecondary
     }
 
+    // Map known on-chain DApp names to localized labels
+    val dappLabel = if (tx.appName?.contains("Assets Swap", ignoreCase = true) == true)
+        stringResource(R.string.tx_detail_assets_swap) else tx.appName
     // Peer address / DApp name display
     val peerAddr = when {
-        tx.isDapps -> tx.appName ?: stringResource(R.string.wallet_dapp_label)
+        tx.isDapps -> dappLabel ?: stringResource(R.string.wallet_dapp_label)
         tx.peerId.isNotEmpty() -> {
             if (tx.peerId.length > 12)
                 "${tx.peerId.take(6)}...${tx.peerId.takeLast(6)}"
@@ -935,7 +938,7 @@ internal fun TxCard(
                 Text(
                     buildString {
                         when {
-                            tx.isDapps -> append(tx.appName ?: stringResource(R.string.wallet_dapp_label))
+                            tx.isDapps -> append(dappLabel ?: stringResource(R.string.wallet_dapp_label))
                             isSelfTx -> append(stringResource(R.string.wallet_self_transfer))
                             isSend -> append(stringResource(R.string.wallet_sent_label))
                             else -> append(stringResource(R.string.wallet_received_label))

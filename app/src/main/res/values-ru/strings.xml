@@ -232,6 +232,7 @@
     <string name="send_confirm_failed">Транзакция не прошла</string>
     <string name="send_confirm_amount_label">Сумма</string>
     <string name="send_confirm_fee_label">Комиссия</string>
+    <string name="send_confirm_fee_format">+ %1$s BEAM (комиссия)</string>
     <string name="send_confirm_total_label">Итого</string>
     <string name="receive_title">Получить</string>
     <string name="receive_my_address">Мой адрес</string>
@@ -1031,6 +1032,9 @@
     <string name="utxo_total_label">Всего UTXO</string>
     <string name="utxo_empty_waiting">Нет UTXO — ожидание данных…</string>
     <string name="utxo_empty_filter">Нет UTXO по этому фильтру</string>
+    <string name="utxo_mp_pool">Пул Макс. Приватности</string>
+    <string name="utxo_mp_locked">Макс. Приватность Заблок.</string>
+    <string name="utxo_mp_no_individual">Отдельные записи монет не создаются для Макс. Приватности</string>
     <string name="toast_rescan_started">Пересканирование запущено</string>
     <string name="settings_public_offline_title">Публичный оффлайн адрес</string>
     <string name="utxo_filter_all">Все</string>
@@ -1108,7 +1112,7 @@
     <string name="qr_scanner_prompt">Наведите камеру на Beam QR-код</string>
     <string name="split_title_format">Разделить %1$s</string>
     <string name="split_description">Создайте мелкие монеты, чтобы избежать сбоев транзакций</string>
-    <string name="split_total_available">Всего Доступно</string>
+    <string name="split_total_available">Обычный Баланс</string>
     <string name="split_current_coins">ТЕКУЩИЕ МОНЕТЫ</string>
     <string name="split_coin_summary_one">%1$d монета</string>
     <string name="split_coin_summary_other">%1$d монет</string>

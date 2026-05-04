@@ -315,8 +315,11 @@ fun AssetDetailScreen(
                 val isFailed = tx.status == TxStatus.FAILED || tx.status == TxStatus.CANCELLED
                 val isSelf = tx.selfTx
                 val amountColor = if (isFailed) C.textSecondary else if (isSelf) C.textSecondary else if (effectiveOut) C.outgoing else C.incoming
+                // Map known on-chain DApp names to localized labels
+                val dappLabel = if (tx.appName?.contains("Assets Swap", ignoreCase = true) == true)
+                    stringResource(R.string.tx_detail_assets_swap) else tx.appName
                 val peerAddr = when {
-                    tx.isDapps -> tx.appName ?: stringResource(R.string.wallet_dapp_label)
+                    tx.isDapps -> dappLabel ?: stringResource(R.string.wallet_dapp_label)
                     isSelf -> stringResource(R.string.wallet_self_label)
                     tx.peerId.isNotEmpty() -> if (tx.peerId.length > 16) "${tx.peerId.take(8)}...${tx.peerId.takeLast(8)}" else tx.peerId
                     else -> "—"
@@ -355,7 +358,7 @@ fun AssetDetailScreen(
                             Text(
                                 buildString {
                                     if (tx.isDapps) {
-                                        append(tx.appName ?: stringResource(R.string.wallet_dapp_label))
+                                        append(dappLabel ?: stringResource(R.string.wallet_dapp_label))
                                     } else if (isSelf) {
                                         append(stringResource(R.string.wallet_self_transfer))
                                     } else {

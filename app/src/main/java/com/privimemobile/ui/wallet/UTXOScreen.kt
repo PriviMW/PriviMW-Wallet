@@ -24,27 +24,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.R
 import com.privimemobile.protocol.Helpers
+import com.privimemobile.protocol.WalletApi
 import com.privimemobile.ui.theme.C
-import com.privimemobile.wallet.WalletEventBus
+
 import com.privimemobile.wallet.assetTicker
-import org.json.JSONArray
 
-// UTXO status codes from Beam C++ core
-private object UtxoStatus {
-    const val AVAILABLE = 1
-    const val MATURING = 2
-    const val UNAVAILABLE = 3
-    const val OUTGOING = 4
-    const val INCOMING = 5
-    const val SPENT = 6
-    const val CONSUMED = 7
-}
-
+// UTXO status codes: Coin and ShieldedCoin have DIFFERENT mappings.
+// Coin:   Unavail=0 Avail=1 Maturing=2 Outgoing=3 Incoming=4 Spent=6 Consumed=7
+// ShldCoin: Unavail=0 Incoming=1 Avail=2 Maturing=3 Outgoing=4 Spent=5 Consumed=6
+// Use status_string from the API for display; use isShielded+status for filtering.
 private data class Utxo(
     val id: Long,
     val stringId: String,
     val amount: Long,
     val status: Int,
+    val statusString: String,
     val maturity: Long,
     val confirmHeight: Long,
     val createTxId: String,
@@ -62,19 +56,43 @@ private enum class UtxoFilter(@androidx.annotation.StringRes val labelResId: Int
 
 @Composable
 fun UTXOScreen(onBack: () -> Unit = {}) {
-    LaunchedEffect(Unit) {
-        try { com.privimemobile.wallet.WalletManager.walletInstance?.getAllUtxosStatus() } catch (_: Exception) {}
-    }
-
-    val utxoJson by WalletEventBus.utxos.collectAsState()
     var filter by remember { mutableStateOf(UtxoFilter.ALL) }
     var selectedAsset by remember { mutableIntStateOf(0) } // default to BEAM
 
-    val utxos = remember(utxoJson) {
+    // Fetch UTXOs via get_utxo API (returns both regular + shielded in one call)
+    var utxos by remember { mutableStateOf<List<Utxo>>(emptyList()) }
+    LaunchedEffect(Unit) {
         try {
-            val arr = JSONArray(utxoJson)
-            parseUtxos(arr)
-        } catch (_: Exception) { emptyList() }
+            val result = WalletApi.callAsyncDirect("get_utxo", mapOf("assets" to true))
+            android.util.Log.d("UTXO", "get_utxo keys: ${result.keys}, size=${result.size}")
+            // WalletApi wraps JSONArray results as mapOf("messages" to List<Map>)
+            val rawList = result["messages"] as? List<*>
+            if (rawList != null) {
+                android.util.Log.d("UTXO", "Parsing ${rawList.size} UTXOs from messages")
+                utxos = rawList.mapNotNull { item ->
+                    val obj = item as? Map<*, *> ?: return@mapNotNull null
+                    val type = (obj["type"] as? String) ?: ""
+                    val isShielded = type == "shld" || (obj["isShielded"] as? Boolean) ?: false
+                    Utxo(
+                        id = (obj["id"] as? String)?.toLongOrNull() ?: 0L,
+                        stringId = (obj["id"] as? String) ?: "",
+                        amount = (obj["amount"] as? Number)?.toLong() ?: 0L,
+                        status = (obj["status"] as? Number)?.toInt() ?: 0,
+                        statusString = (obj["status_string"] as? String) ?: "",
+                        maturity = (obj["maturity"] as? Number)?.toLong() ?: 0L,
+                        confirmHeight = 0L,
+                        createTxId = (obj["createTxId"] as? String) ?: "",
+                        spentTxId = (obj["spentTxId"] as? String) ?: "",
+                        assetId = (obj["asset_id"] as? Number)?.toInt() ?: (obj["assetId"] as? Number)?.toInt() ?: 0,
+                        isShielded = isShielded,
+                    )
+                }
+            } else {
+                android.util.Log.w("UTXO", "No 'messages' key in result. Full result: $result")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UTXO", "get_utxo failed: ${e.message}", e)
+        }
     }
 
     // Unique asset IDs from available UTXOs
@@ -93,24 +111,19 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
     val filtered = remember(utxos, filter, selectedAsset) {
         val byStatus = when (filter) {
             UtxoFilter.ALL -> utxos
-            UtxoFilter.AVAILABLE -> utxos.filter { it.status == UtxoStatus.AVAILABLE }
-            UtxoFilter.MATURING -> utxos.filter {
-                it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING
-            }
-            UtxoFilter.SPENT -> utxos.filter {
-                it.status == UtxoStatus.SPENT ||
-                        it.status == UtxoStatus.CONSUMED ||
-                        it.status == UtxoStatus.OUTGOING
-            }
+            UtxoFilter.AVAILABLE -> utxos.filter { isAvailableStatus(it) }
+            UtxoFilter.MATURING -> utxos.filter { isMaturingStatus(it) }
+            UtxoFilter.SPENT -> utxos.filter { isSpentStatus(it) }
         }
         val list = byStatus.filter { it.assetId == selectedAsset }
         list.sortedWith(compareBy<Utxo> { it.status }.thenByDescending { it.amount })
     }
 
-    // Per-asset totals
+    // Per-asset totals from UTXO list
     val scopeUtxos = utxos.filter { it.assetId == selectedAsset }
-    val scopeAvailable = scopeUtxos.filter { it.status == UtxoStatus.AVAILABLE }.sumOf { it.amount }
-    val scopeMaturing = scopeUtxos.filter { it.status == UtxoStatus.MATURING || it.status == UtxoStatus.INCOMING }.sumOf { it.amount }
+    val scopeAvailable = scopeUtxos.filter { isAvailableStatus(it) }.sumOf { it.amount }
+    val scopeMaturing = scopeUtxos.filter { isMaturingStatus(it) }.sumOf { it.amount }
+    val totalAvailable = scopeAvailable
 
     Column(
         modifier = Modifier
@@ -127,15 +140,17 @@ fun UTXOScreen(onBack: () -> Unit = {}) {
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = C.card),
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SummaryItem(stringResource(R.string.balance_available), Helpers.formatBeam(scopeAvailable), C.text, Modifier.weight(1f))
-                Box(Modifier.width(1.dp).height(32.dp).background(C.border))
-                SummaryItem(stringResource(R.string.balance_maturing), Helpers.formatBeam(scopeMaturing), C.warning, Modifier.weight(1f))
-                Box(Modifier.width(1.dp).height(32.dp).background(C.border))
-                SummaryItem(stringResource(R.string.utxo_total_label), scopeUtxos.size.toString(), C.text, Modifier.weight(1f))
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SummaryItem(stringResource(R.string.balance_available), Helpers.formatBeam(totalAvailable), C.text, Modifier.weight(1f))
+                    Box(Modifier.width(1.dp).height(32.dp).background(C.border))
+                    SummaryItem(stringResource(R.string.balance_maturing), Helpers.formatBeam(scopeMaturing), C.warning, Modifier.weight(1f))
+                    Box(Modifier.width(1.dp).height(32.dp).background(C.border))
+                    SummaryItem(stringResource(R.string.utxo_total_label), scopeUtxos.size.toString(), C.text, Modifier.weight(1f))
+                }
             }
         }
 
@@ -275,8 +290,8 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun UtxoCard(utxo: Utxo) {
-    val statusColor = utxoStatusColor(utxo.status)
-    val statusLabel = utxoStatusLabel(utxo.status)
+    val statusColor = utxoStatusColor(utxo)
+    val statusLabel = utxoStatusLabel(utxo)
     val ticker = com.privimemobile.wallet.assetTicker(utxo.assetId)
 
     Card(
@@ -325,9 +340,8 @@ private fun UtxoCard(utxo: Utxo) {
             if (utxo.assetId != 0) {
                 UtxoDetailRow(stringResource(R.string.utxo_asset_id), "#${utxo.assetId}")
             }
-            if (utxo.isShielded) {
-                UtxoDetailRow(stringResource(R.string.general_type), stringResource(R.string.balance_shielded))
-            }
+            UtxoDetailRow(stringResource(R.string.general_type),
+                if (utxo.isShielded) stringResource(R.string.balance_shielded) else stringResource(R.string.wallet_addr_regular))
             if (utxo.maturity > 0) {
                 UtxoDetailRow(stringResource(R.string.utxo_maturity), stringResource(R.string.wallet_block_height, utxo.maturity))
             }
@@ -355,40 +369,44 @@ private fun UtxoDetailRow(label: String, value: String) {
     }
 }
 
-private fun utxoStatusColor(status: Int): Color = when (status) {
-    UtxoStatus.AVAILABLE -> C.online
-    UtxoStatus.MATURING, UtxoStatus.INCOMING -> C.warning
-    UtxoStatus.OUTGOING -> C.outgoing
-    UtxoStatus.SPENT, UtxoStatus.CONSUMED -> C.textSecondary.copy(alpha = 0.5f)
+// Status filtering handles both Coin and ShieldedCoin status mappings.
+// Coin: Avail=1 Maturing=2 Outgoing=3 Incoming=4 Spent=6 Consumed=7
+// ShldCoin: Incoming=1 Avail=2 Maturing=3 Outgoing=4 Spent=5 Consumed=6
+private fun isAvailableStatus(utxo: Utxo): Boolean {
+    if (utxo.isShielded) return utxo.status == 2 // ShieldedCoin::Available
+    return utxo.status == 1 // Coin::Available
+}
+private fun isMaturingStatus(utxo: Utxo): Boolean {
+    if (utxo.isShielded) return utxo.status == 3 // ShieldedCoin::Maturing
+    return utxo.status == 2 // Coin::Maturing
+}
+private fun isSpentStatus(utxo: Utxo): Boolean {
+    if (utxo.isShielded) return utxo.status == 5 || utxo.status == 6 // ShieldedCoin::Spent/Consumed
+    return utxo.status == 6 || utxo.status == 7 || utxo.status == 3 // Coin::Spent/Consumed/Outgoing
+}
+
+private fun utxoStatusColor(utxo: Utxo): Color = when {
+    isAvailableStatus(utxo) -> C.online
+    isMaturingStatus(utxo) -> C.warning
+    utxo.isShielded && utxo.status == 1 -> C.warning // ShieldedCoin::Incoming
+    !utxo.isShielded && utxo.status == 4 -> C.warning // Coin::Incoming
+    utxo.isShielded && utxo.status == 4 -> C.outgoing // ShieldedCoin::Outgoing
+    !utxo.isShielded && utxo.status == 3 -> C.outgoing // Coin::Outgoing
+    isSpentStatus(utxo) -> C.textSecondary.copy(alpha = 0.5f)
     else -> C.textSecondary
 }
 
 @Composable
-private fun utxoStatusLabel(status: Int): String = when (status) {
-    UtxoStatus.AVAILABLE -> stringResource(R.string.utxo_label_available)
-    UtxoStatus.MATURING -> stringResource(R.string.utxo_label_maturing)
-    UtxoStatus.UNAVAILABLE -> stringResource(R.string.utxo_label_unavailable)
-    UtxoStatus.OUTGOING -> stringResource(R.string.utxo_label_outgoing)
-    UtxoStatus.INCOMING -> stringResource(R.string.utxo_label_incoming)
-    UtxoStatus.SPENT -> stringResource(R.string.utxo_label_spent)
-    UtxoStatus.CONSUMED -> stringResource(R.string.utxo_label_consumed)
-    else -> stringResource(R.string.utxo_label_unknown)
-}
-
-private fun parseUtxos(arr: JSONArray): List<Utxo> {
-    return (0 until arr.length()).mapNotNull { i ->
-        val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-        Utxo(
-            id = obj.optLong("id"),
-            stringId = obj.optString("stringId", ""),
-            amount = obj.optLong("amount"),
-            status = obj.optInt("status"),
-            maturity = obj.optLong("maturity"),
-            confirmHeight = obj.optLong("confirmHeight"),
-            createTxId = obj.optString("createTxId", ""),
-            spentTxId = obj.optString("spentTxId", ""),
-            assetId = obj.optInt("assetId"),
-            isShielded = obj.optBoolean("isShielded"),
-        )
+private fun utxoStatusLabel(utxo: Utxo): String = when {
+        isAvailableStatus(utxo) -> stringResource(R.string.utxo_label_available)
+        isMaturingStatus(utxo) -> stringResource(R.string.utxo_label_maturing)
+        utxo.status == 0 -> stringResource(R.string.utxo_label_unavailable)
+        utxo.isShielded && utxo.status == 1 -> stringResource(R.string.utxo_label_incoming)
+        !utxo.isShielded && utxo.status == 4 -> stringResource(R.string.utxo_label_incoming)
+        utxo.isShielded && utxo.status == 4 -> stringResource(R.string.utxo_label_outgoing)
+        !utxo.isShielded && utxo.status == 3 -> stringResource(R.string.utxo_label_outgoing)
+        isSpentStatus(utxo) -> stringResource(R.string.utxo_label_spent)
+        else -> stringResource(R.string.utxo_label_unknown)
     }
-}
+
+

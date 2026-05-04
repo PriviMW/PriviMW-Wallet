@@ -232,6 +232,7 @@
     <string name="send_confirm_failed">交易失败</string>
     <string name="send_confirm_amount_label">数量</string>
     <string name="send_confirm_fee_label">交易费</string>
+    <string name="send_confirm_fee_format">+ %1$s BEAM（手续费）</string>
     <string name="send_confirm_total_label">总计</string>
     <string name="receive_title">收款</string>
     <string name="receive_my_address">我的地址</string>
@@ -1031,6 +1032,9 @@
     <string name="utxo_total_label">UTXO 总数</string>
     <string name="utxo_empty_waiting">暂无 UTXO — 等待数据中…</string>
     <string name="utxo_empty_filter">没有匹配此筛选条件的 UTXO</string>
+    <string name="utxo_mp_pool">最大隐私池</string>
+    <string name="utxo_mp_locked">最大隐私已锁定</string>
+    <string name="utxo_mp_no_individual">最大隐私交易不生成单独的硬币记录</string>
     <string name="toast_rescan_started">重新扫描已开始</string>
     <string name="settings_public_offline_title">公共离线地址</string>
     <string name="utxo_filter_all">所有</string>
@@ -1108,7 +1112,7 @@
     <string name="qr_scanner_prompt">将摄像头对准 Beam 二维码</string>
     <string name="split_title_format">拆分 %1$s</string>
     <string name="split_description">创建更小的硬币以防止交易失败</string>
-    <string name="split_total_available">可用总额</string>
+    <string name="split_total_available">普通余额</string>
     <string name="split_current_coins">当前硬币</string>
     <string name="split_coin_summary_one">%1$d 枚硬币</string>
     <string name="split_coin_summary_other">%1$d 枚硬币</string>

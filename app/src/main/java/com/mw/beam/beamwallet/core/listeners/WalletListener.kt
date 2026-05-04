@@ -299,6 +299,9 @@ object WalletListener {
     private val mergedUtxos = java.util.concurrent.ConcurrentHashMap<Long, JSONObject>()
 
     @JvmStatic fun onCoinsByTx(utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
+
+    // Always merge — action codes ignored. C++ callbacks may send partial lists
+    // even with Reset action. Map deduplicates by UTXO ID.
     @JvmStatic fun onNormalUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
     @JvmStatic fun onAllShieldedUtxoChanged(action: Int, utxos: Array<UtxoDTO>?) { utxos?.let { mergeAndEmitUtxos(it) } }
     @JvmStatic fun onAllUtxoChanged(utxos: Array<UtxoDTO>?) {

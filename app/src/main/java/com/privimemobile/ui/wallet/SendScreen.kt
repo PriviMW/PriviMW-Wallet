@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import com.privimemobile.R
 import com.privimemobile.chat.ChatService
@@ -76,6 +77,7 @@ fun SendScreen(
 ) {
     val beamStatus by WalletEventBus.beamStatus.collectAsState()
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     var address by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -301,6 +303,7 @@ fun SendScreen(
                         validatingAddr = true
                         addressValid = null
                         addrType = null
+                        focusManager.clearFocus()
                         validateAddress(trimmed) { validateReqId = it }
                     },
                     placeholder = {
@@ -346,6 +349,7 @@ fun SendScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        focusManager.clearFocus()
                                         // Resolve handle to wallet address
                                         resolvingHandle = true
                                         showHandleDropdown = false
@@ -824,10 +828,13 @@ fun SendScreen(
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
-                    // Determine txType like RN: SBBS = 'regular', otherwise depends on sendOffline
-                    val txType = if (addrType is AddrType.Sbbs) "regular"
-                        else if (sendOffline) "offline"
-                        else "regular"
+                    // Determine txType: SBBS=regular, MaxPrivacy=max_privacy, offline=offline, rest=regular
+                    val txType = when {
+                        addrType is AddrType.Sbbs -> "regular"
+                        addrType is AddrType.MaxPrivacy -> "max_privacy"
+                        sendOffline -> "offline"
+                        else -> "regular"
+                    }
                     onNavigateConfirm(
                         address.trim(),
                         amountGroth,

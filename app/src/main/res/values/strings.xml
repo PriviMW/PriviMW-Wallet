@@ -269,6 +269,7 @@
     <string name="send_confirm_failed">Transaction failed</string>
     <string name="send_confirm_amount_label">Amount</string>
     <string name="send_confirm_fee_label">Transaction fee</string>
+    <string name="send_confirm_fee_format">+ %1$s BEAM (fee)</string>
     <string name="send_confirm_total_label">Total</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
@@ -1210,6 +1211,9 @@
     <string name="utxo_total_label">Total UTXOs</string>
     <string name="utxo_empty_waiting">No UTXOs yet — waiting for data…</string>
     <string name="utxo_empty_filter">No UTXOs match this filter</string>
+    <string name="utxo_mp_pool">Max Privacy Pool</string>
+    <string name="utxo_mp_locked">Max Privacy Locked</string>
+    <string name="utxo_mp_no_individual">Individual coin records are not generated for Max Privacy</string>
     <string name="toast_rescan_started">Rescan started</string>
     <string name="settings_public_offline_title">Public Offline Address</string>
     <string name="utxo_filter_all">All</string>
@@ -1297,7 +1301,7 @@
     <!-- Split -->
     <string name="split_title_format">Split %1$s</string>
     <string name="split_description">Create smaller coins to prevent transaction failures</string>
-    <string name="split_total_available">Total Available</string>
+    <string name="split_total_available">Regular Balance</string>
     <string name="split_current_coins">CURRENT COINS</string>
     <string name="split_coin_summary_one">%1$d coin</string>
     <string name="split_coin_summary_other">%1$d coins</string>

@@ -67,9 +67,13 @@ fun SendConfirmScreen(
     val currency = CurrencyManager.getPreferredCurrency()
     val rate = exchangeRates["beam_$currency"] ?: 0.0
 
-    // TX type passed from SendScreen — matches RN: "regular" = SBBS online, "offline" = offline
-    val isOffline = txType == "offline"
-    val txTypeLabel = if (txType == "regular") "SBBS (Online)" else "Regular (Offline)"
+    // TX type passed from SendScreen: "regular"=SBBS online, "offline"=offline, "max_privacy"=max privacy
+    val isOffline = txType == "offline" || txType == "max_privacy"
+    val txTypeLabel = when (txType) {
+        "regular" -> stringResource(R.string.send_addr_type_sbbs)
+        "max_privacy" -> stringResource(R.string.send_addr_type_max_privacy)
+        else -> stringResource(R.string.send_addr_type_regular)
+    }
 
     // Check biometric availability
     LaunchedEffect(Unit) {
@@ -344,7 +348,7 @@ fun SendConfirmScreen(
                                 if (assetFiat != null) Text("≈ $assetFiat", color = C.textSecondary, fontSize = 11.sp)
                             }
                             Text(
-                                "+ ${Helpers.formatBeam(fee)} BEAM (fee)",
+                                stringResource(R.string.send_confirm_fee_format, Helpers.formatBeam(fee)),
                                 color = C.textSecondary,
                                 fontSize = 12.sp,
                             )

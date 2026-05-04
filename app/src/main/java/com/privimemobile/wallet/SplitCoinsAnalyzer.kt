@@ -27,6 +27,7 @@ object SplitCoinsAnalyzer {
         val amount: Long,
         val status: Int,
         val assetId: Int,
+        val isShielded: Boolean = false,
     )
 
     /**

@@ -82,6 +82,7 @@ fun SplitCoinsSheet(
                     amount = obj.optLong("amount"),
                     status = obj.optInt("status"),
                     assetId = obj.optInt("assetId"),
+                    isShielded = obj.optBoolean("isShielded"),
                 )
             }
         } catch (_: Exception) { emptyList() }
@@ -92,7 +93,7 @@ fun SplitCoinsSheet(
     }
 
     val assetUtxos = remember(utxos, assetId) {
-        utxos.filter { it.assetId == assetId && it.status == 1 }.sortedByDescending { it.amount }
+        utxos.filter { it.assetId == assetId && it.status == 1 && !it.isShielded }.sortedByDescending { it.amount }
     }
 
     val totalAvailable = assetUtxos.sumOf { it.amount }

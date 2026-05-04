@@ -213,4 +213,5 @@
     <string name="receive_tab_regular">Thông thường</string>
     <string name="new_chat_contacts">Liên hệ</string>
     <string name="tx_cancelled">Giao dịch đã huỷ</string>
+    <string name="contact_copy_wallet_id_cd">Sao chép</string>
 </resources>

@@ -605,7 +605,7 @@ fun ChatsScreen(
                             ) {
                                 CircularProgressIndicator(Modifier.size(18.dp), color = C.accent, strokeWidth = 2.dp)
                                 Spacer(Modifier.width(10.dp))
-                                Text("Searching...", color = C.textSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.search_searching), color = C.textSecondary, fontSize = 13.sp)
                             }
                         }
                     }
@@ -654,7 +654,7 @@ fun ChatsScreen(
                                     }
                                     Surface(shape = RoundedCornerShape(20.dp), color = C.accent) {
                                         Text(
-                                            "Chat", color = C.textDark, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                            stringResource(R.string.search_button_chat), color = C.textDark, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                                         )
                                     }
@@ -733,7 +733,7 @@ fun ChatsScreen(
                                             CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                                         } else {
                                             Text(
-                                                if (needsApproval) "Request" else "Join",
+                                                if (needsApproval) stringResource(R.string.search_button_request) else stringResource(R.string.search_button_join),
                                                 fontSize = 13.sp, fontWeight = FontWeight.Bold,
                                             )
                                         }
@@ -801,7 +801,7 @@ fun ChatsScreen(
                         contentColor = C.textDark,
                         shape = CircleShape,
                     ) {
-                        Icon(Icons.Filled.Edit, contentDescription = "New Chat")
+                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.chats_fab_new_chat))
                     }
                 }
             }
@@ -846,7 +846,7 @@ fun ChatsScreen(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(target.name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text("${target.memberCount} members", color = C.textSecondary, fontSize = 12.sp)
+                        Text(stringResource(R.string.group_member_count_format, target.memberCount), color = C.textSecondary, fontSize = 12.sp)
                     }
                 }
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f))

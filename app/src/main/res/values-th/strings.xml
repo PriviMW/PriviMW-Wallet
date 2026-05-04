@@ -263,4 +263,5 @@
     <string name="receive_tab_regular">ปกติ</string>
     <string name="new_chat_contacts">รายชื่อผู้ติดต่อ</string>
     <string name="tx_cancelled">ธุรกรรมได้ถูกยกเลิก</string>
+    <string name="contact_copy_wallet_id_cd">คัดลอก</string>
 </resources>

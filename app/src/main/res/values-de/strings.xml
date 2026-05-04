@@ -378,4 +378,6 @@
     <string name="split_coin_label">Coin</string>
     <string name="new_chat_contacts">Kontakte</string>
     <string name="tx_cancelled">Transaktion abgebrochen</string>
+    <string name="contact_copy_wallet_id_cd">Kopieren</string>
+    <string name="chats_fab_new_chat">Neuer Chat</string>
 </resources>

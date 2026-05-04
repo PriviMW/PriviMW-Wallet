@@ -308,4 +308,5 @@
     <string name="receive_tab_regular">Běžné</string>
     <string name="new_chat_contacts">Kontakty</string>
     <string name="tx_cancelled">Transakce byla zrušena</string>
+    <string name="contact_copy_wallet_id_cd">Kopírovat</string>
 </resources>

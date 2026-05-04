@@ -379,4 +379,6 @@
     <string name="split_coin_label">Moeda</string>
     <string name="new_chat_contacts">Contatos</string>
     <string name="tx_cancelled">Transação cancelada</string>
+    <string name="contact_copy_wallet_id_cd">Copiar</string>
+    <string name="chats_fab_new_chat">Novo bate-papo</string>
 </resources>

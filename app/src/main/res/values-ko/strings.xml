@@ -231,4 +231,5 @@
     <string name="receive_tab_regular">일반</string>
     <string name="new_chat_contacts">연락처</string>
     <string name="tx_cancelled">거래가 취소됨</string>
+    <string name="contact_copy_wallet_id_cd">복사</string>
 </resources>

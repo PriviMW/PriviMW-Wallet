@@ -81,9 +81,16 @@ fun ContactInfoScreen(
 
     // Notification sound
     val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
-    var notifSoundName by remember {
-        mutableStateOf(prefs.getString("notif_sound_name_$convKey", "Default") ?: "Default")
+    val notifSoundNameRaw = remember {
+        mutableStateOf(prefs.getString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_default))
+            ?: context.getString(R.string.contact_notif_sound_default))
     }
+    val notifSoundName: String
+        @Composable get() = when (notifSoundNameRaw.value) {
+            "Default" -> context.getString(R.string.contact_notif_sound_default)
+            "Silent" -> context.getString(R.string.contact_notif_sound_silent)
+            else -> notifSoundNameRaw.value
+        }
     val soundPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -96,13 +103,12 @@ fun ContactInfoScreen(
             prefs.edit().putString("notif_sound_$convKey", uri.toString())
                 .putString("notif_sound_name_$convKey", name)
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            notifSoundName = name
+            notifSoundNameRaw.value = name
         } else {
-            // "Silent" was picked (null URI)
             prefs.edit().putString("notif_sound_$convKey", "silent")
                 .putString("notif_sound_name_$convKey", "Silent")
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            notifSoundName = "Silent"
+            notifSoundNameRaw.value = "Silent"
         }
     }
 
@@ -178,14 +184,14 @@ fun ContactInfoScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Default.ContentCopy, "Copy", tint = C.textSecondary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.ContentCopy, stringResource(R.string.contact_copy_wallet_id_cd), tint = C.textSecondary, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
             }
 
             // Media
-            InfoSection("Shared Media") {
+            InfoSection(stringResource(R.string.contact_section_shared_media)) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = C.card,
@@ -194,7 +200,7 @@ fun ContactInfoScreen(
                     Column {
                         InfoRow(
                             icon = Icons.Default.PhotoLibrary,
-                            label = "Photos",
+                            label = stringResource(R.string.contact_media_photos),
                             value = "$imageAttachments",
                             onClick = if (imageAttachments > 0) onMediaGallery else null,
                         )
@@ -202,7 +208,7 @@ fun ContactInfoScreen(
                             HorizontalDivider(color = C.border.copy(alpha = 0.5f))
                             InfoRow(
                                 icon = Icons.Default.InsertDriveFile,
-                                label = "Files",
+                                label = stringResource(R.string.contact_media_files),
                                 value = "${totalAttachments - imageAttachments}",
                             )
                         }
@@ -210,7 +216,7 @@ fun ContactInfoScreen(
                             HorizontalDivider(color = C.border.copy(alpha = 0.5f))
                             InfoRow(
                                 icon = Icons.Default.Link,
-                                label = "Links",
+                                label = stringResource(R.string.contact_media_links),
                                 value = "$linkCount",
                             )
                         }
@@ -229,7 +235,7 @@ fun ContactInfoScreen(
                         // Mute
                         InfoRow(
                             icon = if (isMuted) Icons.Default.NotificationsOff else Icons.Default.Notifications,
-                            label = if (isMuted) "Unmute" else "Mute",
+                            label = if (isMuted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute),
                             onClick = {
                                 if (convId > 0L) {
                                     scope.launch {
@@ -243,12 +249,12 @@ fun ContactInfoScreen(
                         // Notification sound
                         InfoRow(
                             icon = Icons.Default.MusicNote,
-                            label = "Notification sound",
+                            label = stringResource(R.string.contact_notif_sound_label),
                             value = notifSoundName,
                             onClick = {
                                 val intent = android.content.Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Notification sound")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, stringResource(R.string.contact_notif_sound_label))
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
                                     val currentUri = prefs.getString("notif_sound_$convKey", null)
@@ -264,7 +270,7 @@ fun ContactInfoScreen(
                         // Block
                         InfoRow(
                             icon = Icons.Default.Block,
-                            label = if (isBlocked) "Unblock" else "Block",
+                            label = if (isBlocked) stringResource(R.string.chat_unblock_user) else stringResource(R.string.chat_block_user),
                             labelColor = if (!isBlocked) C.error else C.text,
                             onClick = {
                                 if (convId > 0L) {
@@ -279,7 +285,7 @@ fun ContactInfoScreen(
                         // Delete chat
                         InfoRow(
                             icon = Icons.Default.Delete,
-                            label = "Delete chat",
+                            label = stringResource(R.string.contact_delete_chat_label),
                             labelColor = C.error,
                             onClick = { showDeleteConfirm = true },
                         )
@@ -296,8 +302,8 @@ fun ContactInfoScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = C.card,
-            title = { Text("Delete chat", color = C.text, fontWeight = FontWeight.SemiBold) },
-            text = { Text("Delete this entire conversation?", color = C.textSecondary) },
+            title = { Text(stringResource(R.string.contact_delete_chat_label), color = C.text, fontWeight = FontWeight.SemiBold) },
+            text = { Text(stringResource(R.string.contact_delete_chat_body), color = C.textSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     if (convId > 0L) {

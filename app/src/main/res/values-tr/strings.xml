@@ -205,4 +205,5 @@
     <string name="receive_tab_regular">Normal</string>
     <string name="new_chat_contacts">Bağlantılar</string>
     <string name="tx_cancelled">İşlem iptal edildi</string>
+    <string name="contact_copy_wallet_id_cd">Kopyala</string>
 </resources>

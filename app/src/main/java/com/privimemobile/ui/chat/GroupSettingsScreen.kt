@@ -181,13 +181,13 @@ fun GroupSettingsScreen(
                         AlertDialog(
                             onDismissRequest = { showNameDialog = false },
                             containerColor = C.card,
-                            title = { Text("Edit Group Name", color = C.text) },
+                            title = { Text(stringResource(R.string.group_edit_name_title), color = C.text) },
                             text = {
                                 Column {
                                     OutlinedTextField(
                                         value = newName,
                                         onValueChange = { if (it.length <= 32) newName = it },
-                                        placeholder = { Text("Group name", color = C.textMuted) },
+                                        placeholder = { Text(stringResource(R.string.group_name_placeholder), color = C.textMuted) },
                                         singleLine = true,
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
@@ -219,14 +219,14 @@ fun GroupSettingsScreen(
                         )
                     }
                     Text(
-                        text = "${members.size} members",
+                        text = stringResource(R.string.group_member_count_format, members.size),
                         color = C.textSecondary,
                         fontSize = 14.sp,
                     )
                     if (group?.isPublic == true) {
-                        Text("Public Group", color = C.accent, fontSize = 13.sp)
+                        Text(stringResource(R.string.group_public_label), color = C.accent, fontSize = 13.sp)
                     } else {
-                        Text("Private Group", color = C.textMuted, fontSize = 13.sp)
+                        Text(stringResource(R.string.group_private_label), color = C.textMuted, fontSize = 13.sp)
                     }
                 }
             }
@@ -250,7 +250,7 @@ fun GroupSettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.general_description), color = C.textSecondary, fontSize = 12.sp)
                         Text(
-                            desc?.ifEmpty { "No description" } ?: "No description",
+                            desc?.ifEmpty { stringResource(R.string.group_no_description) } ?: stringResource(R.string.group_no_description),
                             color = if (desc.isNullOrEmpty()) C.textMuted else C.text,
                             fontSize = 14.sp,
                         )
@@ -265,12 +265,12 @@ fun GroupSettingsScreen(
                     AlertDialog(
                         onDismissRequest = { showDescDialog = false },
                         containerColor = C.card,
-                        title = { Text("Edit Description", color = C.text) },
+                        title = { Text(stringResource(R.string.group_edit_description_title), color = C.text) },
                         text = {
                             OutlinedTextField(
                                 value = newDesc,
                                 onValueChange = { if (it.length <= 200) newDesc = it },
-                                placeholder = { Text("Group description...", color = C.textMuted) },
+                                placeholder = { Text(stringResource(R.string.group_description_placeholder), color = C.textMuted) },
                                 maxLines = 4,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
@@ -290,10 +290,10 @@ fun GroupSettingsScreen(
                                     val dedupKey = "$ts:info_update:desc:$groupId".hashCode().toString(16)
                                     ChatService.db?.messageDao()?.insert(com.privimemobile.chat.db.entities.MessageEntity(
                                         conversationId = convId, timestamp = ts,
-                                        senderHandle = myHandle, text = "You updated group description",
+                                        senderHandle = myHandle, text = context.getString(R.string.group_updated_description),
                                         type = "group_service", sent = true, sbbsDedupKey = dedupKey,
                                     ))
-                                    ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "You updated group description")
+                                    ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, context.getString(R.string.group_updated_description))
                                     // Broadcast to all members
                                     val infoPayload = mapOf(
                                         "v" to 1, "t" to "group_info_update",
@@ -333,7 +333,7 @@ fun GroupSettingsScreen(
                         TextButton(onClick = { showAddDialog = true }) {
                             Icon(Icons.Default.PersonAdd, null, tint = C.accent, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Add", color = C.accent, fontSize = 13.sp)
+                            Text(stringResource(R.string.group_add_member_button), color = C.accent, fontSize = 13.sp)
                         }
 
                         if (showAddDialog) {
@@ -347,7 +347,7 @@ fun GroupSettingsScreen(
                             AlertDialog(
                                 onDismissRequest = { showAddDialog = false; searchJob?.cancel() },
                                 containerColor = C.card,
-                                title = { Text("Add Member", color = C.text) },
+                                title = { Text(stringResource(R.string.group_add_member_title), color = C.text) },
                                 text = {
                                     Column(modifier = Modifier.heightIn(max = 350.dp)) {
                                         OutlinedTextField(
@@ -369,7 +369,7 @@ fun GroupSettingsScreen(
                                                     searching = false
                                                 }
                                             },
-                                            placeholder = { Text("Search handle...", color = C.textMuted) },
+                                            placeholder = { Text(stringResource(R.string.group_search_handle_placeholder), color = C.textMuted) },
                                             singleLine = true,
                                             enabled = !addLoading,
                                             modifier = Modifier.fillMaxWidth(),
@@ -380,9 +380,9 @@ fun GroupSettingsScreen(
                                         )
                                         Spacer(Modifier.height(8.dp))
                                         if (searching) {
-                                            Text("Searching...", color = C.textMuted, fontSize = 13.sp)
+                                            Text(stringResource(R.string.search_searching), color = C.textMuted, fontSize = 13.sp)
                                         } else if (addQuery.removePrefix("@").trim().isNotEmpty() && searchResults.isEmpty()) {
-                                            Text("No handles found", color = C.textSecondary, fontSize = 13.sp)
+                                            Text(stringResource(R.string.group_search_no_results), color = C.textSecondary, fontSize = 13.sp)
                                         }
                                         // Results list
                                         searchResults.forEach { contact ->
@@ -506,7 +506,7 @@ fun GroupSettingsScreen(
             if (isAdmin) {
                 item {
                     Text(
-                        "Admin Settings",
+                        stringResource(R.string.group_admin_settings),
                         color = C.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
@@ -539,9 +539,9 @@ fun GroupSettingsScreen(
                             text = {
                                 Column {
                                     if (admins.isEmpty()) {
-                                        Text("Promote an admin first before transferring ownership.", color = C.textSecondary, fontSize = 14.sp)
+                                        Text(stringResource(R.string.group_transfer_need_admin), color = C.textSecondary, fontSize = 14.sp)
                                     } else {
-                                        Text("Choose a new owner:", color = C.textSecondary, fontSize = 13.sp)
+                                        Text(stringResource(R.string.group_transfer_choose_owner), color = C.textSecondary, fontSize = 13.sp)
                                         Spacer(Modifier.height(8.dp))
                                         admins.forEach { admin ->
                                             Row(
@@ -677,7 +677,7 @@ private fun MemberRow(
                 )
                 if (isMe) {
                     Spacer(Modifier.width(6.dp))
-                    Text("you", color = C.textMuted, fontSize = 12.sp)
+                    Text(stringResource(R.string.group_self_label), color = C.textMuted, fontSize = 12.sp)
                 }
             }
             if (!member.displayName.isNullOrEmpty()) {
@@ -691,9 +691,9 @@ private fun MemberRow(
 
         // Role badge
         val roleText = when (member.role) {
-            2 -> "Creator"
+            2 -> stringResource(R.string.group_role_creator)
             1 -> stringResource(R.string.group_member_role_admin)
-            3 -> "Banned"
+            3 -> stringResource(R.string.group_role_banned)
             else -> null
         }
         if (roleText != null) {
@@ -720,7 +720,7 @@ private fun MemberRow(
             onDismissRequest = { showMenu = false },
         ) {
             if (actionPending) {
-                DropdownMenuItem(text = { Text("Action submitted...", color = C.textMuted) }, onClick = { showMenu = false })
+                DropdownMenuItem(text = { Text(stringResource(R.string.group_action_pending), color = C.textMuted) }, onClick = { showMenu = false })
             } else {
             if (callerIsCreator) {
                 if (member.role == 0) {
@@ -740,16 +740,16 @@ private fun MemberRow(
                 if (member.role == 3) {
                     // Banned member — show unban
                     DropdownMenuItem(
-                        text = { Text("Unban", color = Color(0xFF66BB6A)) },
+                        text = { Text(stringResource(R.string.group_action_unban), color = Color(0xFF66BB6A)) },
                         onClick = { showMenu = false; actionPending = true; onUnban() },
                     )
                 } else if (member.role < 2) {
                     DropdownMenuItem(
-                        text = { Text("Remove") },
+                        text = { Text(stringResource(R.string.group_action_remove)) },
                         onClick = { showMenu = false; actionPending = true; onRemove() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Ban", color = Color(0xFFEF5350)) },
+                        text = { Text(stringResource(R.string.group_action_ban), color = Color(0xFFEF5350)) },
                         onClick = { showMenu = false; actionPending = true; onBan() },
                     )
                 }

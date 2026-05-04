@@ -372,4 +372,6 @@
     <string name="split_coin_label">コイン</string>
     <string name="new_chat_contacts">コンタクト</string>
     <string name="tx_cancelled">トランザクションはキャンセルされました</string>
+    <string name="contact_copy_wallet_id_cd">コピー</string>
+    <string name="chats_fab_new_chat">新しいチャット</string>
 </resources>

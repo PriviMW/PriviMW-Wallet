@@ -379,4 +379,6 @@
     <string name="split_coin_label">Манета</string>
     <string name="new_chat_contacts">Кантакты</string>
     <string name="tx_cancelled">Транзакцыя адменена</string>
+    <string name="contact_copy_wallet_id_cd">Капіяваць</string>
+    <string name="chats_fab_new_chat">Новая размова</string>
 </resources>

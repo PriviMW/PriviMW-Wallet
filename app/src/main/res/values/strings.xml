@@ -1472,4 +1472,53 @@
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <string name="tip_cancelled">Tip cancelled</string>
     <string name="tip_failed">Tip failed: %1$s</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CONTACT INFO  —  PriviMW-specific                                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="contact_notif_sound_default">Default</string>
+    <string name="contact_notif_sound_silent">Silent</string>
+    <string name="contact_copy_wallet_id_cd">Copy</string>
+    <string name="contact_section_shared_media">Shared Media</string>
+    <string name="contact_media_photos">Photos</string>
+    <string name="contact_media_files">Files</string>
+    <string name="contact_media_links">Links</string>
+    <string name="contact_notif_sound_label">Notification sound</string>
+    <string name="contact_delete_chat_label">Delete chat</string>
+    <string name="contact_delete_chat_body">Delete this entire conversation?</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  GROUP SETTINGS  —  PriviMW-specific                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="group_edit_name_title">Edit Group Name</string>
+    <string name="group_member_count_format">%1$d members</string>
+    <string name="group_public_label">Public Group</string>
+    <string name="group_private_label">Private Group</string>
+    <string name="group_no_description">No description</string>
+    <string name="group_edit_description_title">Edit Description</string>
+    <string name="group_description_placeholder">Group description...</string>
+    <string name="group_updated_description">You updated group description</string>
+    <string name="group_add_member_button">Add</string>
+    <string name="group_add_member_title">Add Member</string>
+    <string name="group_search_handle_placeholder">Search handle...</string>
+    <string name="group_search_no_results">No handles found</string>
+    <string name="group_admin_settings">Admin Settings</string>
+    <string name="group_transfer_need_admin">Promote an admin first before transferring ownership.</string>
+    <string name="group_transfer_choose_owner">Choose a new owner:</string>
+    <string name="group_self_label">you</string>
+    <string name="group_role_creator">Creator</string>
+    <string name="group_role_banned">Banned</string>
+    <string name="group_action_pending">Action submitted...</string>
+    <string name="group_action_unban">Unban</string>
+    <string name="group_action_remove">Remove</string>
+    <string name="group_action_ban">Ban</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  SEARCH  —  PriviMW-specific                                       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="search_button_chat">Chat</string>
+    <string name="search_button_request">Request</string>
+    <string name="search_button_join">Join</string>
+    <string name="search_searching">Searching...</string>
+    <string name="chats_fab_new_chat">New Chat</string>
 </resources>

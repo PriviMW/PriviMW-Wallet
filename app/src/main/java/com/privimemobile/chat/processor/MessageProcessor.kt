@@ -446,6 +446,18 @@ class MessageProcessor(
                     val senderDisplayName = senderContact?.displayName?.takeIf { it.isNotBlank() } ?: "@$from"
                     val isMuted = db.conversationDao().isMuted(conv.id) ?: false
                     val totalUnread = db.conversationDao().getTotalUnread()
+                    // Build preview of the reacted message for the notification
+                    val maxPreviewLen = 50
+                    val reactedPreview = when (myMsg.type) {
+                        "file" -> myMsg.text?.substringAfterLast(": ")?.takeIf { it.isNotEmpty() } ?: "📎 File"
+                        "voice" -> "🎤 Voice message"
+                        "sticker" -> "🎟️ Sticker"
+                        "poll" -> "📊 Poll"
+                        "tip" -> "💰 Tip"
+                        else -> myMsg.text?.trim()
+                    }?.let { txt ->
+                        if (txt.length > maxPreviewLen) txt.take(maxPreviewLen) + "…" else txt
+                    }
                     // For groups: use group entity name (conv.handle = full groupId for group convs)
                     val senderName = if (convKey.startsWith("g_")) {
                         val group = db.groupDao().findByGroupId(conv.handle ?: "")
@@ -465,6 +477,7 @@ class MessageProcessor(
                         totalUnread = totalUnread,
                         senderHandle = from,
                         reactionEmoji = emoji,
+                        reactedMessageText = reactedPreview,
                     )
                 }
             }

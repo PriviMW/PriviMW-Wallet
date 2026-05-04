@@ -65,7 +65,9 @@ object ChatNotificationManager {
      *
      * @param reactionEmoji When set, this call represents a reaction notification that is merged into
      *                      the conversation's message notification. The senderName is the reactor's
-     *                      display name, text is "Reacted to your message: $reactionEmoji".
+     *                      display name, text is "Reacted $reactionEmoji to \"$reactedMessageText\"".
+     * @param reactedMessageText When reactionEmoji is set, the text of the message that was reacted to
+     *                           (truncated preview). Shown quoted in the notification line.
      */
     fun notifyMessage(
         convKey: String,
@@ -77,6 +79,7 @@ object ChatNotificationManager {
         totalUnread: Int,
         senderHandle: String? = null,
         reactionEmoji: String? = null,
+        reactedMessageText: String? = null,
     ) {
         if (!initialized) return
 
@@ -106,19 +109,24 @@ object ChatNotificationManager {
             // then append a new reaction entry so the notification shows both the prior message
             // and the reaction. This keeps the DM title as the contact's name, not the reactor's.
             val lastEntry = if (history.isNotEmpty()) history.removeAt(history.size - 1) else null
+            val reactionText = if (reactedMessageText != null) {
+                "Reacted $reactionEmoji to \"$reactedMessageText\""
+            } else {
+                "Reacted to your message: $reactionEmoji"
+            }
             if (lastEntry != null) {
                 // Re-add the original message first
                 history.add(lastEntry)
                 // Then add the reaction as a new entry using the original sender's name for the title
                 history.add(NotifMessage(
                     senderName = lastEntry.senderName,
-                    text = "Reacted to your message: $reactionEmoji",
+                    text = reactionText,
                     timestamp = System.currentTimeMillis(),
                     senderHandle = lastEntry.senderHandle,
                 ))
             } else {
                 // No prior messages — add a reaction entry directly
-                history.add(NotifMessage(senderName, "Reacted to your message: $reactionEmoji",
+                history.add(NotifMessage(senderName, reactionText,
                     System.currentTimeMillis(), senderHandle))
             }
         } else {

@@ -306,7 +306,11 @@ fun ChatScreen(
     val resolvedName = if (isGroupMode) {
         group?.name ?: "Group"
     } else {
-        displayName.ifEmpty { conv?.displayName?.ifEmpty { null } ?: "@$handle" }
+        displayName.ifEmpty {
+            contact?.displayName?.ifEmpty { null }
+                ?: conv?.displayName?.ifEmpty { null }
+                ?: "@$handle"
+        }
     }
     val resolvedWalletId = contact?.walletId
     val isDeletedAccount = contact?.isDeleted == true
@@ -830,7 +834,7 @@ fun ChatScreen(
             val sdf = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
             val timeStr = sdf.format(java.util.Date(scheduledAt * 1000))
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Message scheduled for $timeStr", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.toast_message_scheduled, timeStr), Toast.LENGTH_LONG).show()
             }
         }
         setInputText("")
@@ -843,7 +847,7 @@ fun ChatScreen(
         val durationMs = voicePreviewDuration
 
         if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
-            Toast.makeText(context, "Cannot send — address not resolved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_cannot_send_no_address, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -864,7 +868,7 @@ fun ChatScreen(
             val sizeKB = inlineData.length / 1024
             val limitKB = com.privimemobile.protocol.Config.MAX_INLINE_SIZE / 1024
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Voice message too large (${sizeKB}KB). Max is ${limitKB}KB.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.toast_voice_too_large, sizeKB, limitKB), Toast.LENGTH_LONG).show()
             }
             file.delete()
             voicePreviewFile = null
@@ -954,7 +958,7 @@ fun ChatScreen(
     // Send voice message (direct from RecordingResult - Telegram-style release to send)
     suspend fun sendVoiceMessage(result: com.privimemobile.chat.voice.VoiceRecorder.RecordingResult) {
         if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
-            Toast.makeText(context, "Cannot send — address not resolved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_cannot_send_no_address, Toast.LENGTH_SHORT).show()
             result.file.delete()
             return
         }
@@ -979,7 +983,7 @@ fun ChatScreen(
             val sizeKB = inlineData.length / 1024
             val limitKB = com.privimemobile.protocol.Config.MAX_INLINE_SIZE / 1024
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Voice message too large (${sizeKB}KB). Max is ${limitKB}KB.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.toast_voice_too_large, sizeKB, limitKB), Toast.LENGTH_LONG).show()
             }
             result.file.delete()
             return
@@ -1092,7 +1096,7 @@ fun ChatScreen(
     fun handleSend() {
         val now = System.currentTimeMillis()
         if (now - lastSendTime < 3000) {
-            android.widget.Toast.makeText(context, "Slow down! Wait 3s between messages", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, R.string.toast_slow_down, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         lastSendTime = now
@@ -1169,7 +1173,7 @@ fun ChatScreen(
                     tipTargetHandle = replyingTo!!.from
                     tipTokens = tokens // all tokens are amount/asset/msg
                 } else {
-                    Toast.makeText(context, "Reply to a message or use: /tip @handle <amount>", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, R.string.toast_reply_or_tip_hint, Toast.LENGTH_LONG).show()
                     setInputText(""); return
                 }
             } else {
@@ -1179,8 +1183,8 @@ fun ChatScreen(
 
             val amountBeam = tipTokens.getOrNull(0)?.replace(',', '.')?.toDoubleOrNull()
             if (amountBeam == null || amountBeam <= 0) {
-                val usage = if (isGroupMode) "Usage: /tip @handle <amount> [asset_id] [message]"
-                    else "Usage: /tip <amount> [asset_id] [message]"
+                val usage = if (isGroupMode) context.getString(R.string.toast_tip_usage_group)
+                    else context.getString(R.string.toast_tip_usage_dm)
                 Toast.makeText(context, usage, Toast.LENGTH_SHORT).show()
                 return
             }
@@ -1197,7 +1201,7 @@ fun ChatScreen(
 
                 if (tipWalletId.isNullOrEmpty()) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Cannot resolve @$tipTargetHandle address", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.toast_cannot_resolve, tipTargetHandle), Toast.LENGTH_SHORT).show()
                     }
                     return@launch
                 }
@@ -1220,7 +1224,7 @@ fun ChatScreen(
                 val spendable = (bal?.available ?: 0L) + (bal?.shielded ?: 0L)
                 if (spendable < amountGroth) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Insufficient $assetName balance (have ${Helpers.formatBeam(spendable)}, need ${Helpers.formatBeam(amountGroth)})", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.toast_insufficient_balance, assetName, Helpers.formatBeam(spendable), Helpers.formatBeam(amountGroth)), Toast.LENGTH_LONG).show()
                     }
                     return@launch
                 }
@@ -1228,7 +1232,7 @@ fun ChatScreen(
                     val beamBal = com.privimemobile.wallet.WalletEventBus.assetBalances[0]
                     val beamSpendable = (beamBal?.available ?: 0L) + (beamBal?.shielded ?: 0L)
                     if (beamSpendable <= 0) {
-                        withContext(Dispatchers.Main) { Toast.makeText(context, "Insufficient BEAM for transaction fee", Toast.LENGTH_LONG).show() }
+                        withContext(Dispatchers.Main) { Toast.makeText(context, R.string.toast_insufficient_beam_fee, Toast.LENGTH_LONG).show() }
                         return@launch
                     }
                 }
@@ -1292,7 +1296,7 @@ fun ChatScreen(
                         }
                     }
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Tip sent! $tipLabel", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.chat_tip_sent, tipLabel), Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1360,7 +1364,7 @@ fun ChatScreen(
                     }
                 }
             } else {
-                Toast.makeText(context, "Usage: /poll Question | Option 1 | Option 2", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, R.string.toast_poll_usage, Toast.LENGTH_LONG).show()
             }
             setInputText("")
             return
@@ -1796,7 +1800,7 @@ fun ChatScreen(
                     if (peerTyping) {
                         // Bouncing dots animation (Telegram-style)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("typing", color = C.accent, fontSize = 12.sp)
+                            Text(stringResource(R.string.chat_typing), color = C.accent, fontSize = 12.sp)
                             val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
                             repeat(3) { i ->
                                 val offsetY by infiniteTransition.animateFloat(
@@ -1999,7 +2003,7 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        placeholder = { Text("Search in chat...", color = C.textMuted, fontSize = 14.sp) },
+                        placeholder = { Text(stringResource(R.string.chat_search_in_chat), color = C.textMuted, fontSize = 14.sp) },
                         singleLine = true,
                         trailingIcon = if (searchQuery.isNotEmpty()) { {
                             IconButton(onClick = {
@@ -2066,7 +2070,7 @@ fun ChatScreen(
                                     )
                                 }
                                 if (result.sent) {
-                                    Text("You", color = C.textSecondary, fontSize = 11.sp)
+                                    Text(stringResource(R.string.chat_you_label), color = C.textSecondary, fontSize = 11.sp)
                                 }
                             }
                             HorizontalDivider(color = C.border, thickness = 0.5.dp)
@@ -2192,7 +2196,7 @@ fun ChatScreen(
                     onDismissRequest = { showPinListDialog = false },
                     containerColor = C.card,
                     title = {
-                        Text("Pinned Messages (${pinnedByOrder.size})", color = C.text, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.chat_pinned_messages, pinnedByOrder.size), color = C.text, fontWeight = FontWeight.SemiBold)
                     },
                     text = {
                         Column(modifier = Modifier.heightIn(max = 400.dp)) {
@@ -2264,13 +2268,13 @@ fun ChatScreen(
                                 }
                                 showPinListDialog = false
                             }) {
-                                Text("Unpin All", color = C.error, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.chat_unpin_all), color = C.error, fontWeight = FontWeight.Bold)
                             }
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showPinListDialog = false }) {
-                            Text("Close", color = C.textSecondary)
+                            Text(stringResource(R.string.general_close), color = C.textSecondary)
                         }
                     },
                 )
@@ -2616,7 +2620,7 @@ fun ChatScreen(
                         onPollVote = { optIdx ->
                             val now = System.currentTimeMillis()
                             if (now - lastSendTime < 3000) {
-                                Toast.makeText(context, "Wait a moment...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.toast_wait_moment, Toast.LENGTH_SHORT).show()
                                 return@MessageBubble
                             }
                             lastSendTime = now
@@ -3094,7 +3098,7 @@ fun ChatScreen(
                             // Recent emojis
                             if (recentEmojis.isNotEmpty()) {
                                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(9) }) {
-                                    Text("Recent", color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp))
+                                    Text(stringResource(R.string.chat_recent), color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp))
                                 }
                                 items(recentEmojis.size) { idx ->
                                     Text(
@@ -3157,7 +3161,7 @@ fun ChatScreen(
                                     } catch (_: Exception) {}
                                 }
                                 packs = loadPacks()
-                                Toast.makeText(context, "${uris.size} sticker(s) added", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.toast_stickers_added, uris.size), Toast.LENGTH_SHORT).show()
                             }
                         }
 
@@ -3203,9 +3207,9 @@ fun ChatScreen(
                                 } catch (_: Exception) {}
                                 packs = loadPacks()
                                 if (count > 0) {
-                                    Toast.makeText(context, "$count sticker(s) imported from ZIP", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_stickers_imported, count), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "No images found in ZIP", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, R.string.toast_no_images_in_zip, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -3257,8 +3261,8 @@ fun ChatScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("\uD83C\uDFAD", fontSize = 48.sp)
                                         Spacer(Modifier.height(8.dp))
-                                        Text("No sticker packs", color = C.textSecondary, fontSize = 14.sp)
-                                        Text("Tap + to create a pack", color = C.textMuted, fontSize = 12.sp)
+                                        Text(stringResource(R.string.chat_no_sticker_packs), color = C.textSecondary, fontSize = 14.sp)
+                                        Text(stringResource(R.string.chat_tap_create_pack), color = C.textMuted, fontSize = 12.sp)
                                     }
                                 }
                             } else {
@@ -3273,24 +3277,24 @@ fun ChatScreen(
                                         Text(" (${currentPack.second.size})", color = C.textMuted, fontSize = 12.sp)
                                         Spacer(Modifier.weight(1f))
                                         TextButton(onClick = { zipImportLauncher.launch("application/zip") }) {
-                                            Text("ZIP", color = C.accent, fontSize = 12.sp)
+                                            Text(stringResource(R.string.chat_zip_label), color = C.accent, fontSize = 12.sp)
                                         }
                                         TextButton(onClick = { addToPackLauncher.launch("image/*") }) {
-                                            Text("+ Add", color = C.accent, fontSize = 12.sp)
+                                            Text(stringResource(R.string.chat_add_sticker), color = C.accent, fontSize = 12.sp)
                                         }
                                         TextButton(onClick = {
                                             // Share entire pack as ZIP
                                             val packFiles = currentPack?.second ?: emptyList()
                                             if (packFiles.isEmpty()) {
-                                                Toast.makeText(context, "Pack is empty", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, R.string.toast_pack_empty, Toast.LENGTH_SHORT).show()
                                             } else if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
-                                                Toast.makeText(context, "Resolving address...", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, R.string.toast_resolving_address, Toast.LENGTH_SHORT).show()
                                             } else {
                                                 val pName = currentPack!!.first
                                                 val pId = pName.hashCode().toString(16)
                                                 val pTotal = packFiles.size
                                                 showEmojiPicker = false
-                                                Toast.makeText(context, "Packaging $pTotal stickers...", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.toast_packaging_stickers, pTotal), Toast.LENGTH_SHORT).show()
                                                 com.privimemobile.chat.ChatService.scope.launch {
                                                     try {
                                                         // Build ZIP of all stickers (try 512px first, then 256px if too large)
@@ -3327,7 +3331,7 @@ fun ChatScreen(
 
                                                         if (zipFile.length() > 700_000) {
                                                             withContext(Dispatchers.Main) {
-                                                                Toast.makeText(context, "Pack too large to share (${zipFile.length() / 1024}KB)", Toast.LENGTH_LONG).show()
+                                                                Toast.makeText(context, context.getString(R.string.toast_pack_too_large, zipFile.length() / 1024), Toast.LENGTH_LONG).show()
                                                             }
                                                             zipFile.delete()
                                                             return@launch
@@ -3385,36 +3389,36 @@ fun ChatScreen(
                                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
                                                             }
                                                             withContext(Dispatchers.Main) {
-                                                                Toast.makeText(context, "Pack shared! ($pTotal stickers, ${zipFile.length() / 1024}KB)", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.toast_pack_shared, pTotal, zipFile.length() / 1024), Toast.LENGTH_SHORT).show()
                                                             }
                                                         }
                                                         zipFile.delete()
                                                     } catch (e: Exception) {
                                                         Log.e("ChatScreen", "Share pack error: ${e.message}")
                                                         withContext(Dispatchers.Main) {
-                                                            Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                                            Toast.makeText(context, context.getString(R.string.toast_share_failed, e.message), Toast.LENGTH_LONG).show()
                                                         }
                                                     }
                                                 }
                                             }
                                         }) {
-                                            Text("Share", color = C.accent, fontSize = 12.sp)
+                                            Text(stringResource(R.string.chat_label_share), color = C.accent, fontSize = 12.sp)
                                         }
                                         TextButton(onClick = {
                                             val dir = java.io.File(stickersRoot, currentPack.first)
                                             dir.deleteRecursively()
                                             packs = loadPacks()
                                             activePackIdx = 0
-                                            Toast.makeText(context, "Pack deleted", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, R.string.toast_pack_deleted, Toast.LENGTH_SHORT).show()
                                         }) {
-                                            Text("Delete", color = C.error, fontSize = 12.sp)
+                                            Text(stringResource(R.string.chat_label_delete), color = C.error, fontSize = 12.sp)
                                         }
                                     }
 
                                     // Sticker grid
                                     if (currentPack.second.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("Empty pack — tap + Add", color = C.textMuted, fontSize = 13.sp)
+                                            Text(stringResource(R.string.chat_empty_pack_hint), color = C.textMuted, fontSize = 13.sp)
                                         }
                                     } else {
                                         LazyVerticalGrid(
@@ -3445,7 +3449,7 @@ fun ChatScreen(
                                                             onLongPress = {
                                                                 file.delete()
                                                                 packs = loadPacks()
-                                                                Toast.makeText(context, "Sticker removed", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, R.string.toast_sticker_removed, Toast.LENGTH_SHORT).show()
                                                             },
                                                         )
                                                     }
@@ -3493,12 +3497,12 @@ fun ChatScreen(
                             AlertDialog(
                                 onDismissRequest = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() },
                                 containerColor = C.card,
-                                title = { Text("New Sticker Pack", color = C.text) },
+                                title = { Text(stringResource(R.string.chat_new_sticker_pack), color = C.text) },
                                 text = {
                                     OutlinedTextField(
                                         value = newPackName,
                                         onValueChange = { newPackName = it.take(20) },
-                                        placeholder = { Text("Pack name", color = C.textMuted) },
+                                        placeholder = { Text(stringResource(R.string.chat_pack_name), color = C.textMuted) },
                                         singleLine = true,
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedTextColor = C.text, unfocusedTextColor = C.text,
@@ -3516,11 +3520,11 @@ fun ChatScreen(
                                             showCreateStickerPack = false; newPackName = ""
                                             focusManager.clearFocus(); keyboardController?.hide()
                                         }
-                                    }) { Text("Create", color = C.accent) }
+                                    }) { Text(stringResource(R.string.chat_create), color = C.accent) }
                                 },
                                 dismissButton = {
                                     TextButton(onClick = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() }) {
-                                        Text("Cancel", color = C.textSecondary)
+                                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                     }
                                 },
                             )
@@ -3724,7 +3728,7 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    Text("Commands", color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+                    Text(stringResource(R.string.chat_commands), color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                     listOf(
                         Triple("/tip",
                             if (isGroupMode) "<amount> [asset_id] [msg] (reply to tip)" else "<amount> [asset_id] [message]",
@@ -4212,8 +4216,8 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { showClearConfirm = false },
                 containerColor = C.card,
-                title = { Text("Clear history", color = C.text, fontWeight = FontWeight.SemiBold) },
-                text = { Text("Delete all messages in this chat? This cannot be undone.", color = C.textSecondary) },
+                title = { Text(stringResource(R.string.chat_clear_history), color = C.text, fontWeight = FontWeight.SemiBold) },
+                text = { Text(stringResource(R.string.chat_clear_history_body), color = C.textSecondary) },
                 confirmButton = {
                     TextButton(onClick = {
                         if (convId > 0L) {
@@ -4224,12 +4228,12 @@ fun ChatScreen(
                         }
                         showClearConfirm = false
                     }) {
-                        Text("Clear", color = C.error, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat_clear), color = C.error, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearConfirm = false }) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
             )
@@ -4282,12 +4286,12 @@ fun ChatScreen(
                             onBack()
                         }
                     }) {
-                        Text("Delete", color = C.error, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.general_delete), color = C.error, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
             )
@@ -4304,7 +4308,7 @@ fun ChatScreen(
                     pendingDeleteIds = emptyList()
                 },
                 containerColor = C.card,
-                title = { Text("Delete $count message${if (count > 1) "s" else ""}?", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text(context.getString(R.string.chat_delete_messages_title, count, if (count > 1) "s" else ""), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
                         // Delete for me
@@ -4326,7 +4330,7 @@ fun ChatScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Delete for me", color = C.text, fontSize = 15.sp, modifier = Modifier.fillMaxWidth())
+                            Text(stringResource(R.string.chat_delete_for_me), color = C.text, fontSize = 15.sp, modifier = Modifier.fillMaxWidth())
                         }
                         // Delete for everyone (only if we have own messages selected)
                         if (hasOwnMessages) {
@@ -4370,7 +4374,7 @@ fun ChatScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Delete for everyone", color = C.error, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
+                                Text(stringResource(R.string.chat_delete_for_everyone), color = C.error, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
@@ -4381,7 +4385,7 @@ fun ChatScreen(
                         showDeleteConfirmDialog = false
                         pendingDeleteIds = emptyList()
                     }) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
             )
@@ -4401,7 +4405,7 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { showWallpaperPicker = false },
                 containerColor = C.card,
-                title = { Text("Chat Wallpaper", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.chat_wallpaper), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
                         // Custom image option
@@ -4420,7 +4424,7 @@ fun ChatScreen(
                                 contentAlignment = Alignment.Center,
                             ) { Text("\uD83D\uDDBC", fontSize = 16.sp) }
                             Spacer(Modifier.width(12.dp))
-                            Text("Custom Image", color = C.text, fontSize = 15.sp)
+                            Text(stringResource(R.string.chat_custom_image), color = C.text, fontSize = 15.sp)
                             if (chatWallpaper.startsWith("custom:")) {
                                 Spacer(Modifier.weight(1f))
                                 Text("\u2713", color = C.accent, fontSize = 16.sp)
@@ -4487,10 +4491,10 @@ fun ChatScreen(
                 AlertDialog(
                     onDismissRequest = { showSchedulePicker = false },
                     containerColor = C.card,
-                    title = { Text("Schedule Message", color = C.text, fontWeight = FontWeight.SemiBold) },
+                    title = { Text(stringResource(R.string.chat_schedule_message), color = C.text, fontWeight = FontWeight.SemiBold) },
                     text = {
                         Column {
-                            Text("Long-press send to schedule", color = C.textSecondary, fontSize = 12.sp,
+                            Text(stringResource(R.string.chat_longpress_schedule_hint), color = C.textSecondary, fontSize = 12.sp,
                                 modifier = Modifier.padding(bottom = 8.dp))
                             scheduleOptions.forEach { (key, label) ->
                                 Row(
@@ -4544,11 +4548,11 @@ fun ChatScreen(
                             TextButton(onClick = {
                                 val millis = dateState.selectedDateMillis
                                 if (millis != null) selectedDateMillis = millis
-                            }) { Text("Next", color = C.accent) }
+                            }) { Text(stringResource(R.string.general_next), color = C.accent) }
                         },
                         dismissButton = {
                             TextButton(onClick = { showCustomDateTime = false; showSchedulePicker = false }) {
-                                Text("Cancel", color = C.textSecondary)
+                                Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                             }
                         },
                     ) {
@@ -4565,7 +4569,7 @@ fun ChatScreen(
                     AlertDialog(
                         onDismissRequest = { showCustomDateTime = false; showSchedulePicker = false },
                         containerColor = C.card,
-                        title = { Text("Pick time", color = C.text, fontWeight = FontWeight.SemiBold) },
+                        title = { Text(stringResource(R.string.chat_pick_time), color = C.text, fontWeight = FontWeight.SemiBold) },
                         text = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 TimePicker(state = timeState)
@@ -4583,11 +4587,11 @@ fun ChatScreen(
                                 if (scheduledAt > now) {
                                     scheduleMessage(inputText.text, scheduledAt)
                                 } else {
-                                    Toast.makeText(context, "Time must be in the future", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, R.string.toast_time_future, Toast.LENGTH_SHORT).show()
                                 }
                                 showCustomDateTime = false
                                 showSchedulePicker = false
-                            }) { Text("Schedule", color = C.accent) }
+                            }) { Text(stringResource(R.string.chat_schedule), color = C.accent) }
                         },
                         dismissButton = {
                             TextButton(onClick = { selectedDateMillis = null }) {
@@ -4617,15 +4621,15 @@ fun ChatScreen(
                     Column {
                         Text(packName, color = C.text, fontWeight = FontWeight.SemiBold)
                         if (localFiles.isNotEmpty()) {
-                            Text("${localFiles.size} stickers", color = C.accent, fontSize = 12.sp)
+                            Text(stringResource(R.string.chat_stickers_count, localFiles.size), color = C.accent, fontSize = 12.sp)
                         } else {
-                            Text("Pack not saved yet. Ask sender to share it.", color = C.textSecondary, fontSize = 12.sp)
+                            Text(stringResource(R.string.chat_pack_not_saved), color = C.textSecondary, fontSize = 12.sp)
                         }
                     }
                 },
                 text = {
                     if (localFiles.isEmpty()) {
-                        Text("You don't have this pack. The sender can share it using the Share button in their sticker picker.", color = C.textMuted, fontSize = 13.sp)
+                        Text(stringResource(R.string.chat_dont_have_pack), color = C.textMuted, fontSize = 13.sp)
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(4),
@@ -4668,7 +4672,7 @@ fun ChatScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { viewPackId = null }) { Text("OK", color = C.accent) }
+                    TextButton(onClick = { viewPackId = null }) { Text(stringResource(R.string.general_ok), color = C.accent) }
                 },
                 dismissButton = {},
             )
@@ -4696,12 +4700,12 @@ fun ChatScreen(
                         }
                         showDatePicker = false
                     }) {
-                        Text("Jump", color = C.accent)
+                        Text(stringResource(R.string.chat_jump), color = C.accent)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDatePicker = false }) {
-                        Text("Cancel", color = C.textSecondary)
+                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
                 colors = DatePickerDefaults.colors(containerColor = C.card),
@@ -4723,7 +4727,7 @@ fun ChatScreen(
                 onDismissRequest = { showOneShotTimerPicker = false },
                 containerColor = C.card,
                 shape = RoundedCornerShape(16.dp),
-                title = { Text("Self-destruct timer", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.chat_self_destruct_timer), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
                         Text(
@@ -4910,7 +4914,7 @@ fun ChatScreen(
                             MenuItemRow("Copy") {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("message", targetMsg.text))
-                                Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.general_copied, Toast.LENGTH_SHORT).show()
                                 contextMenuMsg = null
                             }
                         }
@@ -4934,11 +4938,11 @@ fun ChatScreen(
                                         AlertDialog(
                                             onDismissRequest = { showSaveToPackPicker = false },
                                             containerColor = C.card,
-                                            title = { Text("Save to pack", color = C.text) },
+                                            title = { Text(stringResource(R.string.chat_save_to_pack), color = C.text) },
                                             text = {
                                                 Column {
                                                     if (packDirs.isEmpty()) {
-                                                        Text("No packs yet. Create one in the sticker tab first.", color = C.textSecondary, fontSize = 13.sp)
+                                                        Text(stringResource(R.string.chat_no_packs_yet), color = C.textSecondary, fontSize = 13.sp)
                                                     }
                                                     packDirs.forEach { dir ->
                                                         val count = dir.listFiles()?.size ?: 0
@@ -4956,7 +4960,7 @@ fun ChatScreen(
                                                                             val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
                                                                             val dest = java.io.File(dir, "sticker_${System.currentTimeMillis()}.webp")
                                                                             dest.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, 80, it) }
-                                                                            Toast.makeText(context, "Saved to ${dir.name}", Toast.LENGTH_SHORT).show()
+                                                                            Toast.makeText(context, context.getString(R.string.toast_saved_to_dir, dir.name), Toast.LENGTH_SHORT).show()
                                                                         }
                                                                     } catch (_: Exception) {}
                                                                     showSaveToPackPicker = false
@@ -4977,7 +4981,7 @@ fun ChatScreen(
                                             confirmButton = {},
                                             dismissButton = {
                                                 TextButton(onClick = { showSaveToPackPicker = false }) {
-                                                    Text("Cancel", color = C.textSecondary)
+                                                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                                 }
                                             },
                                         )
@@ -5088,7 +5092,7 @@ fun ChatScreen(
                                             }
                                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
                                             withContext(Dispatchers.Main) {
-                                                Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, R.string.toast_message_resent, Toast.LENGTH_SHORT).show()
                                             }
                                         } else {
                                             // DM: rebuild payload based on original type
@@ -5138,7 +5142,7 @@ fun ChatScreen(
                                                 }
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(wid, payload)
                                                 withContext(Dispatchers.Main) {
-                                                    Toast.makeText(context, "Message resent", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, R.string.toast_message_resent, Toast.LENGTH_SHORT).show()
                                                 }
                                             }
                                         }
@@ -5162,11 +5166,11 @@ fun ChatScreen(
                                     refreshConversationPreview(cid)
                                 }
                                 contextMenuMsg = null
-                                Toast.makeText(context, "Scheduled message cancelled", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.toast_scheduled_cancelled, Toast.LENGTH_SHORT).show()
                             }
                         }
 
-                        MenuItemRow("Delete for me", color = C.error) {
+                        MenuItemRow(stringResource(R.string.chat_delete_for_me), color = C.error) {
                             val cid = convId
                             scope.launch {
                                 com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
@@ -5176,7 +5180,7 @@ fun ChatScreen(
                         }
 
                         if (targetMsg.sent) {
-                            MenuItemRow("Delete for everyone", color = C.error) {
+                            MenuItemRow(stringResource(R.string.chat_delete_for_everyone), color = C.error) {
                                 scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
@@ -5305,7 +5309,7 @@ fun ChatScreen(
 
                     if (filteredReactors.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                            Text("No reactions yet", color = C.textSecondary, fontSize = 14.sp)
+                            Text(stringResource(R.string.chat_no_reactions), color = C.textSecondary, fontSize = 14.sp)
                         }
                     } else {
                         // Per-reactor date formatting (reactor.timestamp = when they reacted)
@@ -5388,7 +5392,7 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { forwardingMsg = null; forwardingMsgs = emptyList() },
                 containerColor = C.card,
-                title = { Text("Forward ${if (allFwdMsgs.size > 1) "${allFwdMsgs.size} messages" else ""} to", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.chat_forward_to, if (allFwdMsgs.size > 1) "${allFwdMsgs.size} messages" else ""), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column(modifier = Modifier.heightIn(max = 400.dp)) {
                         // Preview of message(s) being forwarded
@@ -5426,12 +5430,12 @@ fun ChatScreen(
                         }
 
                         if (forwardContacts.isEmpty() && forwardGroups.isEmpty()) {
-                            Text("No contacts or groups", color = C.textSecondary, fontSize = 14.sp)
+                            Text(stringResource(R.string.chat_no_contacts), color = C.textSecondary, fontSize = 14.sp)
                         } else {
                             LazyColumn {
                                 // Groups section (hidden for multi-forward — SBBS reliability)
                                 if (forwardGroups.isNotEmpty() && allFwdMsgs.size <= 1) {
-                                    item { Text("Groups", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp)) }
+                                    item { Text(stringResource(R.string.chat_section_groups), color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp)) }
                                     items(forwardGroups, key = { "g_${it.groupId}" }) { grp ->
                                         Row(
                                             modifier = Modifier
@@ -5506,7 +5510,7 @@ fun ChatScreen(
                                                             }
 
                                                             withContext(Dispatchers.Main) {
-                                                                Toast.makeText(context, "Forwarded to $targetName", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.toast_forwarded_to, targetName), Toast.LENGTH_SHORT).show()
                                                             }
                                                         } else {
                                                             Log.w("ChatScreen", "Forward failed: myHandle is null")
@@ -5551,7 +5555,7 @@ fun ChatScreen(
                                 }
                                 // Contacts section
                                 if (forwardContacts.isNotEmpty()) {
-                                    item { Text("Contacts", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp)) }
+                                    item { Text(stringResource(R.string.chat_section_contacts), color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp)) }
                                 }
                                 items(forwardContacts, key = { it.handle }) { contact ->
                                     Row(
@@ -5629,7 +5633,7 @@ fun ChatScreen(
                                                             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fwdConv.id, lastTs, lastPreview)
                                                         }
                                                         val count = allFwdMsgs.size
-                                                        Toast.makeText(context, "Forwarded $count message${if (count > 1) "s" else ""} to @${toHandle}", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, context.getString(R.string.toast_forwarded_count, count, if (count > 1) "s" else "", toHandle), Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
                                                 forwardingMsg = null
@@ -5912,7 +5916,7 @@ private fun MessageBubble(
                                 }
                                 com.privimemobile.chat.ChatService.groups.joinGroup(inviteGroupId, joinPassword = invitePassword) { s, e ->
                                     if (s) {
-                                        android.widget.Toast.makeText(context, "Joining $inviteGroupName...", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(context, context.getString(R.string.toast_joining_group, inviteGroupName), android.widget.Toast.LENGTH_SHORT).show()
                                     } else {
                                         joining = false
                                         android.widget.Toast.makeText(context, e ?: "Join failed", android.widget.Toast.LENGTH_SHORT).show()
@@ -5923,7 +5927,7 @@ private fun MessageBubble(
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                         ) {
-                            Text("Accept", color = C.textDark, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.chat_accept), color = C.textDark, fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
                             onClick = {
@@ -5934,11 +5938,11 @@ private fun MessageBubble(
                             },
                             shape = RoundedCornerShape(8.dp),
                         ) {
-                            Text("Decline", color = C.textSecondary)
+                            Text(stringResource(R.string.chat_decline), color = C.textSecondary)
                         }
                     }
                 } else if (joining) {
-                    Text("Joining...", color = C.accent, fontSize = 13.sp)
+                    Text(stringResource(R.string.chat_joining), color = C.accent, fontSize = 13.sp)
                 } else {
                     Text("\u2705 Responded", color = C.textMuted, fontSize = 13.sp)
                 }
@@ -6116,9 +6120,9 @@ private fun MessageBubble(
                                                 entry = zis.nextEntry
                                             }
                                         }
-                                        Toast.makeText(context, "Saved $count stickers to \"${msg.stickerPackName}\"", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.toast_stickers_saved, count, msg.stickerPackName), Toast.LENGTH_SHORT).show()
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.media_save_failed) + ": ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
@@ -6551,7 +6555,7 @@ private fun MessageBubble(
         AlertDialog(
             onDismissRequest = { pendingOpenUrl = null },
             containerColor = C.card,
-            title = { Text("Open link?", color = C.text, fontWeight = FontWeight.SemiBold) },
+            title = { Text(stringResource(R.string.chat_open_link_title), color = C.text, fontWeight = FontWeight.SemiBold) },
             text = {
                 Column {
                     Text(
@@ -6582,12 +6586,12 @@ private fun MessageBubble(
                     } catch (e: Exception) {}
                     pendingOpenUrl = null
                 }) {
-                    Text("Open", color = C.accent, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.chat_open), color = C.accent, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingOpenUrl = null }) {
-                    Text("Cancel", color = C.textSecondary)
+                    Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                 }
             },
         )
@@ -6662,8 +6666,8 @@ private fun FileContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text("\uD83D\uDD04", fontSize = 24.sp)
-                    Text("Tap to retry", color = C.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Sender may be offline", color = C.textSecondary, fontSize = 10.sp)
+                    Text(stringResource(R.string.chat_tap_to_retry), color = C.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.chat_sender_offline), color = C.textSecondary, fontSize = 10.sp)
                 }
             }
         } else {
@@ -6712,13 +6716,13 @@ private fun FileContent(
                             )
                         }
                         "error" -> {
-                            Text("Retry", color = C.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.chat_retry), color = C.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                         else -> {
                             if (filePath != null) {
-                                Text("Save", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.general_save), color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             } else {
-                                Text("Download", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.chat_download), color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -6772,7 +6776,7 @@ private fun saveFileToDownloads(context: Context, srcPath: String, fileName: Str
     try {
         val srcFile = java.io.File(srcPath)
         if (!srcFile.exists()) {
-            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_file_not_found, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -6789,9 +6793,9 @@ private fun saveFileToDownloads(context: Context, srcPath: String, fileName: Str
                 resolver.openOutputStream(uri)?.use { out ->
                     srcFile.inputStream().use { input -> input.copyTo(out) }
                 }
-                Toast.makeText(context, "Saved to Downloads/$fileName", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.media_saved_to_downloads, fileName), Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Save failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, R.string.media_save_failed, Toast.LENGTH_SHORT).show()
             }
         } else {
             // Legacy storage (API < 29)
@@ -6800,10 +6804,10 @@ private fun saveFileToDownloads(context: Context, srcPath: String, fileName: Str
             srcFile.inputStream().use { input ->
                 destFile.outputStream().use { output -> input.copyTo(output) }
             }
-            Toast.makeText(context, "Saved to Downloads/$fileName", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.media_saved_to_downloads, fileName), Toast.LENGTH_SHORT).show()
         }
     } catch (e: Exception) {
-        Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.media_save_failed) + ": ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -6913,12 +6917,12 @@ private fun FullscreenImageViewer(
                         containerColor = C.card,
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Delete for me", color = C.error) },
+                            text = { Text(stringResource(R.string.chat_delete_for_me), color = C.error) },
                             onClick = { showDeleteMenu = false; onDeleteForMe() },
                         )
                         if (onDeleteForEveryone != null) {
                             DropdownMenuItem(
-                                text = { Text("Delete for everyone", color = C.error) },
+                                text = { Text(stringResource(R.string.chat_delete_for_everyone), color = C.error) },
                                 onClick = { showDeleteMenu = false; onDeleteForEveryone() },
                             )
                         }
@@ -7083,7 +7087,7 @@ private fun AttachmentPickerSheet(
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text("Gallery access needed", color = C.textSecondary, fontSize = 14.sp)
+                                Text(stringResource(R.string.chat_gallery_access_needed), color = C.textSecondary, fontSize = 14.sp)
                                 Spacer(Modifier.height(12.dp))
                                 Button(
                                     onClick = {
@@ -7096,11 +7100,11 @@ private fun AttachmentPickerSheet(
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                                 ) {
-                                    Text("Grant Access", color = C.textDark)
+                                    Text(stringResource(R.string.chat_grant_access), color = C.textDark)
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(onClick = onPickGallery) {
-                                    Text("Or pick from system gallery", color = C.accent, fontSize = 13.sp)
+                                    Text(stringResource(R.string.chat_pick_gallery), color = C.accent, fontSize = 13.sp)
                                 }
                             }
                         } else if (galleryImages.value.isEmpty()) {
@@ -7108,7 +7112,7 @@ private fun AttachmentPickerSheet(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("No images found", color = C.textMuted, fontSize = 14.sp)
+                                Text(stringResource(R.string.chat_no_images), color = C.textMuted, fontSize = 14.sp)
                             }
                         } else {
                             val selectedUris = remember { mutableStateListOf<Uri>() }
@@ -7223,8 +7227,8 @@ private fun AttachmentPickerSheet(
                                     )
                                     Spacer(Modifier.width(14.dp))
                                     Column {
-                                        Text("Browse Files", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                        Text("Documents, PDFs, and more", color = C.textSecondary, fontSize = 12.sp)
+                                        Text(stringResource(R.string.chat_browse_files), color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                        Text(stringResource(R.string.chat_browse_files_desc), color = C.textSecondary, fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -7250,8 +7254,8 @@ private fun AttachmentPickerSheet(
                                     )
                                     Spacer(Modifier.width(14.dp))
                                     Column {
-                                        Text("Photo / Video", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                        Text("Pick from gallery", color = C.textSecondary, fontSize = 12.sp)
+                                        Text(stringResource(R.string.chat_photo_video), color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                        Text(stringResource(R.string.chat_pick_from_gallery), color = C.textSecondary, fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -7352,7 +7356,7 @@ private fun ImagePreviewSheet(
                         value = caption,
                         onValueChange = { onCaptionChange(it) },
                         placeholder = {
-                            Text("Add a caption...", color = C.textMuted, fontSize = 14.sp)
+                            Text(stringResource(R.string.chat_add_caption), color = C.textMuted, fontSize = 14.sp)
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(20.dp),

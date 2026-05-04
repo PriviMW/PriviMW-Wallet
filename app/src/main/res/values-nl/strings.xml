@@ -302,6 +302,8 @@
     <string name="register_transaction_failed">Transactie mislukt</string>
     <string name="chats_tab_all">Alle</string>
     <string name="chats_swipe_delete">Verwijderen</string>
+    <string name="chats_cd_clear_search">Wis zoekopdracht</string>
+    <string name="chats_cd_delete">Verwijderen</string>
     <string name="chats_swipe_read">lezen</string>
     <string name="group_description_label">Omschrijving</string>
     <string name="payment_proof_title">Betalingsbewijs verificatie</string>
@@ -373,4 +375,8 @@
     <string name="tx_cancelled">Transactie geannuleerd</string>
     <string name="contact_copy_wallet_id_cd">Kopiëren</string>
     <string name="chats_fab_new_chat">Nieuwe chat</string>
+    <string name="chat_clear">wissen</string>
+    <string name="chat_section_contacts">Contacten</string>
+    <string name="chat_open">open</string>
+    <string name="chat_label_delete">Verwijderen</string>
 </resources>

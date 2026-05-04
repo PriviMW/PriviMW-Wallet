@@ -84,6 +84,7 @@
     <string name="settings_save_logs">Сачувај логове новчаника</string>
     <string name="chat_online">повезан на мрежу</string>
     <string name="chat_sent">послато</string>
+    <string name="chats_cd_clear_search">Очисти претрагу</string>
     <string name="notif_clear_all">Обриши све</string>
     <string name="notif_tx_title_received">примљено</string>
     <string name="notif_tx_title_sent">послато</string>

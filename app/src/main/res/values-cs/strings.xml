@@ -251,6 +251,8 @@
     <string name="register_transaction_failed">Transakce se nezdařila</string>
     <string name="chats_tab_all">Všechny</string>
     <string name="chats_swipe_delete">Smazat</string>
+    <string name="chats_cd_clear_search">Vymazat hledání</string>
+    <string name="chats_cd_delete">Smazat</string>
     <string name="chats_swipe_read">číst</string>
     <string name="payment_proof_title">Ověření dokladu platby</string>
     <string name="payment_proof_paste">Zde vložte své potvrzení o platbě</string>
@@ -309,4 +311,8 @@
     <string name="new_chat_contacts">Kontakty</string>
     <string name="tx_cancelled">Transakce byla zrušena</string>
     <string name="contact_copy_wallet_id_cd">Kopírovat</string>
+    <string name="chat_clear">vyčistit</string>
+    <string name="chat_section_contacts">Kontakty</string>
+    <string name="chat_open">otevřít</string>
+    <string name="chat_label_delete">Smazat</string>
 </resources>

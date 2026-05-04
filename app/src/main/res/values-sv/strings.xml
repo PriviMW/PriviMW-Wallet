@@ -229,6 +229,8 @@
     <string name="register_transaction_failed">Transaktion misslyckades</string>
     <string name="chats_tab_all">Alla</string>
     <string name="chats_swipe_delete">Ta bort</string>
+    <string name="chats_cd_clear_search">Rensa sökning</string>
+    <string name="chats_cd_delete">Ta bort</string>
     <string name="chats_swipe_read">läs</string>
     <string name="payment_proof_title">Verifiering för betalningsbevis</string>
     <string name="payment_proof_paste">Klistra in ditt betalningsbevis här</string>
@@ -286,4 +288,7 @@
     <string name="new_chat_contacts">Kontakter</string>
     <string name="tx_cancelled">Transaktion avbruten</string>
     <string name="contact_copy_wallet_id_cd">Kopiera</string>
+    <string name="chat_clear">rensa</string>
+    <string name="chat_section_contacts">Kontakter</string>
+    <string name="chat_label_delete">Ta bort</string>
 </resources>

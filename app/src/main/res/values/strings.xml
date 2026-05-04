@@ -764,7 +764,6 @@
 
     <!-- Chat forward -->
     <string name="chat_forward_title">Forward Message</string>
-    <string name="chat_forward_to">Forward to</string>
     <string name="chat_forward_sent">Forwarded %1$d message%2$s to @%3$s</string>
 
     <!-- Chat selection mode -->
@@ -831,6 +830,15 @@
     <string name="chats_swipe_delete">Delete</string>
     <string name="chats_swipe_mute">Mute</string>
     <string name="chats_swipe_unmute">Unmute</string>
+    <string name="chats_archive">Archive</string>
+    <string name="chats_unarchive">Unarchive</string>
+    <string name="chats_leave_group">Leave group</string>
+    <string name="chats_cd_muted">Muted</string>
+    <string name="chats_cd_pinned">Pinned</string>
+    <string name="chats_cd_blocked">Blocked</string>
+    <string name="chats_cd_clear_search">Clear search</string>
+    <string name="chats_cd_delete">Delete</string>
+    <string name="chats_cd_archive">Archive</string>
     <string name="chats_swipe_pin">Pin</string>
     <string name="chats_swipe_unpin">Unpin</string>
     <string name="chats_swipe_read">Read</string>
@@ -1521,4 +1529,102 @@
     <string name="search_button_join">Join</string>
     <string name="search_searching">Searching...</string>
     <string name="chats_fab_new_chat">New Chat</string>
+    <string name="search_section_global">GLOBAL SEARCH</string>
+    <string name="search_section_groups">PUBLIC GROUPS</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CHAT SCREEN TOASTS  —  PriviMW-specific                           -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="toast_message_scheduled">Message scheduled for %1$s</string>
+    <string name="toast_cannot_send_no_address">Cannot send — address not resolved</string>
+    <string name="toast_voice_too_large">Voice message too large (%1$dKB). Max is %2$dKB.</string>
+    <string name="toast_slow_down">Slow down! Wait 3s between messages</string>
+    <string name="toast_reply_or_tip_hint">Reply to a message or use: /tip @handle &lt;amount&gt;</string>
+    <string name="toast_cannot_resolve">Cannot resolve @%1$s address</string>
+    <string name="toast_insufficient_balance">Insufficient %1$s balance (have %2$s, need %3$s)</string>
+    <string name="toast_insufficient_beam_fee">Insufficient BEAM for transaction fee</string>
+    <string name="toast_poll_usage">Usage: /poll Question | Option 1 | Option 2</string>
+    <string name="toast_tip_usage_dm">Usage: /tip &lt;amount&gt; [asset_id] [message]</string>
+    <string name="toast_tip_usage_group">Usage: /tip @handle &lt;amount&gt; [asset_id] [message]</string>
+    <string name="toast_wait_moment">Wait a moment...</string>
+    <string name="toast_stickers_added">%1$d sticker(s) added</string>
+    <string name="toast_stickers_imported">%1$d sticker(s) imported from ZIP</string>
+    <string name="toast_no_images_in_zip">No images found in ZIP</string>
+    <string name="toast_pack_empty">Pack is empty</string>
+    <string name="toast_resolving_address">Resolving address...</string>
+    <string name="toast_packaging_stickers">Packaging %1$d stickers...</string>
+    <string name="toast_pack_too_large">Pack too large to share (%1$dKB)</string>
+    <string name="toast_pack_shared">Pack shared! (%1$d stickers, %2$dKB)</string>
+    <string name="toast_share_failed">Share failed: %1$s</string>
+    <string name="toast_pack_deleted">Pack deleted</string>
+    <string name="toast_sticker_removed">Sticker removed</string>
+    <string name="toast_time_future">Time must be in the future</string>
+    <string name="toast_message_resent">Message resent</string>
+    <string name="toast_scheduled_cancelled">Scheduled message cancelled</string>
+    <string name="toast_forwarded_to">Forwarded to %1$s</string>
+    <string name="toast_forwarded_count">Forwarded %1$d message%2$s to @%3$s</string>
+    <string name="toast_joining_group">Joining %1$s...</string>
+    <string name="toast_stickers_saved">Saved %1$d stickers to \"%2$s\"</string>
+    <string name="toast_saved_to_dir">Saved to %1$s</string>
+    <string name="toast_file_not_found">File not found</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CHAT SCREEN UI  —  PriviMW-specific                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <string name="chat_search_in_chat">Search in chat...</string>
+    <string name="chat_you_label">You</string>
+    <string name="chat_pinned_messages">Pinned Messages (%1$d)</string>
+    <string name="chat_unpin_all">Unpin All</string>
+    <string name="chat_recent">Recent</string>
+    <string name="chat_no_sticker_packs">No sticker packs</string>
+    <string name="chat_tap_create_pack">Tap + to create a pack</string>
+    <string name="chat_add_sticker">+ Add</string>
+    <string name="chat_empty_pack_hint">Empty pack — tap + Add</string>
+    <string name="chat_new_sticker_pack">New Sticker Pack</string>
+    <string name="chat_pack_name">Pack name</string>
+    <string name="chat_create">Create</string>
+    <string name="chat_commands">Commands</string>
+    <string name="chat_clear_history_body">Delete all messages in this chat? This cannot be undone.</string>
+    <string name="chat_clear">Clear</string>
+    <string name="chat_delete_messages_title">Delete %1$d message%2$s?</string>
+    <string name="chat_delete_for_me">Delete for me</string>
+    <string name="chat_delete_for_everyone">Delete for everyone</string>
+    <string name="chat_wallpaper">Chat Wallpaper</string>
+    <string name="chat_custom_image">Custom Image</string>
+    <string name="chat_schedule_message">Schedule Message</string>
+    <string name="chat_longpress_schedule_hint">Long-press send to schedule</string>
+    <string name="chat_pick_time">Pick time</string>
+    <string name="chat_schedule">Schedule</string>
+    <string name="chat_jump">Jump</string>
+    <string name="chat_self_destruct_timer">Self-destruct timer</string>
+    <string name="chat_save_to_pack">Save to pack</string>
+    <string name="chat_no_packs_yet">No packs yet. Create one in the sticker tab first.</string>
+    <string name="chat_no_reactions">No reactions yet</string>
+    <string name="chat_forward_to">Forward %1$s to</string>
+    <string name="chat_no_contacts">No contacts or groups</string>
+    <string name="chat_section_groups">Groups</string>
+    <string name="chat_section_contacts">Contacts</string>
+    <string name="chat_accept">Accept</string>
+    <string name="chat_decline">Decline</string>
+    <string name="chat_joining">Joining...</string>
+    <string name="chat_open_link_title">Open link?</string>
+    <string name="chat_open">Open</string>
+    <string name="chat_tap_to_retry">Tap to retry</string>
+    <string name="chat_sender_offline">Sender may be offline</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_download">Download</string>
+    <string name="chat_gallery_access_needed">Gallery access needed</string>
+    <string name="chat_grant_access">Grant Access</string>
+    <string name="chat_pick_gallery">Or pick from system gallery</string>
+    <string name="chat_no_images">No images found</string>
+    <string name="chat_browse_files">Browse Files</string>
+    <string name="chat_browse_files_desc">Documents, PDFs, and more</string>
+    <string name="chat_photo_video">Photo / Video</string>
+    <string name="chat_pick_from_gallery">Pick from gallery</string>
+    <string name="chat_stickers_count">%1$d stickers</string>
+    <string name="chat_pack_not_saved">Pack not saved yet. Ask sender to share it.</string>
+    <string name="chat_dont_have_pack">You don\'t have this pack. The sender can share it using the Share button in their sticker picker.</string>
+    <string name="chat_zip_label">ZIP</string>
+    <string name="chat_label_share">Share</string>
+    <string name="chat_label_delete">Delete</string>
 </resources>

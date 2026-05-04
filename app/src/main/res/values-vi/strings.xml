@@ -171,6 +171,7 @@
     <string name="register_transaction_failed">Giao dịch thất bại</string>
     <string name="chats_tab_all">Tất cả</string>
     <string name="chats_swipe_delete">Xoá</string>
+    <string name="chats_cd_delete">Xoá</string>
     <string name="payment_proof_title">Xác minh bằng chứng thanh toán</string>
     <string name="payment_proof_paste">Dán bằng chứng thanh toán tại đây</string>
     <string name="payment_proof_code">Mã</string>
@@ -214,4 +215,6 @@
     <string name="new_chat_contacts">Liên hệ</string>
     <string name="tx_cancelled">Giao dịch đã huỷ</string>
     <string name="contact_copy_wallet_id_cd">Sao chép</string>
+    <string name="chat_section_contacts">Liên hệ</string>
+    <string name="chat_label_delete">Xoá</string>
 </resources>

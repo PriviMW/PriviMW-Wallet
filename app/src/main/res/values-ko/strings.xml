@@ -187,6 +187,8 @@
     <string name="register_transaction_failed">거래 실패</string>
     <string name="chats_tab_all">전부</string>
     <string name="chats_swipe_delete">삭제</string>
+    <string name="chats_cd_clear_search">검색 지우기</string>
+    <string name="chats_cd_delete">삭제</string>
     <string name="payment_proof_title">지불 증명 검증</string>
     <string name="payment_proof_paste">당신의 지불 증명을 여기에 붙여넣기 하세요</string>
     <string name="payment_proof_code">코드</string>
@@ -232,4 +234,6 @@
     <string name="new_chat_contacts">연락처</string>
     <string name="tx_cancelled">거래가 취소됨</string>
     <string name="contact_copy_wallet_id_cd">복사</string>
+    <string name="chat_section_contacts">연락처</string>
+    <string name="chat_label_delete">삭제</string>
 </resources>

@@ -85,12 +85,13 @@ fun ContactInfoScreen(
         mutableStateOf(prefs.getString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_default))
             ?: context.getString(R.string.contact_notif_sound_default))
     }
-    val notifSoundName: String
-        @Composable get() = when (notifSoundNameRaw.value) {
+    val notifSoundName = remember(notifSoundNameRaw.value) {
+        when (notifSoundNameRaw.value) {
             "Default" -> context.getString(R.string.contact_notif_sound_default)
             "Silent" -> context.getString(R.string.contact_notif_sound_silent)
             else -> notifSoundNameRaw.value
         }
+    }
     val soundPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -247,14 +248,15 @@ fun ContactInfoScreen(
                         HorizontalDivider(color = C.border.copy(alpha = 0.5f))
 
                         // Notification sound
+                        val soundLabel = stringResource(R.string.contact_notif_sound_label)
                         InfoRow(
                             icon = Icons.Default.MusicNote,
-                            label = stringResource(R.string.contact_notif_sound_label),
+                            label = soundLabel,
                             value = notifSoundName,
                             onClick = {
                                 val intent = android.content.Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, stringResource(R.string.contact_notif_sound_label))
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, soundLabel)
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
                                     putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
                                     val currentUri = prefs.getString("notif_sound_$convKey", null)

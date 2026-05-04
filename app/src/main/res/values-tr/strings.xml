@@ -164,6 +164,7 @@
     <string name="register_transaction_failed">İşlem başarısız</string>
     <string name="chats_tab_all">Tümü</string>
     <string name="chats_swipe_delete">Sil</string>
+    <string name="chats_cd_delete">Sil</string>
     <string name="payment_proof_title">Ödeme kanıtı doğrulama</string>
     <string name="payment_proof_paste">Ödeme kanıdınızı buraya yapıştırın</string>
     <string name="payment_proof_code">Kod</string>
@@ -206,4 +207,6 @@
     <string name="new_chat_contacts">Bağlantılar</string>
     <string name="tx_cancelled">İşlem iptal edildi</string>
     <string name="contact_copy_wallet_id_cd">Kopyala</string>
+    <string name="chat_section_contacts">Bağlantılar</string>
+    <string name="chat_label_delete">Sil</string>
 </resources>

@@ -196,6 +196,8 @@
     <string name="register_transaction_failed">Ostotapahtuma epäonnistui</string>
     <string name="chats_tab_all">Kaikki</string>
     <string name="chats_swipe_delete">Poista</string>
+    <string name="chats_cd_clear_search">Tyhjennä haku</string>
+    <string name="chats_cd_delete">Poista</string>
     <string name="payment_proof_title">Maksutodistuksen varmennus</string>
     <string name="payment_proof_paste">Liitä maksutodistuksen koodi tähän</string>
     <string name="payment_proof_code">Koodi</string>
@@ -245,4 +247,6 @@
     <string name="new_chat_contacts">Yhteystiedot</string>
     <string name="tx_cancelled">Maksutapahtuma peruutettu</string>
     <string name="contact_copy_wallet_id_cd">Kopioi</string>
+    <string name="chat_section_contacts">Yhteystiedot</string>
+    <string name="chat_label_delete">Poista</string>
 </resources>

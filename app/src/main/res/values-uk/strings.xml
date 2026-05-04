@@ -310,6 +310,8 @@
     <string name="register_transaction_failed">Не вдалося виконати транзакцію</string>
     <string name="chats_tab_all">Всі</string>
     <string name="chats_swipe_delete">Видалити</string>
+    <string name="chats_cd_clear_search">Очистити пошук</string>
+    <string name="chats_cd_delete">Видалити</string>
     <string name="chats_swipe_read">читати</string>
     <string name="group_description_label">Опис</string>
     <string name="payment_proof_title">Підтвердження платежу</string>
@@ -381,4 +383,8 @@
     <string name="tx_cancelled">Трансакція скасована</string>
     <string name="contact_copy_wallet_id_cd">Копіювати</string>
     <string name="chats_fab_new_chat">Новий чат</string>
+    <string name="chat_clear">очистити</string>
+    <string name="chat_section_contacts">Контакти</string>
+    <string name="chat_open">відкрити</string>
+    <string name="chat_label_delete">Видалити</string>
 </resources>

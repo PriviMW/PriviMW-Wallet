@@ -310,6 +310,8 @@
     <string name="register_transaction_failed">Falha na transação</string>
     <string name="chats_tab_all">Tudo</string>
     <string name="chats_swipe_delete">Excluir</string>
+    <string name="chats_cd_clear_search">Limpar pesquisa</string>
+    <string name="chats_cd_delete">Excluir</string>
     <string name="chats_swipe_read">lidos</string>
     <string name="group_description_label">Descrição</string>
     <string name="payment_proof_title">Verificação de prova de pagamento</string>
@@ -381,4 +383,8 @@
     <string name="tx_cancelled">Transação cancelada</string>
     <string name="contact_copy_wallet_id_cd">Copiar</string>
     <string name="chats_fab_new_chat">Novo bate-papo</string>
+    <string name="chat_clear">limpar</string>
+    <string name="chat_section_contacts">Contatos</string>
+    <string name="chat_open">abrir</string>
+    <string name="chat_label_delete">Excluir</string>
 </resources>

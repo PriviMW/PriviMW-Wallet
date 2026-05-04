@@ -326,7 +326,7 @@ fun ChatsScreen(
                                     IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
                                         Icon(
                                             Icons.Default.Close,
-                                            contentDescription = "Clear search",
+                                            contentDescription = stringResource(R.string.chats_cd_clear_search),
                                             tint = C.textSecondary,
                                             modifier = Modifier.size(16.dp),
                                         )
@@ -568,9 +568,9 @@ fun ChatsScreen(
                                         contentAlignment = iconAlignment,
                                     ) {
                                         if (direction == SwipeToDismissBoxValue.EndToStart) {
-                                            Icon(Icons.Default.Delete, "Delete", tint = Color.White.copy(alpha = iconAlpha))
+                                            Icon(Icons.Default.Delete, stringResource(R.string.chats_cd_delete), tint = Color.White.copy(alpha = iconAlpha))
                                         } else if (direction == SwipeToDismissBoxValue.StartToEnd) {
-                                            Icon(Icons.Default.Archive, "Archive", tint = Color.White.copy(alpha = iconAlpha))
+                                            Icon(Icons.Default.Archive, stringResource(R.string.chats_cd_archive), tint = Color.White.copy(alpha = iconAlpha))
                                         }
                                     }
                                 },
@@ -614,7 +614,7 @@ fun ChatsScreen(
                     if (onChainNew.isNotEmpty()) {
                         item {
                             Text(
-                                "GLOBAL SEARCH",
+                                stringResource(R.string.search_section_global),
                                 color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.5.sp,
                                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
@@ -672,7 +672,7 @@ fun ChatsScreen(
                     if (onChainGroupsNew.isNotEmpty()) {
                         item {
                             Text(
-                                "PUBLIC GROUPS",
+                                stringResource(R.string.search_section_groups),
                                 color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.5.sp,
                                 modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
@@ -851,7 +851,7 @@ fun ChatsScreen(
                 }
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
-                ChatListMenuItem(if (target.pinned) "Unpin" else "Pin") {
+                ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
                     val gid = target.groupId; val newVal = !target.pinned
                     scope.launch {
                         ChatService.db?.groupDao()?.setPinned(gid, newVal)
@@ -860,7 +860,7 @@ fun ChatsScreen(
                     }
                     menuTargetGroup = null
                 }
-                ChatListMenuItem(if (target.muted) "Unmute" else "Mute") {
+                ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
                     val gid = target.groupId; val newVal = !target.muted
                     scope.launch {
                         ChatService.db?.groupDao()?.setMuted(gid, newVal)
@@ -869,12 +869,12 @@ fun ChatsScreen(
                     }
                     menuTargetGroup = null
                 }
-                ChatListMenuItem(if (target.archived) "Unarchive" else "Archive") {
+                ChatListMenuItem(if (target.archived) stringResource(R.string.chats_unarchive) else stringResource(R.string.chats_archive)) {
                     scope.launch { ChatService.db?.groupDao()?.setArchived(target.groupId, !target.archived) }
                     menuTargetGroup = null
                 }
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
-                ChatListMenuItem("Leave group", color = C.error) {
+                ChatListMenuItem(stringResource(R.string.chats_leave_group), color = C.error) {
                     scope.launch {
                         ChatService.groups.leaveGroup(target.groupId)
                     }
@@ -933,20 +933,20 @@ fun ChatsScreen(
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
                 // Menu items with touch highlight
-                ChatListMenuItem(if (target.pinned) "Unpin" else "Pin") {
+                ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
                     scope.launch { ChatService.db?.conversationDao()?.setPinned(target.id, !target.pinned) }; menuTarget = null
                 }
-                ChatListMenuItem(if (target.muted) "Unmute" else "Mute") {
+                ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
                     scope.launch { ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted) }; menuTarget = null
                 }
-                ChatListMenuItem(if (target.archived) "Unarchive" else "Archive") {
+                ChatListMenuItem(if (target.archived) stringResource(R.string.chats_unarchive) else stringResource(R.string.chats_archive)) {
                     scope.launch { ChatService.db?.conversationDao()?.setArchived(target.id, !target.archived) }; menuTarget = null
                 }
-                ChatListMenuItem(if (target.isBlocked) "Unblock" else "Block", color = if (target.isBlocked) C.text else C.error) {
+                ChatListMenuItem(if (target.isBlocked) stringResource(R.string.chat_unblock_user) else stringResource(R.string.chat_block_user), color = if (target.isBlocked) C.text else C.error) {
                     scope.launch { ChatService.db?.conversationDao()?.setBlocked(target.id, !target.isBlocked) }; menuTarget = null
                 }
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
-                ChatListMenuItem("Delete", color = C.error) {
+                ChatListMenuItem(stringResource(R.string.general_delete), color = C.error) {
                     scope.launch {
                         val db = ChatService.db ?: return@launch
                         // Delete attachment files from disk
@@ -1302,7 +1302,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                     if (conv.muted) {
                         Icon(
                             Icons.Default.NotificationsOff,
-                            contentDescription = "Muted",
+                            contentDescription = stringResource(R.string.chats_cd_muted),
                             tint = C.textSecondary,
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )
@@ -1310,7 +1310,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                     if (conv.pinned) {
                         Icon(
                             Icons.Default.PushPin,
-                            contentDescription = "Pinned",
+                            contentDescription = stringResource(R.string.chats_cd_pinned),
                             tint = C.textSecondary,
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )
@@ -1318,7 +1318,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                     if (conv.isBlocked) {
                         Icon(
                             Icons.Default.Block,
-                            contentDescription = "Blocked",
+                            contentDescription = stringResource(R.string.chats_cd_blocked),
                             tint = Color(0xFFEF5350),
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
                         )

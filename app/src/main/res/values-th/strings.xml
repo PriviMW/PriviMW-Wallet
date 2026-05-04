@@ -212,6 +212,8 @@
     <string name="register_transaction_failed">การทำธุรกรรมล้มเหลว</string>
     <string name="chats_tab_all">ทั้งหมด</string>
     <string name="chats_swipe_delete">ลบ</string>
+    <string name="chats_cd_clear_search">ล้างการค้นหา</string>
+    <string name="chats_cd_delete">ลบ</string>
     <string name="chats_swipe_read">อ่าน</string>
     <string name="payment_proof_title">ตรวจสอบ Payment Proof</string>
     <string name="payment_proof_paste">วาง Payment Proof ของคุณที่นี่</string>
@@ -264,4 +266,7 @@
     <string name="new_chat_contacts">รายชื่อผู้ติดต่อ</string>
     <string name="tx_cancelled">ธุรกรรมได้ถูกยกเลิก</string>
     <string name="contact_copy_wallet_id_cd">คัดลอก</string>
+    <string name="chat_clear">ล้างข้อมูล</string>
+    <string name="chat_section_contacts">รายชื่อผู้ติดต่อ</string>
+    <string name="chat_label_delete">ลบ</string>
 </resources>

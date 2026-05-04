@@ -310,6 +310,8 @@
     <string name="register_transaction_failed">Transaksi gagal</string>
     <string name="chats_tab_all">Semua</string>
     <string name="chats_swipe_delete">Hapus</string>
+    <string name="chats_cd_clear_search">Bersihkan pencarian</string>
+    <string name="chats_cd_delete">Hapus</string>
     <string name="chats_swipe_read">dibaca</string>
     <string name="group_description_label">Deskripsi</string>
     <string name="payment_proof_title">Verifikasi bukti pembayaran</string>
@@ -381,4 +383,8 @@
     <string name="tx_cancelled">Transaksi dibatalkan</string>
     <string name="contact_copy_wallet_id_cd">Salin</string>
     <string name="chats_fab_new_chat">Obrolan baru</string>
+    <string name="chat_clear">bersihkan</string>
+    <string name="chat_section_contacts">Kontak</string>
+    <string name="chat_open">buka</string>
+    <string name="chat_label_delete">Hapus</string>
 </resources>

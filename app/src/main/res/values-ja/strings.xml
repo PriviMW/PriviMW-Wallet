@@ -303,6 +303,8 @@
     <string name="register_transaction_failed">トランザクションが失敗しました</string>
     <string name="chats_tab_all">すべて</string>
     <string name="chats_swipe_delete">削除</string>
+    <string name="chats_cd_clear_search">検索をクリア</string>
+    <string name="chats_cd_delete">削除</string>
     <string name="chats_swipe_read">既読</string>
     <string name="group_description_label">説明</string>
     <string name="payment_proof_title">支払証明照合</string>
@@ -374,4 +376,8 @@
     <string name="tx_cancelled">トランザクションはキャンセルされました</string>
     <string name="contact_copy_wallet_id_cd">コピー</string>
     <string name="chats_fab_new_chat">新しいチャット</string>
+    <string name="chat_clear">クリア</string>
+    <string name="chat_section_contacts">コンタクト</string>
+    <string name="chat_open">開く</string>
+    <string name="chat_label_delete">削除</string>
 </resources>

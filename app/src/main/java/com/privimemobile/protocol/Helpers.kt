@@ -1,5 +1,6 @@
 package com.privimemobile.protocol
 
+import com.privimemobile.R
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -176,13 +177,14 @@ object Helpers {
     // === Duration formatting ===
 
     /** Format seconds into human-readable duration like "5 min" or "30 sec". */
-    fun formatDuration(seconds: Int): String {
+    fun formatDuration(ctx: android.content.Context, seconds: Int): String {
         return when {
-            seconds == 0 -> "Off"
-            seconds < 60 -> "${seconds} sec"
-            seconds < 3600 -> "${seconds / 60} min"
-            seconds < 86400 -> "${seconds / 3600} hr"
-            else -> "${seconds / 86400} day${if (seconds >= 172800) "s" else ""}"
+            seconds == 0 -> ctx.getString(R.string.chat_timer_off)
+            seconds < 60 -> ctx.getString(R.string.chat_duration_seconds, seconds)
+            seconds < 3600 -> ctx.getString(R.string.chat_duration_minutes, seconds / 60)
+            seconds < 86400 -> ctx.getString(R.string.chat_duration_hours, seconds / 3600)
+            seconds < 172800 -> ctx.getString(R.string.chat_duration_day, seconds / 86400)
+            else -> ctx.getString(R.string.chat_duration_days, seconds / 86400)
         }
     }
 

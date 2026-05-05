@@ -704,7 +704,7 @@ fun ChatsScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                                         Text(
-                                            "$memberCount members · by @$creator",
+                                            context.getString(R.string.chat_join_group_subtitle, memberCount, creator),
                                             color = C.textSecondary, fontSize = 13.sp,
                                         )
                                     }
@@ -1541,8 +1541,8 @@ private fun GroupRow(
             val hasDraft = !draftText.isNullOrEmpty()
             if (typingHandles.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val label = if (typingHandles.size == 1) "@${typingHandles[0]} typing"
-                        else "${typingHandles.size} people typing"
+                    val label = if (typingHandles.size == 1) context.getString(R.string.chat_group_typing_singular, "@${typingHandles[0]}")
+                        else context.getString(R.string.chat_group_typing_multiple, typingHandles.size)
                     Text(label, color = C.accent, fontSize = 14.sp)
                     val infiniteTransition = rememberInfiniteTransition(label = "gTyping")
                     repeat(3) { i ->

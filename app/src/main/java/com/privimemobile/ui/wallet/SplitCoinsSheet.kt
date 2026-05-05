@@ -163,7 +163,7 @@ fun SplitCoinsSheet(
                 if (apiResult.containsKey("error")) {
                     val err = apiResult["error"]
                     val errMsg = when (err) {
-                        is Map<*, *> -> err["message"]?.toString() ?: "Unknown error"
+                        is Map<*, *> -> err["message"]?.toString() ?: context.getString(R.string.tx_unknown_error)
                         else -> err.toString()
                     }
                     errorMsg = errMsg

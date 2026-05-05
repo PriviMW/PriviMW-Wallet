@@ -185,7 +185,7 @@ fun SettingsScreen(
             val name = if (cursor != null && nameIndex >= 0 && cursor.moveToFirst()) {
                 cursor.getString(nameIndex)
             } else {
-                uri.lastPathSegment ?: "selected file"
+                uri.lastPathSegment ?: context.getString(R.string.settings_file_unnamed)
             }
             cursor?.close()
 

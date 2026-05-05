@@ -159,7 +159,7 @@ fun DAppStoreBrowseScreen(
                 message = context.getString(R.string.dapps_install_complete)
                 loadAvailable()
             } catch (e: Exception) {
-                message = "Install failed: ${e.message ?: "Unknown error"}"
+                message = context.getString(R.string.dapps_install_failed_msg, e.message ?: context.getString(R.string.tx_unknown_error))
             }
             installing = null
         }
@@ -320,7 +320,7 @@ fun DAppStoreBrowseScreen(
                                         message = context.getString(R.string.dapps_no_download_source)
                                     }
                                 } catch (e: Exception) {
-                                    message = context.getString(R.string.dapps_install_failed_msg, e.message ?: "Unknown error")
+                                    message = context.getString(R.string.dapps_install_failed_msg, e.message ?: context.getString(R.string.tx_unknown_error))
                                 }
                                 installing = null
                             }

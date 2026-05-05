@@ -399,4 +399,6 @@
     <string name="chat_voice_cancel">Cancelar</string>
     <string name="chat_timer_5min">5 minutos</string>
     <string name="chat_timer_1h">1 hora</string>
+    <string name="chat_preview_unknown">desconhecido</string>
+    <string name="chat_sender_unknown">desconhecido</string>
 </resources>

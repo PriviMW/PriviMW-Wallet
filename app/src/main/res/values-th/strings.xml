@@ -280,4 +280,6 @@
     <string name="chat_voice_cancel">ยกเลิก</string>
     <string name="chat_timer_5min">5 นาที</string>
     <string name="chat_timer_1h">1 ชั่วโมง</string>
+    <string name="chat_preview_unknown">ไม่ทราบ</string>
+    <string name="chat_sender_unknown">ไม่ทราบ</string>
 </resources>

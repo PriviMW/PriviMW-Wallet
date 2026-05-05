@@ -399,4 +399,6 @@
     <string name="chat_voice_cancel">Скасувати</string>
     <string name="chat_timer_5min">5 хвилин</string>
     <string name="chat_timer_1h">1 година</string>
+    <string name="chat_preview_unknown">невідомо</string>
+    <string name="chat_sender_unknown">невідомо</string>
 </resources>

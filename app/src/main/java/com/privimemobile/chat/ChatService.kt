@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import com.privimemobile.R
 import com.privimemobile.chat.contacts.ContactManager
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.ChatStateEntity
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.*
  */
 object ChatService {
     private const val TAG = "ChatService"
+    private lateinit var appContext: android.content.Context
 
     // Timestamp (epoch seconds) when this app session started — used to filter stale SBBS
     val sessionStartTs: Long = System.currentTimeMillis() / 1000
@@ -125,6 +127,7 @@ object ChatService {
      * Safe to call multiple times — skips if already initialized.
      */
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (_initialized.value && db != null) {
             Log.d(TAG, "Already initialized — restarting polling")
             com.privimemobile.protocol.WalletApi.subscribeToEvents()
@@ -153,7 +156,7 @@ object ChatService {
         val localeContext = com.privimemobile.protocol.LocaleHelper.applyLocale(context.applicationContext)
         identity = IdentityManager(db!!, scope, localeContext)
         contacts = ContactManager(db!!, scope)
-        processor = MessageProcessor(db!!, contacts, scope)
+        processor = MessageProcessor(db!!, contacts, scope, context.applicationContext)
         sbbs = SbbsTransport(db!!, processor, scope)
         groups = com.privimemobile.chat.group.GroupManager(db!!, scope, localeContext)
         pendingTxs = com.privimemobile.chat.group.PendingTxManager(db!!, scope)
@@ -224,8 +227,8 @@ object ChatService {
                 val latest = db?.messageDao()?.getLatestMessage(convId)
                 if (latest != null) {
                     val preview = when (latest.type) {
-                        "tip" -> "Tip"
-                        "file" -> "📎 File"
+                        "tip" -> appContext.getString(R.string.chat_preview_tip)
+                        "file" -> "📎 ${appContext.getString(R.string.chat_preview_file)}"
                         else -> latest.text?.take(100)
                     }
                     db?.conversationDao()?.updateLastMessage(convId, latest.timestamp, preview)
@@ -239,11 +242,11 @@ object ChatService {
                     val group = db?.groupDao()?.findByConvKey(groupPrefix)
                     if (group != null) {
                         if (latest != null) {
-                            val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
+                            val senderLabel = if (latest.sent) appContext.getString(R.string.chat_sender_you) else "@${latest.senderHandle}"
                             val groupPreview = when (latest.type) {
-                                "tip" -> "$senderLabel: Tip"
-                                "file" -> "$senderLabel: 📎 File"
-                                else -> "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                                "tip" -> "$senderLabel: ${appContext.getString(R.string.chat_preview_tip)}"
+                                "file" -> "$senderLabel: 📎 ${appContext.getString(R.string.chat_preview_file)}"
+                                else -> "$senderLabel: ${latest.text?.take(40) ?: appContext.getString(R.string.chat_msg_message)}"
                             }
                             db?.groupDao()?.updateLastMessage(group.groupId, latest.timestamp, groupPreview)
                         } else {
@@ -294,7 +297,7 @@ object ChatService {
                         try { sbbs.sendOnce(walletId, payload) } catch (_: Exception) {}
                         kotlinx.coroutines.delay(200)
                     }
-                    db?.groupDao()?.updateLastMessage(group.groupId, ts, "You: ${msg.text?.take(40) ?: "message"}")
+                    db?.groupDao()?.updateLastMessage(group.groupId, ts, "${appContext.getString(R.string.chat_you_prefix)}${msg.text?.take(40) ?: appContext.getString(R.string.chat_msg_message)}")
                 } else {
                     // DM scheduled message
                     val contactHandle = conv.convKey.removePrefix("@")

@@ -303,4 +303,6 @@
     <string name="chat_voice_cancel">Avbryt</string>
     <string name="chat_timer_5min">5 minuter</string>
     <string name="chat_timer_1h">1 timme</string>
+    <string name="chat_preview_unknown">okänd</string>
+    <string name="chat_sender_unknown">okänd</string>
 </resources>

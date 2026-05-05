@@ -1909,7 +1909,7 @@ fun ChatScreen(
                         }
                         OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { showOverflowMenu = false; showWallpaperPicker = true }
                         // Per-message self-destruct timer
-                        OverflowItem("\u23F1", if (oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(oneShotTimer))) {
+                        OverflowItem("\u23F1", if (oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(context, oneShotTimer))) {
                             showOverflowMenu = false
                             showOneShotTimerPicker = true
                         }
@@ -2462,7 +2462,7 @@ fun ChatScreen(
                                 color = C.accent.copy(alpha = 0.15f),
                             ) {
                                 Text(
-                                    "$unreadCount new message${if (unreadCount > 1) "s" else ""}",
+                                    context.resources.getQuantityString(R.plurals.chat_new_messages, unreadCount, unreadCount),
                                     color = C.accent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -2563,7 +2563,7 @@ fun ChatScreen(
                                     horizontalArrangement = Arrangement.End,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text("${albumMsgs.size} photos", color = C.textMuted, fontSize = 10.sp)
+                                    Text(context.getString(R.string.chat_album_photos, albumMsgs.size), color = C.textMuted, fontSize = 10.sp)
                                     Spacer(Modifier.width(6.dp))
                                     Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
                                     if (isMine) {
@@ -4913,7 +4913,7 @@ fun ChatScreen(
                         if (targetMsg.text.isNotEmpty()) {
                             MenuItemRow(stringResource(R.string.chat_copy)) {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("message", targetMsg.text))
+                                clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_clip_label), targetMsg.text))
                                 Toast.makeText(context, R.string.general_copied, Toast.LENGTH_SHORT).show()
                                 contextMenuMsg = null
                             }
@@ -6087,7 +6087,7 @@ private fun MessageBubble(
                     modifier = Modifier.widthIn(max = 260.dp).clickable { onTap() },
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("\uD83D\uDCE6 Sticker Pack", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("\uD83D\uDCE6 ${stringResource(R.string.chat_sticker_pack_header)}", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
                         Text(msg.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text("${msg.stickerPackTotal} stickers", color = C.textSecondary, fontSize = 12.sp)
@@ -6411,7 +6411,7 @@ private fun MessageBubble(
                         } catch (_: Exception) { emptyList<PollOpt>() }
                     }
                     val totalVotes = pollOptions.sumOf { it.voteCount }
-                    Text("\uD83D\uDCCA Poll", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("\uD83D\uDCCA ${stringResource(R.string.chat_poll_label)}", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     Text(pollQuestion, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
                     pollOptions.forEachIndexed { optIdx, opt ->
                         val myVote = myHandle != null && myHandle in opt.voters
@@ -7791,10 +7791,10 @@ private fun formatDateSeparator(ts: Long, ctx: Context): String {
 /** Format disappearing timer value to human-readable label. */
 internal fun formatTimerLabel(ctx: Context, seconds: Int): String = when {
     seconds <= 0 -> ctx.getString(R.string.chat_timer_off)
-    seconds < 60 -> "${seconds}s"
-    seconds < 3600 -> "${seconds / 60}m"
-    seconds < 86400 -> "${seconds / 3600}h"
-    else -> "${seconds / 86400}d"
+    seconds < 60 -> ctx.getString(R.string.chat_timer_seconds_dynamic, seconds)
+    seconds < 3600 -> ctx.getString(R.string.chat_timer_minutes_dynamic, seconds / 60)
+    seconds < 86400 -> ctx.getString(R.string.chat_timer_hours_dynamic, seconds / 3600)
+    else -> ctx.getString(R.string.chat_timer_days_dynamic, seconds / 86400)
 }
 
 /** Telegram-style fling: reduce initial velocity for heavier, more controlled scroll feel. */

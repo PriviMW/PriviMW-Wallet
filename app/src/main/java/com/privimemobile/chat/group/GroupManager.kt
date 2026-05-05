@@ -2,6 +2,7 @@ package com.privimemobile.chat.group
 
 import android.content.Context
 import android.util.Log
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.GroupEntity
@@ -162,7 +163,7 @@ class GroupManager(
         if (conv.deletedAtTs > 0) db.conversationDao().undelete(conv.id)
 
         val inviteTs = payload["ts"] as Long
-        val inviteText = "👥 You invited @$targetHandle to ${group.name}"
+        val inviteText = context.getString(R.string.chat_you_invited_group, "@$targetHandle", group.name)
         val dedupKey = "$inviteTs:group_invite_sent:$groupId:$targetHandle:$myHandle".hashCode().toString(16)
 
         val entity = com.privimemobile.chat.db.entities.MessageEntity(
@@ -879,16 +880,16 @@ class GroupManager(
         if (group != null) {
             val convId = getOrCreateGroupConversation(groupId, group.name)
             val serviceText = when (action) {
-                "joined" -> if (target != null) "You invited @$target to the group" else "You joined the group"
-                "left" -> "You left the group"
-                "kicked" -> "You removed @$target"
-                "banned" -> "You banned @$target"
-                "unbanned" -> "You unbanned @$target"
-                "promoted" -> "You promoted @$target to admin"
-                "demoted" -> "You demoted @$target to member"
-                "ownership_transferred" -> "You transferred ownership to @$target"
-                "group_deleted" -> "You deleted the group"
-                else -> "You $action" + if (target != null) " @$target" else ""
+                "joined" -> if (target != null) context.getString(R.string.chat_you_invited, "@$target") else context.getString(R.string.chat_you_joined)
+                "left" -> context.getString(R.string.chat_you_left)
+                "kicked" -> context.getString(R.string.chat_you_removed, "@$target")
+                "banned" -> context.getString(R.string.chat_you_banned, "@$target")
+                "unbanned" -> context.getString(R.string.chat_you_unbanned, "@$target")
+                "promoted" -> context.getString(R.string.chat_you_promoted, "@$target")
+                "demoted" -> context.getString(R.string.chat_you_demoted, "@$target")
+                "ownership_transferred" -> context.getString(R.string.chat_you_ownership, "@$target")
+                "group_deleted" -> context.getString(R.string.chat_you_group_deleted)
+                else -> context.getString(R.string.chat_you_unknown, action, if (target != null) " @$target" else "")
             }
             val dedupEpoch = ts / 120 // 2-minute window — prevents spam but allows repeated actions over time
             val dedupKey = "svc:$action:${target ?: myHandle}:$groupId:$dedupEpoch".hashCode().toString(16)

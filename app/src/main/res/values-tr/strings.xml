@@ -220,4 +220,6 @@
     <string name="chat_voice_cancel">İptal</string>
     <string name="chat_timer_5min">5 dakika</string>
     <string name="chat_timer_1h">1 saat</string>
+    <string name="chat_preview_unknown">bilinmiyor</string>
+    <string name="chat_sender_unknown">bilinmiyor</string>
 </resources>

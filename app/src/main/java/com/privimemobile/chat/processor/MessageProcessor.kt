@@ -1,6 +1,7 @@
 package com.privimemobile.chat.processor
 
 import android.util.Log
+import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.contacts.ContactManager
 import com.privimemobile.chat.db.ChatDatabase
@@ -24,6 +25,7 @@ class MessageProcessor(
     private val db: ChatDatabase,
     private val contacts: ContactManager,
     private val scope: CoroutineScope,
+    private val ctx: android.content.Context,
 ) {
     private val TAG = "MessageProcessor"
 
@@ -256,13 +258,13 @@ class MessageProcessor(
         val isDmImage = type == "file" && fileMime?.startsWith("image/") == true
         val isVoice = type == "file" && com.privimemobile.protocol.Helpers.isVoiceMime(fileMime ?: "")
         val preview = when {
-            type == "tip" -> "Tip: ${Helpers.grothToBeam(message.tipAmount)} ${com.privimemobile.wallet.assetTicker(message.tipAssetId)}"
-            type == "sticker" -> "\uD83C\uDF1F Sticker"
-            type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack: ${stickerPackName ?: "Stickers"}"
-            type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
-            isDmImage -> "\uD83D\uDDBC\uFE0F Image"
-            isVoice -> "\uD83C\uDFA4 Voice message"
-            type == "file" -> "\uD83D\uDCCE ${(payload["file"] as? Map<*, *>)?.get("name") ?: "File"}"
+            type == "tip" -> ctx.getString(R.string.chat_preview_tip_amount, Helpers.grothToBeam(message.tipAmount), com.privimemobile.wallet.assetTicker(message.tipAssetId))
+            type == "sticker" -> "\uD83C\uDF1F ${ctx.getString(R.string.chat_preview_sticker)}"
+            type == "sticker_pack" -> "\uD83D\uDCE6 ${ctx.getString(R.string.chat_preview_sticker_pack)}: ${stickerPackName ?: ctx.getString(R.string.chat_preview_sticker)}"
+            type == "poll" -> "\uD83D\uDCCA ${ctx.getString(R.string.chat_preview_poll_text, text?.take(50) ?: ctx.getString(R.string.chat_preview_vote))}"
+            isDmImage -> "\uD83D\uDDBC\uFE0F ${ctx.getString(R.string.chat_preview_image)}"
+            isVoice -> "\uD83C\uDFA4 ${ctx.getString(R.string.chat_preview_voice)}"
+            type == "file" -> "\uD83D\uDCCE ${ctx.getString(R.string.chat_preview_file_name, (payload["file"] as? Map<*, *>)?.get("name") ?: ctx.getString(R.string.chat_preview_file))}"
             else -> text?.take(100)
         }
         db.conversationDao().updateLastMessage(conv.id, ts, preview)
@@ -273,16 +275,16 @@ class MessageProcessor(
             // Show notification
             val isMuted = db.conversationDao().isMuted(conv.id) ?: false
             val totalUnread = db.conversationDao().getTotalUnread()
-            val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { "Unknown" }
+            val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { ctx.getString(R.string.chat_sender_unknown) }
             val isImage = type == "file" && fileMime?.startsWith("image/") == true
             val notifText = when {
-                type == "tip" -> preview ?: "Sent a tip"
-                type == "sticker" -> "\uD83C\uDF1F Sticker"
-                type == "sticker_pack" -> "\uD83D\uDCE6 Sticker Pack"
-                type == "poll" -> "\uD83D\uDCCA Poll: ${text?.take(50) ?: "Vote"}"
-                isImage -> "\uD83D\uDDBC\uFE0F Image"
-                isVoice -> "\uD83C\uDFA4 Voice message"
-                type == "file" -> "\uD83D\uDCCE File: ${(payload["file"] as? Map<*, *>)?.get("name") ?: "file"}"
+                type == "tip" -> preview ?: ctx.getString(R.string.chat_preview_sent_tip)
+                type == "sticker" -> "\uD83C\uDF1F ${ctx.getString(R.string.chat_notif_sticker)}"
+                type == "sticker_pack" -> "\uD83D\uDCE6 ${ctx.getString(R.string.chat_notif_sticker_pack)}"
+                type == "poll" -> "\uD83D\uDCCA ${ctx.getString(R.string.chat_notif_poll, text?.take(50) ?: ctx.getString(R.string.chat_preview_vote))}"
+                isImage -> "\uD83D\uDDBC\uFE0F ${ctx.getString(R.string.chat_notif_image)}"
+                isVoice -> "\uD83C\uDFA4 ${ctx.getString(R.string.chat_notif_voice)}"
+                type == "file" -> "\uD83D\uDCCE ${ctx.getString(R.string.chat_notif_file, (payload["file"] as? Map<*, *>)?.get("name") ?: ctx.getString(R.string.chat_preview_file))}"
                 else -> text?.take(200) ?: ""
             }
             com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
@@ -449,11 +451,11 @@ class MessageProcessor(
                     // Build preview of the reacted message for the notification
                     val maxPreviewLen = 50
                     val reactedPreview = when (myMsg.type) {
-                        "file" -> myMsg.text?.substringAfterLast(": ")?.takeIf { it.isNotEmpty() } ?: "📎 File"
-                        "voice" -> "🎤 Voice message"
-                        "sticker" -> "🎟️ Sticker"
-                        "poll" -> "📊 Poll"
-                        "tip" -> "💰 Tip"
+                        "file" -> myMsg.text?.substringAfterLast(": ")?.takeIf { it.isNotEmpty() } ?: "📎 ${ctx.getString(R.string.chat_reaction_file)}"
+                        "voice" -> "🎤 ${ctx.getString(R.string.chat_reaction_voice)}"
+                        "sticker" -> "🎟️ ${ctx.getString(R.string.chat_reaction_sticker)}"
+                        "poll" -> "📊 ${ctx.getString(R.string.chat_reaction_poll)}"
+                        "tip" -> "💰 ${ctx.getString(R.string.chat_reaction_tip)}"
                         else -> myMsg.text?.trim()
                     }?.let { txt ->
                         if (txt.length > maxPreviewLen) txt.take(maxPreviewLen) + "…" else txt
@@ -461,7 +463,7 @@ class MessageProcessor(
                     // For groups: use group entity name (conv.handle = full groupId for group convs)
                     val senderName = if (convKey.startsWith("g_")) {
                         val group = db.groupDao().findByGroupId(conv.handle ?: "")
-                        val groupName = group?.name?.ifEmpty { null } ?: "Group"
+                        val groupName = group?.name?.ifEmpty { null } ?: ctx.getString(R.string.chat_group_name_fallback)
                         "$groupName: $senderDisplayName"
                     } else {
                         senderDisplayName
@@ -768,8 +770,8 @@ class MessageProcessor(
             if (group != null && group.lastMessageTs == msgTs) {
                 val latest = db.messageDao().getLatestMessage(conv.id)
                 if (latest != null) {
-                    val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
-                    val preview = "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                    val senderLabel = if (latest.sent) ctx.getString(R.string.chat_sender_you) else "@${latest.senderHandle}"
+                    val preview = "$senderLabel: ${latest.text?.take(40) ?: ctx.getString(R.string.chat_delete_preview)}"
                     db.groupDao().updateLastMessage(group.groupId, latest.timestamp, preview)
                 } else {
                     db.groupDao().updateLastMessage(group.groupId, 0, null)
@@ -784,8 +786,8 @@ class MessageProcessor(
         val latest = db.messageDao().getLatestMessage(convId)
         if (latest != null) {
             val preview = when (latest.type) {
-                "tip" -> "Tip"
-                "file" -> "\uD83D\uDCCE File"
+                "tip" -> ctx.getString(R.string.chat_preview_tip)
+                "file" -> "\uD83D\uDCCE ${ctx.getString(R.string.chat_preview_file)}"
                 else -> latest.text?.take(100)
             }
             db.conversationDao().updateLastMessage(convId, latest.timestamp, preview)
@@ -834,7 +836,7 @@ class MessageProcessor(
     ) {
         if (sent) return // ignore our own invite echoes
         val groupId = payload["invite_group_id"] as? String ?: return
-        val groupName = payload["group_name"] as? String ?: "Group"
+        val groupName = payload["group_name"] as? String ?: ctx.getString(R.string.chat_group_name_fallback)
         val memberCount = (payload["member_count"] as? Number)?.toInt() ?: 0
         val displayName = Helpers.fixBvmUtf8(payload["dn"] as? String)
 
@@ -843,7 +845,7 @@ class MessageProcessor(
 
         val dedupKey = "$ts:group_invite:$groupId:$from".hashCode().toString(16)
         val joinPassword = payload["join_password"] as? String
-        val inviteText = "\uD83D\uDC65 Group invite: $groupName ($memberCount members)"
+        val inviteText = ctx.getString(R.string.chat_group_invite_preview, groupName, memberCount)
         val inviteData = org.json.JSONObject().apply {
             put("group_id", groupId)
             put("group_name", groupName)
@@ -992,7 +994,7 @@ class MessageProcessor(
 
         // Update group last message + unread
         val senderLabel = if (sent) "You" else (displayName ?: "@$from")
-        val preview = "$senderLabel: ${text?.take(40) ?: "message"}"
+        val preview = "$senderLabel: ${text?.take(40) ?: ctx.getString(R.string.chat_delete_preview)}"
         db.groupDao().updateLastMessage(groupId, ts, preview)
 
         if (!sent) {
@@ -1033,8 +1035,8 @@ class MessageProcessor(
             val isMentioned = text != null &&
                 Regex("@${Regex.escape(myHandle)}\\b").containsMatchIn(text)
             if (!isActive && (!group.muted || isMentioned)) {
-                val notifText = if (isMentioned && group.muted) "mentioned you: ${text ?: ""}"
-                    else text ?: "sent a message"
+                val notifText = if (isMentioned && group.muted) ctx.getString(R.string.chat_notif_mentioned, text ?: "")
+                    else text ?: ctx.getString(R.string.chat_notif_sent_message)
                 com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                     convKey = groupConvKey,
                     convId = convId,
@@ -1174,17 +1176,17 @@ class MessageProcessor(
                 }
 
                 // Update group preview + unread
-                val senderLabel = if (sent) "You" else (displayName ?: "@$from")
+                val senderLabel = if (sent) ctx.getString(R.string.chat_sender_you) else (displayName ?: "@$from")
                 val isGroupImage = type == "file" && (fileData?.get("mime") as? String)?.startsWith("image/") == true
                 val isGroupVoice = type == "file" && com.privimemobile.protocol.Helpers.isVoiceMime(fileData?.get("mime") as? String ?: "")
                 val preview = when {
-                    type == "tip" -> "$senderLabel: Tip"
-                    isGroupImage -> "$senderLabel: \uD83D\uDDBC\uFE0F Image"
-                    isGroupVoice -> "$senderLabel: \uD83C\uDFA4 Voice message"
-                    type == "file" -> "$senderLabel: \uD83D\uDCCE ${fileData?.get("name") ?: "File"}"
-                    type == "sticker" -> "$senderLabel: \uD83C\uDF1F Sticker"
-                    type == "sticker_pack" -> "$senderLabel: \uD83D\uDCE6 Sticker Pack"
-                    type == "poll" -> "$senderLabel: \uD83D\uDCCA ${text ?: "Poll"}"
+                    type == "tip" -> "$senderLabel: ${ctx.getString(R.string.chat_preview_tip)}"
+                    isGroupImage -> "$senderLabel: \uD83D\uDDBC\uFE0F ${ctx.getString(R.string.chat_preview_image)}"
+                    isGroupVoice -> "$senderLabel: \uD83C\uDFA4 ${ctx.getString(R.string.chat_preview_voice)}"
+                    type == "file" -> "$senderLabel: \uD83D\uDCCE ${fileData?.get("name") ?: ctx.getString(R.string.chat_preview_file)}"
+                    type == "sticker" -> "$senderLabel: \uD83C\uDF1F ${ctx.getString(R.string.chat_preview_sticker)}"
+                    type == "sticker_pack" -> "$senderLabel: \uD83D\uDCE6 ${ctx.getString(R.string.chat_preview_sticker_pack)}"
+                    type == "poll" -> "$senderLabel: \uD83D\uDCCA ${text ?: ctx.getString(R.string.chat_preview_poll)}"
                     else -> "$senderLabel: ${text?.take(40) ?: type}"
                 }
                 db.groupDao().updateLastMessage(groupId, ts, preview)
@@ -1251,16 +1253,16 @@ class MessageProcessor(
         val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
         val serviceText = when (action) {
-            "joined" -> "@${target ?: from} joined the group"
-            "left" -> "@$from left the group"
-            "kicked" -> "@$target was removed by @$from"
-            "banned" -> "@$target was banned by @$from"
-            "unbanned" -> "@$target was unbanned by @$from"
-            "promoted" -> "@$target was promoted to admin by @$from"
-            "demoted" -> "@$target was demoted by @$from"
-            "ownership_transferred" -> "@$from transferred ownership to @$target"
-            "group_deleted" -> "Group was deleted by @$from"
-            else -> "$action by @$from"
+            "joined" -> "@${target ?: from} ${ctx.getString(R.string.chat_svc_joined)}"
+            "left" -> "@$from ${ctx.getString(R.string.chat_svc_left)}"
+            "kicked" -> "@${target ?: from} ${ctx.getString(R.string.chat_svc_removed, target ?: from, from)}"
+            "banned" -> "@$target ${ctx.getString(R.string.chat_svc_banned, target, from)}"
+            "unbanned" -> "@$target ${ctx.getString(R.string.chat_svc_unbanned, target, from)}"
+            "promoted" -> "@$target ${ctx.getString(R.string.chat_svc_promoted, target, from)}"
+            "demoted" -> "@$target ${ctx.getString(R.string.chat_svc_demoted, target, from)}"
+            "ownership_transferred" -> "@$from ${ctx.getString(R.string.chat_svc_ownership, from, target)}"
+            "group_deleted" -> ctx.getString(R.string.chat_svc_group_deleted, from)
+            else -> ctx.getString(R.string.chat_svc_action, action, "@$from")
         }
 
         // Check if I'm being removed or group is deleted — clean up locally
@@ -1394,14 +1396,14 @@ class MessageProcessor(
 
         // Insert service message in chat
         val changeText = payload["change"] as? String
-            ?: if (newName != null) "changed the group name to \"$newName\""
-            else if (avatarBase64 != null) "updated group picture"
-            else if (description != null) "updated group description"
-            else "updated group info"
+            ?: if (newName != null) ctx.getString(R.string.chat_svc_info_name, newName)
+            else if (avatarBase64 != null) ctx.getString(R.string.chat_svc_info_picture)
+            else if (description != null) ctx.getString(R.string.chat_svc_info_description)
+            else ctx.getString(R.string.chat_svc_info_general)
         val group2 = db.groupDao().findByGroupId(groupId) ?: return
         val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group2.name)
         val svcTs = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000)
-        val serviceText = "@$from $changeText"
+        val serviceText = ctx.getString(R.string.chat_svc_info_change, "@$from", changeText)
         val dedupKey = "$svcTs:info_update:$from:$groupId".hashCode().toString(16)
         val entity = MessageEntity(
             conversationId = convId,

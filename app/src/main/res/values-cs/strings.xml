@@ -327,4 +327,6 @@
     <string name="chat_voice_cancel">Zrušit</string>
     <string name="chat_timer_5min">5 minut</string>
     <string name="chat_timer_1h">1 hodina</string>
+    <string name="chat_preview_unknown">neznámý</string>
+    <string name="chat_sender_unknown">neznámý</string>
 </resources>

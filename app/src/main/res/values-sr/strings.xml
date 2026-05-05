@@ -103,4 +103,6 @@
     <string name="tx_cancelled">Трансакција отказана</string>
     <string name="chat_timer_5min">5 минута</string>
     <string name="chat_timer_1h">1 сат</string>
+    <string name="chat_preview_unknown">непознато</string>
+    <string name="chat_sender_unknown">непознато</string>
 </resources>

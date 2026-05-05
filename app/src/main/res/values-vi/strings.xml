@@ -228,4 +228,6 @@
     <string name="chat_voice_cancel">Huỷ</string>
     <string name="chat_timer_5min">5 phút</string>
     <string name="chat_timer_1h">1 giờ</string>
+    <string name="chat_preview_unknown">chưa xác định</string>
+    <string name="chat_sender_unknown">chưa xác định</string>
 </resources>

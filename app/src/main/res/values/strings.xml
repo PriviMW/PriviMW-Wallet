@@ -858,6 +858,15 @@
 
     <!-- CHAT TIMER LABELS -->
     <string name="chat_timer_off">Off</string>
+    <string name="chat_timer_seconds_dynamic">%d s</string>
+    <string name="chat_timer_minutes_dynamic">%d m</string>
+    <string name="chat_timer_hours_dynamic">%d h</string>
+    <string name="chat_timer_days_dynamic">%d d</string>
+    <string name="chat_duration_seconds">%d sec</string>
+    <string name="chat_duration_minutes">%d min</string>
+    <string name="chat_duration_hours">%d hr</string>
+    <string name="chat_duration_day">%d day</string>
+    <string name="chat_duration_days">%d days</string>
 
     <!-- CHAT PINNED / REPLY PREVIEWS -->
     <string name="chat_pinned_file">📎 File</string>
@@ -1551,6 +1560,7 @@
     <string name="settings_file_empty">Selected file is empty</string>
     <string name="settings_invalid_json">Invalid JSON file</string>
     <string name="settings_file_read_failed">Failed to read file: %1$s</string>
+    <string name="settings_file_unnamed">Selected file</string>
     <string name="settings_wallet_import_ok">Wallet data imported successfully</string>
     <string name="settings_wallet_import_failed">Import failed — invalid or corrupt file</string>
     <string name="settings_owner_key_copied_timed">Owner key copied! Clipboard clears in 30s</string>
@@ -1741,6 +1751,10 @@
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <string name="chat_join_failed">Join failed</string>
     <string name="chat_sticker_pack_label">Stickers</string>
+    <string name="chat_album_photos">%1$d photos</string>
+    <string name="chat_sticker_pack_header">Sticker Pack</string>
+    <string name="chat_poll_label">Poll</string>
+    <string name="chat_clip_label">Message</string>
     <string name="chat_editing_message">Editing message</string>
     <string name="chat_forwarded_from">Forwarded from %1$s</string>
     <string name="chat_update_pack">Update Pack</string>
@@ -1810,6 +1824,7 @@
     <string name="chat_reacted_on">reacted on</string>
     <string name="chat_messages_selected">%1$d messages selected</string>
     <string name="chat_group_invite">👥 Group Invite</string>
+    <string name="chat_group_invite_preview">👥 Group invite: %1$s (%2$d members)</string>
     <string name="chat_invite_member_count_format">%1$d members • Invited by %2$s</string>
     <string name="chat_join_group_subtitle">%1$d members · by %2$s</string>
 
@@ -1833,6 +1848,91 @@
     <string name="chat_wallpaper_midnight">Midnight</string>
     <string name="chat_wallpaper_forest">Forest</string>
     <string name="chat_wallpaper_sunset">Sunset</string>
+
+    <!-- Message type labels for chat list preview and notifications -->
+    <string name="chat_preview_tip">Tip</string>
+    <string name="chat_preview_sticker">Sticker</string>
+    <string name="chat_preview_sticker_pack">Sticker Pack</string>
+    <string name="chat_preview_poll">Poll</string>
+    <string name="chat_preview_image">Image</string>
+    <string name="chat_preview_voice">Voice message</string>
+    <string name="chat_preview_file">File</string>
+    <string name="chat_preview_vote">Vote</string>
+    <string name="chat_preview_unknown">Unknown</string>
+    <string name="chat_preview_sent_tip">Sent a tip</string>
+    <string name="chat_preview_tip_amount">Tip: %1$s %2$s</string>
+    <string name="chat_preview_poll_text">Poll: %1$s</string>
+    <string name="chat_preview_file_name">File: %1$s</string>
+    <string name="chat_msg_message">message</string>
+    <string name="chat_you_prefix">You: </string>
+
+    <!-- Notification message type labels -->
+    <string name="chat_notif_sticker">Sticker</string>
+    <string name="chat_notif_sticker_pack">Sticker Pack</string>
+    <string name="chat_notif_poll">Poll: %1$s</string>
+    <string name="chat_notif_image">Image</string>
+    <string name="chat_notif_voice">Voice message</string>
+    <string name="chat_notif_file">File: %1$s</string>
+
+    <!-- Sender/label fallbacks -->
+    <string name="chat_sender_unknown">Unknown</string>
+    <string name="chat_sender_you">You</string>
+
+    <!-- Reaction notification previews -->
+    <string name="chat_reaction_file">File</string>
+    <string name="chat_reaction_voice">Voice message</string>
+    <string name="chat_reaction_sticker">Sticker</string>
+    <string name="chat_reaction_poll">Poll</string>
+    <string name="chat_reaction_tip">Tip</string>
+
+    <!-- Group service messages -->
+    <string name="chat_svc_joined">joined the group</string>
+    <string name="chat_svc_left">left the group</string>
+    <string name="chat_svc_removed">%1$s was removed by %2$s</string>
+    <string name="chat_svc_banned">%1$s was banned by %2$s</string>
+    <string name="chat_svc_unbanned">%1$s was unbanned by %2$s</string>
+    <string name="chat_svc_promoted">%1$s was promoted to admin by %2$s</string>
+    <string name="chat_svc_demoted">%1$s was demoted by %2$s</string>
+    <string name="chat_svc_ownership">%1$s transferred ownership to %2$s</string>
+    <string name="chat_svc_group_deleted">Group was deleted by %1$s</string>
+    <string name="chat_svc_action">%1$s by %2$s</string>
+    <string name="chat_svc_at">%1$s</string>
+
+    <!-- Sender-side group service messages (what you see in group chat) -->
+    <string name="chat_you_joined">You joined the group</string>
+    <string name="chat_you_invited">You invited %1$s to the group</string>
+    <string name="chat_you_left">You left the group</string>
+    <string name="chat_you_removed">You removed %1$s</string>
+    <string name="chat_you_banned">You banned %1$s</string>
+    <string name="chat_you_unbanned">You unbanned %1$s</string>
+    <string name="chat_you_promoted">You promoted %1$s to admin</string>
+    <string name="chat_you_demoted">You demoted %1$s to member</string>
+    <string name="chat_you_ownership">You transferred ownership to %1$s</string>
+    <string name="chat_you_group_deleted">You deleted the group</string>
+    <string name="chat_you_unknown">You %1$s%2$s</string>
+
+    <!-- Sender-side group invite confirmation -->
+    <string name="chat_you_invited_group">👥 You invited %1$s to %2$s</string>
+
+    <!-- Group info change messages -->
+    <string name="chat_svc_info_name">changed the group name to \"%1$s\"</string>
+    <string name="chat_svc_info_picture">updated group picture</string>
+    <string name="chat_svc_info_description">updated group description</string>
+    <string name="chat_svc_info_general">updated group info</string>
+    <string name="chat_svc_info_change">%1$s %2$s</string>
+
+    <!-- Notification text for groups -->
+    <string name="chat_notif_mentioned">mentioned you: %1$s</string>
+    <string name="chat_notif_sent_message">sent a message</string>
+
+    <!-- Delete for everyone preview -->
+    <string name="chat_delete_preview">Message</string>
+
+    <!-- Unread messages divider -->
+    <plurals name="chat_new_messages">
+        <item quantity="one">%1$d new message</item>
+        <item quantity="other">%1$d new messages</item>
+    </plurals>
 
     <!-- EMOJI PICKER CATEGORIES -->
     <string name="chat_emoji_cat_people">Emoji &amp; People</string>

@@ -399,4 +399,6 @@
     <string name="chat_voice_cancel">Batal</string>
     <string name="chat_timer_5min">5 menit</string>
     <string name="chat_timer_1h">1 jam</string>
+    <string name="chat_preview_unknown">tidak diketahui</string>
+    <string name="chat_sender_unknown">tidak diketahui</string>
 </resources>

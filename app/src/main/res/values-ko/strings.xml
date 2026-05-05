@@ -247,4 +247,6 @@
     <string name="chat_voice_cancel">취소</string>
     <string name="chat_timer_5min">5분</string>
     <string name="chat_timer_1h">1 시간</string>
+    <string name="chat_preview_unknown">알려지지 않음</string>
+    <string name="chat_sender_unknown">알려지지 않음</string>
 </resources>

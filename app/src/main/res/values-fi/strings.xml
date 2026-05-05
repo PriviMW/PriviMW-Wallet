@@ -260,4 +260,6 @@
     <string name="chat_voice_cancel">Peruuta</string>
     <string name="chat_timer_5min">5 minuuttia</string>
     <string name="chat_timer_1h">1 tunti</string>
+    <string name="chat_preview_unknown">tuntematon</string>
+    <string name="chat_sender_unknown">tuntematon</string>
 </resources>

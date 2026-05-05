@@ -115,7 +115,7 @@ fun GroupSettingsScreen(
                             scope.launch {
                                 val ts = System.currentTimeMillis() / 1000
                                 // Insert local service message
-                                val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: "Group")
+                                val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: context.getString(R.string.chat_group_name_fallback))
                                 val dedupKey = "$ts:info_update:avatar:$groupId".hashCode().toString(16)
                                 ChatService.db?.messageDao()?.insert(com.privimemobile.chat.db.entities.MessageEntity(
                                     conversationId = convId, timestamp = ts,
@@ -144,7 +144,7 @@ fun GroupSettingsScreen(
                             if (bmp != null) {
                                 androidx.compose.foundation.Image(
                                     bitmap = bmp.asImageBitmap(),
-                                    contentDescription = "Group avatar",
+                                    contentDescription = stringResource(R.string.chat_section_groups),
                                     modifier = Modifier.size(80.dp).clip(CircleShape),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 )
@@ -286,7 +286,7 @@ fun GroupSettingsScreen(
                                     ChatService.db?.groupDao()?.updateDescription(groupId, descToSave)
                                     // Insert local service message (sendGroupPayload excludes self)
                                     val ts = System.currentTimeMillis() / 1000
-                                    val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: "Group")
+                                    val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: context.getString(R.string.chat_group_name_fallback))
                                     val dedupKey = "$ts:info_update:desc:$groupId".hashCode().toString(16)
                                     ChatService.db?.messageDao()?.insert(com.privimemobile.chat.db.entities.MessageEntity(
                                         conversationId = convId, timestamp = ts,

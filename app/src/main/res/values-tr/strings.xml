@@ -54,6 +54,10 @@
     <string name="auth_node_remote">Belirli bir uzak noda bağlan</string>
     <string name="auth_node_port_label">Dinlemek için port girin</string>
     <string name="auth_node_peer_label">Eş</string>
+    <string name="onboarding_create_new_wallet">Yeni cüzdan oluştur</string>
+    <string name="onboarding_generate_seed_phrase">Anahtar kelimeleri oluştur</string>
+    <string name="onboarding_restore_wallet">Cüzdanı geri yükle</string>
+    <string name="onboarding_node">Nod</string>
     <string name="wallet_title">Cüzdan</string>
     <string name="wallet_send_button">Gönder</string>
     <string name="wallet_receive_button">Al</string>
@@ -160,6 +164,7 @@
     <string name="chat_search">Ara</string>
     <string name="chat_online">Çevrimiçi</string>
     <string name="chat_sent">Gönderildi</string>
+    <string name="chat_tx_failed">İşlem başarısız</string>
     <string name="register_try_again">Tekrar deneyin</string>
     <string name="register_transaction_failed">İşlem başarısız</string>
     <string name="chats_tab_all">Tümü</string>
@@ -209,4 +214,10 @@
     <string name="contact_copy_wallet_id_cd">Kopyala</string>
     <string name="chat_section_contacts">Bağlantılar</string>
     <string name="chat_label_delete">Sil</string>
+    <string name="chat_copy">Kopyala</string>
+    <string name="chat_close">Kapalı</string>
+    <string name="chat_overflow_search">Ara</string>
+    <string name="chat_voice_cancel">İptal</string>
+    <string name="chat_timer_5min">5 dakika</string>
+    <string name="chat_timer_1h">1 saat</string>
 </resources>

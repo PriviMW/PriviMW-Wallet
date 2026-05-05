@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Увядзіце порт</string>
     <string name="auth_node_peer_label">Адрас піра</string>
     <string name="auth_create_password_btn">Стварыць пароль</string>
+    <string name="onboarding_create_new_wallet">Стварыць гаманец</string>
+    <string name="onboarding_generate_seed_phrase">Генераваць кантрольную фразу</string>
+    <string name="onboarding_restore_wallet">Аднавіць гаманец</string>
+    <string name="onboarding_node">Вузел</string>
+    <string name="onboarding_remote_node">Аддалены вузел</string>
     <string name="wallet_title">Гаманец</string>
     <string name="wallet_send_button">Адправіць</string>
     <string name="wallet_receive_button">Атрымаць</string>
@@ -306,6 +311,7 @@
     <string name="chat_online">Анлайн</string>
     <string name="chat_sent">Адпраўлена</string>
     <string name="chat_read">прачытана</string>
+    <string name="chat_tx_failed">Транзакцыя не атрымалася</string>
     <string name="register_try_again">Паспрабуйце зноў</string>
     <string name="register_transaction_failed">Транзакцыя не атрымалася</string>
     <string name="chats_tab_all">Усе</string>
@@ -387,4 +393,10 @@
     <string name="chat_section_contacts">Кантакты</string>
     <string name="chat_open">адчыніць</string>
     <string name="chat_label_delete">Выдаліць</string>
+    <string name="chat_copy">Капіяваць</string>
+    <string name="chat_close">Зачыніць</string>
+    <string name="chat_overflow_search">Пошук</string>
+    <string name="chat_voice_cancel">Адмяніць</string>
+    <string name="chat_timer_5min">5 хвілін</string>
+    <string name="chat_timer_1h">1 гадзіна</string>
 </resources>

@@ -60,6 +60,11 @@
     <string name="auth_node_port_label">Zadejte port pro poslech</string>
     <string name="auth_node_peer_label">Klient</string>
     <string name="auth_create_password_btn">Vytvořit heslo</string>
+    <string name="onboarding_create_new_wallet">Vytvořit novou peněženku</string>
+    <string name="onboarding_generate_seed_phrase">Vygenerovat Vaše klíčová slova</string>
+    <string name="onboarding_restore_wallet">Obnovit peněženku</string>
+    <string name="onboarding_node">přístupový bod Node</string>
+    <string name="onboarding_remote_node">Vzdálený node</string>
     <string name="wallet_title">Peněženka</string>
     <string name="wallet_send_button">Odeslat</string>
     <string name="wallet_receive_button">Přijmout</string>
@@ -247,6 +252,7 @@
     <string name="chat_online">On-line</string>
     <string name="chat_sent">Odesláno</string>
     <string name="chat_read">číst</string>
+    <string name="chat_tx_failed">Transakce se nezdařila</string>
     <string name="register_try_again">Zkusit znovu</string>
     <string name="register_transaction_failed">Transakce se nezdařila</string>
     <string name="chats_tab_all">Všechny</string>
@@ -315,4 +321,10 @@
     <string name="chat_section_contacts">Kontakty</string>
     <string name="chat_open">otevřít</string>
     <string name="chat_label_delete">Smazat</string>
+    <string name="chat_copy">Kopírovat</string>
+    <string name="chat_close">Zavřít</string>
+    <string name="chat_overflow_search">Hledat</string>
+    <string name="chat_voice_cancel">Zrušit</string>
+    <string name="chat_timer_5min">5 minut</string>
+    <string name="chat_timer_1h">1 hodina</string>
 </resources>

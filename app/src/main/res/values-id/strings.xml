@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Masuk ke port untuk mendengarkan</string>
     <string name="auth_node_peer_label">Peer</string>
     <string name="auth_create_password_btn">Buat kata sandi</string>
+    <string name="onboarding_create_new_wallet">Buat dompet baru</string>
+    <string name="onboarding_generate_seed_phrase">Hasilkan Seed Phrase</string>
+    <string name="onboarding_restore_wallet">Pulihkan dompet</string>
+    <string name="onboarding_node">Node</string>
+    <string name="onboarding_remote_node">Node jarak jauh</string>
     <string name="wallet_title">Dompet</string>
     <string name="wallet_send_button">Kirim</string>
     <string name="wallet_receive_button">Terima</string>
@@ -306,6 +311,7 @@
     <string name="chat_online">Online</string>
     <string name="chat_sent">Dikirim</string>
     <string name="chat_read">dibaca</string>
+    <string name="chat_tx_failed">Transaksi gagal</string>
     <string name="register_try_again">Coba lagi</string>
     <string name="register_transaction_failed">Transaksi gagal</string>
     <string name="chats_tab_all">Semua</string>
@@ -387,4 +393,10 @@
     <string name="chat_section_contacts">Kontak</string>
     <string name="chat_open">buka</string>
     <string name="chat_label_delete">Hapus</string>
+    <string name="chat_copy">Salin</string>
+    <string name="chat_close">Tutup</string>
+    <string name="chat_overflow_search">Cari</string>
+    <string name="chat_voice_cancel">Batal</string>
+    <string name="chat_timer_5min">5 menit</string>
+    <string name="chat_timer_1h">1 jam</string>
 </resources>

@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">接続ポートを入力</string>
     <string name="auth_node_peer_label">ピア</string>
     <string name="auth_create_password_btn">パスワードを作成する</string>
+    <string name="onboarding_create_new_wallet">新しいウォレットを作成</string>
+    <string name="onboarding_generate_seed_phrase">シードフレーズを生成</string>
+    <string name="onboarding_restore_wallet">ウォレットを復元する</string>
+    <string name="onboarding_node">ノード</string>
+    <string name="onboarding_remote_node">リモートノード</string>
     <string name="wallet_title">ウォレット</string>
     <string name="wallet_send_button">送信</string>
     <string name="wallet_receive_button">受信</string>
@@ -299,6 +304,7 @@
     <string name="chat_online">オンライン</string>
     <string name="chat_sent">送信済</string>
     <string name="chat_read">既読</string>
+    <string name="chat_tx_failed">トランザクションが失敗しました</string>
     <string name="register_try_again">再試行してください。</string>
     <string name="register_transaction_failed">トランザクションが失敗しました</string>
     <string name="chats_tab_all">すべて</string>
@@ -380,4 +386,10 @@
     <string name="chat_section_contacts">コンタクト</string>
     <string name="chat_open">開く</string>
     <string name="chat_label_delete">削除</string>
+    <string name="chat_copy">コピー</string>
+    <string name="chat_close">閉じる</string>
+    <string name="chat_overflow_search">検索</string>
+    <string name="chat_voice_cancel">キャンセル</string>
+    <string name="chat_timer_5min">5分</string>
+    <string name="chat_timer_1h">1時間</string>
 </resources>

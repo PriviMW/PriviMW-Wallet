@@ -56,6 +56,10 @@
     <string name="auth_node_remote">Kết nối với nút từ xa cụ thể</string>
     <string name="auth_node_port_label">Vào cổng để nghe</string>
     <string name="auth_node_peer_label">Đối tượng ngang hàng</string>
+    <string name="onboarding_create_new_wallet">Tạo ví mới</string>
+    <string name="onboarding_generate_seed_phrase">Tạo cụm từ hạt giống</string>
+    <string name="onboarding_restore_wallet">Khôi phục ví</string>
+    <string name="onboarding_node">Nút</string>
     <string name="wallet_title">Ví</string>
     <string name="wallet_send_button">Gửi</string>
     <string name="wallet_receive_button">Nhận</string>
@@ -167,6 +171,7 @@
     <string name="chat_search">Tìm</string>
     <string name="chat_online">Trực tuyến</string>
     <string name="chat_sent">Đã gửi</string>
+    <string name="chat_tx_failed">Giao dịch thất bại</string>
     <string name="register_try_again">Thử lại lần nữa</string>
     <string name="register_transaction_failed">Giao dịch thất bại</string>
     <string name="chats_tab_all">Tất cả</string>
@@ -217,4 +222,10 @@
     <string name="contact_copy_wallet_id_cd">Sao chép</string>
     <string name="chat_section_contacts">Liên hệ</string>
     <string name="chat_label_delete">Xoá</string>
+    <string name="chat_copy">Sao chép</string>
+    <string name="chat_close">Đóng</string>
+    <string name="chat_overflow_search">Tìm</string>
+    <string name="chat_voice_cancel">Huỷ</string>
+    <string name="chat_timer_5min">5 phút</string>
+    <string name="chat_timer_1h">1 giờ</string>
 </resources>

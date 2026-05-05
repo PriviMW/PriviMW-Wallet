@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Port zum Verbinden eingeben</string>
     <string name="auth_node_peer_label">Peer</string>
     <string name="auth_create_password_btn">Passwort erstellen</string>
+    <string name="onboarding_create_new_wallet">Neue Wallet erstellen</string>
+    <string name="onboarding_generate_seed_phrase">Seed-Phrase generieren</string>
+    <string name="onboarding_restore_wallet">Wallet wiederherstellen</string>
+    <string name="onboarding_node">Node</string>
+    <string name="onboarding_remote_node">Remote-Node</string>
     <string name="wallet_title">Wallet</string>
     <string name="wallet_send_button">Senden</string>
     <string name="wallet_receive_button">Erhalten</string>
@@ -305,6 +310,7 @@
     <string name="chat_online">Online</string>
     <string name="chat_sent">Gesendet</string>
     <string name="chat_read">lesen</string>
+    <string name="chat_tx_failed">Transaktion fehlgeschlagen</string>
     <string name="register_try_again">Erneut versuchen</string>
     <string name="register_transaction_failed">Transaktion fehlgeschlagen</string>
     <string name="chats_tab_all">Alle</string>
@@ -386,4 +392,10 @@
     <string name="chat_section_contacts">Kontakte</string>
     <string name="chat_open">öffnen</string>
     <string name="chat_label_delete">Löschen</string>
+    <string name="chat_copy">Kopieren</string>
+    <string name="chat_close">Schließen</string>
+    <string name="chat_overflow_search">Suche</string>
+    <string name="chat_voice_cancel">Abbrechen</string>
+    <string name="chat_timer_5min">5 Minuten</string>
+    <string name="chat_timer_1h">1 Stunde</string>
 </resources>

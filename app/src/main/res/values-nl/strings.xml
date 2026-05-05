@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Voer poort in</string>
     <string name="auth_node_peer_label">Peer</string>
     <string name="auth_create_password_btn">Wachtwoord aanmaken</string>
+    <string name="onboarding_create_new_wallet">Nieuwe wallet aanmaken</string>
+    <string name="onboarding_generate_seed_phrase">Genereer herstelzin</string>
+    <string name="onboarding_restore_wallet">Wallet herstellen</string>
+    <string name="onboarding_node">Node</string>
+    <string name="onboarding_remote_node">Externe node</string>
     <string name="wallet_title">Wallet</string>
     <string name="wallet_send_button">Verzend</string>
     <string name="wallet_receive_button">Ontvang</string>
@@ -298,6 +303,7 @@
     <string name="chat_online">Online</string>
     <string name="chat_sent">Verzonden</string>
     <string name="chat_read">lezen</string>
+    <string name="chat_tx_failed">Transactie mislukt</string>
     <string name="register_try_again">Probeer opnieuw</string>
     <string name="register_transaction_failed">Transactie mislukt</string>
     <string name="chats_tab_all">Alle</string>
@@ -379,4 +385,10 @@
     <string name="chat_section_contacts">Contacten</string>
     <string name="chat_open">open</string>
     <string name="chat_label_delete">Verwijderen</string>
+    <string name="chat_copy">Kopiëren</string>
+    <string name="chat_close">Sluiten</string>
+    <string name="chat_overflow_search">Zoeken</string>
+    <string name="chat_voice_cancel">Annuleren</string>
+    <string name="chat_timer_5min">5 minuten</string>
+    <string name="chat_timer_1h">1 uur</string>
 </resources>

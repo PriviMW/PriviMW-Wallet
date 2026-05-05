@@ -53,7 +53,7 @@ fun MediaGalleryScreen(
     val scope = rememberCoroutineScope()
     val isGroup = handle.length == 64 && handle.all { it.isLetterOrDigit() }
     val convKey = if (isGroup) "g_${handle.take(16)}" else "@$handle"
-    val displayName = if (isGroup) "Group" else "@$handle"
+    val displayName = if (isGroup) context.getString(R.string.chat_group_name_fallback) else "@$handle"
 
     val conversations by ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
@@ -93,7 +93,7 @@ fun MediaGalleryScreen(
     Column(modifier = Modifier.fillMaxSize().background(C.bg)) {
         // Header — flush with status bar
         TopAppBar(
-            title = { Text("Media & Files", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) },
+            title = { Text(stringResource(R.string.chat_media_files_title), color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.general_back), tint = C.text)
@@ -131,7 +131,7 @@ fun MediaGalleryScreen(
             // Media grid
             if (images.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No images shared yet", color = C.textMuted, fontSize = 14.sp)
+                    Text(context.getString(R.string.chat_no_images_yet), color = C.textMuted, fontSize = 14.sp)
                 }
             } else {
                 LazyVerticalGrid(
@@ -185,7 +185,7 @@ fun MediaGalleryScreen(
             // Files list
             if (files.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No files shared yet", color = C.textMuted, fontSize = 14.sp)
+                    Text(context.getString(R.string.chat_no_files_yet), color = C.textMuted, fontSize = 14.sp)
                 }
             } else {
                 LazyColumn(modifier = Modifier.padding(8.dp)) {
@@ -260,7 +260,7 @@ fun MediaGalleryScreen(
                                 IconButton(onClick = {
                                     saveFileToDownloads(context, path, att.fileName, att.mimeType)
                                 }) {
-                                    Icon(Icons.Default.Download, "Save", tint = C.accent)
+                                    Icon(Icons.Default.Download, context.getString(R.string.chat_save_file), tint = C.accent)
                                 }
                             } else {
                                 CircularProgressIndicator(color = C.accent, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -329,7 +329,7 @@ fun MediaGalleryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(onClick = { fullscreenImage = null }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close", tint = androidx.compose.ui.graphics.Color.White)
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, context.getString(R.string.chat_close), tint = androidx.compose.ui.graphics.Color.White)
                         }
                         Text(att.fileName, color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -345,11 +345,11 @@ fun MediaGalleryScreen(
                         var showDelMenu by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { showDelMenu = true }) {
-                                Icon(Icons.Default.Delete, "Delete", tint = C.error)
+                                Icon(Icons.Default.Delete, context.getString(R.string.chat_label_delete), tint = C.error)
                             }
                             DropdownMenu(expanded = showDelMenu, onDismissRequest = { showDelMenu = false }, containerColor = C.card) {
                                 DropdownMenuItem(
-                                    text = { Text("Delete for me", color = C.error) },
+                                    text = { Text(context.getString(R.string.media_delete_for_me), color = C.error) },
                                     onClick = {
                                         scope.launch { ChatService.db?.messageDao()?.markDeletedById(att.messageId) }
                                         showDelMenu = false; fullscreenImage = null
@@ -358,7 +358,7 @@ fun MediaGalleryScreen(
                                 )
                                 if (isMine) {
                                     DropdownMenuItem(
-                                        text = { Text("Delete for everyone", color = C.error) },
+                                        text = { Text(context.getString(R.string.media_delete_for_everyone), color = C.error) },
                                         onClick = {
                                             scope.launch {
                                                 val state = ChatService.db?.chatStateDao()?.get()
@@ -391,7 +391,7 @@ fun MediaGalleryScreen(
                         IconButton(onClick = {
                             if (path != null) saveFileToDownloads(context, path, att.fileName, att.mimeType ?: "image/jpeg")
                         }) {
-                            Icon(Icons.Default.Download, "Save", tint = androidx.compose.ui.graphics.Color.White)
+                            Icon(Icons.Default.Download, context.getString(R.string.chat_save_file), tint = androidx.compose.ui.graphics.Color.White)
                         }
                     }
                 }

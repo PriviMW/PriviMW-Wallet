@@ -84,6 +84,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
     var activeWordIdx by remember { mutableIntStateOf(-1) }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // FLAG_SECURE: block screenshots on seed phrase screen
     val activity = (LocalContext.current as? android.app.Activity)
@@ -130,9 +131,9 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
         if (loading) {
             LoadingScreen(
                 when (step) {
-                    OnboardingStep.CREATING -> "Creating wallet..."
-                    OnboardingStep.RESTORE_PASSWORD -> "Restoring wallet..."
-                    else -> "Generating seed phrase..."
+                    OnboardingStep.CREATING -> stringResource(R.string.onboarding_creating_wallet)
+                    OnboardingStep.RESTORE_PASSWORD -> stringResource(R.string.onboarding_restoring_wallet)
+                    else -> stringResource(R.string.onboarding_generating_seed)
                 }
             )
             return@Column
@@ -157,9 +158,9 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                     onCustomNodeChange = { customNode = it },
                     onNext = {
                         when {
-                            password.length < 6 -> error = "Password must be at least 6 characters"
-                            password != confirmPassword -> error = "Passwords don't match"
-                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = "Invalid node address. Use hostname:port with valid port (1-65535)"
+                            password.length < 6 -> error = context.getString(R.string.onboarding_error_password_short)
+                            password != confirmPassword -> error = context.getString(R.string.onboarding_error_passwords_mismatch)
+                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = context.getString(R.string.onboarding_error_invalid_node)
                             else -> {
                                 error = null
                                 loading = true
@@ -170,7 +171,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                         }
                                         step = OnboardingStep.SHOW_SEED
                                     } catch (e: Exception) {
-                                        error = e.message ?: "Failed to generate seed"
+                                        error = e.message ?: context.getString(R.string.onboarding_error_generate_seed)
                                     }
                                     loading = false
                                 }
@@ -214,7 +215,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                         }
                         verifyErrors = errors
                         if (errors.any { it }) {
-                            error = "One or more words are incorrect. Please check your seed phrase."
+                            error = context.getString(R.string.onboarding_error_verify_failed)
                             return@VerifySeedScreen
                         }
                         error = null
@@ -237,7 +238,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                 SecureStorage.setHasWallet(true)
                                 onWalletReady()
                             } else {
-                                error = "Failed to create wallet"
+                                error = context.getString(R.string.onboarding_error_create_wallet)
                                 step = OnboardingStep.SHOW_SEED
                             }
                         }
@@ -245,7 +246,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                     onShowSeedAgain = { step = OnboardingStep.SHOW_SEED },
                 )
 
-                OnboardingStep.CREATING -> LoadingScreen("Creating wallet...")
+                OnboardingStep.CREATING -> LoadingScreen(stringResource(R.string.onboarding_creating_wallet))
 
                 OnboardingStep.RESTORE_SEED -> RestoreSeedScreen(
                     words = restoreWords,
@@ -294,13 +295,13 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                 if (w.isNotEmpty() && w !in dictionary) i else null
                             }
                             if (invalid.isNotEmpty()) {
-                                error = "Invalid seed word(s) at position ${invalid.map { "#${it + 1}" }.joinToString(", ")}"
+                                error = context.getString(R.string.auth_invalid_seed_words, invalid.map { "#${it + 1}" }.joinToString(", "))
                                 return@RestoreSeedScreen
                             }
                         }
                         val filled = restoreWords.count { it.isNotBlank() }
                         if (filled < 12) {
-                            error = "Please enter all 12 seed words"
+                            error = context.getString(R.string.onboarding_error_fill_all_words)
                             return@RestoreSeedScreen
                         }
                         error = null
@@ -326,9 +327,9 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                     onCustomNodeChange = { customNode = it },
                     onRestore = {
                         when {
-                            password.length < 6 -> error = "Password must be at least 6 characters"
-                            password != confirmPassword -> error = "Passwords don't match"
-                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = "Invalid node address. Use hostname:port with valid port (1-65535)"
+                            password.length < 6 -> error = context.getString(R.string.onboarding_error_password_short)
+                            password != confirmPassword -> error = context.getString(R.string.onboarding_error_passwords_mismatch)
+                            nodeMode == "own" && !isValidNodeAddress(customNode) -> error = context.getString(R.string.onboarding_error_invalid_node)
                             else -> {
                                 error = null
                                 loading = true
@@ -356,7 +357,7 @@ fun OnboardingScreen(onWalletReady: () -> Unit) {
                                         onWalletReady()
                                     } else {
                                         loading = false
-                                        error = "Failed to restore wallet. Check your seed phrase."
+                                        error = context.getString(R.string.onboarding_error_restore_failed)
                                         step = OnboardingStep.RESTORE_SEED
                                     }
                                 }
@@ -389,14 +390,14 @@ private fun ChooseScreen(onCreateNew: () -> Unit, onRestore: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 painter = painterResource(R.drawable.privimw_logo),
-                contentDescription = "PriviMW Logo",
+                contentDescription = stringResource(R.string.onboarding_logo_desc),
                 modifier = Modifier.size(48.dp),
             )
             Spacer(Modifier.width(12.dp))
-            Text("PriviMW", color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_app_title), color = C.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Wallet on Beam Privacy Blockchain", color = C.textSecondary, fontSize = 14.sp, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.onboarding_tagline), color = C.textSecondary, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(64.dp))
 
         Button(
@@ -405,7 +406,7 @@ private fun ChooseScreen(onCreateNew: () -> Unit, onRestore: () -> Unit) {
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("Create New Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_create_new_wallet), color = C.textDark, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
@@ -416,7 +417,7 @@ private fun ChooseScreen(onCreateNew: () -> Unit, onRestore: () -> Unit) {
                 brush = androidx.compose.ui.graphics.SolidColor(C.accent)
             ),
         ) {
-            Text("Restore from Seed", color = C.accent, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.onboarding_restore_from_seed), color = C.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -434,17 +435,17 @@ private fun CreatePasswordScreen(
     ) {
         TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
         Spacer(Modifier.height(8.dp))
-        Text("Create Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.onboarding_create_wallet), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(24.dp))
 
-        Text("Password", color = C.textSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.general_password), color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(6.dp))
-        PasswordField(password, onPasswordChange, "Min 6 characters")
+        PasswordField(password, onPasswordChange, stringResource(R.string.onboarding_password_hint))
         Spacer(Modifier.height(16.dp))
 
-        Text("Confirm Password", color = C.textSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.general_confirm_password), color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(6.dp))
-        PasswordField(confirmPassword, onConfirmChange, "Repeat password")
+        PasswordField(confirmPassword, onConfirmChange, stringResource(R.string.onboarding_confirm_password_hint))
         Spacer(Modifier.height(16.dp))
 
         NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
@@ -461,7 +462,7 @@ private fun CreatePasswordScreen(
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("Generate Seed Phrase", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_generate_seed_phrase), color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -471,10 +472,10 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        Text("Save Your Seed Phrase", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.onboarding_save_seed), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Write these 12 words down and store them safely. This is the ONLY way to recover your wallet. Never share them with anyone.",
+            stringResource(R.string.onboarding_seed_warning),
             color = C.error,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -508,9 +509,7 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4DFFC107)),
         ) {
             Text(
-                "This seed phrase can only be used on one device at a time. " +
-                "Running the same seed on multiple devices will cause transaction conflicts. " +
-                "To monitor your wallet from another device, use your owner key with your own node.",
+                stringResource(R.string.onboarding_seed_one_device),
                 color = Color(0xFFFFC107),
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
@@ -525,7 +524,7 @@ private fun SeedScreen(words: List<String>, onConfirm: () -> Unit, onBack: () ->
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("I've saved my seed phrase", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_seed_saved), color = C.textDark, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
@@ -554,22 +553,22 @@ private fun VerifySeedScreen(
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
     ) {
-        Text("Verify Seed Phrase", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.onboarding_verify_seed), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "To confirm you saved your seed phrase, enter the following words:",
+            stringResource(R.string.onboarding_verify_instructions),
             color = C.textSecondary,
             fontSize = 14.sp,
         )
         Spacer(Modifier.height(24.dp))
 
         verifyIndices.forEachIndexed { i, wordIdx ->
-            Text("Word #${wordIdx + 1}", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.auth_word_label, wordIdx + 1), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = verifyAnswers[i],
                 onValueChange = { onAnswerChange(i, it) },
-                placeholder = { Text("Enter word #${wordIdx + 1}") },
+                placeholder = { Text(stringResource(R.string.auth_enter_word, wordIdx + 1)) },
                 singleLine = true,
                 isError = verifyErrors[i],
                 modifier = Modifier.fillMaxWidth(),
@@ -585,7 +584,7 @@ private fun VerifySeedScreen(
                 ),
             )
             if (verifyErrors[i]) {
-                Text("Incorrect word", color = C.error, fontSize = 12.sp)
+                Text(stringResource(R.string.onboarding_incorrect_word), color = C.error, fontSize = 12.sp)
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -601,7 +600,7 @@ private fun VerifySeedScreen(
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
         ) {
-            Text("Confirm & Create Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_confirm_create_wallet), color = C.textDark, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
@@ -612,7 +611,7 @@ private fun VerifySeedScreen(
                 brush = androidx.compose.ui.graphics.SolidColor(C.accent)
             ),
         ) {
-            Text("Show seed phrase again", color = C.accent, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.onboarding_show_seed_again), color = C.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -638,9 +637,9 @@ private fun RestoreSeedScreen(
         modifier = Modifier.fillMaxSize().padding(24.dp),
     ) {
         TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
-        Text("Restore Wallet", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.onboarding_restore_wallet), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("Enter your 12-word seed phrase. Type each word — suggestions will appear.",
+        Text(stringResource(R.string.onboarding_restore_instructions),
             color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(12.dp))
 
@@ -712,7 +711,7 @@ private fun RestoreSeedScreen(
                     OutlinedTextField(
                         value = word,
                         onValueChange = { onWordChange(idx, it) },
-                        placeholder = { Text("word", fontSize = 14.sp) },
+                        placeholder = { Text(stringResource(R.string.onboarding_word_placeholder), fontSize = 14.sp) },
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
@@ -733,7 +732,7 @@ private fun RestoreSeedScreen(
             }
         }
 
-        Text("$filledCount/12 words entered", color = C.textSecondary, fontSize = 12.sp,
+        Text(stringResource(R.string.auth_words_entered, filledCount), color = C.textSecondary, fontSize = 12.sp,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
         if (error != null) {
@@ -752,7 +751,7 @@ private fun RestoreSeedScreen(
                 disabledContainerColor = C.accent.copy(alpha = 0.4f),
             ),
         ) {
-            Text("Next", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.general_next), color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -770,20 +769,20 @@ private fun RestorePasswordScreen(
     ) {
         TextButton(onClick = onBack) { Text(stringResource(R.string.general_back), color = C.accent) }
         Spacer(Modifier.height(8.dp))
-        Text("Set Password", color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.onboarding_set_password), color = C.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("Choose a password to protect your wallet on this device.",
+        Text(stringResource(R.string.onboarding_set_password_desc),
             color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(24.dp))
 
-        Text("Password", color = C.textSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.general_password), color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(6.dp))
-        PasswordField(password, onPasswordChange, "Min 6 characters")
+        PasswordField(password, onPasswordChange, stringResource(R.string.onboarding_password_hint))
         Spacer(Modifier.height(16.dp))
 
-        Text("Confirm Password", color = C.textSecondary, fontSize = 14.sp)
+        Text(stringResource(R.string.general_confirm_password), color = C.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(6.dp))
-        PasswordField(confirmPassword, onConfirmChange, "Repeat password")
+        PasswordField(confirmPassword, onConfirmChange, stringResource(R.string.onboarding_confirm_password_hint))
         Spacer(Modifier.height(16.dp))
 
         NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
@@ -805,7 +804,7 @@ private fun RestorePasswordScreen(
                 disabledContainerColor = C.accent.copy(alpha = 0.4f),
             ),
         ) {
-            Text("Restore Wallet", color = C.textDark, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.onboarding_restore_wallet), color = C.textDark, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -837,7 +836,7 @@ private fun NodeSelector(
     nodeMode: String, customNode: String,
     onNodeModeChange: (String) -> Unit, onCustomNodeChange: (String) -> Unit,
 ) {
-    Text("Node", color = C.textSecondary, fontSize = 14.sp)
+    Text(stringResource(R.string.onboarding_node), color = C.textSecondary, fontSize = 14.sp)
     Spacer(Modifier.height(6.dp))
     Row(
         modifier = Modifier
@@ -845,7 +844,7 @@ private fun NodeSelector(
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, C.border, RoundedCornerShape(8.dp)),
     ) {
-        listOf("random" to "Remote Node", "own" to "Own Node").forEach { (mode, label) ->
+        listOf("random" to stringResource(R.string.onboarding_remote_node), "own" to stringResource(R.string.onboarding_own_node)).forEach { (mode, label) ->
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -868,7 +867,7 @@ private fun NodeSelector(
         OutlinedTextField(
             value = customNode,
             onValueChange = onCustomNodeChange,
-            placeholder = { Text("ip:port (e.g. 192.168.1.10:8100)") },
+            placeholder = { Text(stringResource(R.string.onboarding_node_placeholder)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(

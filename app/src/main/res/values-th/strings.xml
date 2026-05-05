@@ -59,6 +59,10 @@
     <string name="auth_node_port_label">กรอกหมายเลข Port</string>
     <string name="auth_node_peer_label">Peer</string>
     <string name="auth_create_password_btn">สร้างรหัสผ่าน</string>
+    <string name="onboarding_create_new_wallet">สร้างกระเป๋าใหม่</string>
+    <string name="onboarding_generate_seed_phrase">สร้างกลุ่มคำลับ</string>
+    <string name="onboarding_restore_wallet">กู้กระเป๋า</string>
+    <string name="onboarding_node">Node</string>
     <string name="wallet_title">กระเป๋า</string>
     <string name="wallet_send_button">โอน</string>
     <string name="wallet_receive_button">รับ</string>
@@ -208,6 +212,7 @@
     <string name="chat_online">ออนไลน์</string>
     <string name="chat_sent">ส่งแล้ว</string>
     <string name="chat_read">อ่าน</string>
+    <string name="chat_tx_failed">การทำธุรกรรมล้มเหลว</string>
     <string name="register_try_again">ลองอีกครั้ง</string>
     <string name="register_transaction_failed">การทำธุรกรรมล้มเหลว</string>
     <string name="chats_tab_all">ทั้งหมด</string>
@@ -269,4 +274,10 @@
     <string name="chat_clear">ล้างข้อมูล</string>
     <string name="chat_section_contacts">รายชื่อผู้ติดต่อ</string>
     <string name="chat_label_delete">ลบ</string>
+    <string name="chat_copy">คัดลอก</string>
+    <string name="chat_close">ปิด</string>
+    <string name="chat_overflow_search">ค้นหา</string>
+    <string name="chat_voice_cancel">ยกเลิก</string>
+    <string name="chat_timer_5min">5 นาที</string>
+    <string name="chat_timer_1h">1 ชั่วโมง</string>
 </resources>

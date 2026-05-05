@@ -60,6 +60,11 @@
     <string name="auth_node_port_label">Ange port att lyssna på</string>
     <string name="auth_node_peer_label">Jämlike(peer)</string>
     <string name="auth_create_password_btn">Skapa lösenord</string>
+    <string name="onboarding_create_new_wallet">Skapa ny plånbok</string>
+    <string name="onboarding_generate_seed_phrase">Generera seed phrase</string>
+    <string name="onboarding_restore_wallet">Återställ plånbok</string>
+    <string name="onboarding_node">Nod</string>
+    <string name="onboarding_remote_node">Fjärr-nod</string>
     <string name="wallet_title">Plånbok</string>
     <string name="wallet_send_button">Skicka</string>
     <string name="wallet_receive_button">Ta emot</string>
@@ -225,6 +230,7 @@
     <string name="chat_online">Uppkopplad</string>
     <string name="chat_sent">Skickat</string>
     <string name="chat_read">läs</string>
+    <string name="chat_tx_failed">Transaktion misslyckades</string>
     <string name="register_try_again">Försök igen</string>
     <string name="register_transaction_failed">Transaktion misslyckades</string>
     <string name="chats_tab_all">Alla</string>
@@ -291,4 +297,10 @@
     <string name="chat_clear">rensa</string>
     <string name="chat_section_contacts">Kontakter</string>
     <string name="chat_label_delete">Ta bort</string>
+    <string name="chat_copy">Kopiera</string>
+    <string name="chat_close">Stäng</string>
+    <string name="chat_overflow_search">Sök</string>
+    <string name="chat_voice_cancel">Avbryt</string>
+    <string name="chat_timer_5min">5 minuter</string>
+    <string name="chat_timer_1h">1 timme</string>
 </resources>

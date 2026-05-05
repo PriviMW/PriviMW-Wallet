@@ -101,4 +101,6 @@
     <string name="utxo_label_unknown">непознато</string>
     <string name="send_mode_online">повезан на мрежу</string>
     <string name="tx_cancelled">Трансакција отказана</string>
+    <string name="chat_timer_5min">5 минута</string>
+    <string name="chat_timer_1h">1 сат</string>
 </resources>

@@ -100,16 +100,16 @@ fun ContactInfoScreen(
         val ver = prefs.getInt("notif_channel_ver_$convKey", 0) + 1
         if (uri != null) {
             val ringtone = RingtoneManager.getRingtone(context, uri)
-            val name = ringtone?.getTitle(context) ?: "Custom"
+            val name = ringtone?.getTitle(context) ?: context.getString(R.string.contact_notif_sound_custom)
             prefs.edit().putString("notif_sound_$convKey", uri.toString())
                 .putString("notif_sound_name_$convKey", name)
                 .putInt("notif_channel_ver_$convKey", ver).apply()
             notifSoundNameRaw.value = name
         } else {
             prefs.edit().putString("notif_sound_$convKey", "silent")
-                .putString("notif_sound_name_$convKey", "Silent")
+                .putString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_silent))
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            notifSoundNameRaw.value = "Silent"
+            notifSoundNameRaw.value = context.getString(R.string.contact_notif_sound_silent)
         }
     }
 
@@ -366,7 +366,7 @@ private fun InfoRow(
         }
         if (onClick != null) {
             Spacer(Modifier.width(4.dp))
-            Icon(Icons.Default.ChevronRight, "Navigate", tint = C.textMuted, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.ChevronRight, null, tint = C.textMuted, modifier = Modifier.size(18.dp))
         }
     }
 }

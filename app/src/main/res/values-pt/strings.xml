@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Digite a porta a ouvir</string>
     <string name="auth_node_peer_label">Par</string>
     <string name="auth_create_password_btn">Criar senha</string>
+    <string name="onboarding_create_new_wallet">Criar nova carteira</string>
+    <string name="onboarding_generate_seed_phrase">Gerar palavras-chave</string>
+    <string name="onboarding_restore_wallet">Restaurar carteira</string>
+    <string name="onboarding_node">Nó</string>
+    <string name="onboarding_remote_node">Nó remoto</string>
     <string name="wallet_title">Carteira</string>
     <string name="wallet_send_button">Mandar</string>
     <string name="wallet_receive_button">Receber</string>
@@ -306,6 +311,7 @@
     <string name="chat_online">Online</string>
     <string name="chat_sent">Enviado</string>
     <string name="chat_read">lidos</string>
+    <string name="chat_tx_failed">Falha na transação</string>
     <string name="register_try_again">Tente novamente</string>
     <string name="register_transaction_failed">Falha na transação</string>
     <string name="chats_tab_all">Tudo</string>
@@ -387,4 +393,10 @@
     <string name="chat_section_contacts">Contatos</string>
     <string name="chat_open">abrir</string>
     <string name="chat_label_delete">Excluir</string>
+    <string name="chat_copy">Copiar</string>
+    <string name="chat_close">Fechar</string>
+    <string name="chat_overflow_search">Pesquisa</string>
+    <string name="chat_voice_cancel">Cancelar</string>
+    <string name="chat_timer_5min">5 minutos</string>
+    <string name="chat_timer_1h">1 hora</string>
 </resources>

@@ -65,6 +65,11 @@
     <string name="auth_node_port_label">Введіть порт для прослуховування</string>
     <string name="auth_node_peer_label">Учасник</string>
     <string name="auth_create_password_btn">Створити пароль</string>
+    <string name="onboarding_create_new_wallet">Створити новий гаманець</string>
+    <string name="onboarding_generate_seed_phrase">Створити фразу-пароль</string>
+    <string name="onboarding_restore_wallet">Відновити гаманець</string>
+    <string name="onboarding_node">Вузол</string>
+    <string name="onboarding_remote_node">Віддалений вузол</string>
     <string name="wallet_title">Гаманець</string>
     <string name="wallet_send_button">Надіслати</string>
     <string name="wallet_receive_button">Отримати</string>
@@ -306,6 +311,7 @@
     <string name="chat_online">Онлайн</string>
     <string name="chat_sent">Надіслано</string>
     <string name="chat_read">читати</string>
+    <string name="chat_tx_failed">Не вдалося виконати транзакцію</string>
     <string name="register_try_again">Спробувати знову</string>
     <string name="register_transaction_failed">Не вдалося виконати транзакцію</string>
     <string name="chats_tab_all">Всі</string>
@@ -387,4 +393,10 @@
     <string name="chat_section_contacts">Контакти</string>
     <string name="chat_open">відкрити</string>
     <string name="chat_label_delete">Видалити</string>
+    <string name="chat_copy">Копіювати</string>
+    <string name="chat_close">Закрити</string>
+    <string name="chat_overflow_search">Пошук</string>
+    <string name="chat_voice_cancel">Скасувати</string>
+    <string name="chat_timer_5min">5 хвилин</string>
+    <string name="chat_timer_1h">1 година</string>
 </resources>

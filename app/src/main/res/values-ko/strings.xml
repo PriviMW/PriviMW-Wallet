@@ -57,6 +57,10 @@
     <string name="auth_node_remote">특정 원격 노드에 연결하기</string>
     <string name="auth_node_port_label">포트를 열고 통신하십시오</string>
     <string name="auth_node_peer_label">피어</string>
+    <string name="onboarding_create_new_wallet">새로운 지갑 만들기</string>
+    <string name="onboarding_generate_seed_phrase">시드 구문 생성하기</string>
+    <string name="onboarding_restore_wallet">지갑 복구하기</string>
+    <string name="onboarding_node">노드</string>
     <string name="wallet_title">지갑</string>
     <string name="wallet_send_button">보내기</string>
     <string name="wallet_receive_button">받기</string>
@@ -183,6 +187,7 @@
     <string name="chat_search">검색</string>
     <string name="chat_online">온라인</string>
     <string name="chat_sent">보냄</string>
+    <string name="chat_tx_failed">거래 실패</string>
     <string name="register_try_again">다시 시도하기</string>
     <string name="register_transaction_failed">거래 실패</string>
     <string name="chats_tab_all">전부</string>
@@ -236,4 +241,10 @@
     <string name="contact_copy_wallet_id_cd">복사</string>
     <string name="chat_section_contacts">연락처</string>
     <string name="chat_label_delete">삭제</string>
+    <string name="chat_copy">복사</string>
+    <string name="chat_close">닫기</string>
+    <string name="chat_overflow_search">검색</string>
+    <string name="chat_voice_cancel">취소</string>
+    <string name="chat_timer_5min">5분</string>
+    <string name="chat_timer_1h">1 시간</string>
 </resources>

@@ -303,7 +303,7 @@ fun ChatsScreen(
                             IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     Icons.Default.Search,
-                                    contentDescription = "Search messages",
+                                    contentDescription = stringResource(R.string.chat_search),
                                     tint = C.textSecondary,
                                     modifier = Modifier.size(22.dp),
                                 )
@@ -792,7 +792,7 @@ fun ChatsScreen(
                         contentColor = C.accent,
                         shape = CircleShape,
                     ) {
-                        Icon(Icons.Filled.Group, contentDescription = "Create Group", modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.Group, contentDescription = stringResource(R.string.chats_create_group_desc), modifier = Modifier.size(20.dp))
                     }
                     // Main FAB - New Chat
                     FloatingActionButton(
@@ -834,7 +834,7 @@ fun ChatsScreen(
                     if (grpAvatarBmp != null) {
                         Image(
                             bitmap = grpAvatarBmp.asImageBitmap(),
-                            contentDescription = "Group",
+                            contentDescription = stringResource(R.string.chat_section_groups),
                             modifier = Modifier.size(40.dp).clip(CircleShape),
                             contentScale = ContentScale.Crop,
                         )
@@ -912,7 +912,7 @@ fun ChatsScreen(
                     if (dmAvatarBmp != null) {
                         Image(
                             bitmap = dmAvatarBmp.asImageBitmap(),
-                            contentDescription = "Avatar",
+                            contentDescription = stringResource(R.string.contact_info_title),
                             modifier = Modifier.size(40.dp).clip(CircleShape),
                             contentScale = ContentScale.Crop,
                         )
@@ -1224,7 +1224,7 @@ private fun ReRegisterLanding(chatState: ChatStateEntity) {
                 com.privimemobile.protocol.WalletApi.call("create_address", mapOf(
                     "type" to "regular",
                     "expiration" to "never",
-                    "comment" to "PriviMe messaging",
+                    "comment" to context.getString(R.string.chats_messaging_address_comment),
                 )) { result ->
                     val addr = result["address"] as? String
                     if (addr != null) {
@@ -1338,7 +1338,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                     val hasDraft = !conv.draftText.isNullOrEmpty()
                     if (isTyping) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Text("typing", color = C.accent, fontSize = 14.sp)
+                            Text(stringResource(R.string.chats_typing_status), color = C.accent, fontSize = 14.sp)
                             val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
                             repeat(3) { i ->
                                 val offsetY by infiniteTransition.animateFloat(
@@ -1356,7 +1356,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                         Text(
                             buildAnnotatedString {
                                 withStyle(SpanStyle(color = C.error, fontWeight = FontWeight.Medium)) {
-                                    append("Draft: ")
+                                    append(stringResource(R.string.chats_draft_prefix))
                                 }
                                 withStyle(SpanStyle(color = C.textSecondary)) {
                                     append(conv.draftText!!)
@@ -1396,7 +1396,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                if (conv.unreadCount > 99) "99+" else "${conv.unreadCount}",
+                                if (conv.unreadCount > 99) stringResource(R.string.chat_unread_overflow) else "${conv.unreadCount}",
                                 color = C.textDark,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1485,7 +1485,7 @@ private fun GroupRow(
         if (groupAvatarBmp != null) {
             androidx.compose.foundation.Image(
                 bitmap = groupAvatarBmp.asImageBitmap(),
-                contentDescription = "Group",
+                contentDescription = stringResource(R.string.chat_section_groups),
                 modifier = Modifier.size(52.dp).clip(CircleShape),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             )
@@ -1503,7 +1503,7 @@ private fun GroupRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (!group.isPublic) {
-                    Icon(Icons.Default.Lock, "Private", tint = C.textSecondary, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Lock, stringResource(R.string.chats_private_desc), tint = C.textSecondary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(
@@ -1518,7 +1518,7 @@ private fun GroupRow(
                 if (group.pinned) {
                     Icon(
                         Icons.Default.PushPin,
-                        contentDescription = "Pinned",
+                        contentDescription = stringResource(R.string.chat_pin),
                         tint = C.textSecondary,
                         modifier = Modifier.padding(start = 4.dp).size(14.dp),
                     )
@@ -1526,7 +1526,7 @@ private fun GroupRow(
                 if (group.muted) {
                     Icon(
                         Icons.Default.NotificationsOff,
-                        contentDescription = "Muted",
+                        contentDescription = stringResource(R.string.chat_mute_notifications),
                         tint = C.textSecondary,
                         modifier = Modifier.padding(start = 4.dp).size(14.dp),
                     )
@@ -1560,7 +1560,7 @@ private fun GroupRow(
             } else if (hasDraft) {
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = C.error, fontWeight = FontWeight.Medium)) { append("Draft: ") }
+                        withStyle(SpanStyle(color = C.error, fontWeight = FontWeight.Medium)) { append(stringResource(R.string.chats_draft_prefix)) }
                         withStyle(SpanStyle(color = C.textSecondary)) { append(draftText!!) }
                     },
                     fontSize = 14.sp, maxLines = 1,
@@ -1576,7 +1576,7 @@ private fun GroupRow(
                 )
             } else {
                 Text(
-                    text = if (group.myRole == 2) "You created this group" else "Group chat",
+                    text = if (group.myRole == 2) stringResource(R.string.chat_you_created) else stringResource(R.string.chat_group_chat),
                     color = C.textMuted,
                     fontSize = 14.sp,
                 )
@@ -1604,7 +1604,7 @@ private fun GroupRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    if (group.unreadCount > 99) "99+" else group.unreadCount.toString(),
+                    if (group.unreadCount > 99) stringResource(R.string.chat_unread_overflow) else group.unreadCount.toString(),
                     color = C.textDark,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,

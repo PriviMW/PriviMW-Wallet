@@ -179,7 +179,7 @@ fun ChatScreen(
             com.privimemobile.chat.ChatService.groups.refreshGroupMembers(groupId)
             com.privimemobile.chat.ChatService.db?.groupDao()?.clearUnread(groupId)
             val grp = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId)
-            groupConvId = com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, grp?.name ?: "Group")
+            groupConvId = com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, grp?.name ?: context.getString(R.string.chat_group_name_fallback))
 
             // Request group avatar + description if missing locally
             com.privimemobile.chat.ChatService.groups.requestGroupInfoIfNeeded(groupId)
@@ -304,7 +304,7 @@ fun ChatScreen(
     val contact = roomContact.firstOrNull { it.handle == handle }
 
     val resolvedName = if (isGroupMode) {
-        group?.name ?: "Group"
+        group?.name ?: stringResource(R.string.chat_group_name_fallback)
     } else {
         displayName.ifEmpty {
             contact?.displayName?.ifEmpty { null }
@@ -461,7 +461,7 @@ fun ChatScreen(
     var showCreateStickerPack by remember { mutableStateOf(false) }
     // Group notification sound (same system as ContactInfoScreen)
     val chatPrefs = context.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE)
-    var groupNotifSoundName by remember { mutableStateOf(chatPrefs.getString("notif_sound_name_$convKey", "Default") ?: "Default") }
+    var groupNotifSoundName by remember { mutableStateOf(chatPrefs.getString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_default)) ?: context.getString(R.string.contact_notif_sound_default)) }
     val groupSoundPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -469,16 +469,16 @@ fun ChatScreen(
         val ver = chatPrefs.getInt("notif_channel_ver_$convKey", 0) + 1
         if (uri != null) {
             val ringtone = android.media.RingtoneManager.getRingtone(context, uri)
-            val name = ringtone?.getTitle(context) ?: "Custom"
+            val name = ringtone?.getTitle(context) ?: context.getString(R.string.contact_notif_sound_custom)
             chatPrefs.edit().putString("notif_sound_$convKey", uri.toString())
                 .putString("notif_sound_name_$convKey", name)
                 .putInt("notif_channel_ver_$convKey", ver).apply()
             groupNotifSoundName = name
         } else {
             chatPrefs.edit().putString("notif_sound_$convKey", "silent")
-                .putString("notif_sound_name_$convKey", "Silent")
+                .putString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_silent))
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            groupNotifSoundName = "Silent"
+            groupNotifSoundName = context.getString(R.string.contact_notif_sound_silent)
         }
     }
     var emojiMainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
@@ -773,9 +773,9 @@ fun ChatScreen(
             if (info.size > limit) {
                 Log.w("ChatScreen", "File too large: ${info.size} > $limit (isImage=$isImage)")
                 val msg = if (isImage) {
-                    "Image too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)"
+                    context.getString(R.string.chat_image_too_large, Config.MAX_FILE_SIZE / 1024 / 1024)
                 } else {
-                    "File too large (max ${Config.MAX_INLINE_SIZE / 1024}KB). Only images are compressed."
+                    context.getString(R.string.chat_file_too_large, Config.MAX_INLINE_SIZE / 1024)
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 return
@@ -813,7 +813,7 @@ fun ChatScreen(
             val myHandle = state.myHandle ?: return@launch
             val ts = System.currentTimeMillis() / 1000
             val schedConvId = if (isGroupMode && groupId != null) {
-                com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: "Group")
+                com.privimemobile.chat.ChatService.groups.getOrCreateGroupConversation(groupId, group?.name ?: context.getString(R.string.chat_group_name_fallback))
             } else {
                 val conv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                 if (conv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(conv.id)
@@ -1217,7 +1217,7 @@ fun ChatScreen(
                 }
                 val amountGroth = (amountBeam * 100_000_000).toLong()
                 val assetName = com.privimemobile.wallet.assetTicker(assetId)
-                val tipLabel = "Tip to @$tipTargetHandle: ${Helpers.formatBeam(amountGroth)} $assetName"
+                val tipLabel = context.getString(R.string.chat_tip_to, "@$tipTargetHandle", "${Helpers.formatBeam(amountGroth)} $assetName")
 
                 // Balance check
                 val bal = com.privimemobile.wallet.WalletEventBus.assetBalances[assetId]
@@ -1238,7 +1238,7 @@ fun ChatScreen(
                 }
 
                 try {
-                    val txComment = "Tip to @$tipTargetHandle" + if (caption.isNotEmpty()) " — $caption" else ""
+                    val txComment = context.getString(R.string.chat_tip_tx_comment, tipTargetHandle) + if (caption.isNotEmpty()) " — $caption" else ""
                     val txResult = com.privimemobile.protocol.WalletApi.callAsync("tx_send", mapOf(
                         "value" to amountGroth,
                         "address" to tipWalletId,
@@ -1300,7 +1300,7 @@ fun ChatScreen(
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        val errorMap = mapOf("error" to mapOf("message" to (e.message ?: "Send failed")))
+                        val errorMap = mapOf("error" to mapOf("message" to (e.message ?: context.getString(R.string.chat_send_failed))))
                         val errMsg = Helpers.extractError(errorMap, context)
                         val tipCancelled = errMsg == context.getString(R.string.tx_cancelled)
                         Toast.makeText(context,
@@ -1483,7 +1483,7 @@ fun ChatScreen(
                     }
                 } catch (e: Exception) {
                     Log.e("ChatScreen", "File send error: ${e.message}")
-                    android.widget.Toast.makeText(context, e.message ?: "File send failed", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, context.getString(R.string.chat_file_send_failed) + ": " + (e.message ?: ""), android.widget.Toast.LENGTH_LONG).show()
                 } finally {
                     uploading = false
                     pendingFile = null
@@ -1589,8 +1589,8 @@ fun ChatScreen(
         val latest = com.privimemobile.chat.ChatService.db?.messageDao()?.getLatestMessage(cid)
         if (latest != null) {
             val preview = when (latest.type) {
-                "tip" -> "Tip"
-                "file" -> "\uD83D\uDCCE File"
+                "tip" -> context.getString(R.string.chat_tip_preview)
+                "file" -> "\uD83D\uDCCE " + context.getString(R.string.chat_file_label)
                 else -> latest.text?.take(100)
             }
             com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(cid, latest.timestamp, preview)
@@ -1602,8 +1602,8 @@ fun ChatScreen(
             val group = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId!!)
             if (group != null) {
                 if (latest != null) {
-                    val senderLabel = if (latest.sent) "You" else "@${latest.senderHandle}"
-                    val grpPreview = "$senderLabel: ${latest.text?.take(40) ?: "message"}"
+                    val senderLabel = if (latest.sent) context.getString(R.string.chat_you_label) else "@${latest.senderHandle}"
+                    val grpPreview = "$senderLabel: ${latest.text?.take(40) ?: context.getString(R.string.chat_message_label)}"
                     com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, latest.timestamp, grpPreview)
                 } else {
                     com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, 0, null)
@@ -1659,10 +1659,10 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { selectionMode = false; selectedIds.clear() }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel", tint = C.text, modifier = Modifier.size(22.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_cancel_scheduled), tint = C.text, modifier = Modifier.size(22.dp))
                     }
                     Text(
-                        "${selectedIds.size} selected",
+                        context.getString(R.string.chat_x_selected, selectedIds.size),
                         color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
@@ -1671,7 +1671,7 @@ fun ChatScreen(
                         pendingDeleteIds = selectedIds.toList()
                         showDeleteConfirmDialog = true
                     }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Delete, "Delete", tint = C.error, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Delete, stringResource(R.string.chat_label_delete), tint = C.error, modifier = Modifier.size(22.dp))
                     }
                     // Forward selected — forward ALL selected messages (not just first)
                     IconButton(onClick = {
@@ -1684,7 +1684,7 @@ fun ChatScreen(
                         selectionMode = false
                         selectedIds.clear()
                     }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.Send, "Forward", tint = C.accent, modifier = Modifier.size(22.dp))
+                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_forward), tint = C.accent, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -1714,7 +1714,7 @@ fun ChatScreen(
                     if (groupAvatarBmp != null) {
                         androidx.compose.foundation.Image(
                             bitmap = groupAvatarBmp.asImageBitmap(),
-                            contentDescription = "Group",
+                            contentDescription = stringResource(R.string.chat_section_groups),
                             modifier = Modifier.size(38.dp).clip(CircleShape).clickable { onGroupSettings() },
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         )
@@ -1753,7 +1753,7 @@ fun ChatScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (isGroupMode && group?.isPublic == false) {
-                            Icon(Icons.Default.Lock, "Private", tint = C.textSecondary, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Lock, stringResource(R.string.chat_send_message), tint = C.textSecondary, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                         }
                         Text(
@@ -1770,9 +1770,9 @@ fun ChatScreen(
                         val groupTypers = if (typingVer2 >= 0) com.privimemobile.chat.ChatService.getGroupTyping(convKey) else emptyList()
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (groupTypers.isNotEmpty()) {
-                                val typingText = if (groupTypers.size == 1) "@${groupTypers[0]} is typing"
-                                    else if (groupTypers.size == 2) "@${groupTypers[0]} and @${groupTypers[1]} are typing"
-                                    else "${groupTypers.size} people are typing"
+                                val typingText = if (groupTypers.size == 1) context.getString(R.string.chat_group_typing_singular, "@${groupTypers[0]}")
+                                    else if (groupTypers.size == 2) context.getString(R.string.chat_group_typing_two, "@${groupTypers[0]}", "@${groupTypers[1]}")
+                                    else context.getString(R.string.chat_group_typing_multiple, groupTypers.size)
                                 Text(typingText, color = C.accent, fontSize = 12.sp)
                                 val infiniteTransition = rememberInfiniteTransition(label = "grpTypingDots")
                                 repeat(3) { i ->
@@ -1787,10 +1787,10 @@ fun ChatScreen(
                                         modifier = Modifier.offset(y = offsetY.dp))
                                 }
                             } else {
-                                Text("$groupMemberCount members", color = C.textSecondary, fontSize = 12.sp)
+                                Text(stringResource(R.string.group_member_count_format, groupMemberCount), color = C.textSecondary, fontSize = 12.sp)
                             }
                             if (group?.muted == true) {
-                                Icon(Icons.Default.NotificationsOff, "Muted", tint = C.textSecondary,
+                                Icon(Icons.Default.NotificationsOff, stringResource(R.string.chat_overflow_mute), tint = C.textSecondary,
                                     modifier = Modifier.padding(start = 4.dp).size(13.dp))
                             }
                         }
@@ -1823,11 +1823,11 @@ fun ChatScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
                             if (conv?.muted == true) {
-                                Icon(Icons.Default.NotificationsOff, "Muted", tint = C.textSecondary,
+                                Icon(Icons.Default.NotificationsOff, stringResource(R.string.chat_overflow_mute), tint = C.textSecondary,
                                     modifier = Modifier.padding(start = 4.dp).size(13.dp))
                             }
                             if (conv?.isBlocked == true) {
-                                Icon(Icons.Default.Block, "Blocked", tint = Color(0xFFEF5350),
+                                Icon(Icons.Default.Block, stringResource(R.string.chat_overflow_block), tint = Color(0xFFEF5350),
                                     modifier = Modifier.padding(start = 4.dp).size(13.dp))
                             }
                         }
@@ -1850,7 +1850,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
-                            contentDescription = "Menu",
+                            contentDescription = stringResource(R.string.chat_overflow_search),
                             tint = if (showOverflowMenu) C.accent else C.textSecondary,
                             modifier = Modifier
                                 .size(22.dp)
@@ -1882,19 +1882,19 @@ fun ChatScreen(
                                 Text(label, color = color, fontSize = 15.sp)
                             }
                         }
-                        OverflowItem("\uD83D\uDD0D", if (showSearch) "Close Search" else "Search") {
+                        OverflowItem("\uD83D\uDD0D", if (showSearch) stringResource(R.string.chat_overflow_close_search) else stringResource(R.string.chat_overflow_search)) {
                             showSearch = !showSearch
                             if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
                             showOverflowMenu = false
                         }
-                        OverflowItem("\uD83D\uDDBC", "Media") { showOverflowMenu = false; onMediaGallery() }
+                        OverflowItem("\uD83D\uDDBC", stringResource(R.string.chat_overflow_media)) { showOverflowMenu = false; onMediaGallery() }
                         if (isGroupMode) {
-                            OverflowItem("\u2699\uFE0F", "Group info") { showOverflowMenu = false; onGroupSettings() }
-                            OverflowItem("\uD83D\uDD14", "Sound: $groupNotifSoundName") {
+                            OverflowItem("\u2699\uFE0F", stringResource(R.string.chat_overflow_group_info)) { showOverflowMenu = false; onGroupSettings() }
+                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, groupNotifSoundName)) {
                                 showOverflowMenu = false
                                 val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Notification Sound")
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
                                     val current = chatPrefs.getString("notif_sound_$convKey", null)
@@ -1905,26 +1905,26 @@ fun ChatScreen(
                                 groupSoundPicker.launch(intent)
                             }
                         } else {
-                            OverflowItem("\uD83D\uDC64", "View profile") { showOverflowMenu = false; onContactInfo() }
+                            OverflowItem("\uD83D\uDC64", stringResource(R.string.chat_overflow_view_profile)) { showOverflowMenu = false; onContactInfo() }
                         }
-                        OverflowItem("\uD83C\uDFA8", "Wallpaper") { showOverflowMenu = false; showWallpaperPicker = true }
+                        OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { showOverflowMenu = false; showWallpaperPicker = true }
                         // Per-message self-destruct timer
-                        OverflowItem("\u23F1", "Timer: ${if (oneShotTimer == 0) "Off" else Helpers.formatDuration(oneShotTimer)}") {
+                        OverflowItem("\u23F1", if (oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(oneShotTimer))) {
                             showOverflowMenu = false
                             showOneShotTimerPicker = true
                         }
-                        OverflowItem("\uD83D\uDCE4", "Export chat") {
+                        OverflowItem("\uD83D\uDCE4", stringResource(R.string.chat_overflow_export_chat)) {
                             showOverflowMenu = false
-                            val exportTitle = if (isGroupMode) "PriviMe Group — ${group?.name ?: "Group"}" else "PriviMe Chat — @$handle"
+                            val exportTitle = if (isGroupMode) context.getString(R.string.chat_export_group_label, group?.name ?: context.getString(R.string.chat_group_name_fallback)) else context.getString(R.string.chat_export_dm_label, "@$handle")
                             scope.launch {
                                 val sb = StringBuilder()
                                 sb.appendLine(exportTitle)
-                                sb.appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                                sb.appendLine(context.getString(R.string.chat_export_date, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())))
                                 sb.appendLine("---")
                                 messages.forEach { msg ->
                                     val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                                         .format(java.util.Date(msg.timestamp * 1000))
-                                    val sender = if (msg.sent) "You" else "@${msg.from}"
+                                    val sender = if (msg.sent) context.getString(R.string.chat_you_label) else "@${msg.from}"
                                     val text = when {
                                         msg.isTip -> "[Tip: ${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}] ${msg.text}"
                                         msg.type == "file" -> "[File: ${msg.file?.name ?: "file"}] ${msg.text}"
@@ -1938,12 +1938,12 @@ fun ChatScreen(
                                         putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
                                         putExtra(android.content.Intent.EXTRA_SUBJECT, exportTitle)
                                     }
-                                    context.startActivity(android.content.Intent.createChooser(intent, "Export chat"))
+                                    context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.chat_overflow_export_chat)))
                                 }
                             }
                         }
                         val isMuted = if (isGroupMode) group?.muted == true else conv?.muted == true
-                        OverflowItem(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", if (isMuted) "Unmute" else "Mute") {
+                        OverflowItem(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", if (isMuted) stringResource(R.string.chat_overflow_unmute) else stringResource(R.string.chat_overflow_mute)) {
                             scope.launch {
                                 if (isGroupMode && groupId != null) {
                                     com.privimemobile.chat.ChatService.db?.groupDao()?.setMuted(groupId, !isMuted)
@@ -1955,14 +1955,14 @@ fun ChatScreen(
                         }
                         if (!isGroupMode) {
                             val isBlocked = conv?.isBlocked == true
-                            OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) "Unblock" else "Block", color = if (isBlocked) C.text else C.error) {
+                            OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) stringResource(R.string.chat_overflow_unblock) else stringResource(R.string.chat_overflow_block), color = if (isBlocked) C.text else C.error) {
                                 if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
                                 showOverflowMenu = false
                             }
                         }
                         HorizontalDivider(color = C.border)
-                        OverflowItem("\uD83D\uDDD1", "Clear history", color = C.error) { showOverflowMenu = false; showClearConfirm = true }
-                        OverflowItem("\u274C", if (isGroupMode) "Leave group" else "Delete chat", color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
+                        OverflowItem("\uD83D\uDDD1", stringResource(R.string.chat_clear_history), color = C.error) { showOverflowMenu = false; showClearConfirm = true }
+                        OverflowItem("\u274C", if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
                     }
                 }
             }
@@ -1984,7 +1984,7 @@ fun ChatScreen(
                     IconButton(onClick = {
                         showSearch = false; searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close search", tint = C.textSecondary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_overflow_close_search), tint = C.textSecondary)
                     }
                     OutlinedTextField(
                         value = searchQuery,
@@ -2171,11 +2171,11 @@ fun ChatScreen(
                     }
                     Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                         Text(
-                            if (pinnedByOrder.size > 1) "Pinned Message #${safeIndex + 1}" else "Pinned Message",
+                            if (pinnedByOrder.size > 1) context.getString(R.string.chat_pinned_message_num, safeIndex + 1) else stringResource(R.string.chat_pinned_message),
                             color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            currentPin.text.ifEmpty { if (currentPin.file != null) "\uD83D\uDCCE File" else "Message" },
+                            currentPin.text.ifEmpty { if (currentPin.file != null) stringResource(R.string.chat_file_label) else stringResource(R.string.chat_message_label) },
                             color = C.textSecondary, fontSize = 13.sp,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
@@ -2185,7 +2185,7 @@ fun ChatScreen(
                         onClick = { showPinListDialog = true },
                         modifier = Modifier.size(32.dp),
                     ) {
-                        Icon(Icons.Default.PushPin, "All pins", tint = C.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.PushPin, stringResource(R.string.chat_pinned_messages), tint = C.textSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -2223,7 +2223,7 @@ fun ChatScreen(
                                         // Message preview
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                pin.text.ifEmpty { if (pin.file != null) "\uD83D\uDCCE File" else "Message" },
+                                                pin.text.ifEmpty { if (pin.file != null) stringResource(R.string.chat_pinned_file) else stringResource(R.string.chat_pinned_message) },
                                                 color = C.text, fontSize = 14.sp,
                                                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                                             )
@@ -2243,7 +2243,7 @@ fun ChatScreen(
                                         ) {
                                             Icon(
                                                 Icons.AutoMirrored.Filled.ArrowForward,
-                                                "Go to message",
+                                                context.getString(R.string.chat_jump),
                                                 tint = C.accent,
                                                 modifier = Modifier.size(18.dp),
                                             )
@@ -2393,7 +2393,7 @@ fun ChatScreen(
                 val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null // older
                 val nextMsg = if (index > 0) reversedMessages[index - 1] else null // newer
                 val showDateSep = prevMsg == null ||
-                        formatDateSeparator(msg.timestamp) != formatDateSeparator(prevMsg.timestamp)
+                        formatDateSeparator(msg.timestamp, context) != formatDateSeparator(prevMsg.timestamp, context)
 
                 // Bubble grouping: consecutive messages from same sender within 60s
                 val sameAsPrev = prevMsg != null && prevMsg.sent == msg.sent &&
@@ -2401,7 +2401,7 @@ fun ChatScreen(
                         kotlin.math.abs(msg.timestamp - prevMsg.timestamp) < 60
                 val sameAsNext = nextMsg != null && nextMsg.sent == msg.sent &&
                         nextMsg.from == msg.from &&
-                        formatDateSeparator(msg.timestamp) == formatDateSeparator(nextMsg.timestamp) &&
+                        formatDateSeparator(msg.timestamp, context) == formatDateSeparator(nextMsg.timestamp, context) &&
                         kotlin.math.abs(msg.timestamp - nextMsg.timestamp) < 60
                 // Position in cluster: first (top), middle, last (bottom), alone
                 val isFirstInCluster = !sameAsPrev
@@ -2440,7 +2440,7 @@ fun ChatScreen(
                                 modifier = Modifier.clickable { showDatePicker = true },
                             ) {
                                 Text(
-                                    formatDateSeparator(msg.timestamp),
+                                    formatDateSeparator(msg.timestamp, context),
                                     color = C.textSecondary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
@@ -2515,13 +2515,13 @@ fun ChatScreen(
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .clickable {
-                                                        if (fp != null) fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: "Image", albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
+                                                        if (fp != null) fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: context.getString(R.string.chat_pinned_file), albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
                                                     },
                                             ) {
                                                 if (fp != null) {
                                                     AsyncImage(
                                                         model = java.io.File(fp),
-                                                        contentDescription = "Photo",
+                                                        contentDescription = stringResource(R.string.chat_media_section),
                                                         contentScale = ContentScale.Crop,
                                                         modifier = Modifier.fillMaxSize(),
                                                     )
@@ -2614,7 +2614,7 @@ fun ChatScreen(
                         },
                         onFullscreenImage = {
                             val fp = filePaths[msg.file?.cid ?: ""]
-                            if (fp != null) fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: "Image", msg.id.toLong(), msg.timestamp, msg.sent)
+                            if (fp != null) fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: context.getString(R.string.chat_pinned_file), msg.id.toLong(), msg.timestamp, msg.sent)
                         },
                         isSelected = selectionMode && msg.id in selectedIds,
                         onPollVote = { optIdx ->
@@ -2811,7 +2811,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(R.string.chat_label_delete),
                                     tint = Color.White,
                                     modifier = Modifier.size(12.dp),
                                 )
@@ -2839,7 +2839,7 @@ fun ChatScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         TextButton(onClick = { pendingFile = null }) {
-                            Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2896,7 +2896,7 @@ fun ChatScreen(
                     contentColor = C.text,
                     shape = CircleShape,
                 ) {
-                    Icon(Icons.Default.KeyboardArrowDown, "Scroll to bottom", modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.chat_jump), modifier = Modifier.size(24.dp))
                 }
                 if (unreadBelow > 0) {
                     Box(
@@ -2910,7 +2910,7 @@ fun ChatScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (unreadBelow > 99) "99+" else "$unreadBelow",
+                            if (unreadBelow > 99) stringResource(R.string.chat_unread_overflow) else "$unreadBelow",
                             color = C.textDark, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                         )
                     }
@@ -2921,7 +2921,7 @@ fun ChatScreen(
         val stickyDateText = remember(listState.firstVisibleItemIndex, reversedMessages) {
             val idx = listState.firstVisibleItemIndex
             if (idx in reversedMessages.indices) {
-                formatDateSeparator(reversedMessages[idx].timestamp)
+                formatDateSeparator(reversedMessages[idx].timestamp, context)
             } else null
         }
         val isScrolling = listState.isScrollInProgress
@@ -2979,7 +2979,7 @@ fun ChatScreen(
 
             // All emoji categories
             val allCategories = listOf(
-                "Emoji & People" to listOf(
+                stringResource(R.string.chat_emoji_cat_people) to listOf(
                     "\uD83D\uDE00", "\uD83D\uDE03", "\uD83D\uDE04", "\uD83D\uDE01", "\uD83D\uDE06", "\uD83D\uDE05", "\uD83D\uDE02", "\uD83E\uDD23", "\uD83D\uDE0A",
                     "\uD83D\uDE07", "\uD83D\uDE42", "\uD83D\uDE43", "\uD83D\uDE09", "\uD83D\uDE0C", "\uD83D\uDE0D", "\uD83E\uDD70", "\uD83D\uDE18", "\uD83D\uDE17",
                     "\uD83D\uDE19", "\uD83D\uDE1A", "\uD83D\uDE0B", "\uD83D\uDE1B", "\uD83D\uDE1C", "\uD83E\uDD2A", "\uD83D\uDE1D", "\uD83E\uDD11", "\uD83E\uDD17",
@@ -2990,32 +2990,32 @@ fun ChatScreen(
                     "\uD83D\uDE37", "\uD83E\uDD12", "\uD83E\uDD15", "\uD83D\uDE35", "\uD83E\uDD74", "\uD83E\uDD22", "\uD83D\uDC7F", "\uD83D\uDC79", "\uD83D\uDC7A",
                     "\uD83D\uDC80", "\uD83D\uDC7B", "\uD83D\uDC7D", "\uD83E\uDD16", "\uD83D\uDCA9", "\uD83D\uDE3A", "\uD83D\uDE38", "\uD83D\uDE39", "\uD83D\uDE3B",
                 ),
-                "Hands & Gestures" to listOf(
+                stringResource(R.string.chat_emoji_cat_gestures) to listOf(
                     "\uD83D\uDC4D", "\uD83D\uDC4E", "\u270A", "\uD83D\uDC4A", "\uD83E\uDD1B", "\uD83E\uDD1C", "\uD83D\uDC4F", "\uD83D\uDE4C", "\uD83D\uDC50",
                     "\uD83E\uDD32", "\uD83E\uDD1D", "\uD83D\uDE4F", "\u270D\uFE0F", "\uD83D\uDC85", "\uD83E\uDD33", "\uD83D\uDCAA", "\uD83D\uDC4B", "\uD83E\uDD1A",
                     "\u270B", "\uD83D\uDC4C", "\uD83E\uDD0F", "\u270C\uFE0F", "\uD83E\uDD1E", "\uD83E\uDD1F", "\uD83E\uDD18", "\uD83E\uDD19", "\uD83D\uDC46",
                     "\uD83D\uDC47", "\uD83D\uDC48", "\uD83D\uDC49", "\uD83D\uDD95", "\uD83D\uDC4B", "\uD83E\uDEF6", "\uD83E\uDEF1", "\uD83E\uDEF2", "\uD83E\uDEF3",
                 ),
-                "Hearts & Symbols" to listOf(
+                stringResource(R.string.chat_emoji_cat_hearts) to listOf(
                     "\u2764\uFE0F", "\uD83E\uDDE1", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99", "\uD83D\uDC9C", "\uD83D\uDDA4", "\uD83D\uDC94",
                     "\uD83D\uDC95", "\uD83D\uDC9E", "\uD83D\uDC93", "\uD83D\uDC97", "\uD83D\uDC96", "\uD83D\uDC98", "\uD83D\uDC9D", "\u2B50", "\uD83C\uDF1F",
                     "\uD83D\uDCAB", "\u26A1", "\uD83D\uDD25", "\uD83D\uDCA5", "\uD83C\uDF89", "\uD83C\uDF8A", "\uD83C\uDFC6", "\uD83E\uDD47", "\uD83E\uDD48",
                     "\uD83E\uDD49", "\uD83D\uDCAF", "\uD83D\uDC8B", "\uD83D\uDCA4", "\uD83D\uDCA8", "\uD83C\uDF08", "\u2600\uFE0F", "\uD83C\uDF19", "\u2744\uFE0F",
                 ),
-                "Animals & Nature" to listOf(
+                stringResource(R.string.chat_emoji_cat_animals) to listOf(
                     "\uD83D\uDC36", "\uD83D\uDC31", "\uD83D\uDC2D", "\uD83D\uDC39", "\uD83D\uDC30", "\uD83E\uDD8A", "\uD83D\uDC3B", "\uD83D\uDC28",
                     "\uD83D\uDC2F", "\uD83E\uDD81", "\uD83D\uDC2E", "\uD83D\uDC37", "\uD83D\uDC38", "\uD83D\uDC35", "\uD83D\uDE48", "\uD83D\uDE49",
                     "\uD83D\uDE4A", "\uD83D\uDC27", "\uD83D\uDC26", "\uD83E\uDD85", "\uD83E\uDD86", "\uD83E\uDD89", "\uD83D\uDC3C", "\uD83D\uDC22",
                     "\uD83D\uDC0D", "\uD83E\uDD96", "\uD83D\uDC33", "\uD83D\uDC2C", "\uD83E\uDD8B", "\uD83C\uDF3A", "\uD83C\uDF39", "\uD83C\uDF3B",
                     "\uD83C\uDF3C", "\uD83C\uDF37", "\uD83C\uDF34", "\uD83C\uDF35", "\uD83C\uDF32", "\uD83C\uDF33", "\uD83C\uDF40", "\uD83C\uDF3F",
                 ),
-                "Food & Drink" to listOf(
+                stringResource(R.string.chat_emoji_cat_food) to listOf(
                     "\uD83C\uDF4E", "\uD83C\uDF4A", "\uD83C\uDF4B", "\uD83C\uDF4C", "\uD83C\uDF49", "\uD83C\uDF47", "\uD83C\uDF53", "\uD83C\uDF48",
                     "\uD83C\uDF55", "\uD83C\uDF54", "\uD83C\uDF5F", "\uD83C\uDF2D", "\uD83C\uDF2E", "\uD83C\uDF2F", "\uD83C\uDF73", "\uD83C\uDF5E",
                     "\u2615", "\uD83C\uDF75", "\uD83C\uDF7A", "\uD83C\uDF77", "\uD83E\uDD42", "\uD83C\uDF78", "\uD83E\uDD64", "\uD83C\uDF70",
                     "\uD83C\uDF82", "\uD83C\uDF6B", "\uD83C\uDF6C", "\uD83C\uDF6D", "\uD83C\uDF6E", "\uD83C\uDF6F", "\uD83C\uDF7E", "\uD83E\uDD43",
                 ),
-                "Objects & Flags" to listOf(
+                stringResource(R.string.chat_emoji_cat_objects) to listOf(
                     "\uD83D\uDCF1", "\uD83D\uDCBB", "\uD83D\uDCF7", "\uD83C\uDFB5", "\uD83C\uDFB6", "\uD83C\uDFA4", "\uD83C\uDFAC", "\uD83D\uDCDA",
                     "\uD83D\uDD13", "\uD83D\uDD12", "\uD83D\uDD11", "\uD83D\uDCA1", "\uD83D\uDD0B", "\uD83D\uDCE7", "\uD83D\uDCE6", "\uD83D\uDCB0",
                     "\uD83D\uDCB3", "\uD83D\uDE97", "\uD83D\uDE95", "\uD83D\uDE8C", "\u2708\uFE0F", "\uD83D\uDE80", "\uD83C\uDFE0", "\uD83C\uDFEB",
@@ -3441,7 +3441,7 @@ fun ChatScreen(
                                                                 val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
                                                                 file.copyTo(cached, overwrite = true)
                                                                 pendingFile = PendingFile(uri = android.net.Uri.fromFile(cached), name = file.name, size = cached.length(), mimeType = mime)
-                                                                val pName = currentPack?.first ?: "Stickers"
+                                                                val pName = currentPack?.first ?: context.getString(R.string.chat_sticker_pack_label)
                                                                 pendingStickerMeta = StickerMeta(pName, pName.hashCode().toString(16), currentPack?.second?.size ?: 0)
                                                                 showEmojiPicker = false
                                                                 handleSend()
@@ -3479,7 +3479,7 @@ fun ChatScreen(
                                                     if (bmp != null) {
                                                         Image(
                                                             bitmap = bmp.asImageBitmap(),
-                                                            contentDescription = "Sticker",
+                                                            contentDescription = stringResource(R.string.chat_sticker_pack_label),
                                                             modifier = stickerMod,
                                                             contentScale = ContentScale.Fit,
                                                         )
@@ -3547,14 +3547,14 @@ fun ChatScreen(
                     Text("\u23F3", fontSize = 14.sp)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Self-destruct: ${formatTimerLabel(oneShotTimer)}",
+                        context.getString(R.string.chat_self_destruct_timer) + ": ${formatTimerLabel(context, oneShotTimer)}",
                         color = C.accent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { oneShotTimer = 0 }) {
-                        Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3582,7 +3582,7 @@ fun ChatScreen(
                             .padding(start = 8.dp),
                     ) {
                         Text(
-                            "Editing message",
+                            stringResource(R.string.chat_editing_message),
                             color = Color(0xFFFFA726),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -3599,7 +3599,7 @@ fun ChatScreen(
                         editingMsg = null
                         setInputText("")
                     }) {
-                        Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3627,7 +3627,7 @@ fun ChatScreen(
                             .padding(start = 8.dp),
                     ) {
                         Text(
-                            if (replyingTo!!.sent) "You" else "@${replyingTo!!.from}",
+                            if (replyingTo!!.sent) stringResource(R.string.chat_you_label) else "@${replyingTo!!.from}",
                             color = C.accent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -3635,9 +3635,9 @@ fun ChatScreen(
                         Text(
                             replyingTo!!.text.ifEmpty {
                                 when (replyingTo!!.type) {
-                                    "file" -> replyingTo!!.file?.name ?: "File"
-                                    "tip" -> "Tip: ${Helpers.formatBeam(replyingTo!!.tipAmount)} ${com.privimemobile.wallet.assetTicker(replyingTo!!.tipAssetId)}"
-                                    else -> "Message"
+                                    "file" -> stringResource(R.string.chat_reply_file)
+                                    "tip" -> context.getString(R.string.chat_tip_simple, "${Helpers.formatBeam(replyingTo!!.tipAmount)} ${com.privimemobile.wallet.assetTicker(replyingTo!!.tipAssetId)}")
+                                    else -> context.getString(R.string.chat_message_label)
                                 }
                             }.take(80),
                             color = C.textSecondary,
@@ -3647,7 +3647,7 @@ fun ChatScreen(
                         )
                     }
                     TextButton(onClick = { replyingTo = null }) {
-                        Text("X", color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -3732,8 +3732,8 @@ fun ChatScreen(
                     listOf(
                         Triple("/tip",
                             if (isGroupMode) "<amount> [asset_id] [msg] (reply to tip)" else "<amount> [asset_id] [message]",
-                            if (isGroupMode) "Reply to a message, or /tip @handle amount" else "Send BEAM (default) or any asset"),
-                        Triple("/poll", "Question | Option 1 | Option 2", "Create a poll"),
+                            if (isGroupMode) stringResource(R.string.chat_tip_hint) else stringResource(R.string.chat_send_beam_hint)),
+                        Triple("/poll", stringResource(R.string.chat_poll_args), stringResource(R.string.chat_poll_desc)),
                     ).forEach { (cmd, args, desc) ->
                         Row(
                             modifier = Modifier
@@ -3893,7 +3893,7 @@ fun ChatScreen(
                                             label = "emojiIcon",
                                         ) { isEmoji ->
                                             if (isEmoji) {
-                                                Icon(Icons.Default.KeyboardArrowDown, "Keyboard", tint = C.textSecondary, modifier = Modifier.size(24.dp))
+                                                Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.chat_send_message), tint = C.textSecondary, modifier = Modifier.size(24.dp))
                                             } else {
                                                 Text("\uD83D\uDE00", fontSize = 24.sp)
                                             }
@@ -3936,10 +3936,10 @@ fun ChatScreen(
                                         placeholder = {
                                             Text(
                                                 when {
-                                                    pendingFile != null -> "Add a caption..."
-                                                    isDeletedAccount -> "This account has been deleted"
-                                                    !isGroupMode && resolvedWalletId.isNullOrEmpty() -> "Resolving address..."
-                                                    else -> "Message"
+                                                    pendingFile != null -> stringResource(R.string.chat_add_caption)
+                                                    isDeletedAccount -> stringResource(R.string.chat_account_deleted_notice)
+                                                    !isGroupMode && resolvedWalletId.isNullOrEmpty() -> stringResource(R.string.chat_resolving_address)
+                                                    else -> stringResource(R.string.chat_message_placeholder)
                                                 },
                                                 color = C.textMuted, fontSize = 15.sp,
                                             )
@@ -3980,7 +3980,7 @@ fun ChatScreen(
                                                         },
                                                     contentAlignment = Alignment.Center,
                                                 ) {
-                                                    Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = C.textDark, modifier = Modifier.size(22.dp))
+                                                    Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send_message), tint = C.textDark, modifier = Modifier.size(22.dp))
                                                 }
                                             }
                                         } else {
@@ -3999,7 +3999,7 @@ fun ChatScreen(
                                                     enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
                                                     modifier = Modifier.size(42.dp),
                                                 ) {
-                                                    Icon(Icons.Default.AttachFile, "Attach", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+                                                    Icon(Icons.Default.AttachFile, stringResource(R.string.chat_attach_file), tint = C.textSecondary, modifier = Modifier.size(22.dp))
                                                 }
                                             }
                                         }
@@ -4034,7 +4034,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Send,
-                                    "Send",
+                                    stringResource(R.string.chat_send_message),
                                     tint = Color.White,
                                     modifier = Modifier.size(26.dp),
                                 )
@@ -4113,7 +4113,7 @@ fun ChatScreen(
                         .align(Alignment.TopEnd)
                         .offset(x = (-12).dp, y = (-28).dp),
                 ) {
-                    com.privimemobile.ui.components.RecordHintTooltip()
+                    com.privimemobile.ui.components.RecordHintTooltip(text = stringResource(R.string.chat_voice_hold_to_record))
                 }
             }
 
@@ -4202,7 +4202,7 @@ fun ChatScreen(
                         ) {
                             Icon(
                                 Icons.Default.Mic,
-                                "Mic",
+                                stringResource(R.string.chat_mic_desc),
                                 tint = Color.White.copy(alpha = 0.9f),
                                 modifier = Modifier.size(20.dp),
                             )
@@ -4244,10 +4244,10 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
                 containerColor = C.card,
-                title = { Text(if (isGroupMode) "Leave group" else "Delete chat", color = C.text, fontWeight = FontWeight.SemiBold) },
+                title = { Text(if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = { Text(
-                    if (isGroupMode) "Leave this group and delete all messages? You can rejoin later."
-                    else "Delete this entire conversation? New messages from this contact will start a fresh chat.",
+                    if (isGroupMode) stringResource(R.string.chat_leave_confirm)
+                    else stringResource(R.string.chat_delete_confirm),
                     color = C.textSecondary,
                 ) },
                 confirmButton = {
@@ -4260,7 +4260,7 @@ fun ChatScreen(
                                     scope.launch {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Failed to leave group: ${error ?: "Transaction failed"}",
+                                            context.getString(R.string.chat_leave_failed, error ?: context.getString(R.string.chat_tx_failed)),
                                             android.widget.Toast.LENGTH_LONG
                                         ).show()
                                     }
@@ -4269,7 +4269,7 @@ fun ChatScreen(
                                     scope.launch {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Leave transaction submitted. Group will be removed once confirmed.",
+                                            context.getString(R.string.chat_leave_tx_submitted),
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -4394,13 +4394,13 @@ fun ChatScreen(
         // ── Wallpaper picker ──
         if (showWallpaperPicker) {
             val wallpaperOptions = listOf(
-                "default" to "Default",
-                "dark_blue" to "Dark Blue",
-                "teal" to "Teal",
-                "purple" to "Purple",
-                "midnight" to "Midnight",
-                "forest" to "Forest",
-                "sunset" to "Sunset",
+                "default" to stringResource(R.string.chat_wallpaper_default),
+                "dark_blue" to stringResource(R.string.chat_wallpaper_dark_blue),
+                "teal" to stringResource(R.string.chat_wallpaper_teal),
+                "purple" to stringResource(R.string.chat_wallpaper_purple),
+                "midnight" to stringResource(R.string.chat_wallpaper_midnight),
+                "forest" to stringResource(R.string.chat_wallpaper_forest),
+                "sunset" to stringResource(R.string.chat_wallpaper_sunset),
             )
             AlertDialog(
                 onDismissRequest = { showWallpaperPicker = false },
@@ -4478,12 +4478,12 @@ fun ChatScreen(
         // ── Schedule message picker ──
         if (showSchedulePicker) {
             val scheduleOptions = listOf(
-                "10min" to "In 10 minutes",
-                "30min" to "In 30 minutes",
-                "1h" to "In 1 hour",
-                "3h" to "In 3 hours",
-                "tomorrow" to "Tomorrow morning (9:00 AM)",
-                "custom" to "Pick date & time...",
+                "10min" to stringResource(R.string.chat_schedule_in_10min),
+                "30min" to stringResource(R.string.chat_schedule_in_30min),
+                "1h" to stringResource(R.string.chat_schedule_in_1h),
+                "3h" to stringResource(R.string.chat_schedule_in_3h),
+                "tomorrow" to stringResource(R.string.chat_schedule_tomorrow),
+                "custom" to stringResource(R.string.chat_schedule_custom),
             )
             var showCustomDateTime by remember { mutableStateOf(false) }
 
@@ -4606,7 +4606,7 @@ fun ChatScreen(
         // ── View Sticker Pack dialog (local only) ──
         if (viewPackId != null) {
             // Get pack name from the sticker message that triggered this
-            val packName = messages.firstOrNull { it.stickerPackId == viewPackId }?.stickerPackName ?: "Stickers"
+            val packName = messages.firstOrNull { it.stickerPackId == viewPackId }?.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)
             val stickersRoot = java.io.File(context.filesDir, "stickers")
             val localPackDir = java.io.File(stickersRoot, packName)
             val localFiles = remember(viewPackId) {
@@ -4661,7 +4661,7 @@ fun ChatScreen(
                                     if (bmp != null) {
                                         Image(
                                             bitmap = bmp.asImageBitmap(),
-                                            contentDescription = "Sticker",
+                                            contentDescription = stringResource(R.string.chat_sticker_pack_label),
                                             modifier = Modifier.aspectRatio(1f).padding(4.dp).clip(RoundedCornerShape(8.dp)),
                                             contentScale = ContentScale.Fit,
                                         )
@@ -4717,11 +4717,11 @@ fun ChatScreen(
         // ── Per-message self-destruct timer picker ──
         if (showOneShotTimerPicker) {
             val timerOptions = listOf(
-                0 to "Off",
-                30 to "30 seconds",
-                300 to "5 minutes",
-                3600 to "1 hour",
-                86400 to "1 day",
+                0 to stringResource(R.string.chat_overflow_timer_off),
+                30 to stringResource(R.string.chat_timer_30s),
+                300 to stringResource(R.string.chat_timer_5min),
+                3600 to stringResource(R.string.chat_timer_1h),
+                86400 to stringResource(R.string.chat_timer_1day),
             )
             AlertDialog(
                 onDismissRequest = { showOneShotTimerPicker = false },
@@ -4731,7 +4731,7 @@ fun ChatScreen(
                 text = {
                     Column {
                         Text(
-                            "Next message will auto-delete after this time. Does not change the other person's settings.",
+                            stringResource(R.string.chat_next_message_hint),
                             color = C.textSecondary, fontSize = 13.sp,
                             modifier = Modifier.padding(bottom = 12.dp),
                         )
@@ -4904,14 +4904,14 @@ fun ChatScreen(
                         // Menu items with touch highlight
                         // View Pack for sticker messages
                         if (targetMsg.type == "sticker" && targetMsg.stickerPackId != null) {
-                            MenuItemRow("View Pack \u2014 ${targetMsg.stickerPackName ?: "Stickers"}") {
+                            MenuItemRow(context.getString(R.string.chat_view_pack) + " \u2014 ${targetMsg.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)}") {
                                 viewPackId = targetMsg.stickerPackId
                                 contextMenuMsg = null
                             }
                         }
 
                         if (targetMsg.text.isNotEmpty()) {
-                            MenuItemRow("Copy") {
+                            MenuItemRow(stringResource(R.string.chat_copy)) {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("message", targetMsg.text))
                                 Toast.makeText(context, R.string.general_copied, Toast.LENGTH_SHORT).show()
@@ -4922,14 +4922,14 @@ fun ChatScreen(
                         if (targetMsg.file != null) {
                             val targetPath = filePaths[targetMsg.file.cid]
                             if (targetPath != null) {
-                                MenuItemRow("Save to Downloads") {
+                                MenuItemRow(stringResource(R.string.chat_save_to_downloads)) {
                                     saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
                                     contextMenuMsg = null
                                 }
                                 // Save to stickers for image files
                                 if (Helpers.isImageMime(targetMsg.file.mime)) {
                                     var showSaveToPackPicker by remember { mutableStateOf(false) }
-                                    MenuItemRow("Save to stickers") {
+                                    MenuItemRow(stringResource(R.string.chat_save_to_stickers)) {
                                         showSaveToPackPicker = true
                                     }
                                     if (showSaveToPackPicker) {
@@ -4990,12 +4990,12 @@ fun ChatScreen(
                             }
                         }
 
-                        MenuItemRow("Reply") { replyingTo = targetMsg; contextMenuMsg = null }
+                        MenuItemRow(stringResource(R.string.chat_reply)) { replyingTo = targetMsg; contextMenuMsg = null }
 
                         // Pin/Unpin — in group mode, only admin (role>=1) or creator (role==2) can pin
                         val canPin = !isGroupMode || (group?.myRole ?: 0) >= 1
                         if (canPin) {
-                            MenuItemRow(if (targetMsg.pinned) "Unpin" else "Pin") {
+                            MenuItemRow(if (targetMsg.pinned) stringResource(R.string.chat_unpin) else stringResource(R.string.chat_pin)) {
                                 val isPinning = !targetMsg.pinned
                                 scope.launch {
                                     if (isPinning) com.privimemobile.chat.ChatService.db?.messageDao()?.pinMessage(targetMsg.id.toLong())
@@ -5017,14 +5017,14 @@ fun ChatScreen(
                         }
 
                         if (targetMsg.sent && targetMsg.text.isNotEmpty() && targetMsg.type != "tip") {
-                            MenuItemRow("Edit") {
+                            MenuItemRow(stringResource(R.string.chat_edit)) {
                                 editingMsg = targetMsg; replyingTo = null
                                 setInputText(targetMsg.text); contextMenuMsg = null
                             }
                         }
 
                         if (targetMsg.text.isNotEmpty() || targetMsg.file != null) {
-                            MenuItemRow("Forward") {
+                            MenuItemRow(stringResource(R.string.chat_forward)) {
                                 forwardingMsgs = emptyList()
                                 forwardingMsg = targetMsg; contextMenuMsg = null
                             }
@@ -5032,7 +5032,7 @@ fun ChatScreen(
 
                         // Resend option for sent messages not yet delivered (text, file, voice, sticker, sticker_pack, poll)
                         if (targetMsg.sent && !targetMsg.delivered && targetMsg.scheduledAt == 0L) {
-                            MenuItemRow("Resend") {
+                            MenuItemRow(stringResource(R.string.chat_resend)) {
                                 scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
@@ -5152,14 +5152,14 @@ fun ChatScreen(
                             }
                         }
 
-                        MenuItemRow("Select") {
+                        MenuItemRow(stringResource(R.string.chat_select)) {
                             selectionMode = true; selectedIds.clear()
                             selectedIds.add(targetMsg.id); contextMenuMsg = null
                         }
 
                         // Cancel scheduled message option
                         if (targetMsg.scheduledAt > 0) {
-                            MenuItemRow("Cancel scheduled", color = C.error) {
+                            MenuItemRow(stringResource(R.string.chat_cancel_scheduled), color = C.error) {
                                 val cid = convId
                                 scope.launch {
                                     com.privimemobile.chat.ChatService.db?.messageDao()?.cancelScheduled(targetMsg.id.toLong())
@@ -5329,7 +5329,7 @@ fun ChatScreen(
                             filteredReactors.forEach { reactor ->
                                 val isMe = reactor.senderHandle == myHandle
                                 val contact = contactsMap[reactor.senderHandle]
-                                val displayName = if (isMe) "You" else contact?.displayName ?: groupMemberNames[reactor.senderHandle] ?: "@${reactor.senderHandle}"
+                                val displayName = if (isMe) stringResource(R.string.chat_you_label) else contact?.displayName ?: groupMemberNames[reactor.senderHandle] ?: "@${reactor.senderHandle}"
                                 val reactedDate = reactedDateFormat.format(java.util.Date(reactor.timestamp * 1000))
 
                                 Row(
@@ -5355,7 +5355,7 @@ fun ChatScreen(
                                             fontWeight = FontWeight.Medium,
                                         )
                                         Text(
-                                            "reacted on $reactedDate",
+                                            context.getString(R.string.chat_reacted_on, reactedDate),
                                             fontSize = 12.sp,
                                             color = C.textSecondary,
                                         )
@@ -5404,14 +5404,14 @@ fun ChatScreen(
                             Column(modifier = Modifier.padding(8.dp)) {
                                 if (allFwdMsgs.size > 1) {
                                     Text(
-                                        "${allFwdMsgs.size} messages selected",
+                                        context.getString(R.string.chat_messages_selected, allFwdMsgs.size),
                                         color = C.textSecondary,
                                         fontSize = 12.sp,
                                     )
                                 } else {
                                     if (fwdMsg.file != null) {
                                         Text(
-                                            "\uD83D\uDCCE ${fwdMsg.file.name.ifEmpty { "File" }}",
+                                            stringResource(R.string.chat_forward_file_msg, fwdMsg.file.name.ifEmpty { "" }),
                                             color = C.accent,
                                             fontSize = 12.sp,
                                         )
@@ -5500,7 +5500,7 @@ fun ChatScreen(
                                                                         )
                                                                     )
                                                                 }
-                                                                val preview = if (m.text.isNotEmpty()) "📎 ${f.name.ifEmpty { "File" }}" else "📎 ${f.name.ifEmpty { "File" }}"
+                                                                val preview = if (m.text.isNotEmpty()) context.getString(R.string.chat_forward_file_msg, f.name.ifEmpty { "" }) else context.getString(R.string.chat_forward_file_msg, f.name.ifEmpty { "" })
                                                                 com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(targetGid, ts, preview)
 
                                                                 com.privimemobile.chat.ChatService.groups.sendGroupPayload(targetGid, payload)
@@ -5623,7 +5623,7 @@ fun ChatScreen(
                                                                     )
                                                                 )
                                                             }
-                                                            lastPreview = if (isFile) "\uD83D\uDCCE ${m.file!!.name.ifEmpty { "File" }}" else m.text.take(100)
+                                                            lastPreview = if (isFile) context.getString(R.string.chat_forward_file_msg, m.file!!.name.ifEmpty { "" }) else m.text.take(100)
                                                             lastTs = ts
                                                             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.walletId!!, payload)
                                                             // Delay between forwards to avoid SBBS rate-limiting
@@ -5733,8 +5733,8 @@ fun ChatScreen(
                     val isImage = Helpers.isImageMime(info.mimeType)
                     val limit = if (isImage) Config.MAX_FILE_SIZE else Config.MAX_INLINE_SIZE
                     if (info.size > limit) {
-                        val msg = if (isImage) "Image too large (max ${Config.MAX_FILE_SIZE / 1024 / 1024}MB)"
-                        else "File too large (max ${Config.MAX_INLINE_SIZE / 1024}KB)"
+                        val msg = if (isImage) context.getString(R.string.chat_image_too_large, Config.MAX_FILE_SIZE / 1024 / 1024)
+                        else context.getString(R.string.chat_file_too_large, Config.MAX_INLINE_SIZE / 1024)
                         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         imagePreview = null
                         sendingFromPreview = false
@@ -5885,7 +5885,7 @@ private fun MessageBubble(
             try { org.json.JSONObject(msg.pollData) } catch (_: Exception) { null }
         }
         val inviteGroupId = inviteData?.optString("group_id") ?: ""
-        val inviteGroupName = inviteData?.optString("group_name") ?: "Group"
+        val inviteGroupName = inviteData?.optString("group_name") ?: stringResource(R.string.chat_group_name_fallback)
         val invitedBy = inviteData?.optString("invited_by") ?: msg.from
         val inviteMemberCount = inviteData?.optInt("member_count", 0) ?: 0
         val invitePassword = inviteData?.optString("join_password")
@@ -5900,10 +5900,10 @@ private fun MessageBubble(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 16.dp),
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("\uD83D\uDC65 Group Invite", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.chat_group_invite), color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Text(inviteGroupName, color = C.bubbleText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("$inviteMemberCount members \u2022 Invited by @$invitedBy", color = C.textSecondary, fontSize = 12.sp)
+                Text(stringResource(R.string.chat_invite_member_count_format, inviteMemberCount, "@$invitedBy"), color = C.textSecondary, fontSize = 12.sp)
                 Spacer(Modifier.height(10.dp))
                 if (!alreadyResponded && !joining) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -5919,7 +5919,7 @@ private fun MessageBubble(
                                         android.widget.Toast.makeText(context, context.getString(R.string.toast_joining_group, inviteGroupName), android.widget.Toast.LENGTH_SHORT).show()
                                     } else {
                                         joining = false
-                                        android.widget.Toast.makeText(context, e ?: "Join failed", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(context, context.getString(R.string.chat_join_failed) + ": " + e, android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -5944,7 +5944,7 @@ private fun MessageBubble(
                 } else if (joining) {
                     Text(stringResource(R.string.chat_joining), color = C.accent, fontSize = 13.sp)
                 } else {
-                    Text("\u2705 Responded", color = C.textMuted, fontSize = 13.sp)
+                    Text(stringResource(R.string.chat_invite_responded), color = C.textMuted, fontSize = 13.sp)
                 }
             }
         }
@@ -6089,7 +6089,7 @@ private fun MessageBubble(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("\uD83D\uDCE6 Sticker Pack", color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
-                        Text(msg.stickerPackName ?: "Stickers", color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(msg.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text("${msg.stickerPackTotal} stickers", color = C.textSecondary, fontSize = 12.sp)
                         Spacer(Modifier.height(8.dp))
                         if (!isMine && filePath != null) {
@@ -6128,7 +6128,7 @@ private fun MessageBubble(
                                 colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(if (packSaved) "Update Pack" else "Save Pack", color = C.textDark)
+                                Text(if (packSaved) stringResource(R.string.chat_update_pack) else stringResource(R.string.chat_save_pack), color = C.textDark)
                             }
                         } else if (!isMine) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), color = C.accent, strokeWidth = 2.dp)
@@ -6177,7 +6177,7 @@ private fun MessageBubble(
                         // Static sticker (WebP/PNG)
                         AsyncImage(
                             model = filePath,
-                            contentDescription = "Sticker",
+                            contentDescription = stringResource(R.string.chat_sticker_pack_label),
                             modifier = Modifier
                                 .size(180.dp)
                                 .clip(RoundedCornerShape(8.dp))
@@ -6255,7 +6255,7 @@ private fun MessageBubble(
                 // Forwarded label
                 if (msg.fwdFrom != null) {
                     Text(
-                        "Forwarded from @${msg.fwdFrom}",
+                        context.getString(R.string.chat_forwarded_from, msg.fwdFrom),
                         color = C.accent,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
@@ -6270,7 +6270,7 @@ private fun MessageBubble(
                     val tipTarget = if (msg.text.startsWith("\u2192@")) {
                         msg.text.lineSequence().first().removePrefix("\u2192")
                     } else null
-                    val tipLabel = if (tipTarget != null) "Tip to $tipTarget: $assetLabel" else "Tip: $assetLabel"
+                    val tipLabel = if (tipTarget != null) context.getString(R.string.chat_tip_to, tipTarget, assetLabel) else context.getString(R.string.chat_tip_simple, assetLabel)
                     Text(
                         tipLabel,
                         color = C.accent,
@@ -6305,7 +6305,7 @@ private fun MessageBubble(
                             )
                             Column(modifier = Modifier.padding(start = 8.dp)) {
                                 if (quoteSender != null) {
-                                    val senderName = if (quoteSender == myHandle) "You"
+                                    val senderName = if (quoteSender == myHandle) stringResource(R.string.chat_you_label)
                                         else groupMemberNames[quoteSender] ?: "@$quoteSender"
                                     Text(
                                         senderName,
@@ -6473,7 +6473,7 @@ private fun MessageBubble(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (msg.edited) {
-                        Text("edited", color = C.textMuted, fontSize = 10.sp)
+                        Text(stringResource(R.string.chat_edited_label), color = C.textMuted, fontSize = 10.sp)
                         Spacer(Modifier.width(4.dp))
                     }
                     if (showTimestamp) {
@@ -6559,7 +6559,7 @@ private fun MessageBubble(
             text = {
                 Column {
                     Text(
-                        "This URL will open in your default browser:",
+                        stringResource(R.string.chat_url_open_warning),
                         color = C.textSecondary,
                         fontSize = 13.sp,
                     )
@@ -6895,7 +6895,7 @@ private fun FullscreenImageViewer(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onDismiss) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_close), tint = Color.White)
             }
             Text(
                 fileName,
@@ -6909,7 +6909,7 @@ private fun FullscreenImageViewer(
                 var showDeleteMenu by remember { mutableStateOf(false) }
                 Box {
                     IconButton(onClick = { showDeleteMenu = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = C.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.chat_label_delete), tint = C.error)
                     }
                     DropdownMenu(
                         expanded = showDeleteMenu,
@@ -6930,7 +6930,7 @@ private fun FullscreenImageViewer(
                 }
             }
             IconButton(onClick = onSave) {
-                Icon(Icons.Default.Download, contentDescription = "Save", tint = Color.White)
+                Icon(Icons.Default.Download, contentDescription = androidx.compose.ui.platform.LocalContext.current.getString(R.string.chat_save_file), tint = Color.White)
             }
         }
         } // end AnimatedVisibility
@@ -7039,8 +7039,8 @@ private fun AttachmentPickerSheet(
                         .padding(horizontal = 12.dp),
                 ) {
                     listOf(
-                        Triple(0, "Gallery", Icons.Default.PhotoLibrary),
-                        Triple(1, "Files", Icons.Default.Description),
+                        Triple(0, stringResource(R.string.chat_attach_gallery), Icons.Default.PhotoLibrary),
+                        Triple(1, stringResource(R.string.chat_attach_files), Icons.Default.Description),
                     ).forEach { (index, label, icon) ->
                         val isSelected = selectedTab == index
                         Surface(
@@ -7133,7 +7133,7 @@ private fun AttachmentPickerSheet(
                                             },
                                     ) {
                                         Text(
-                                            "Send ${selectedUris.size} photo${if (selectedUris.size > 1) "s" else ""}",
+                                            if (selectedUris.size == 1) stringResource(R.string.chat_send_photo_one) else stringResource(R.string.chat_send_photo_other, selectedUris.size),
                                             color = C.textDark,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -7263,7 +7263,7 @@ private fun AttachmentPickerSheet(
                             Spacer(Modifier.weight(1f))
 
                             Text(
-                                "Max file size: ${Config.MAX_FILE_SIZE / 1024 / 1024}MB",
+                                context.getString(R.string.chat_max_file_size_hint, Config.MAX_FILE_SIZE / 1024 / 1024),
                                 color = C.textMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -7307,7 +7307,7 @@ private fun ImagePreviewSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Color.White, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chat_cancel_scheduled), tint = Color.White, modifier = Modifier.size(28.dp))
                     }
                 }
             }
@@ -7385,7 +7385,7 @@ private fun ImagePreviewSheet(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
+                                contentDescription = stringResource(R.string.chat_send_message),
                                 tint = C.textDark,
                                 modifier = Modifier.size(22.dp),
                             )
@@ -7560,7 +7560,7 @@ private fun VoiceRecordingBar(
             when {
                 shouldCancel -> {
                     Text(
-                        text = "Release to cancel",
+                        text = stringResource(R.string.chat_voice_release_cancel),
                         color = C.error,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
@@ -7569,7 +7569,7 @@ private fun VoiceRecordingBar(
 
                 isLocked -> {
                     Text(
-                        text = "CANCEL",
+                        text = stringResource(R.string.chat_voice_cancel),
                         color = if (shouldLock) C.accent else C.accent.copy(alpha = 0.7f),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -7579,7 +7579,7 @@ private fun VoiceRecordingBar(
 
                 else -> {
                     Text(
-                        text = "\u27F5 Slide to Cancel",
+                        text = "\u27F5 " + stringResource(R.string.chat_voice_slide_to_cancel),
                         color = C.textSecondary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
@@ -7615,7 +7615,7 @@ private fun VoicePreviewBar(
             onClick = onDelete,
             modifier = Modifier.size(40.dp).clip(CircleShape),
         ) {
-            Icon(Icons.Default.Delete, "Delete", tint = C.textSecondary, modifier = Modifier.size(22.dp))
+            Icon(Icons.Default.Delete, stringResource(R.string.chat_label_delete), tint = C.textSecondary, modifier = Modifier.size(22.dp))
         }
 
         Spacer(Modifier.width(4.dp))
@@ -7645,7 +7645,7 @@ private fun VoicePreviewBar(
             onClick = onSend,
             modifier = Modifier.size(40.dp).clip(CircleShape).background(C.accent),
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send_message), tint = Color.White, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -7671,7 +7671,7 @@ private fun VoiceLockIndicator(
         ) {
             Icon(
                 Icons.Default.Lock,
-                "Lock",
+                stringResource(R.string.chat_send_message),
                 tint = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.size(18.dp),
             )
@@ -7772,7 +7772,7 @@ private fun parseMarkdown(text: String): androidx.compose.ui.text.AnnotatedStrin
 }
 
 private val dateSepFormat = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
-private fun formatDateSeparator(ts: Long): String {
+private fun formatDateSeparator(ts: Long, ctx: Context): String {
     if (ts <= 0) return ""
     val date = Date(ts * 1000)
     val cal = Calendar.getInstance()
@@ -7781,16 +7781,16 @@ private fun formatDateSeparator(ts: Long): String {
     cal.time = date
     return when {
         cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-                cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> "Today"
+                cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> ctx.getString(R.string.chat_date_today)
         cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-                cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) - 1 -> "Yesterday"
+                cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) - 1 -> ctx.getString(R.string.chat_date_yesterday)
         else -> dateSepFormat.format(date)
     }
 }
 
 /** Format disappearing timer value to human-readable label. */
-internal fun formatTimerLabel(seconds: Int): String = when {
-    seconds <= 0 -> "Off"
+internal fun formatTimerLabel(ctx: Context, seconds: Int): String = when {
+    seconds <= 0 -> ctx.getString(R.string.chat_timer_off)
     seconds < 60 -> "${seconds}s"
     seconds < 3600 -> "${seconds / 60}m"
     seconds < 86400 -> "${seconds / 3600}h"

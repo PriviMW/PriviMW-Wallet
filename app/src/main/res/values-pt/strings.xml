@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">Ok</string>
     <string name="general_cancel">Cancelar</string>
     <string name="general_back">voltar</string>
     <string name="general_next">Próximo</string>
+    <string name="general_done">Concluído</string>
     <string name="general_close">Fechar</string>
     <string name="general_confirm">Confirmar</string>
     <string name="general_save">Guardar</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Colar</string>
     <string name="general_send">Mandar</string>
     <string name="general_receive">Receber</string>
+    <string name="general_edit">Editar</string>
     <string name="general_search">Pesquisa</string>
     <string name="general_clear">limpar</string>
+    <string name="general_share">Compartilhar</string>
+    <string name="general_loading">Carregando…</string>
     <string name="general_amount">Quantidade</string>
     <string name="general_fee">Taxa de transação</string>
     <string name="general_address">Endereço</string>
@@ -27,7 +32,9 @@
     <string name="general_advanced">Avançado</string>
     <string name="general_change">Troca</string>
     <string name="general_proceed">Continuar</string>
+    <string name="general_unlock">Desbloquear</string>
     <string name="general_password">Senha</string>
+    <string name="general_confirm_password">Confirmar senha</string>
     <string name="general_all">Tudo</string>
     <string name="general_none">Nenhum</string>
     <string name="general_rescan">Reescanear</string>
@@ -36,15 +43,21 @@
     <string name="general_coin">Moeda</string>
     <string name="general_source">Fonte</string>
     <string name="general_date">Data</string>
+    <string name="general_time">Hora</string>
     <string name="general_name">Nome:</string>
     <string name="general_type">Tipo</string>
     <string name="general_from">De</string>
     <string name="general_to">Para</string>
     <string name="general_unknown">desconhecido</string>
     <string name="general_optional">(opcional)</string>
+    <string name="general_copied">Copiado</string>
+    <string name="general_removed">Removido</string>
+    <string name="general_updated">Atualizado</string>
+    <string name="general_no_internet">Sem conexão à internet</string>
     <string name="general_try_again">Tente novamente</string>
     <string name="general_show_in_folder">Mostrar na pasta</string>
     <string name="general_open_in_explorer">Abrir no Blockchain Explorer</string>
+    <string name="general_select_all">Selecionar tudo</string>
     <string name="auth_create_wallet">Criar nova carteira</string>
     <string name="auth_restore_wallet">Restaurar carteira</string>
     <string name="auth_seed_warning_1">Não deixe ninguém ver suas palavras-chave</string>

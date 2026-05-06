@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ok</string>
     <string name="general_cancel">Avbryt</string>
     <string name="general_back">tillbaka</string>
     <string name="general_next">Nästa</string>
+    <string name="general_done">Klar</string>
     <string name="general_close">Stäng</string>
     <string name="general_confirm">Bekräfta</string>
     <string name="general_save">Spara</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Klistra in</string>
     <string name="general_send">Skicka</string>
     <string name="general_receive">Ta emot</string>
+    <string name="general_edit">Redigera</string>
     <string name="general_search">Sök</string>
     <string name="general_clear">rensa</string>
+    <string name="general_share">Dela</string>
+    <string name="general_loading">Laddar…</string>
     <string name="general_amount">Belopp</string>
     <string name="general_fee">Transaktionskostnad</string>
     <string name="general_address">Adress</string>
@@ -24,22 +29,30 @@
     <string name="general_advanced">Avancerat</string>
     <string name="general_change">Ändra</string>
     <string name="general_proceed">Fortsätt</string>
+    <string name="general_unlock">Lås upp</string>
     <string name="general_password">Lösenord</string>
+    <string name="general_confirm_password">Bekräfta lösenord</string>
     <string name="general_all">Alla</string>
     <string name="general_none">Inga</string>
     <string name="general_rescan">Scanna</string>
     <string name="general_swap">Swappa</string>
     <string name="general_rate">Växelkurs</string>
     <string name="general_date">Datum</string>
+    <string name="general_time">Tid</string>
     <string name="general_name">Namn</string>
     <string name="general_type">Typ</string>
     <string name="general_from">Från</string>
     <string name="general_to">Till</string>
     <string name="general_unknown">okänd</string>
     <string name="general_optional">(frivilligt)</string>
+    <string name="general_copied">Kopierat</string>
+    <string name="general_removed">Borttaget</string>
+    <string name="general_updated">Uppdaterat</string>
+    <string name="general_no_internet">Ingen internetanslutning</string>
     <string name="general_try_again">Försök igen</string>
     <string name="general_show_in_folder">Visa i mapp</string>
     <string name="general_open_in_explorer">Öppna i block-kedjans utforskare</string>
+    <string name="general_select_all">Välj alla</string>
     <string name="auth_create_wallet">Skapa ny plånbok</string>
     <string name="auth_restore_wallet">Återställ plånbok</string>
     <string name="auth_seed_warning_1">Låt ingen annan se din seed phrase</string>

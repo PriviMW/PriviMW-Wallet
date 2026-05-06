@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">Đồng ý</string>
     <string name="general_cancel">Huỷ</string>
     <string name="general_back">Quay lại</string>
     <string name="general_next">Tiếp</string>
+    <string name="general_done">Xong</string>
     <string name="general_close">Đóng</string>
     <string name="general_confirm">Xác nhận</string>
     <string name="general_save">Lưu</string>
@@ -12,7 +14,10 @@
     <string name="general_paste">Dán</string>
     <string name="general_send">Gửi</string>
     <string name="general_receive">Nhận</string>
+    <string name="general_edit">Sửa</string>
     <string name="general_search">Tìm</string>
+    <string name="general_share">Chia sẻ</string>
+    <string name="general_loading">Đang tải…</string>
     <string name="general_amount">Số tiền</string>
     <string name="general_fee">Phí giao dịch</string>
     <string name="general_address">Địa chỉ</string>
@@ -23,20 +28,28 @@
     <string name="general_advanced">Nâng cao</string>
     <string name="general_change">Thay đổi</string>
     <string name="general_proceed">Tiến hành</string>
+    <string name="general_unlock">Mở khóa</string>
     <string name="general_password">Mật khẩu</string>
+    <string name="general_confirm_password">Xác nhận mật khẩu</string>
     <string name="general_all">Tất cả</string>
     <string name="general_none">Không có gì</string>
     <string name="general_rescan">Quét lại</string>
     <string name="general_swap">Trao đổi</string>
     <string name="general_date">Ngày</string>
+    <string name="general_time">Thời gian</string>
     <string name="general_name">Tên</string>
     <string name="general_type">Loại</string>
     <string name="general_from">Từ</string>
     <string name="general_to">Đến</string>
     <string name="general_unknown">chưa xác định</string>
+    <string name="general_copied">Đã sao chép</string>
+    <string name="general_removed">Đã xóa</string>
+    <string name="general_updated">Đã cập nhật</string>
+    <string name="general_no_internet">Không có kết nối mạng</string>
     <string name="general_try_again">Thử lại lần nữa</string>
     <string name="general_show_in_folder">Hiển thị trong thư mục</string>
     <string name="general_open_in_explorer">Mở trong Blockchain Explorer</string>
+    <string name="general_select_all">Chọn tất cả</string>
     <string name="auth_create_wallet">Tạo ví mới</string>
     <string name="auth_restore_wallet">Khôi phục ví</string>
     <string name="auth_seed_warning_1">Không để ai nhìn thấy cụm từ hạt giống của bạn</string>

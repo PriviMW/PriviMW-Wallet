@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ya</string>
     <string name="general_cancel">Batal</string>
     <string name="general_back">kembali</string>
     <string name="general_next">Selanjutnya</string>
+    <string name="general_done">Selesai</string>
     <string name="general_close">Tutup</string>
     <string name="general_confirm">Konfirmasi</string>
     <string name="general_save">Simpan</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Tempel</string>
     <string name="general_send">Kirim</string>
     <string name="general_receive">Terima</string>
+    <string name="general_edit">Edit</string>
     <string name="general_search">Cari</string>
     <string name="general_clear">bersihkan</string>
+    <string name="general_share">Bagikan</string>
+    <string name="general_loading">Memuat…</string>
     <string name="general_amount">Jumlah</string>
     <string name="general_fee">Biaya transaksi</string>
     <string name="general_address">Alamat</string>
@@ -27,7 +32,9 @@
     <string name="general_advanced">Lanjutan</string>
     <string name="general_change">Perubahan</string>
     <string name="general_proceed">Memproses</string>
+    <string name="general_unlock">Buka</string>
     <string name="general_password">Kata sandi</string>
+    <string name="general_confirm_password">Konfirmasi kata sandi</string>
     <string name="general_all">Semua</string>
     <string name="general_none">Tidak ada</string>
     <string name="general_rescan">Pindai Ulang</string>
@@ -36,15 +43,21 @@
     <string name="general_coin">Koin</string>
     <string name="general_source">Sumber</string>
     <string name="general_date">Tanggal</string>
+    <string name="general_time">Waktu</string>
     <string name="general_name">Nama</string>
     <string name="general_type">Jenis</string>
     <string name="general_from">Dari</string>
     <string name="general_to">Kepada</string>
     <string name="general_unknown">tidak diketahui</string>
     <string name="general_optional">(opsional)</string>
+    <string name="general_copied">Disalin</string>
+    <string name="general_removed">Dihapus</string>
+    <string name="general_updated">Diperbarui</string>
+    <string name="general_no_internet">Tidak ada koneksi internet</string>
     <string name="general_try_again">Coba lagi</string>
     <string name="general_show_in_folder">Tampilkan dalam folder</string>
     <string name="general_open_in_explorer">Buka di Penjelajah Blockchain</string>
+    <string name="general_select_all">Pilih semua</string>
     <string name="auth_create_wallet">Buat dompet baru</string>
     <string name="auth_restore_wallet">Pulihkan dompet</string>
     <string name="auth_seed_warning_1">Jangan biarkan siapa pun melihat frase awal Anda</string>

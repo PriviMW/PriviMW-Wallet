@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ok</string>
     <string name="general_cancel">Скасувати</string>
     <string name="general_back">повернутися</string>
     <string name="general_next">Наступний</string>
+    <string name="general_done">Готово</string>
     <string name="general_close">Закрити</string>
     <string name="general_confirm">Підтвердити</string>
     <string name="general_save">Зберегти</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Вставити</string>
     <string name="general_send">Надіслати</string>
     <string name="general_receive">Отримати</string>
+    <string name="general_edit">Редагувати</string>
     <string name="general_search">Пошук</string>
     <string name="general_clear">очистити</string>
+    <string name="general_share">Поділитися</string>
+    <string name="general_loading">Завантаження…</string>
     <string name="general_amount">Кількість</string>
     <string name="general_fee">Комісія за транзакцію</string>
     <string name="general_address">Адреса</string>
@@ -27,7 +32,9 @@
     <string name="general_advanced">Розширені</string>
     <string name="general_change">Змінити</string>
     <string name="general_proceed">Продовжити</string>
+    <string name="general_unlock">Розблокувати</string>
     <string name="general_password">Пароль</string>
+    <string name="general_confirm_password">Підтвердьте пароль</string>
     <string name="general_all">Всі</string>
     <string name="general_none">Нема</string>
     <string name="general_rescan">Повторне сканування</string>
@@ -36,15 +43,21 @@
     <string name="general_coin">Монета</string>
     <string name="general_source">Джерело</string>
     <string name="general_date">Дата</string>
+    <string name="general_time">Час</string>
     <string name="general_name">Назва</string>
     <string name="general_type">Тип</string>
     <string name="general_from">Від</string>
     <string name="general_to">На</string>
     <string name="general_unknown">невідомо</string>
     <string name="general_optional">(опціонально)</string>
+    <string name="general_copied">Скопійовано</string>
+    <string name="general_removed">Видалено</string>
+    <string name="general_updated">Оновлено</string>
+    <string name="general_no_internet">Немає інтернету</string>
     <string name="general_try_again">Спробувати знову</string>
     <string name="general_show_in_folder">Відкрити в теці</string>
     <string name="general_open_in_explorer">Відкрити в провіднику Blockchain</string>
+    <string name="general_select_all">Вибрати все</string>
     <string name="auth_create_wallet">Створити новий гаманець</string>
     <string name="auth_restore_wallet">Відновити гаманець</string>
     <string name="auth_seed_warning_1">Не дозволяйте нікому побачити вашу фразу відновлення</string>

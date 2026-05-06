@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ตกลง</string>
     <string name="general_cancel">ยกเลิก</string>
     <string name="general_back">ย้อนกลับ</string>
     <string name="general_next">ถัดไป</string>
+    <string name="general_done">เสร็จ</string>
     <string name="general_close">ปิด</string>
     <string name="general_confirm">ยืนยัน</string>
     <string name="general_save">บันทึก</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">วาง</string>
     <string name="general_send">โอน</string>
     <string name="general_receive">รับ</string>
+    <string name="general_edit">แก้ไข</string>
     <string name="general_search">ค้นหา</string>
     <string name="general_clear">ล้างข้อมูล</string>
+    <string name="general_share">แชร์</string>
+    <string name="general_loading">กำลังโหลด…</string>
     <string name="general_amount">จำนวน</string>
     <string name="general_fee">ค่าธรรมเนียมธุรกรรม</string>
     <string name="general_address">ที่อยู่</string>
@@ -24,21 +29,29 @@
     <string name="general_advanced">ขั้นสูง</string>
     <string name="general_change">เปลี่ยน</string>
     <string name="general_proceed">ดำเนินการ</string>
+    <string name="general_unlock">ปลดล็อค</string>
     <string name="general_password">รหัสผ่าน</string>
+    <string name="general_confirm_password">ยืนยันรหัสผ่าน</string>
     <string name="general_all">ทั้งหมด</string>
     <string name="general_none">ไม่มี</string>
     <string name="general_rescan">สแกนใหม่</string>
     <string name="general_swap">สวอป</string>
     <string name="general_rate">อัตราแลกเปลี่ยน</string>
     <string name="general_date">วันที่</string>
+    <string name="general_time">เวลา</string>
     <string name="general_name">ชื่อ</string>
     <string name="general_type">ประเภท</string>
     <string name="general_from">จาก</string>
     <string name="general_to">ถึง</string>
     <string name="general_unknown">ไม่ทราบ</string>
+    <string name="general_copied">คัดลอกแล้ว</string>
+    <string name="general_removed">ลบแล้ว</string>
+    <string name="general_updated">อัปเดตแล้ว</string>
+    <string name="general_no_internet">ไม่มีการเชื่อมต่ออินเทอร์เน็ต</string>
     <string name="general_try_again">ลองอีกครั้ง</string>
     <string name="general_show_in_folder">แสดงในโฟลเดอร์</string>
     <string name="general_open_in_explorer">เปิดใน Block Explorer</string>
+    <string name="general_select_all">เลือกทั้งหมด</string>
     <string name="auth_create_wallet">สร้างกระเป๋าใหม่</string>
     <string name="auth_restore_wallet">กู้กระเป๋า</string>
     <string name="auth_seed_warning_1">อย่าปล่อยให้ใครเห็นกลุ่มคำลับเหล่านี้</string>

@@ -1,17 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_back">назад</string>
+    <string name="general_done">Gotovo</string>
     <string name="general_paste">Налепи</string>
+    <string name="general_edit">Izmeni</string>
+    <string name="general_share">Podeli</string>
+    <string name="general_loading">Učitavanje…</string>
     <string name="general_status">Статус</string>
     <string name="general_details">детаљи</string>
     <string name="general_actions">Акције</string>
+    <string name="general_unlock">Otključaj</string>
+    <string name="general_confirm_password">Potvrdi lozinku</string>
     <string name="general_rescan">Поново скенирај</string>
     <string name="general_rate">Стопа Мењачнице</string>
+    <string name="general_time">Vreme</string>
     <string name="general_type">Тип</string>
     <string name="general_from">Од</string>
     <string name="general_to">За</string>
     <string name="general_unknown">непознато</string>
+    <string name="general_copied">Kopirano</string>
+    <string name="general_removed">Uklonjeno</string>
+    <string name="general_updated">Ažurirano</string>
+    <string name="general_no_internet">Nema internet veze</string>
     <string name="general_show_in_folder">Прикажи у фолдеру</string>
+    <string name="general_select_all">Izaberi sve</string>
     <string name="auth_seed_warning_3">Чувајте копије ваше seed фразе на сигурном месту</string>
     <string name="auth_password_very_weak">Веома слаба лозинка</string>
     <string name="auth_password_weak">Слаба лозинка</string>

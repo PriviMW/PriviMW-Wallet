@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">Tamam</string>
     <string name="general_cancel">İptal</string>
     <string name="general_back">Geri</string>
     <string name="general_next">İleri</string>
+    <string name="general_done">Tamam</string>
     <string name="general_close">Kapalı</string>
     <string name="general_confirm">Onayla</string>
     <string name="general_save">Kaydet</string>
@@ -12,7 +14,10 @@
     <string name="general_paste">Yapıştır</string>
     <string name="general_send">Gönder</string>
     <string name="general_receive">Al</string>
+    <string name="general_edit">Düzenle</string>
     <string name="general_search">Ara</string>
+    <string name="general_share">Paylaş</string>
+    <string name="general_loading">Yükleniyor…</string>
     <string name="general_amount">Miktar</string>
     <string name="general_fee">İşlem ücreti</string>
     <string name="general_address">Adres</string>
@@ -23,18 +28,26 @@
     <string name="general_advanced">Gelişmiş</string>
     <string name="general_change">Değiştir</string>
     <string name="general_proceed">Devam et</string>
+    <string name="general_unlock">Kilit Aç</string>
     <string name="general_password">Şifre</string>
+    <string name="general_confirm_password">Şifreyi Onayla</string>
     <string name="general_all">Tümü</string>
     <string name="general_none">Hiçbiri</string>
     <string name="general_rescan">Tekrar tara</string>
     <string name="general_swap">Takas</string>
     <string name="general_date">Tarih</string>
+    <string name="general_time">Zaman</string>
     <string name="general_name">İsim</string>
     <string name="general_type">Tip</string>
     <string name="general_unknown">bilinmiyor</string>
+    <string name="general_copied">Kopyalandı</string>
+    <string name="general_removed">Kaldırıldı</string>
+    <string name="general_updated">Güncellendi</string>
+    <string name="general_no_internet">İnternet bağlantısı yok</string>
     <string name="general_try_again">Tekrar deneyin</string>
     <string name="general_show_in_folder">Dosyada göster</string>
     <string name="general_open_in_explorer">Blok Gezgininde aç</string>
+    <string name="general_select_all">Tümünü Seç</string>
     <string name="auth_create_wallet">Yeni cüzdan oluştur</string>
     <string name="auth_restore_wallet">Cüzdanı geri yükle</string>
     <string name="auth_seed_warning_1">Kimsenin anahtar kelimelerinizi görmesine izin vermeyin</string>

@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ok</string>
     <string name="general_cancel">Annuler</string>
     <string name="general_back">retour</string>
     <string name="general_next">Suivant</string>
+    <string name="general_done">Terminé</string>
     <string name="general_close">Fermer</string>
     <string name="general_confirm">Confirmer</string>
     <string name="general_save">Sauvegarder</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Coller</string>
     <string name="general_send">Envoyer</string>
     <string name="general_receive">Recevoir</string>
+    <string name="general_edit">Modifier</string>
     <string name="general_search">Rechercher</string>
     <string name="general_clear">effacer</string>
+    <string name="general_share">Partager</string>
+    <string name="general_loading">Chargement…</string>
     <string name="general_amount">Montant</string>
     <string name="general_fee">Frais de transaction</string>
     <string name="general_address">Adresse</string>
@@ -27,7 +32,9 @@
     <string name="general_advanced">Avancé</string>
     <string name="general_change">Changer</string>
     <string name="general_proceed">Continuer</string>
+    <string name="general_unlock">Déverrouiller</string>
     <string name="general_password">Mot de passe</string>
+    <string name="general_confirm_password">Confirmer le mot de passe</string>
     <string name="general_all">Tous</string>
     <string name="general_none">Aucun</string>
     <string name="general_rescan">Scanner à nouveau</string>
@@ -36,15 +43,21 @@
     <string name="general_coin">Monnaie</string>
     <string name="general_source">Source</string>
     <string name="general_date">Date</string>
+    <string name="general_time">Heure</string>
     <string name="general_name">Nom</string>
     <string name="general_type">Type</string>
     <string name="general_from">De</string>
     <string name="general_to">À</string>
     <string name="general_unknown">inconnu</string>
     <string name="general_optional">(optionnel)</string>
+    <string name="general_copied">Copié</string>
+    <string name="general_removed">Supprimé</string>
+    <string name="general_updated">Mis à jour</string>
+    <string name="general_no_internet">Pas de connexion internet</string>
     <string name="general_try_again">Réessayer</string>
     <string name="general_show_in_folder">Montrer dans le dossier</string>
     <string name="general_open_in_explorer">Ouvrir dans le Blockchain Explorer</string>
+    <string name="general_select_all">Tout sélectionner</string>
     <string name="auth_create_wallet">Créer un nouveau portefeuille</string>
     <string name="auth_restore_wallet">Restaurer un portefeuille</string>
     <string name="auth_seed_warning_1">Ne laissez personne voir votre phrase mnémonique</string>

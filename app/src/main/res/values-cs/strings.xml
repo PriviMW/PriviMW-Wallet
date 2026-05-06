@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">OK</string>
     <string name="general_cancel">Zrušit</string>
     <string name="general_back">zpět</string>
     <string name="general_next">Další</string>
+    <string name="general_done">Hotovo</string>
     <string name="general_close">Zavřít</string>
     <string name="general_confirm">Potvrdit</string>
     <string name="general_save">Uložit</string>
@@ -12,8 +14,11 @@
     <string name="general_paste">Vložit</string>
     <string name="general_send">Odeslat</string>
     <string name="general_receive">Přijmout</string>
+    <string name="general_edit">Upravit</string>
     <string name="general_search">Hledat</string>
     <string name="general_clear">vyčistit</string>
+    <string name="general_share">Sdílet</string>
+    <string name="general_loading">Načítání…</string>
     <string name="general_amount">Částka</string>
     <string name="general_fee">Transakční poplatek</string>
     <string name="general_address">Adresa</string>
@@ -24,22 +29,30 @@
     <string name="general_advanced">Rozšířené nastavení</string>
     <string name="general_change">Změnit</string>
     <string name="general_proceed">Provést</string>
+    <string name="general_unlock">Odemknout</string>
     <string name="general_password">Heslo</string>
+    <string name="general_confirm_password">Potvrdit heslo</string>
     <string name="general_all">Všechny</string>
     <string name="general_none">Žádný</string>
     <string name="general_rescan">Znovu naskenovat</string>
     <string name="general_swap">Změnit</string>
     <string name="general_rate">Směnný kurz</string>
     <string name="general_date">Datum</string>
+    <string name="general_time">Čas</string>
     <string name="general_name">Jméno</string>
     <string name="general_type">Typ</string>
     <string name="general_from">Od</string>
     <string name="general_to">Komu</string>
     <string name="general_unknown">neznámý</string>
     <string name="general_optional">(nepovinné)</string>
+    <string name="general_copied">Zkopírováno</string>
+    <string name="general_removed">Odstraněno</string>
+    <string name="general_updated">Aktualizováno</string>
+    <string name="general_no_internet">Žádné internetové připojení</string>
     <string name="general_try_again">Zkusit znovu</string>
     <string name="general_show_in_folder">Zobrazit ve složce</string>
     <string name="general_open_in_explorer">Otevřít v prohlížeči Blockchainu</string>
+    <string name="general_select_all">Vybrat vše</string>
     <string name="auth_create_wallet">Vytvořit novou peněženku</string>
     <string name="auth_restore_wallet">Obnovit peněženku</string>
     <string name="auth_seed_warning_1">Neumožněte nikomu dalšímu aby viděl Vaše klíčová slova</string>

@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">PriviMW</string>
     <string name="general_ok">ok</string>
     <string name="general_cancel">Peruuta</string>
     <string name="general_back">takaisin</string>
     <string name="general_next">Seuraava</string>
+    <string name="general_done">Valmis</string>
     <string name="general_close">Sulje</string>
     <string name="general_confirm">Vahvista</string>
     <string name="general_save">Tallenna</string>
@@ -12,7 +14,10 @@
     <string name="general_paste">Liitä</string>
     <string name="general_send">Lähetä</string>
     <string name="general_receive">Vastaanota</string>
+    <string name="general_edit">Muokkaa</string>
     <string name="general_search">Etsi</string>
+    <string name="general_share">Jaa</string>
+    <string name="general_loading">Ladataan…</string>
     <string name="general_amount">Summa</string>
     <string name="general_fee">Siirtomaksu</string>
     <string name="general_address">Osoite</string>
@@ -23,21 +28,29 @@
     <string name="general_advanced">Lisäasetukset</string>
     <string name="general_change">Vaihda</string>
     <string name="general_proceed">Jatka</string>
+    <string name="general_unlock">Avaa lukitus</string>
     <string name="general_password">Salasana</string>
+    <string name="general_confirm_password">Vahvista salasana</string>
     <string name="general_all">Kaikki</string>
     <string name="general_none">Ei mitään</string>
     <string name="general_rescan">Skannaa uudelleen</string>
     <string name="general_swap">Swap</string>
     <string name="general_rate">Vaihtokurssi</string>
     <string name="general_date">Päivämäärä</string>
+    <string name="general_time">Aika</string>
     <string name="general_name">Nimi</string>
     <string name="general_type">Tyyppi</string>
     <string name="general_from">Lähettäjä</string>
     <string name="general_to">Saaja</string>
     <string name="general_unknown">tuntematon</string>
+    <string name="general_copied">Kopioitu</string>
+    <string name="general_removed">Poistettu</string>
+    <string name="general_updated">Päivitetty</string>
+    <string name="general_no_internet">Ei internet-yhteyttä</string>
     <string name="general_try_again">Yritä uudelleen</string>
     <string name="general_show_in_folder">Näytä kansiossa</string>
     <string name="general_open_in_explorer">Avaa Blockchain Explorerissa</string>
+    <string name="general_select_all">Valitse kaikki</string>
     <string name="auth_create_wallet">Luo uusi lompakko</string>
     <string name="auth_restore_wallet">Palauta vanha lompakko</string>
     <string name="auth_seed_warning_1">Älä anna kenenkään nähdä palautusavaintasi</string>

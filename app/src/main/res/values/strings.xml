@@ -1294,6 +1294,9 @@
     <string name="settings_latest_version_toast">You\'re on the latest version</string>
     <string name="settings_update_available_title">Update Available</string>
     <string name="settings_view_release">View Release</string>
+    <string name="settings_open_release_url">Open release page?\n\n%1$s</string>
+    <string name="settings_open">Open</string>
+    <string name="settings_cancel">Cancel</string>
     <string name="settings_later">Later</string>
     <string name="settings_progress_percent">%1$d%%</string>
     <string name="settings_sync_progress">Syncing %1$d%% (%2$dk / %3$dk)</string>

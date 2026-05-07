@@ -1300,7 +1300,46 @@ fun SettingsScreen(
             val appVersion = try {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
             } catch (_: Exception) { "1.0.0" }
-            SettingsRow(stringResource(R.string.settings_app_label), stringResource(R.string.settings_version, appVersion ?: ""))
+            var showVersionDialog by remember { mutableStateOf(false) }
+            val versionLabel = stringResource(R.string.settings_app_label)
+            val versionValue = stringResource(R.string.settings_version, appVersion ?: "")
+            val releaseUrl = "https://github.com/PriviMW/PriviMW-Wallet/releases/tag/v${appVersion}"
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showVersionDialog = true }
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(versionLabel, color = C.textSecondary, fontSize = 14.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(versionValue, color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(4.dp))
+                    Text("↗", color = C.accent, fontSize = 13.sp)
+                }
+            }
+            if (showVersionDialog) {
+                AlertDialog(
+                    onDismissRequest = { showVersionDialog = false },
+                    containerColor = C.card,
+                    title = { Text(stringResource(R.string.settings_view_release), color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                    text = { Text(stringResource(R.string.settings_open_release_url, releaseUrl), color = C.text, fontSize = 14.sp) },
+                    confirmButton = {
+                        Button(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)))
+                            showVersionDialog = false
+                        }, colors = ButtonDefaults.buttonColors(containerColor = C.accent)) {
+                            Text(stringResource(R.string.settings_open), color = C.bg)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showVersionDialog = false }) {
+                            Text(stringResource(R.string.settings_cancel), color = C.textSecondary)
+                        }
+                    }
+                )
+            }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             var checkingUpdate by remember { mutableStateOf(false) }
             var showUpdateDialog by remember { mutableStateOf<com.privimemobile.wallet.UpdateChecker.UpdateInfo?>(null) }

@@ -259,9 +259,9 @@ fun AssetDetailScreen(
                     BalanceRow(stringResource(R.string.balance_max_privacy_locked), "${Helpers.formatBeam(assetStatus.maxPrivacy)} $assetName", locked = true)
                 }
                 if (assetStatus.sending > 0) {
-                    BalanceRow(stringResource(R.string.balance_sending), "${Helpers.formatBeam(assetStatus.sending)} $assetName", outgoing = true)
+                    BalanceRow(stringResource(R.string.balance_locked), "${Helpers.formatBeam(assetStatus.sending)} $assetName", locked = true)
                 }
-                if (assetStatus.receiving > 0) {
+                if (assetStatus.receiving > 0 && assetStatus.sending == 0L) {
                     BalanceRow(stringResource(R.string.balance_receiving), "${Helpers.formatBeam(assetStatus.receiving)} $assetName", incoming = true)
                 }
             }
@@ -509,7 +509,7 @@ private fun BalanceRow(
 ) {
     val valueColor = when {
         locked -> Color(0xFFFF9800)
-        incoming -> C.incoming
+        incoming -> C.accent
         outgoing -> C.outgoing
         primary -> C.text
         else -> C.textSecondary

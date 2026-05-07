@@ -332,10 +332,6 @@ fun WalletScreen(
         else -> C.accent
     }
 
-    // In-flight amounts — matches RN exactly (includes maxPrivacy + shielded)
-    val hasPending = beamStatus.sending > 0 || beamStatus.receiving > 0 ||
-            beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0
-
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = { doRefresh() },
@@ -429,7 +425,9 @@ fun WalletScreen(
                             }
 
                         // Total portfolio fiat value (BEAM + DEX-priced assets)
-                        val totalGroth = beamStatus.available + beamStatus.shielded
+                        // When sending, available already excludes the spent UTXO but change isn't in available yet —
+                        // it's in receiving. Adding receiving back gives the true effective balance during pending TXs.
+                        val totalGroth = beamStatus.available + beamStatus.shielded + beamStatus.receiving
                         var totalFiat = if (rate > 0) CurrencyManager.grothToFiat(totalGroth, currency, rate) else 0.0
 
                         // Add non-BEAM assets: value = amount × beamRatio × beamRate
@@ -438,7 +436,7 @@ fun WalletScreen(
                                 if (assetId == 0) continue
                                 val beamRatio = exchangeRates["${assetId}_beam"] ?: 0.0
                                 if (beamRatio > 0) {
-                                    val assetGroth = status.available + status.shielded
+                                    val assetGroth = status.available + status.shielded + status.receiving
                                     if (assetGroth > 0) {
                                         val decimals = exchangeRates["${assetId}_decimals"]?.toInt() ?: 8
                                         val humanBalance = assetGroth.toDouble() / Math.pow(10.0, decimals.toDouble())
@@ -525,44 +523,7 @@ fun WalletScreen(
                             )
                         }
 
-                        // Pending amounts — wrapping FlowRow like RN flexWrap
-                        if (hasPending) {
-                            Spacer(Modifier.height(8.dp))
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
-                                if (beamStatus.sending > 0) {
-                                    Text(
-                                        "${stringResource(R.string.balance_sending)}: ${masked(beamStatus.sending)}",
-                                        color = C.textSecondary,
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                if (beamStatus.receiving > 0) {
-                                    Text(
-                                        "${stringResource(R.string.balance_receiving)}: ${masked(beamStatus.receiving)}",
-                                        color = C.accent,
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                if (beamStatus.maturing > 0) {
-                                    Text(
-                                        "${stringResource(R.string.balance_locked)}: ${masked(beamStatus.maturing)}",
-                                        color = Color(0xFFFF9800),
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                if (beamStatus.maxPrivacy > 0) {
-                                    Text(
-                                        "${stringResource(R.string.balance_max_privacy_locked)}: ${masked(beamStatus.maxPrivacy)}",
-                                        color = Color(0xFFFF9800),
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                            }
-                        }
+                        // Pending amounts moved to individual asset cards
 
                         // Send / Receive buttons — centered, same width, side by side
                         Spacer(Modifier.height(20.dp))
@@ -628,22 +589,20 @@ fun WalletScreen(
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("BEAM", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            // Show sub-text for in-flight amounts (matches RN exactly)
-                            if (beamStatus.sending > 0 || beamStatus.receiving > 0 ||
+                            // Show sub-text for locked/receiving/maturing amounts
+                            if (beamStatus.sending > 0 || (beamStatus.receiving > 0 && beamStatus.sending == 0L) ||
                                 beamStatus.maturing > 0 || beamStatus.maxPrivacy > 0 || beamStatus.shielded > 0) {
                                 val masked = { amount: Long -> if (balanceHidden) MASKED else Helpers.formatBeam(amount) }
-                                val subParts = mutableListOf<String>()
-                                if (beamStatus.sending > 0) subParts.add("${stringResource(R.string.balance_sending)}: ${masked(beamStatus.sending)}")
-                                if (beamStatus.receiving > 0) subParts.add("${stringResource(R.string.balance_receiving)}: ${masked(beamStatus.receiving)}")
-                                if (beamStatus.maturing > 0) subParts.add("${stringResource(R.string.balance_locked)}: ${masked(beamStatus.maturing)}")
-                                if (beamStatus.maxPrivacy > 0) subParts.add("${stringResource(R.string.balance_max_privacy)}: ${masked(beamStatus.maxPrivacy)}")
-                                if (beamStatus.shielded > 0) subParts.add("${stringResource(R.string.balance_shielded)}: ${masked(beamStatus.shielded)}")
-                                Text(
-                                    subParts.joinToString("  "),
-                                    color = C.textSecondary,
-                                    fontSize = 11.sp,
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier.padding(top = 2.dp),
-                                )
+                                ) {
+                                    if (beamStatus.sending > 0) Text("${stringResource(R.string.balance_locked)}: ${masked(beamStatus.sending)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                    if (beamStatus.receiving > 0 && beamStatus.sending == 0L) Text("${stringResource(R.string.balance_receiving)}: ${masked(beamStatus.receiving)}", color = C.accent, fontSize = 11.sp)
+                                    if (beamStatus.maturing > 0) Text("${stringResource(R.string.balance_maturing)}: ${masked(beamStatus.maturing)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                    if (beamStatus.maxPrivacy > 0) Text("${stringResource(R.string.balance_max_privacy)}: ${masked(beamStatus.maxPrivacy)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                    if (beamStatus.shielded > 0) Text("${stringResource(R.string.balance_shielded)}: ${masked(beamStatus.shielded)}", color = C.textSecondary, fontSize = 11.sp)
+                                }
                             }
                         }
                         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
@@ -714,19 +673,18 @@ fun WalletScreen(
                                         )
                                     }
                                 }
-                                val subParts = mutableListOf<String>()
-                                if (asset.sending > 0) subParts.add("${stringResource(R.string.balance_sending)}: ${masked(asset.sending)}")
-                                if (asset.receiving > 0) subParts.add("${stringResource(R.string.balance_receiving)}: ${masked(asset.receiving)}")
-                                if (asset.maturing > 0) subParts.add("${stringResource(R.string.balance_locked)}: ${masked(asset.maturing)}")
-                                if (asset.maxPrivacy > 0) subParts.add("${stringResource(R.string.balance_max_privacy)}: ${masked(asset.maxPrivacy)}")
-                                if (asset.shielded > 0) subParts.add("${stringResource(R.string.balance_shielded)}: ${masked(asset.shielded)}")
-                                if (subParts.isNotEmpty()) {
-                                    Text(
-                                        subParts.joinToString("  "),
-                                        color = C.textSecondary,
-                                        fontSize = 11.sp,
+                                if (asset.sending > 0 || (asset.receiving > 0 && asset.sending == 0L) ||
+                                    asset.maturing > 0 || asset.maxPrivacy > 0 || asset.shielded > 0) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.padding(top = 2.dp),
-                                    )
+                                    ) {
+                                        if (asset.sending > 0) Text("${stringResource(R.string.balance_locked)}: ${masked(asset.sending)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                        if (asset.receiving > 0 && asset.sending == 0L) Text("${stringResource(R.string.balance_receiving)}: ${masked(asset.receiving)}", color = C.accent, fontSize = 11.sp)
+                                        if (asset.maturing > 0) Text("${stringResource(R.string.balance_maturing)}: ${masked(asset.maturing)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                        if (asset.maxPrivacy > 0) Text("${stringResource(R.string.balance_max_privacy)}: ${masked(asset.maxPrivacy)}", color = Color(0xFFFF9800), fontSize = 11.sp)
+                                        if (asset.shielded > 0) Text("${stringResource(R.string.balance_shielded)}: ${masked(asset.shielded)}", color = C.textSecondary, fontSize = 11.sp)
+                                    }
                                 }
                             }
                             Column(

@@ -564,7 +564,20 @@ fun SendConfirmScreen(
                                 brush = androidx.compose.ui.graphics.SolidColor(C.border)
                             ),
                         ) {
-                            Text(stringResource(R.string.general_cancel), color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_cancel)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = C.textSecondary, fontSize = fontSize, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                         Button(
                             onClick = {
@@ -587,7 +600,20 @@ fun SendConfirmScreen(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
                         ) {
-                            Text(stringResource(R.string.general_confirm), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_confirm)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Bold,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }

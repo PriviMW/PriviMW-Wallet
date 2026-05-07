@@ -30,12 +30,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mw.beam.beamwallet.core.Api
@@ -783,8 +785,21 @@ fun SettingsScreen(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, color = if (nodeMode == mode) C.textDark else C.textSecondary,
-                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (9.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val fontSize = when {
+                                label.length > (fitCount * 1.0f).toInt() -> 9.sp
+                                label.length > (fitCount * 0.82f).toInt() -> 10.sp
+                                label.length > (fitCount * 0.68f).toInt() -> 11.sp
+                                else -> 13.sp
+                            }
+                            Text(label, color = if (nodeMode == mode) C.textDark else C.textSecondary,
+                                fontSize = fontSize, fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
@@ -1838,15 +1853,30 @@ private fun OptionRow(options: List<Pair<String, Int>>, selected: Int, onSelect:
                     if (isSelected) C.accent else C.border,
                 ),
             ) {
-                Text(
-                    label,
-                    color = if (isSelected) C.accent else C.textSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .padding(vertical = 8.dp, horizontal = 14.dp)
-                        .wrapContentWidth(Alignment.CenterHorizontally),
-                )
+                BoxWithConstraints(
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val density = LocalDensity.current
+                    val availPx = with(density) { maxWidth.toPx() }
+                    val pxPerChar = with(density) { (9.sp).toPx() }
+                    val fitCount = (availPx / pxPerChar).toInt()
+                    val fontSize = when {
+                        label.length > (fitCount * 1.0f).toInt() -> 9.sp
+                        label.length > (fitCount * 0.82f).toInt() -> 10.sp
+                        label.length > (fitCount * 0.68f).toInt() -> 11.sp
+                        else -> 13.sp
+                    }
+                    Text(
+                        label,
+                        color = if (isSelected) C.accent else C.textSecondary,
+                        fontSize = fontSize,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

@@ -778,14 +778,29 @@ private fun TabItem(label: String, selected: Boolean, modifier: Modifier, onClic
         shape = RoundedCornerShape(7.dp),
         color = if (selected) C.bg else Color.Transparent,
     ) {
-        Text(
-            text = label,
-            color = if (selected) C.accent else C.textSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(vertical = 9.dp),
-        )
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            val density = LocalDensity.current
+            val availPx = with(density) { maxWidth.toPx() }
+            val pxPerChar = with(density) { (8.sp).toPx() }
+            val fitCount = (availPx / pxPerChar).toInt()
+            val fontSize = when {
+                label.length > (fitCount * 1.0f).toInt() -> 8.sp
+                label.length > (fitCount * 0.82f).toInt() -> 9.sp
+                label.length > (fitCount * 0.68f).toInt() -> 10.sp
+                else -> 11.sp
+            }
+            Text(
+                text = label,
+                color = if (selected) C.accent else C.textSecondary,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(vertical = 9.dp),
+            )
+        }
     }
 }
 

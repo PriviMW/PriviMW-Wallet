@@ -10,10 +10,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Apps
@@ -34,6 +37,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import com.privimemobile.MainActivity
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -173,7 +178,7 @@ fun AppNavigation() {
                                     contentDescription = stringResource(tab.labelResId),
                                 )
                             },
-                            label = { Text(stringResource(tab.labelResId)) },
+                            label = { AutoSizeNavLabel(stringResource(tab.labelResId)) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = C.accent,
                                 selectedTextColor = C.accent,
@@ -574,5 +579,28 @@ fun AppNavigation() {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AutoSizeNavLabel(text: String) {
+    BoxWithConstraints(contentAlignment = Alignment.Center) {
+        val density = LocalDensity.current
+        val availPx = with(density) { maxWidth.toPx() }
+        val pxPerChar = with(density) { (9.sp).toPx() }
+        val fitCount = (availPx / pxPerChar).toInt()
+        val fontSize = when {
+            text.length > (fitCount * 1.0f).toInt() -> 9.sp
+            text.length > (fitCount * 0.82f).toInt() -> 10.sp
+            text.length > (fitCount * 0.68f).toInt() -> 11.sp
+            else -> 12.sp
+        }
+        Text(
+            text = text,
+            fontSize = fontSize,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

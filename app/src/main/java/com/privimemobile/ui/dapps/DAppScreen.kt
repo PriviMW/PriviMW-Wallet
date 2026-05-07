@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -273,19 +274,34 @@ fun DAppScreen(
                 // Tab buttons
                 val tabs = listOf(stringResource(R.string.dapp_balance_tab), stringResource(R.string.dapp_tx_tab, dappName.uppercase()))
                 tabs.forEachIndexed { idx, label ->
-                    Text(
-                        label,
-                        color = if (selectedTab == idx) C.accent else C.textSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        modifier = Modifier
-                            .clickable {
-                                selectedTab = idx
-                                if (!panelExpanded) panelExpanded = true
-                            }
-                            .padding(end = 16.dp),
-                    )
+                    BoxWithConstraints {
+                        val density = LocalDensity.current
+                        val availPx = with(density) { maxWidth.toPx() }
+                        val pxPerChar = with(density) { (7.sp).toPx() }
+                        val fitCount = (availPx / pxPerChar).toInt()
+                        val fontSize = when {
+                            label.length > (fitCount * 1.0f).toInt() -> 7.sp
+                            label.length > (fitCount * 0.82f).toInt() -> 8.sp
+                            label.length > (fitCount * 0.68f).toInt() -> 9.sp
+                            else -> 10.sp
+                        }
+                        Text(
+                            label,
+                            color = if (selectedTab == idx) C.accent else C.textSecondary,
+                            fontSize = fontSize,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .clickable {
+                                    selectedTab = idx
+                                    if (!panelExpanded) panelExpanded = true
+                                }
+                                .padding(end = 16.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.weight(1f))
                 Icon(

@@ -162,13 +162,28 @@ fun SwapScreen(
                         shape = RoundedCornerShape(8.dp),
                         color = if (selectedTab == idx) C.accent.copy(alpha = 0.15f) else C.card,
                     ) {
-                        Text(
-                            "$label ($count)",
-                            color = if (selectedTab == idx) C.accent else C.textSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        )
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            val tabLabel = "$label ($count)"
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (10.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val fontSize = when {
+                                tabLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                tabLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                else -> 14.sp
+                            }
+                            Text(
+                                tabLabel,
+                                color = if (selectedTab == idx) C.accent else C.textSecondary,
+                                fontSize = fontSize,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -514,7 +529,22 @@ fun SwapScreen(
                             onClick = { showPasswordDialog = false },
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(10.dp),
-                        ) { Text(stringResource(R.string.general_cancel), color = C.textSecondary) }
+                        ) {
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_cancel)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = C.textSecondary, fontSize = fontSize,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                         Button(
                             onClick = {
                                 if (passwordInput.isNotBlank()) {
@@ -530,7 +560,22 @@ fun SwapScreen(
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                        ) { Text(stringResource(R.string.general_confirm), color = C.bg, fontWeight = FontWeight.Bold) }
+                        ) {
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_confirm)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = C.bg, fontWeight = FontWeight.Bold, fontSize = fontSize,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                 }
             }

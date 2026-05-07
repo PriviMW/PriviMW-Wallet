@@ -24,7 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import com.privimemobile.R
 import com.privimemobile.chat.ChatService
@@ -943,16 +945,28 @@ private fun SendModeTab(
             brush = androidx.compose.ui.graphics.SolidColor(C.border)
         ),
     ) {
-        Text(
-            label,
-            color = if (selected) Color.White else C.textSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .padding(vertical = 10.dp)
-                .fillMaxWidth()
-                .wrapContentWidth(Alignment.CenterHorizontally),
-        )
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            val density = LocalDensity.current
+            val availPx = with(density) { maxWidth.toPx() }
+            val pxPerChar = with(density) { (9.sp).toPx() }
+            val fitCount = (availPx / pxPerChar).toInt()
+            val fontSize = when {
+                label.length > (fitCount * 1.0f).toInt() -> 9.sp
+                label.length > (fitCount * 0.82f).toInt() -> 10.sp
+                label.length > (fitCount * 0.68f).toInt() -> 11.sp
+                else -> 13.sp
+            }
+            Text(
+                label,
+                color = if (selected) Color.White else C.textSecondary,
+                fontSize = fontSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(vertical = 10.dp),
+            )
+        }
     }
 }
 

@@ -669,7 +669,20 @@ fun SplitCoinsSheet(
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.split_splitting), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     } else {
-                        Text(stringResource(R.string.split_confirm_button), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            val btnLabel = stringResource(R.string.split_confirm_button)
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (10.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val fontSize = when {
+                                btnLabel.length > (fitCount * 1.0f).toInt() -> 11.sp
+                                btnLabel.length > (fitCount * 0.82f).toInt() -> 13.sp
+                                else -> 15.sp
+                            }
+                            Text(btnLabel, color = C.textDark, fontSize = fontSize, fontWeight = FontWeight.Bold,
+                                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
 
@@ -683,7 +696,20 @@ fun SplitCoinsSheet(
                         brush = androidx.compose.ui.graphics.SolidColor(C.border)
                     ),
                 ) {
-                    Text(stringResource(R.string.send_confirm_back_edit), color = C.textSecondary, fontSize = 15.sp)
+                    BoxWithConstraints(contentAlignment = Alignment.Center) {
+                        val btnLabel = stringResource(R.string.send_confirm_back_edit)
+                        val density = LocalDensity.current
+                        val availPx = with(density) { maxWidth.toPx() }
+                        val pxPerChar = with(density) { (10.sp).toPx() }
+                        val fitCount = (availPx / pxPerChar).toInt()
+                        val fontSize = when {
+                            btnLabel.length > (fitCount * 1.0f).toInt() -> 11.sp
+                            btnLabel.length > (fitCount * 0.82f).toInt() -> 13.sp
+                            else -> 15.sp
+                        }
+                        Text(btnLabel, color = C.textSecondary, fontSize = fontSize,
+                            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 } // end confirm Column
             }
@@ -733,7 +759,20 @@ fun SplitCoinsSheet(
                                 brush = androidx.compose.ui.graphics.SolidColor(C.border)
                             ),
                         ) {
-                            Text(stringResource(R.string.general_cancel), color = C.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_cancel)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = C.textSecondary, fontSize = fontSize, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                         Button(
                             onClick = {
@@ -754,7 +793,20 @@ fun SplitCoinsSheet(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = C.accent),
                         ) {
-                            Text(stringResource(R.string.general_confirm), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            BoxWithConstraints(contentAlignment = Alignment.Center) {
+                                val btnLabel = stringResource(R.string.general_confirm)
+                                val density = LocalDensity.current
+                                val availPx = with(density) { maxWidth.toPx() }
+                                val pxPerChar = with(density) { (10.sp).toPx() }
+                                val fitCount = (availPx / pxPerChar).toInt()
+                                val fontSize = when {
+                                    btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                    btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                    else -> 14.sp
+                                }
+                                Text(btnLabel, color = C.textDark, fontSize = fontSize, fontWeight = FontWeight.Bold,
+                                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }

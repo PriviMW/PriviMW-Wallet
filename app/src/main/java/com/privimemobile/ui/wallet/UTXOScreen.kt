@@ -280,13 +280,28 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
             brush = androidx.compose.ui.graphics.SolidColor(if (selected) C.accent else C.border)
         ),
     ) {
-        Text(
-            text = label,
-            color = if (selected) C.accent else C.textSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        )
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            val density = LocalDensity.current
+            val availPx = with(density) { maxWidth.toPx() }
+            val pxPerChar = with(density) { (8.sp).toPx() }
+            val fitCount = (availPx / pxPerChar).toInt()
+            val fontSize = when {
+                label.length > (fitCount * 1.0f).toInt() -> 8.sp
+                label.length > (fitCount * 0.82f).toInt() -> 10.sp
+                label.length > (fitCount * 0.68f).toInt() -> 11.sp
+                else -> 12.sp
+            }
+            Text(
+                text = label,
+                color = if (selected) C.accent else C.textSecondary,
+                fontSize = fontSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
     }
 }
 

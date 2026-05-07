@@ -97,6 +97,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
@@ -7064,12 +7065,26 @@ private fun AttachmentPickerSheet(
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text(
-                                    label,
-                                    color = if (isSelected) C.accent else C.textSecondary,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
+                                BoxWithConstraints {
+                                    val density = LocalDensity.current
+                                    val availPx = with(density) { maxWidth.toPx() - 26.dp.toPx() }.coerceAtLeast(0f)
+                                    val pxPerChar = with(density) { (10.sp).toPx() }
+                                    val fitCount = (availPx / pxPerChar).toInt()
+                                    val fontSize = when {
+                                        label.length > (fitCount * 1.0f).toInt() -> 10.sp
+                                        label.length > (fitCount * 0.82f).toInt() -> 12.sp
+                                        else -> 14.sp
+                                    }
+                                    Text(
+                                        label,
+                                        color = if (isSelected) C.accent else C.textSecondary,
+                                        fontSize = fontSize,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                     }

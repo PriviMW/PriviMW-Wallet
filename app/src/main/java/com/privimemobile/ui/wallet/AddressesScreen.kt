@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -154,13 +155,28 @@ fun AddressesScreen(onBack: () -> Unit = {}) {
                             )
                         ),
                     ) {
-                        Text(
-                            text = label,
-                            color = if (filter == f) C.accent else C.textSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        )
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (9.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val fontSize = when {
+                                label.length > (fitCount * 1.0f).toInt() -> 9.sp
+                                label.length > (fitCount * 0.82f).toInt() -> 10.sp
+                                label.length > (fitCount * 0.68f).toInt() -> 11.sp
+                                else -> 13.sp
+                            }
+                            Text(
+                                text = label,
+                                color = if (filter == f) C.accent else C.textSecondary,
+                                fontSize = fontSize,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            )
+                        }
                     }
                 }
             }

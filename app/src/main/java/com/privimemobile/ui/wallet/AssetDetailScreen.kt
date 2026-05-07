@@ -279,7 +279,21 @@ fun AssetDetailScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.outgoing),
             ) {
-                Text(stringResource(R.string.general_send), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                BoxWithConstraints(contentAlignment = Alignment.Center) {
+                    val btnLabel = stringResource(R.string.general_send)
+                    val density = LocalDensity.current
+                    val availPx = with(density) { maxWidth.toPx() }
+                    val pxPerChar = with(density) { (10.sp).toPx() }
+                    val fitCount = (availPx / pxPerChar).toInt()
+                    val fontSize = when {
+                        btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                        btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                        btnLabel.length > (fitCount * 0.68f).toInt() -> 13.sp
+                        else -> 15.sp
+                    }
+                    Text(btnLabel, color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Bold,
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
             }
             Button(
                 onClick = onReceive,
@@ -287,7 +301,21 @@ fun AssetDetailScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = C.incoming),
             ) {
-                Text(stringResource(R.string.general_receive), color = C.textDark, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                BoxWithConstraints(contentAlignment = Alignment.Center) {
+                    val btnLabel = stringResource(R.string.general_receive)
+                    val density = LocalDensity.current
+                    val availPx = with(density) { maxWidth.toPx() }
+                    val pxPerChar = with(density) { (10.sp).toPx() }
+                    val fitCount = (availPx / pxPerChar).toInt()
+                    val fontSize = when {
+                        btnLabel.length > (fitCount * 1.0f).toInt() -> 10.sp
+                        btnLabel.length > (fitCount * 0.82f).toInt() -> 12.sp
+                        btnLabel.length > (fitCount * 0.68f).toInt() -> 13.sp
+                        else -> 15.sp
+                    }
+                    Text(btnLabel, color = C.textDark, fontSize = fontSize, fontWeight = FontWeight.Bold,
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
 

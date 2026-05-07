@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -252,14 +254,30 @@ fun ReceiveScreen(onBack: () -> Unit) {
                         shape = RoundedCornerShape(9.dp),
                         color = if (selected) C.bg else Color.Transparent,
                     ) {
-                        Text(
-                            stringResource(tab.labelResId),
-                            color = if (selected) C.accent else C.textSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 9.dp),
-                        )
+                        BoxWithConstraints(contentAlignment = Alignment.Center) {
+                            val tabLabel = stringResource(tab.labelResId)
+                            val density = LocalDensity.current
+                            val availPx = with(density) { maxWidth.toPx() }
+                            val pxPerChar = with(density) { (9.sp).toPx() }
+                            val fitCount = (availPx / pxPerChar).toInt()
+                            val fontSize = when {
+                                tabLabel.length > (fitCount * 1.0f).toInt() -> 9.sp
+                                tabLabel.length > (fitCount * 0.82f).toInt() -> 10.sp
+                                tabLabel.length > (fitCount * 0.68f).toInt() -> 11.sp
+                                else -> 13.sp
+                            }
+                            Text(
+                                tabLabel,
+                                color = if (selected) C.accent else C.textSecondary,
+                                fontSize = fontSize,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(vertical = 9.dp),
+                            )
+                        }
                     }
                 }
             }

@@ -274,7 +274,7 @@ class MessageProcessor(
             db.conversationDao().incrementUnread(conv.id)
             // Show notification
             val isMuted = db.conversationDao().isMuted(conv.id) ?: false
-            val totalUnread = db.conversationDao().getTotalUnread()
+            val totalUnread = db.conversationDao().getTotalUnread() + db.groupDao().getTotalUnread()
             val senderLabel = displayName?.ifEmpty { null } ?: from.ifEmpty { ctx.getString(R.string.chat_sender_unknown) }
             val isImage = type == "file" && fileMime?.startsWith("image/") == true
             val notifText = when {
@@ -447,7 +447,7 @@ class MessageProcessor(
                     val senderContact = db.contactDao().findByHandle(from)
                     val senderDisplayName = senderContact?.displayName?.takeIf { it.isNotBlank() } ?: "@$from"
                     val isMuted = db.conversationDao().isMuted(conv.id) ?: false
-                    val totalUnread = db.conversationDao().getTotalUnread()
+                    val totalUnread = db.conversationDao().getTotalUnread() + db.groupDao().getTotalUnread()
                     // Build preview of the reacted message for the notification
                     val maxPreviewLen = 50
                     val reactedPreview = when (myMsg.type) {
@@ -869,11 +869,13 @@ class MessageProcessor(
 
         db.conversationDao().updateLastMessage(conv.id, ts, inviteText)
         if (!conv.muted) {
+            val totalUnread = (db.conversationDao().getTotalUnread()
+                + db.groupDao().getTotalUnread())
             com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                 convKey = convKey, convId = conv.id,
                 senderName = displayName ?: "@$from",
                 text = inviteText, type = "group_invite",
-                isMuted = false, totalUnread = 0,
+                isMuted = false, totalUnread = totalUnread,
             )
         }
         db.conversationDao().incrementUnread(conv.id)
@@ -1037,6 +1039,8 @@ class MessageProcessor(
             if (!isActive && (!group.muted || isMentioned)) {
                 val notifText = if (isMentioned && group.muted) ctx.getString(R.string.chat_notif_mentioned, text ?: "")
                     else text ?: ctx.getString(R.string.chat_notif_sent_message)
+                val totalUnread = (db.conversationDao().getTotalUnread()
+                    + db.groupDao().getTotalUnread())
                 com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                     convKey = groupConvKey,
                     convId = convId,
@@ -1044,7 +1048,7 @@ class MessageProcessor(
                     text = notifText,
                     type = "group_msg",
                     isMuted = false,
-                    totalUnread = 0,
+                    totalUnread = totalUnread,
                     senderHandle = from,
                 )
             }
@@ -1218,6 +1222,8 @@ class MessageProcessor(
                     }
 
                     if (!isActive && !group.muted) {
+                        val totalUnread = (db.conversationDao().getTotalUnread()
+                            + db.groupDao().getTotalUnread())
                         com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                             convKey = groupConvKey,
                             convId = convId,
@@ -1225,7 +1231,7 @@ class MessageProcessor(
                             text = preview,
                             type = type,
                             isMuted = false,
-                            totalUnread = 0,
+                            totalUnread = totalUnread,
                             senderHandle = from,
                         )
                     }

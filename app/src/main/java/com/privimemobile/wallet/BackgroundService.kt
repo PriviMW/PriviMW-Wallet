@@ -18,8 +18,10 @@ import com.privimemobile.R
 /**
  * Foreground service — keeps the Beam wallet alive for instant message delivery.
  *
- * Holds a WiFi lock and wake lock to prevent the OS from killing the node connection.
- * Required for reliable SBBS message reception.
+ * Holds a wake lock to prevent CPU sleep and a WiFi lock to keep the network connection alive.
+ * WiFi lock uses WIFI_MODE_FULL (allows radio power-save) instead of WIFI_MODE_FULL_HIGH_PERF
+ * to reduce battery drain. The C++ wallet node maintains its own keepalive — the radio doesn't
+ * need to be at full performance constantly.
  */
 class BackgroundService : Service() {
     private val TAG = "BeamBgService"
@@ -116,7 +118,7 @@ class BackgroundService : Service() {
     private fun acquireLocks() {
         try {
             val wifiMgr = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager
-            wifiLock = wifiMgr?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PriviMW:wifi")
+            wifiLock = wifiMgr?.createWifiLock(WifiManager.WIFI_MODE_FULL, "PriviMW:wifi")
             wifiLock?.acquire()
             Log.d(TAG, "WiFi lock acquired")
         } catch (e: Exception) {

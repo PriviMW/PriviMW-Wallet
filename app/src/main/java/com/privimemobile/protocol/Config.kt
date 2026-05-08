@@ -22,7 +22,8 @@ object Config {
     /** Max chars per SBBS message (1024 byte limit with JSON overhead) */
     const val MAX_MSG_CHARS = 950
 
-    /** Message refresh interval (ms) — fallback poll, ev_txs_changed is primary trigger */
+    /** Legacy — no longer used. Polling interval is in SbbsTransport.POLL_IDLE_MS / POLL_ACTIVE_MS.
+     *  Primary message delivery is via onInstantMessage push from C++ wallet core. */
     const val MSG_REFRESH_MS = 30_000L
 
     /** Conversation storage version — bump to force re-import on format change */

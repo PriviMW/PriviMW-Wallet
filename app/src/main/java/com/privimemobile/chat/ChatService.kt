@@ -176,10 +176,25 @@ object ChatService {
             sbbs.startPolling()
         }
 
-        // Observe total unread → update launcher badge via notification summary
+        _initialized.value = true
+        Log.d(TAG, "Chat system initialized")
+
+        // Catchup: immediately poll for any messages that arrived before initialization.
+        // onInstantMessage silently drops callbacks when initialized.value is false,
+        // so this first poll catches messages received during wallet startup.
+        scope.launch { sbbs.pollNow() }
+
+        // Observe total unread (DMs + groups) → update launcher badge via notification summary
         scope.launch {
-            db!!.conversationDao().observeTotalUnread().collect { count ->
-                ChatNotificationManager.updateBadge(count)
+            db!!.conversationDao().observeTotalUnread().collect { dmUnread ->
+                val groupUnread = db!!.groupDao().getTotalUnread()
+                ChatNotificationManager.updateBadge(dmUnread + groupUnread)
+            }
+        }
+        scope.launch {
+            db!!.groupDao().observeTotalUnread().collect { groupUnread ->
+                val dmUnread = db!!.conversationDao().getTotalUnread()
+                ChatNotificationManager.updateBadge(dmUnread + groupUnread)
             }
         }
 
@@ -208,9 +223,6 @@ object ChatService {
                 delay(10 * 60 * 1000L) // 10 minutes
             }
         }
-
-        _initialized.value = true
-        Log.d(TAG, "Chat system initialized")
     }
 
     /** Clean up expired disappearing messages and update affected conversation previews. */

@@ -4,8 +4,6 @@ import android.util.Log
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.processor.MessageProcessor
-import com.privimemobile.protocol.Config
-import com.privimemobile.protocol.Helpers
 import com.privimemobile.protocol.WalletApi
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -14,7 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * SbbsTransport — handles SBBS send/receive, polling, event-driven refresh.
  *
  * Uses callback ID range 2,000,000+ to coexist with WalletApi (1,000,000+).
- * Primary trigger: ev_txs_changed event. Fallback: 30s polling timer.
+ * Primary trigger: onInstantMessage push from C++ wallet core (fires on every incoming SBBS message).
+ * Fallback: slow polling timer (3 min idle, 2s active) catches any missed push callbacks.
  */
 class SbbsTransport(
     private val db: ChatDatabase,
@@ -27,8 +26,8 @@ class SbbsTransport(
     private var readStartTime = 0L  // auto-reset if stuck >30s
 
     companion object {
-        const val POLL_ACTIVE_MS = 2_000L   // 2s when chat is open — near-instant feel
-        const val POLL_IDLE_MS = 15_000L   // 15s when no chat is open
+        const val POLL_ACTIVE_MS = 2_000L    // 2s when chat is open — near-instant feel
+        const val POLL_IDLE_MS = 180_000L   // 3 min safety net when idle (onInstantMessage is primary)
     }
 
     /** Start adaptive polling — fast when chat open, slow otherwise. */
@@ -62,7 +61,7 @@ class SbbsTransport(
         startPolling()
     }
 
-    /** Called by ProtocolStartup's onTxsChanged hook — event-driven, INSTANT poll. */
+    /** Called by ProtocolStartup's onTxsChanged hook — fires on financial TX changes, not SBBS messages. */
     fun onTxsChanged() {
         Log.d(TAG, "ev_txs_changed — immediate poll")
         scope.launch { safeReadMessages() }

@@ -59,6 +59,14 @@ interface GroupDao {
     @Query("UPDATE groups SET unread_count = 0 WHERE group_id = :groupId")
     suspend fun clearUnread(groupId: String)
 
+    /** Total unread count across all groups (for badge + notification summary). */
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM groups")
+    suspend fun getTotalUnread(): Int
+
+    /** Observe total unread count across all groups (for badge updates). */
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM groups")
+    fun observeTotalUnread(): Flow<Int>
+
     @Query("UPDATE groups SET muted = :muted WHERE group_id = :groupId")
     suspend fun setMuted(groupId: String, muted: Boolean)
 

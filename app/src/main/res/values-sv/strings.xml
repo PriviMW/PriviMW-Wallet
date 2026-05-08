@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Ta bort handle?</string>
     <string name="settings_remove_handle_confirm">Detta kommer att avregistrera @%1$s från blockkedjan. Dina konversationer förloras och tillgången finns tillgänglig för andra.</string>
     <string name="settings_not_registered">Ej registrerad. Registrera ett @handle i Chatt-fliken för att använda messaging.</string>
+    <string name="settings_registration_fee_format">Registreringsavgift: %1$s BEAM</string>
     <string name="settings_theme_label">Tema</string>
     <string name="settings_choose_theme">Välj tema</string>
     <string name="settings_theme_dark">Mörk</string>

@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">¿Eliminar Handle?</string>
     <string name="settings_remove_handle_confirm">Esto anulará el registro de @%1$s de la blockchain. Tus conversaciones se perderán y el Handle estará disponible para otros.</string>
     <string name="settings_not_registered">No registrado. Registra un @handle en la pestaña Chats para usar la mensajería.</string>
+    <string name="settings_registration_fee_format">Tarifa de registro: %1$s BEAM</string>
     <string name="settings_theme_label">Tema</string>
     <string name="settings_choose_theme">Elegir tema</string>
     <string name="settings_theme_dark">Oscuro</string>

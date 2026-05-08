@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Kullanıcı Adını Çıkar?</string>
     <string name="settings_remove_handle_confirm">Bu @%1$s\'i blokzincirden çıkaracak. Konuşmalarınız kaybolacak ve kullanıcı adı başkaları tarafından alınabilir.</string>
     <string name="settings_not_registered">Kaydedilmemiş. Mesajlaşma kullanmak için Sohbetler sekmesinde bir @kullanıcı adı kaydedin.</string>
+    <string name="settings_registration_fee_format">Kayıt ücreti: %1$s BEAM</string>
     <string name="settings_theme_label">Tema</string>
     <string name="settings_choose_theme">Tema Seçin</string>
     <string name="settings_theme_dark">Karanlık</string>

@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Handle verwijderen?</string>
     <string name="settings_remove_handle_confirm">Dit schrijft @%1$s uit op de blockchain. Uw gesprekken gaan verloren en de handle wordt beschikbaar voor anderen.</string>
     <string name="settings_not_registered">Niet geregistreerd. Registreer een @handle in het Chats-tabblad om berichten te gebruiken.</string>
+    <string name="settings_registration_fee_format">Registratiekosten: %1$s BEAM</string>
     <string name="settings_theme_label">Thema</string>
     <string name="settings_choose_theme">Thema kiezen</string>
     <string name="settings_theme_dark">Donker</string>

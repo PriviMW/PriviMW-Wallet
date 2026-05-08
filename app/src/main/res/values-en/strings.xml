@@ -1163,6 +1163,7 @@
     <string name="settings_remove_handle_title">Remove Handle?</string>
     <string name="settings_remove_handle_confirm">This will unregister @%1$s from the blockchain. Your conversations will be lost and the handle will be available for others to claim.</string>
     <string name="settings_not_registered">Not registered. Register a @handle in the Chats tab to use messaging.</string>
+    <string name="settings_registration_fee_format">Registration fee: %1$s BEAM</string>
     <string name="settings_theme_label">Theme</string>
     <string name="settings_choose_theme">Choose Theme</string>
     <string name="settings_theme_dark">Dark</string>

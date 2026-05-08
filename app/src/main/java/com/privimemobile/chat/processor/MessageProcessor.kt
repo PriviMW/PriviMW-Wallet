@@ -1005,7 +1005,7 @@ class MessageProcessor(
         if (insertedId == -1L) return // Dedup — already exists
 
         // Update group last message + unread
-        val senderLabel = if (sent) "You" else (displayName ?: "@$from")
+        val senderLabel = if (sent) ctx.getString(R.string.chat_sender_you) else (displayName ?: "@$from")
         val preview = "$senderLabel: ${text?.take(40) ?: ctx.getString(R.string.chat_delete_preview)}"
         db.groupDao().updateLastMessage(groupId, ts, preview)
 

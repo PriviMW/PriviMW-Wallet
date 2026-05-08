@@ -960,6 +960,7 @@
     <string name="settings_remove_handle_title">Odebrat handle?</string>
     <string name="settings_remove_handle_confirm">Tím se odregistruje @%1$s z blockchainu. Vaše konverzace budou ztraceny a handle bude k dispozici pro ostatní.</string>
     <string name="settings_not_registered">Není registrován. Registrovejte @handle na kartě Chaty pro použití messagingu.</string>
+    <string name="settings_registration_fee_format">Poplatek za registraci: %1$s BEAM</string>
     <string name="settings_theme_label">Téma</string>
     <string name="settings_choose_theme">Vybrat téma</string>
     <string name="settings_theme_dark">Tmavé</string>

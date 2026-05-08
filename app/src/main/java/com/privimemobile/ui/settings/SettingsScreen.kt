@@ -503,7 +503,9 @@ fun SettingsScreen(
                     )
                 }
             } else {
-                Text(stringResource(R.string.settings_not_registered) + "\nRegistration fee: ${if (registrationFee > 0) "${com.privimemobile.protocol.Helpers.grothToBeam(registrationFee)} BEAM" else "loading..."}",
+                Text(stringResource(R.string.settings_not_registered) + "\n" +
+                        if (registrationFee > 0) stringResource(R.string.settings_registration_fee_format, com.privimemobile.protocol.Helpers.grothToBeam(registrationFee))
+                        else stringResource(R.string.general_loading),
                     color = C.textSecondary, fontSize = 13.sp, lineHeight = 20.sp,
                     modifier = Modifier.padding(vertical = 8.dp))
             }

@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Видалити хендл?</string>
     <string name="settings_remove_handle_confirm">Це зніме з реєстрації @%1$s з блокчейну. Ваші розмови будуть втрачені, і хендл буде доступний для інших.</string>
     <string name="settings_not_registered">Не зареєстровано. Зареєструйте @handle у вкладці Чати для використання месенджингу.</string>
+    <string name="settings_registration_fee_format">Комірка реєстрації: %1$s BEAM</string>
     <string name="settings_theme_label">Тема</string>
     <string name="settings_choose_theme">Обрати тему</string>
     <string name="settings_theme_dark">Темна</string>

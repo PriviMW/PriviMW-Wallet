@@ -694,7 +694,7 @@ class GroupManager(
         db.messageDao().insert(entity)
 
         // Update group preview
-        db.groupDao().updateLastMessage(groupId, ts, "You: ${text.take(40)}")
+        db.groupDao().updateLastMessage(groupId, ts, "${context.getString(R.string.chat_sender_you)}: ${text.take(40)}")
 
         // Send to each member with 200ms spacing (first pass)
         for (walletId in memberWalletIds) {

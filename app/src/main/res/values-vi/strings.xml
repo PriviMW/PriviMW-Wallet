@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Xóa handle?</string>
     <string name="settings_remove_handle_confirm">Điều này sẽ hủy đăng ký @%1$s khỏi blockchain. Cuộc trò chuyện của bạn sẽ bị mất và handle sẽ khả dụng cho người khác.</string>
     <string name="settings_not_registered">Chưa đăng ký. Đăng ký @handle trong tab Trò chuyện để nhắn tin.</string>
+    <string name="settings_registration_fee_format">Phí đăng ký: %1$s BEAM</string>
     <string name="settings_theme_label">Giao diện</string>
     <string name="settings_choose_theme">Chọn giao diện</string>
     <string name="settings_theme_dark">Tối</string>

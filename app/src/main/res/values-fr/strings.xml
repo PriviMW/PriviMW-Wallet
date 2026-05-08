@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Supprimer le handle ?</string>
     <string name="settings_remove_handle_confirm">Cela désenregistrera @%1$s de la blockchain. Vos conversations seront perdues et le handle sera disponible pour les autres.</string>
     <string name="settings_not_registered">Pas enregistré. Enregistrez un @handle dans l\'onglet Discussions pour utiliser la messagerie.</string>
+    <string name="settings_registration_fee_format">Frais d\'enregistrement: %1$s BEAM</string>
     <string name="settings_theme_label">Thème</string>
     <string name="settings_choose_theme">Choisir le thème</string>
     <string name="settings_theme_dark">Sombre</string>

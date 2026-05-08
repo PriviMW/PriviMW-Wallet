@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">ハンドルを削除しますか？</string>
     <string name="settings_remove_handle_confirm">@%1$sの登録をブロックチェーンから解除します。会話は失われ、ハンドルは他の人が取得できるようになります。</string>
     <string name="settings_not_registered">未登録。メッセージングを使用するにはチャットタブで@ハンドルを登録してください。</string>
+    <string name="settings_registration_fee_format">登録手数料: %1$s BEAM</string>
     <string name="settings_theme_label">テーマ</string>
     <string name="settings_choose_theme">テーマを選択</string>
     <string name="settings_theme_dark">ダーク</string>

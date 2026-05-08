@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Hapus Handle?</string>
     <string name="settings_remove_handle_confirm">Ini akan menghapus registrasi @%1$s dari blockchain. Percakapan Anda akan hilang dan handle akan tersedia untuk orang lain.</string>
     <string name="settings_not_registered">Belum terdaftar. Daftarkan @handle di tab Obrolan untuk menggunakan messaging.</string>
+    <string name="settings_registration_fee_format">Biaya registrasi: %1$s BEAM</string>
     <string name="settings_theme_label">Tema</string>
     <string name="settings_choose_theme">Pilih Tema</string>
     <string name="settings_theme_dark">Gelap</string>

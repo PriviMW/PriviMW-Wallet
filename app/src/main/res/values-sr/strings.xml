@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Уклонити корисничко име?</string>
     <string name="settings_remove_handle_confirm">Ово ће де-регистровати @%1$s са блокчејна. Ваши разговори ће бити изгубљени и корисничко име ће бити доступно другим корисницима.</string>
     <string name="settings_not_registered">Није регистровано. Региструјте @корисничко име у табу Чатови за коришћење комуникације.</string>
+    <string name="settings_registration_fee_format">Накота за регистрацију: %1$s BEAM</string>
     <string name="settings_theme_label">Тема</string>
     <string name="settings_choose_theme">Изаберите тему</string>
     <string name="settings_theme_dark">Тамна</string>

@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Rimuovi Handle</string>
     <string name="settings_remove_handle_confirm">Questo deregistrera\' @%1$s dalla blockchain. Le tue conversazioni andranno perse e l\'handle sara\' disponibile per altri.</string>
     <string name="settings_not_registered">Non registrato</string>
+    <string name="settings_registration_fee_format">Commissione di Registrazione: %1$s BEAM</string>
     <string name="settings_theme_label">Tema</string>
     <string name="settings_choose_theme">Scegli Tema</string>
     <string name="settings_theme_dark">Scuro</string>

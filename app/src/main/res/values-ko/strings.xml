@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">핸들을 제거하시겠습니까?</string>
     <string name="settings_remove_handle_confirm">블록체인에서 @%1$s 등록을 해제합니다. 대화가 손실되며 다른 사람이 이 핸들을 사용할 수 있습니다.</string>
     <string name="settings_not_registered">등록되지 않음. 메시징을 사용하려면 채팅 탭에서 @핸들을 등록하세요.</string>
+    <string name="settings_registration_fee_format">등록 수수료: %1$s BEAM</string>
     <string name="settings_theme_label">테마</string>
     <string name="settings_choose_theme">테마 선택</string>
     <string name="settings_theme_dark">다크</string>

@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Poista handle?</string>
     <string name="settings_remove_handle_confirm">Tama poistaa @%1$s blockketjusta. Keskustelusi katoavat ja handle vapautuu muille.</string>
     <string name="settings_not_registered">Ei rekisteröity. Rekisteroi @handle Chats-vahvistasta viestintää kayttaaksesi.</string>
+    <string name="settings_registration_fee_format">Rekisteröintimaksu: %1$s BEAM</string>
     <string name="settings_theme_label">Teema</string>
     <string name="settings_choose_theme">Valitse teema</string>
     <string name="settings_theme_dark">Tumma</string>

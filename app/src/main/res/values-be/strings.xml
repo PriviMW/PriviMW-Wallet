@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">Выдаліць хэндл?</string>
     <string name="settings_remove_handle_confirm">Гэта адрэгіструе @%1$s з блокчэйна. Вашы размовы будуць страчаны, а хэндл стане даступным іншым.</string>
     <string name="settings_not_registered">Не зарэгістраваны. Зарэгіструйце @handle ва ўкладцы чатаў для выкарыстання паведамленняў.</string>
+    <string name="settings_registration_fee_format">Камісія рэгістрацыі: %1$s BEAM</string>
     <string name="settings_theme_label">Тэма</string>
     <string name="settings_choose_theme">Выбраць тэму</string>
     <string name="settings_theme_dark">Цёмная</string>

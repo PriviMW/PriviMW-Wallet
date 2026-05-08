@@ -961,6 +961,7 @@
     <string name="settings_remove_handle_title">移除 Handle？</string>
     <string name="settings_remove_handle_confirm">这将从区块链取消注册 @%1$s。您的对话将丢失，该 Handle 将可供他人认领。</string>
     <string name="settings_not_registered">未注册。请在聊天标签页注册一个 @handle 以使用通讯功能。</string>
+    <string name="settings_registration_fee_format">注册费用：%1$s BEAM</string>
     <string name="settings_theme_label">主题</string>
     <string name="settings_choose_theme">选择主题</string>
     <string name="settings_theme_dark">暗色</string>

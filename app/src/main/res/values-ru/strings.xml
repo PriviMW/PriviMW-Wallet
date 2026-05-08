@@ -961,6 +961,7 @@
     <string name="settings_remove_handle_title">Удалить Handle?</string>
     <string name="settings_remove_handle_confirm">Это отменит регистрацию @%1$s в блокчейне. Ваши диалоги будут потеряны, и Handle станет доступен для других.</string>
     <string name="settings_not_registered">Не зарегистрированы. Зарегистрируйте @handle во вкладке Чаты для использования мессенджера.</string>
+    <string name="settings_registration_fee_format">Сбор за регистрацию: %1$s BEAM</string>
     <string name="settings_theme_label">Тема</string>
     <string name="settings_choose_theme">Выбрать тему</string>
     <string name="settings_theme_dark">Тёмная</string>

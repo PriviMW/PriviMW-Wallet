@@ -958,6 +958,7 @@
     <string name="settings_remove_handle_title">ลบแฮนเดิล?</string>
     <string name="settings_remove_handle_confirm">จะยกเลิกลงทะเบียน @%1$s จากบล็อกเชน การสนทนาของคุณจะสูญหายและแฮนเดิลจะพร้อมให้ผู้อื่นใช้</string>
     <string name="settings_not_registered">ยังไม่ได้ลงทะเบียน ลงทะเบียน @handle ในแท็บแชทเพื่อใช้การส่งข้อความ</string>
+    <string name="settings_registration_fee_format">ค่าธรรมเนียมการลงทะเบียน: %1$s BEAM</string>
     <string name="settings_theme_label">ธีม</string>
     <string name="settings_choose_theme">เลือกธีม</string>
     <string name="settings_theme_dark">มืด</string>

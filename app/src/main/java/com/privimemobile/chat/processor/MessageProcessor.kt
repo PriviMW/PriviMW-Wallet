@@ -746,10 +746,20 @@ class MessageProcessor(
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val newText = payload["msg"] as? String ?: return
         val conv = db.conversationDao().findByKey(convKey) ?: return
+        val state = db.chatStateDao().get()
         db.messageDao().editMessage(conv.id, msgTs, from, newText)
         // Update chat list preview if this was the latest message
         if (conv.lastMessageTs == msgTs) {
             db.conversationDao().updateLastMessage(conv.id, msgTs, newText.take(100))
+        }
+        // Also update group preview if this is a group conversation
+        if (convKey.startsWith("g_")) {
+            val groupPrefix = convKey.removePrefix("g_")
+            val group = db.groupDao().findByConvKey(groupPrefix)
+            if (group != null && group.lastMessageTs == msgTs) {
+                val senderLabel = if (state?.myHandle != null && from == state.myHandle) ctx.getString(R.string.chat_sender_you) else "@$from"
+                db.groupDao().updateLastMessage(group.groupId, msgTs, "$senderLabel: ${newText.take(40)}")
+            }
         }
         Log.d(TAG, "Edit from @$from, ts=$msgTs, newText=${newText.take(30)}")
     }

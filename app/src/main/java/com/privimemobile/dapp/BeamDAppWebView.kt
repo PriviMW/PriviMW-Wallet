@@ -519,8 +519,35 @@ body { height: 100vh !important; margin: 0 !important; padding: 0 !important; ba
      * Injects BEAM.api shim into HTML via shouldInterceptRequest for guaranteed timing.
      */
     private inner class DAppWebViewClient : WebViewClient() {
+        /**
+         * Security: only allow navigation to file:// URLs within the DApp's own directory.
+         * http/https links are opened in the system browser instead — they must NOT load
+         * inside the WebView, where they would inherit the BEAM wallet bridge and could
+         * silently exfiltrate wallet data (addresses, balances, UTXOs) via callWalletApi.
+         * Other schemes (data:, javascript:, etc.) are blocked entirely.
+         */
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-            return false
+            val url = request?.url?.toString() ?: return true
+            val scheme = request.url.scheme?.lowercase() ?: return true
+            when (scheme) {
+                "file" -> return false  // allowed — sandboxed by shouldInterceptRequest path guard
+                "http", "https" -> {
+                    // Open in system browser instead of loading in the WebView
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, request.url).apply {
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        this@BeamDAppWebView.context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Cannot open external URL: $url — ${e.message}")
+                    }
+                    return true  // block WebView navigation
+                }
+                else -> {
+                    Log.w(TAG, "BLOCKED unsafe navigation scheme '$scheme': $url")
+                    return true
+                }
+            }
         }
 
         /**

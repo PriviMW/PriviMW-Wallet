@@ -1126,6 +1126,14 @@ fun ChatScreen(
                         if (convEntity != null && convEntity.lastMessageTs == editTarget.timestamp) {
                             com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, editTarget.timestamp, trimmed.take(100))
                         }
+                        // Update group preview if this is a group conversation
+                        if (isGroupMode && groupId != null) {
+                            val group = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId)
+                            if (group != null && group.lastMessageTs == editTarget.timestamp) {
+                                val senderLabel = context.getString(com.privimemobile.R.string.chat_sender_you)
+                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, editTarget.timestamp, "${senderLabel}: ${trimmed.take(40)}")
+                            }
+                        }
                         // Send SBBS edit to recipient(s)
                         val editPayload = mapOf(
                             "v" to 1,

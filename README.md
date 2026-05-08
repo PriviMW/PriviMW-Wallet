@@ -20,9 +20,12 @@ Native Android wallet for the [Beam](https://beam.mw) privacy blockchain — enc
 
 - **Send & Receive** — BEAM and Confidential Assets (offline, online, max privacy modes)
 - **Assets Swap (DEX)** — Peer-to-peer asset trading. Create offers, accept swaps, fully private atomic settlement on-chain
+- **Split Coins** — Break large UTXOs into smaller coins to avoid locked-balance failures
 - **Send to @handle** — Address wallet sends by human-readable handle names
 - **Address Favourites** — Save frequently used addresses for quick sends
+- **Fiat Pricing** — DEX-derived asset prices via BeamScreener API
 - **8 Themes** — Light and dark theme variants with full app-wide support
+- **21 Languages** — Full i18n with in-app language picker (be, cs, de, en, es, fi, fr, in, it, ja, ko, nl, pt, ru, sr, sv, th, tr, uk, vi, zh)
 - **DApp Store** — Browse, install, and sideload Beam DApps
 - **Mobile Node** — Optional FlyClient lightweight verification for trustless operation
 
@@ -115,21 +118,21 @@ app/src/main/java/com/privimemobile/
 │   ├── identity/          # Handle registration + profile
 │   ├── notification/      # Chat notification manager (reactions + messages)
 │   ├── processor/         # SBBS message processing
-│   ├── transport/         # SBBS transport layer
-│   ├── voice/             # Opus voice message recording
+│   ├── transport/         # SBBS + IPFS transport layers
+│   ├── voice/             # Opus voice message recording + playback
 │   └── ChatService.kt    # Singleton orchestrator
-├── protocol/              # Beam JNI bridge, SBBS, config, types, secure storage
-├── wallet/                # Wallet manager, TX auth, swap manager, update checker, notifications
+├── protocol/              # Beam JNI bridge, SBBS, config, types, secure storage, locale helper
+├── wallet/                # Wallet manager, TX auth, swap manager, currency, split coins, notifications
 ├── dapp/                  # DApp WebView bridge + native TX approval
 ├── ui/                    # Jetpack Compose screens
 │   ├── auth/              # Onboarding, lock screen
 │   ├── chat/              # DMs, groups, registration, search, media gallery
-│   ├── components/        # AvatarDisplay, AvatarPicker, VoiceMessageBubble
+│   ├── components/        # AssetIcon, AvatarPicker, VoiceMessageBubble
 │   ├── dapps/             # DApp store + viewer
 │   ├── navigation/        # Nav graph
-│   ├── settings/          # Settings screen
+│   ├── settings/          # Settings screen with language picker
 │   ├── theme/             # 8-theme system (light/dark variants)
-│   └── wallet/            # Send, receive, swap, addresses, UTXO, TX detail
+│   └── wallet/            # Send, receive, swap, split coins, addresses, UTXO, TX detail, asset history
 ├── MainActivity.kt
 └── PriviMWApp.kt          # Application entry point
 ```

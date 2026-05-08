@@ -1061,7 +1061,7 @@
     <string name="notif_channel_tx">Transaction Updates</string>
     <string name="notif_clear_all">Clear all</string>
     <string name="notif_empty">There are no notifications yet</string>
-    <string name="notif_reaction_with_text">Reacted %1$s to "%2$s"</string>
+    <string name="notif_reaction_with_text">Reacted %1$s to \"%2$s\"</string>
     <string name="notif_reaction_emoji_only">Reacted to your message: %1$s</string>
     <string name="notif_summary_title">PriviMe</string>
     <string name="notif_channel_messages">Messages</string>

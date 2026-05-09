@@ -81,6 +81,7 @@ private data class TxDetail(
     val isMaxPrivacy: Boolean,
     val isPublicOffline: Boolean,
     val minConfirmationsProgress: String,
+    val myIdEqualsPeerId: Boolean,
     val isDapps: Boolean = false,
     val appName: String? = null,
     val appID: String? = null,
@@ -135,6 +136,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     isMaxPrivacy = obj.optBoolean("isMaxPrivacy"),
                     isPublicOffline = obj.optBoolean("isPublicOffline"),
                     minConfirmationsProgress = obj.optString("minConfirmationsProgress", ""),
+                    myIdEqualsPeerId = obj.optString("myId", "") == obj.optString("peerId", ""),
                     isDapps = obj.optBoolean("isDapps"),
                     appName = obj.optString("appName", "").ifEmpty { null },
                     appID = obj.optString("appID", "").ifEmpty { null },
@@ -469,6 +471,10 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             if (isSwapTx) stringResource(R.string.general_comment) else if (tx.isDapps) stringResource(R.string.tx_detail_description) else stringResource(R.string.general_comment),
                             tx.message,
                         )
+                    }
+                    // Split TX — selfTx + different myId/peerId (existing address → new address)
+                    if (tx.selfTx && tx.myIdEqualsPeerId && tx.message.isEmpty() && tx.kernelId.isNotEmpty() && !isSwapTx) {
+                        DetailRow(stringResource(R.string.general_comment), stringResource(R.string.split_coins_title))
                     }
                     if (isSwapTx) {
                         // Asset Swap TX — show addresses, fee, asset IDs

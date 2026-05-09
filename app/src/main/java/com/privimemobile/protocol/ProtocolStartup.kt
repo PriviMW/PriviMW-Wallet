@@ -75,49 +75,61 @@ object ProtocolStartup {
         // Fetch BEAM price from CoinGecko + DEX asset prices from BeamScreener (repeat every 10 min)
         scope.launch {
             while (true) {
-                try {
-                    val vsCurrencies = "usd,eur,gbp,sgd,btc,eth,jpy,cad,aud,cny,krw,inr,brl,chf,hkd,nzd,mxn,rub,sek,nok,dkk,pln,thb,idr,php,vnd,try,aed,sar,zar,ars,clp,twd"
-                    val price = withContext(Dispatchers.IO) {
-                        val url = java.net.URL("https://api.coingecko.com/api/v3/simple/price?ids=beam&vs_currencies=$vsCurrencies&include_24hr_change=true")
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.connectTimeout = 10_000
-                        conn.readTimeout = 10_000
-                        try {
-                            val json = conn.inputStream.bufferedReader().readText()
-                            org.json.JSONObject(json).optJSONObject("beam")
-                        } finally {
-                            conn.disconnect()
-                        }
-                    }
-                    val rates = mutableMapOf<String, Double>()
-                    if (price != null) {
-                        val currencies = vsCurrencies.split(",")
-                        for (c in currencies) {
-                            if (price.has(c)) rates["beam_$c"] = price.getDouble(c)
-                            val changeKey = "${c}_24h_change"
-                            if (price.has(changeKey)) rates["beam_${c}_change"] = price.getDouble(changeKey)
-                        }
-                        Log.d(TAG, "CoinGecko rates: ${rates.filter { !it.key.endsWith("_change") }}")
-                    }
-
-                    // Fetch DEX-derived asset prices from BeamScreener
-                    try {
-                        val dexRates = withContext(Dispatchers.IO) { fetchDexAssetPrices() }
-                        rates.putAll(dexRates)
-                        if (dexRates.isNotEmpty()) Log.d(TAG, "DEX rates: $dexRates")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "DEX price fetch failed: ${e.message}")
-                    }
-
-                    if (rates.isNotEmpty()) {
-                        WalletEventBus.emitExchangeRates(rates)
-                        cacheRates(rates)
-                        maybeSaveSnapshot()
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Exchange rate fetch failed: ${e.message}")
-                }
+                fetchExchangeRates()
                 delay(10 * 60 * 1000L) // 10 minutes
+            }
+        }
+    }
+
+    /** Public — fetch fresh BEAM + DEX asset prices on demand (e.g. pull-to-refresh). */
+    fun fetchPrices() {
+        fetchExchangeRates()
+    }
+
+    private fun fetchExchangeRates() {
+        val scope = pollingScope ?: return
+        scope.launch {
+            try {
+                val vsCurrencies = "usd,eur,gbp,sgd,btc,eth,jpy,cad,aud,cny,krw,inr,brl,chf,hkd,nzd,mxn,rub,sek,nok,dkk,pln,thb,idr,php,vnd,try,aed,sar,zar,ars,clp,twd"
+                val price = withContext(Dispatchers.IO) {
+                    val url = java.net.URL("https://api.coingecko.com/api/v3/simple/price?ids=beam&vs_currencies=$vsCurrencies&include_24hr_change=true")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 10_000
+                    try {
+                        val json = conn.inputStream.bufferedReader().readText()
+                        org.json.JSONObject(json).optJSONObject("beam")
+                    } finally {
+                        conn.disconnect()
+                    }
+                }
+                val rates = mutableMapOf<String, Double>()
+                if (price != null) {
+                    val currencies = vsCurrencies.split(",")
+                    for (c in currencies) {
+                        if (price.has(c)) rates["beam_$c"] = price.getDouble(c)
+                        val changeKey = "${c}_24h_change"
+                        if (price.has(changeKey)) rates["beam_${c}_change"] = price.getDouble(changeKey)
+                    }
+                    Log.d(TAG, "CoinGecko rates: ${rates.filter { !it.key.endsWith("_change") }}")
+                }
+
+                // Fetch DEX-derived asset prices from BeamScreener
+                try {
+                    val dexRates = withContext(Dispatchers.IO) { fetchDexAssetPrices() }
+                    rates.putAll(dexRates)
+                    if (dexRates.isNotEmpty()) Log.d(TAG, "DEX rates: $dexRates")
+                } catch (e: Exception) {
+                    Log.w(TAG, "DEX price fetch failed: ${e.message}")
+                }
+
+                if (rates.isNotEmpty()) {
+                    WalletEventBus.emitExchangeRates(rates)
+                    cacheRates(rates)
+                    maybeSaveSnapshot()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Exchange rate fetch failed: ${e.message}")
             }
         }
     }

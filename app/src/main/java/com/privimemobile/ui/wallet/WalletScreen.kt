@@ -291,6 +291,7 @@ fun WalletScreen(
                 wallet.getAddresses(true)
             } catch (_: Exception) {}
         }
+        com.privimemobile.protocol.ProtocolStartup.fetchPrices()
         scope.launch {
             delay(2000)
             refreshing = false

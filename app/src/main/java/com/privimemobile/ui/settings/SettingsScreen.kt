@@ -229,18 +229,24 @@ fun SettingsScreen(
                 val date = java.text.SimpleDateFormat("yyyy-MM-dd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
                 val zipFilename = "privimw-tx-history-$date.zip"
                 val csvFilenames = mapOf(
-                    "transactions" to "transactions.csv",
-                    "atomic_swap" to "atomic_swap_transactions.csv",
-                    "assets_swap" to "assets_swap_transactions.csv",
-                    "contracts" to "contracts_transactions.csv",
+                    "transactions" to "$date-transactions.csv",
+                    "atomic_swap" to "$date-atomic_swap_transactions.csv",
+                    "assets_swap" to "$date-assets_swap_transactions.csv",
+                    "contracts" to "$date-contracts_transactions.csv",
                 )
                 // Build ZIP in memory
                 val baos = java.io.ByteArrayOutputStream()
                 java.util.zip.ZipOutputStream(baos).use { zos ->
                     for ((key, csv) in csvs) {
+                        val content = when (key) {
+                            "transactions" -> com.privimemobile.wallet.CsvExportUtil.reformatTransactionsCsv(csv)
+                            "assets_swap" -> com.privimemobile.wallet.CsvExportUtil.reformatAssetsSwapCsv(csv)
+                            "contracts" -> com.privimemobile.wallet.CsvExportUtil.reformatContractsCsv(csv)
+                            else -> csv
+                        }
                         val entry = java.util.zip.ZipEntry(csvFilenames[key] ?: "$key.csv")
                         zos.putNextEntry(entry)
-                        zos.write(csv.toByteArray())
+                        zos.write(content.toByteArray())
                         zos.closeEntry()
                     }
                 }

@@ -157,7 +157,7 @@ object CsvExportUtil {
         val lines = nativeCsv.split("\n")
         if (lines.size < 2) return nativeCsv
 
-        val header = "Timestamp (UTC),Amount sent,Asset sent,Amount received,Asset received,\"Transaction fee, BEAM\",Status,DApp name,Application shader ID,Description,Transaction ID,Kernel ID"
+        val header = "Timestamp (UTC),Amount sent,Asset sent,Amount received,Asset received,Transaction fee (BEAM),Status,DApp name,Application shader ID,Description,Transaction ID,Kernel ID"
         val result = StringBuilder(header).append('\n')
 
         for (i in 1 until lines.size) {

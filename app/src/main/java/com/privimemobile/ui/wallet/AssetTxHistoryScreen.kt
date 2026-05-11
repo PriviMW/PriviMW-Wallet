@@ -156,6 +156,7 @@ fun AssetTxHistoryScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                item { Spacer(Modifier.height(8.dp)) }
                 items(transactions, key = { it.txId }) { tx ->
                     TxCard(
                         tx = tx,

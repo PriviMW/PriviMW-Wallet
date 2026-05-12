@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Không đủ tiền để hoàn tất giao dịch</string>
     <string name="tx_approve_password_subtitle">Xác nhận mật khẩu ví để phê duyệt giao dịch</string>
     <string name="send_addr_type_sbbs">SBBS (Trực tuyến)</string>
-    <string name="send_addr_type_regular">Thường (Ngoại tuyến)</string>
-    <string name="send_addr_type_max_privacy">Riêng tư tối đa</string>
+    <string name="send_addr_type_regular">Địa chỉ thường</string>
+    <string name="send_addr_type_max_privacy">Địa chỉ riêng tư tối đa</string>
     <string name="send_sending_to_handle">Đang gửi đến %1$s</string>
     <string name="send_resolving_handle">Đang phân giải handle…</string>
     <string name="send_validating">Đang xác minh…</string>

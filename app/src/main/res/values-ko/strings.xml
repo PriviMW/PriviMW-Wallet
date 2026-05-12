@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">이 거래를 완료할 잔액이 부족합니다</string>
     <string name="tx_approve_password_subtitle">이 거래를 승인하려면 지갑 비밀번호를 확인하세요</string>
     <string name="send_addr_type_sbbs">SBBS (온라인)</string>
-    <string name="send_addr_type_regular">일반 (오프라인)</string>
-    <string name="send_addr_type_max_privacy">Max Privacy</string>
+    <string name="send_addr_type_regular">일반 주소</string>
+    <string name="send_addr_type_max_privacy">맥스 프라이버시 주소</string>
     <string name="send_sending_to_handle">%1$s(으)로 보내기</string>
     <string name="send_resolving_handle">핸들 확인 중…</string>
     <string name="send_validating">확인 중…</string>

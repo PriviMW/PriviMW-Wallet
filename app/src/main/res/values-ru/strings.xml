@@ -1194,8 +1194,8 @@
     <string name="dapp_insufficient_funds">Недостаточно средств для завершения этой транзакции</string>
     <string name="tx_approve_password_subtitle">Подтвердите пароль кошелька для одобрения этой транзакции</string>
     <string name="send_addr_type_sbbs">SBBS (Онлайн)</string>
-    <string name="send_addr_type_regular">Обычный (Офлайн)</string>
-    <string name="send_addr_type_max_privacy">Макс. приватность</string>
+    <string name="send_addr_type_regular">Обычный адрес</string>
+    <string name="send_addr_type_max_privacy">Адрес максимальной приватности</string>
     <string name="send_sending_to_handle">Отправка на %1$s</string>
     <string name="send_resolving_handle">Определение handle…</string>
     <string name="send_validating">Проверка…</string>

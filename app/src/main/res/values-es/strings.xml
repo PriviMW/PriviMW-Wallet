@@ -1191,8 +1191,8 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="dapp_insufficient_funds">Fondos insuficientes para completar esta transacción</string>
     <string name="tx_approve_password_subtitle">Confirma tu contraseña de billetera para aprobar esta transacción</string>
     <string name="send_addr_type_sbbs">SBBS (En línea)</string>
-    <string name="send_addr_type_regular">Regular (Sin conexión)</string>
-    <string name="send_addr_type_max_privacy">Máxima privacidad</string>
+    <string name="send_addr_type_regular">Dirección regular</string>
+    <string name="send_addr_type_max_privacy">Dirección máxima privacidad</string>
     <string name="send_sending_to_handle">Enviando a %1$s</string>
     <string name="send_resolving_handle">Resolviendo handle…</string>
     <string name="send_validating">Validando…</string>

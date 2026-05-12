@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Fundos insuficientes para completar esta transacao</string>
     <string name="tx_approve_password_subtitle">Confirme a senha da sua carteira para aprovar esta transacao</string>
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
-    <string name="send_addr_type_regular">Regular (Offline)</string>
-    <string name="send_addr_type_max_privacy">Max. Privacidade</string>
+    <string name="send_addr_type_regular">Endereço regular</string>
+    <string name="send_addr_type_max_privacy">Endereço máx. privacidade</string>
     <string name="send_sending_to_handle">Enviando para %1$s</string>
     <string name="send_resolving_handle">Resolvendo handle...</string>
     <string name="send_validating">Validando...</string>

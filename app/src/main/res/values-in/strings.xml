@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Dana tidak cukup untuk menyelesaikan transaksi ini</string>
     <string name="tx_approve_password_subtitle">Konfirmasi kata sandi dompet Anda untuk menyetujui transaksi ini</string>
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
-    <string name="send_addr_type_regular">Biasa (Offline)</string>
-    <string name="send_addr_type_max_privacy">Privasi Maks</string>
+    <string name="send_addr_type_regular">Alamat biasa</string>
+    <string name="send_addr_type_max_privacy">Privasi Maks-alamat</string>
     <string name="send_sending_to_handle">Mengirim ke %1$s</string>
     <string name="send_resolving_handle">Memecahkan handle...</string>
     <string name="send_validating">Memvalidasi...</string>

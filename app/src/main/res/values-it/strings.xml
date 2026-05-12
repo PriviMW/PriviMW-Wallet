@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Fondi insufficienti per questa DApp</string>
     <string name="tx_approve_password_subtitle">Inserisci la password del wallet</string>
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
-    <string name="send_addr_type_regular">Regolare</string>
-    <string name="send_addr_type_max_privacy">Max Privacy</string>
+    <string name="send_addr_type_regular">Indirizzo regolare</string>
+    <string name="send_addr_type_max_privacy">Max Privacy indirizzo</string>
     <string name="send_sending_to_handle">Invio a %1$s</string>
     <string name="send_resolving_handle">Risoluzione handle...</string>
     <string name="send_validating">Convalida...</string>

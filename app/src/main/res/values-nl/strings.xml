@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Onvoldoende saldo om deze transactie te voltooien</string>
     <string name="tx_approve_password_subtitle">Bevestig uw wachtwoord om deze transactie goed te keuren</string>
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
-    <string name="send_addr_type_regular">Regulier (Offline)</string>
-    <string name="send_addr_type_max_privacy">Max Privacy</string>
+    <string name="send_addr_type_regular">Regulier adres</string>
+    <string name="send_addr_type_max_privacy">Max Privacy-adres</string>
     <string name="send_sending_to_handle">Verzenden aan %1$s</string>
     <string name="send_resolving_handle">Handle oplossen…</string>
     <string name="send_validating">Valideren…</string>

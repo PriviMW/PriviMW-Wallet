@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Недастаткова сродкаў для гэтай транзакцыі</string>
     <string name="tx_approve_password_subtitle">Пацвердзіце пароль гаманца для гэтай транзакцыі</string>
     <string name="send_addr_type_sbbs">SBBS (анлайн)</string>
-    <string name="send_addr_type_regular">Звычайная (афлайн)</string>
-    <string name="send_addr_type_max_privacy">Максімальная прыватнасць</string>
+    <string name="send_addr_type_regular">Звычайны адрас</string>
+    <string name="send_addr_type_max_privacy">Максімальная прыватнасць-адрас</string>
     <string name="send_sending_to_handle">Адпраўленне для %1$s</string>
     <string name="send_resolving_handle">Вызначэнне хэндла…</string>
     <string name="send_validating">Праверка…</string>

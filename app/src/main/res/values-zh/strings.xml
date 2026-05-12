@@ -1194,8 +1194,8 @@
     <string name="dapp_insufficient_funds">资金不足，无法完成此交易</string>
     <string name="tx_approve_password_subtitle">确认钱包密码以批准此交易</string>
     <string name="send_addr_type_sbbs">SBBS（在线）</string>
-    <string name="send_addr_type_regular">普通（离线）</string>
-    <string name="send_addr_type_max_privacy">最大隐私</string>
+    <string name="send_addr_type_regular">普通地址</string>
+    <string name="send_addr_type_max_privacy">最大隐私地址</string>
     <string name="send_sending_to_handle">发送至 %1$s</string>
     <string name="send_resolving_handle">正在解析 Handle…</string>
     <string name="send_validating">验证中…</string>

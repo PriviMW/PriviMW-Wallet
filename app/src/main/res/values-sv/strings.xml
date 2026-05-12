@@ -1189,8 +1189,8 @@
     <string name="dapp_insufficient_funds">Inte tillräckligt med medel för denna transaktion</string>
     <string name="tx_approve_password_subtitle">Bekräfta plånbokslösenord för att bekräfta denna transaktion</string>
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
-    <string name="send_addr_type_regular">Vanlig (Offline)</string>
-    <string name="send_addr_type_max_privacy">Max integritet</string>
+    <string name="send_addr_type_regular">Vanlig adress</string>
+    <string name="send_addr_type_max_privacy">Max integritetsadress</string>
     <string name="send_sending_to_handle">Skicka till %1$s</string>
     <string name="send_resolving_handle">Handle löses upp…</string>
     <string name="send_validating">Valideras…</string>

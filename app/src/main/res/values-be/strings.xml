@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (анлайн)</string>
     <string name="send_addr_type_regular">Звычайны адрас</string>
     <string name="send_addr_type_max_privacy">Максімальная прыватнасць-адрас</string>
+    <string name="send_addr_type_public_offline">Публічны афлайн-адрас</string>
     <string name="send_sending_to_handle">Адпраўленне для %1$s</string>
     <string name="send_resolving_handle">Вызначэнне хэндла…</string>
     <string name="send_validating">Праверка…</string>

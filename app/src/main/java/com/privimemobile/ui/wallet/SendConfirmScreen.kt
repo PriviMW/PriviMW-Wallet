@@ -67,11 +67,12 @@ fun SendConfirmScreen(
     val currency = CurrencyManager.getPreferredCurrency()
     val rate = exchangeRates["beam_$currency"] ?: 0.0
 
-    // TX type passed from SendScreen: "regular"=SBBS online, "offline"=offline, "max_privacy"=max privacy
-    val isOffline = txType == "offline" || txType == "max_privacy"
+    // TX type passed from SendScreen: "regular"=SBBS online, "offline"=regular offline, "max_privacy"=max privacy, "public_offline"=public offline
+    val isOffline = txType == "offline" || txType == "max_privacy" || txType == "public_offline"
     val txTypeLabel = when (txType) {
         "regular" -> stringResource(R.string.send_addr_type_sbbs)
         "max_privacy" -> stringResource(R.string.send_addr_type_max_privacy)
+        "public_offline" -> stringResource(R.string.send_addr_type_public_offline)
         else -> stringResource(R.string.send_addr_type_regular)
     }
 

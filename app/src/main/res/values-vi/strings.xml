@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Trực tuyến)</string>
     <string name="send_addr_type_regular">Địa chỉ thường</string>
     <string name="send_addr_type_max_privacy">Địa chỉ riêng tư tối đa</string>
+    <string name="send_addr_type_public_offline">Địa chỉ công ngoại tuyến</string>
     <string name="send_sending_to_handle">Đang gửi đến %1$s</string>
     <string name="send_resolving_handle">Đang phân giải handle…</string>
     <string name="send_validating">Đang xác minh…</string>

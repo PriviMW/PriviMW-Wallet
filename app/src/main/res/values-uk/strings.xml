@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Онлайн)</string>
     <string name="send_addr_type_regular">Звичайна адреса</string>
     <string name="send_addr_type_max_privacy">Адреса максимальної конфіденційності</string>
+    <string name="send_addr_type_public_offline">Публічний офлайн-адреса</string>
     <string name="send_sending_to_handle">Відправка до %1$s</string>
     <string name="send_resolving_handle">Визначення хендла...</string>
     <string name="send_validating">Перевірка...</string>

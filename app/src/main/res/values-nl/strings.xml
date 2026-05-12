@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
     <string name="send_addr_type_regular">Regulier adres</string>
     <string name="send_addr_type_max_privacy">Max Privacy-adres</string>
+    <string name="send_addr_type_public_offline">Openbare offline-adres</string>
     <string name="send_sending_to_handle">Verzenden aan %1$s</string>
     <string name="send_resolving_handle">Handle oplossen…</string>
     <string name="send_validating">Valideren…</string>

@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Онлајн)</string>
     <string name="send_addr_type_regular">Редовна адреса</string>
     <string name="send_addr_type_max_privacy">Макс. приватност-адреса</string>
+    <string name="send_addr_type_public_offline">Јавна офлинска адреса</string>
     <string name="send_sending_to_handle">Слање на %1$s</string>
     <string name="send_resolving_handle">Решавање корисничког имена…</string>
     <string name="send_validating">Валидација…</string>

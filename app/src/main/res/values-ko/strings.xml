@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (온라인)</string>
     <string name="send_addr_type_regular">일반 주소</string>
     <string name="send_addr_type_max_privacy">맥스 프라이버시 주소</string>
+    <string name="send_addr_type_public_offline">퍼블릭 오프라인 주소</string>
     <string name="send_sending_to_handle">%1$s(으)로 보내기</string>
     <string name="send_resolving_handle">핸들 확인 중…</string>
     <string name="send_validating">확인 중…</string>

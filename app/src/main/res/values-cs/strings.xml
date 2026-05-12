@@ -1193,6 +1193,7 @@
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
     <string name="send_addr_type_regular">Běžná adresa</string>
     <string name="send_addr_type_max_privacy">Max soukromí-adr</string>
+    <string name="send_addr_type_public_offline">Veřejná offline-adr</string>
     <string name="send_sending_to_handle">Odesílání na %1$s</string>
     <string name="send_resolving_handle">Rozlišování handle...</string>
     <string name="send_validating">Validace...</string>

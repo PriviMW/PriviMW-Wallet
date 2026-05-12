@@ -1193,6 +1193,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="send_addr_type_sbbs">SBBS (En línea)</string>
     <string name="send_addr_type_regular">Dirección regular</string>
     <string name="send_addr_type_max_privacy">Dirección máxima privacidad</string>
+    <string name="send_addr_type_public_offline">Dirección pública fuera de línea</string>
     <string name="send_sending_to_handle">Enviando a %1$s</string>
     <string name="send_resolving_handle">Resolviendo handle…</string>
     <string name="send_validating">Validando…</string>

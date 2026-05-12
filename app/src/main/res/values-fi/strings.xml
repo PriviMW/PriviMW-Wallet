@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
     <string name="send_addr_type_regular">Normaali osoite</string>
     <string name="send_addr_type_max_privacy">Maks. yksityisyys-osoite</string>
+    <string name="send_addr_type_public_offline">Julkinen offline-osoite</string>
     <string name="send_sending_to_handle">Lahetetaan kohteeseen %1$s</string>
     <string name="send_resolving_handle">Handlea resolvoidaan...</string>
     <string name="send_validating">Validoidaan...</string>

@@ -50,6 +50,7 @@ private sealed class AddrType {
     data object Sbbs : AddrType()
     data object Regular : AddrType()
     data object MaxPrivacy : AddrType()
+    data object PublicOffline : AddrType()
 }
 
 @Composable
@@ -57,6 +58,7 @@ private fun addrTypeLabel(type: AddrType?): String = when (type) {
     is AddrType.Sbbs -> stringResource(R.string.send_addr_type_sbbs)
     is AddrType.Regular -> stringResource(R.string.send_addr_type_regular)
     is AddrType.MaxPrivacy -> stringResource(R.string.send_addr_type_max_privacy)
+    is AddrType.PublicOffline -> stringResource(R.string.send_addr_type_public_offline)
     null -> ""
 }
 
@@ -200,8 +202,12 @@ fun SendScreen(
                 val apiType = result.optString("type", "")
                 addrType = when {
                     apiType == "max_privacy" || apiType == "max_privacy_offline" -> AddrType.MaxPrivacy
+                    apiType == "public" || apiType == "public_offline" -> AddrType.PublicOffline
                     Regex("^[0-9a-fA-F]{62,68}$").matches(address.trim()) -> AddrType.Sbbs
                     else -> AddrType.Regular
+                }
+                addrType?.let {
+                    if (it is AddrType.MaxPrivacy || it is AddrType.PublicOffline) sendOffline = true
                 }
                 validatingAddr = false
             } catch (_: Exception) {}
@@ -830,10 +836,11 @@ fun SendScreen(
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
-                    // Determine txType: SBBS=regular, MaxPrivacy=max_privacy, offline=offline, rest=regular
+                    // Determine txType: SBBS=regular, MaxPrivacy=max_privacy, PublicOffline=public_offline, rest=offline
                     val txType = when {
                         addrType is AddrType.Sbbs -> "regular"
                         addrType is AddrType.MaxPrivacy -> "max_privacy"
+                        addrType is AddrType.PublicOffline -> "public_offline"
                         sendOffline -> "offline"
                         else -> "regular"
                     }

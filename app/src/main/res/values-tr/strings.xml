@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Çevrimiçi)</string>
     <string name="send_addr_type_regular">Normal adres</string>
     <string name="send_addr_type_max_privacy">Maksimum Gizlilik adresi</string>
+    <string name="send_addr_type_public_offline">Herkese açık offline adres</string>
     <string name="send_sending_to_handle">%1$s\'e gönderiliyor</string>
     <string name="send_resolving_handle">Kullanıcı adı çözümleniyor...</string>
     <string name="send_validating">Doğrulanıyor...</string>

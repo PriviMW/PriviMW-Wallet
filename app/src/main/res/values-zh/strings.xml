@@ -1196,6 +1196,7 @@
     <string name="send_addr_type_sbbs">SBBS（在线）</string>
     <string name="send_addr_type_regular">普通地址</string>
     <string name="send_addr_type_max_privacy">最大隐私地址</string>
+    <string name="send_addr_type_public_offline">公共离线地址</string>
     <string name="send_sending_to_handle">发送至 %1$s</string>
     <string name="send_resolving_handle">正在解析 Handle…</string>
     <string name="send_validating">验证中…</string>

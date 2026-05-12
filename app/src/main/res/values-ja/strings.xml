@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS（オンライン）</string>
     <string name="send_addr_type_regular">レギュラーアドレス</string>
     <string name="send_addr_type_max_privacy">最大プライバシーアドレス</string>
+    <string name="send_addr_type_public_offline">パブリックオフラインアドレス</string>
     <string name="send_sending_to_handle">%1$sに送金</string>
     <string name="send_resolving_handle">ハンドルを解決中…</string>
     <string name="send_validating">検証中…</string>

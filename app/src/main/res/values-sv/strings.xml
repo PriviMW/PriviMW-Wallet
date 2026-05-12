@@ -1191,6 +1191,7 @@
     <string name="send_addr_type_sbbs">SBBS (Online)</string>
     <string name="send_addr_type_regular">Vanlig adress</string>
     <string name="send_addr_type_max_privacy">Max integritetsadress</string>
+    <string name="send_addr_type_public_offline">Publik offline-adress</string>
     <string name="send_sending_to_handle">Skicka till %1$s</string>
     <string name="send_resolving_handle">Handle löses upp…</string>
     <string name="send_validating">Valideras…</string>

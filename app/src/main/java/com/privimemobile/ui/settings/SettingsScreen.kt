@@ -79,6 +79,15 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
     val nodeConn by WalletEventBus.nodeConnection.collectAsState(initial = NodeConnectionEvent(false))
+    var isOwnNode by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
+        isOwnNode = trusted || SecureStorage.getString("node_mode") == "mobile"
+    }
+    LaunchedEffect(nodeConn) {
+        val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
+        isOwnNode = trusted || SecureStorage.getString("node_mode") == "mobile"
+    }
     val syncProgress by WalletEventBus.syncProgress.collectAsState()
     val walletStatus by WalletEventBus.beamStatus.collectAsState()
 
@@ -1297,7 +1306,7 @@ fun SettingsScreen(
                 }
             }
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
-            SettingsAction(stringResource(R.string.settings_show_public_offline_address), stringResource(R.string.settings_public_offline_desc)) {
+            SettingsAction(stringResource(R.string.settings_show_public_offline_address), stringResource(R.string.settings_public_offline_desc), enabled = isOwnNode) {
                 try {
                     WalletManager.walletInstance?.getPublicAddress()
                     toast(context.getString(R.string.settings_requesting_public_addr))
@@ -1827,14 +1836,14 @@ private fun SettingsToggle(label: String, desc: String, checked: Boolean, disabl
 }
 
 @Composable
-private fun SettingsAction(label: String, desc: String = "", onClick: () -> Unit) {
+private fun SettingsAction(label: String, desc: String = "", enabled: Boolean = true, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 10.dp),
     ) {
-        Text(label, color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = if (enabled) C.accent else C.textMuted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         if (desc.isNotEmpty()) {
             Text(desc, color = C.textMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }

@@ -1524,7 +1524,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="chat_timer_1h">1 hora</string>
     <string name="chat_timer_1day">1 día</string>
     <string name="chat_next_message_hint">El próximo mensaje se autodestruirá. No cambia la configuración del otro.</string>
-    <string name="chat_reacted_on"> reaccionó el </string>
+    <string name="chat_reacted_on"> reaccionó el %s</string>
     <string name="chat_messages_selected">%1$d mensajes seleccionados</string>
     <string name="chat_group_invite">👥 Invitación de grupo</string>
     <string name="chat_group_invite_preview">👥 Invitación de grupo: %1$s (%2$d miembros)</string>

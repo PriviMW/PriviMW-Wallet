@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 jam</string>
     <string name="chat_timer_1day">1 hari</string>
     <string name="chat_next_message_hint">Pesan berikutnya akan otomatis dihapus setelah waktu ini. Tidak mengubah pengaturan orang lain.</string>
-    <string name="chat_reacted_on">bereaksi pada</string>
+    <string name="chat_reacted_on">bereaksi pada %s</string>
     <string name="chat_messages_selected">%1$d pesan dipilih</string>
     <string name="chat_group_invite">👥 Undangan Grup</string>
     <string name="chat_group_invite_preview">👥 Undangan grup: %1$s (%2$d anggota)</string>

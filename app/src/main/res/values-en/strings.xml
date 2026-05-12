@@ -1826,7 +1826,7 @@
     <string name="chat_timer_1h">1 hour</string>
     <string name="chat_timer_1day">1 day</string>
     <string name="chat_next_message_hint">Next message will auto-delete after this time. Does not change the other person\'s settings.</string>
-    <string name="chat_reacted_on">reacted on</string>
+    <string name="chat_reacted_on">reacted on %s</string>
     <string name="chat_messages_selected">%1$d messages selected</string>
     <string name="chat_group_invite">👥 Group Invite</string>
     <string name="chat_group_invite_preview">👥 Group invite: %1$s (%2$d members)</string>

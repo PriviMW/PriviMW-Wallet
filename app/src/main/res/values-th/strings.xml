@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 ชั่วโมง</string>
     <string name="chat_timer_1day">1 วัน</string>
     <string name="chat_next_message_hint">ข้อความถัดไปจะลบตัวเองหลังเวลานี้ ไม่เปลี่ยนการตั้งค่าของอีกฝ่าย</string>
-    <string name="chat_reacted_on">react เมื่อ</string>
+    <string name="chat_reacted_on">react เมื่อ %s</string>
     <string name="chat_messages_selected">เลือก %1$d ข้อความ</string>
     <string name="chat_group_invite">👥 คำเชิญเข้ากลุ่ม</string>
     <string name="chat_group_invite_preview">👥 คำเชิญเข้ากลุ่ม: %1$s (%2$d สมาชิก)</string>

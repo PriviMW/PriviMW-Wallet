@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 uur</string>
     <string name="chat_timer_1day">1 dag</string>
     <string name="chat_next_message_hint">Volgend bericht wordt automatisch verwijderd na deze tijd. Dit wijzigt niet de instellingen van de andere persoon.</string>
-    <string name="chat_reacted_on">reageerde op</string>
+    <string name="chat_reacted_on">reageerde op %s</string>
     <string name="chat_messages_selected">%1$d berichten geselecteerd</string>
     <string name="chat_group_invite">👫 Groepsuitnodiging</string>
     <string name="chat_group_invite_preview">👫 Groepsuitnodiging: %1$s (%2$d leden)</string>

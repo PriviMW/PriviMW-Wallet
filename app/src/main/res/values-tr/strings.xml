@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 saat</string>
     <string name="chat_timer_1day">1 gün</string>
     <string name="chat_next_message_hint">Sonraki mesaj bu zaman sonra otomatik silinecek. Kişinin ayarlarını değiştirmiyor.</string>
-    <string name="chat_reacted_on">tepkı verdi</string>
+    <string name="chat_reacted_on">tepkı verdi %s</string>
     <string name="chat_messages_selected">%1$d mesaj seçildi</string>
     <string name="chat_group_invite">👥 Grup Daveti</string>
     <string name="chat_group_invite_preview">👥 Grup daveti: %1$s (%2$d üyeler)</string>

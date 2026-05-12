@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 сат</string>
     <string name="chat_timer_1day">1 дан</string>
     <string name="chat_next_message_hint">Следећа порука ће се аутоматски обрисати након овог времена. Не мења подешавања друге особе.</string>
-    <string name="chat_reacted_on">реаговало на</string>
+    <string name="chat_reacted_on">реаговало на %s</string>
     <string name="chat_messages_selected">%1$d порука изабрано</string>
     <string name="chat_group_invite">👥 Позив у групу</string>
     <string name="chat_group_invite_preview">👥 Позив у групу: %1$s (%2$d чланова)</string>

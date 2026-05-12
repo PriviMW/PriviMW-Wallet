@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 tunti</string>
     <string name="chat_timer_1day">1 päivä</string>
     <string name="chat_next_message_hint">Seuraava viesti poistuu automaattisesti tén ajan jalkeen. Ei muuta muiden asetuksia.</string>
-    <string name="chat_reacted_on">vastasi</string>
+    <string name="chat_reacted_on">vastasi %s</string>
     <string name="chat_messages_selected">%1$d viestiä valittu</string>
     <string name="chat_group_invite">👥 Ryhmäkutsu</string>
     <string name="chat_group_invite_preview">👥 Ryhmäkutsu: %1$s (%2$d jäsentä)</string>

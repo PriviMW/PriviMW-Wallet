@@ -1524,7 +1524,7 @@
     <string name="chat_timer_1h">1 hodina</string>
     <string name="chat_timer_1day">1 den</string>
     <string name="chat_next_message_hint">Další zpráva se po této době automaticky smaže. Nemění nastavení druhé osoby.</string>
-    <string name="chat_reacted_on">reagoval na</string>
+    <string name="chat_reacted_on">reagoval na %s</string>
     <string name="chat_messages_selected">%1$d zpráv vybráno</string>
     <string name="chat_group_invite">Skupinové pozvání</string>
     <string name="chat_group_invite_preview">Skupinové pozvání: %1$s (%2$d členů)</string>

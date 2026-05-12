@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 giờ</string>
     <string name="chat_timer_1day">1 ngày</string>
     <string name="chat_next_message_hint">Tin nhắn tiếp theo sẽ tự xóa sau thời gian này. Không thay đổi cài đặt của người kia.</string>
-    <string name="chat_reacted_on">đã phản ứng</string>
+    <string name="chat_reacted_on">đã phản ứng %s</string>
     <string name="chat_messages_selected">Đã chọn %1$d tin nhắn</string>
     <string name="chat_group_invite">👥 Lời mời nhóm</string>
     <string name="chat_group_invite_preview">👥 Lời mời nhóm: %1$s (%2$d thành viên)</string>

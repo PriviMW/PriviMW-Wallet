@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 гадзіна</string>
     <string name="chat_timer_1day">1 дзень</string>
     <string name="chat_next_message_hint">Наступнае паведамленне будзе аўтаматычна выдалена праз гэты час. Не змяняе налады іншага карыстальніка.</string>
-    <string name="chat_reacted_on">рэагаваў на</string>
+    <string name="chat_reacted_on">рэагаваў на %s</string>
     <string name="chat_messages_selected">%1$d паведамленняў выбрана</string>
     <string name="chat_group_invite">👥 Запрашэнне ў групу</string>
     <string name="chat_group_invite_preview">👥 Запрашэнне ў групу: %1$s (%2$d удзельнікаў)</string>

@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 година</string>
     <string name="chat_timer_1day">1 день</string>
     <string name="chat_next_message_hint">Натисніть, щоб надіслати наступне повідомлення</string>
-    <string name="chat_reacted_on">Відреагував на</string>
+    <string name="chat_reacted_on">Відреагував на %s</string>
     <string name="chat_messages_selected">Вибрано %1$d повідомлень</string>
     <string name="chat_group_invite">Запрошення в групу</string>
     <string name="chat_group_invite_preview">👥 Запрошення в групу: %1$s (%2$d учасників)</string>

@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 timme</string>
     <string name="chat_timer_1day">1 dag</string>
     <string name="chat_next_message_hint">Nästa meddelande raderas automatiskt efter denna tid. Ändrar inte den andras inställningar.</string>
-    <string name="chat_reacted_on">reagerade på</string>
+    <string name="chat_reacted_on">reagerade på %s</string>
     <string name="chat_messages_selected">%1$d meddelanden utvalda</string>
     <string name="chat_group_invite">👥 Grupp-inbjudan</string>
     <string name="chat_group_invite_preview">👥 Grupp-inbjudan: %1$s (%2$d medlemmar)</string>

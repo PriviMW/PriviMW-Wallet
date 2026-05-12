@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">残高を非表示</string>
     <string name="wallet_id_badge">識別子: %1$d</string>
     <string name="send_title">送金</string>
-    <string name="send_address_placeholder">宛先アドレスを入力</string>
+    <string name="send_address_placeholder">宛先アドレスまたは@handleを入力</string>
     <string name="send_amount_label">送信数量</string>
     <string name="send_remaining_label">残高</string>
     <string name="send_beam_remaining">BEAM 残額</string>

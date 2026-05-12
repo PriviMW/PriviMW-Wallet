@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">잔액 숨기기</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">보내기</string>
-    <string name="send_address_placeholder">받는 사람 주소 입력</string>
+    <string name="send_address_placeholder">받는 사람 주소 또는 @handle 입력</string>
     <string name="send_amount_label">보낼 양</string>
     <string name="send_remaining_label">남아있는</string>
     <string name="send_beam_remaining">BEAM 남은 금액</string>

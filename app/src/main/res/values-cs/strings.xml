@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Skrýt zůstatek</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">Odeslat</string>
-    <string name="send_address_placeholder">Zde vložte adresu příjemce</string>
+    <string name="send_address_placeholder">Zde vložte adresu příjemce nebo @handle</string>
     <string name="send_amount_label">Částka k odeslání</string>
     <string name="send_remaining_label">Zbývající</string>
     <string name="send_beam_remaining">BEAM zbývá</string>

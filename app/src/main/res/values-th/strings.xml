@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">ซ่อนยอดเงิน</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">โอน</string>
-    <string name="send_address_placeholder">วางที่อยู่ผู้รับที่นี่</string>
+    <string name="send_address_placeholder">วางที่อยู่ผู้รับหรือ@handle ที่นี่</string>
     <string name="send_amount_label">จำนวนโอน</string>
     <string name="send_remaining_label">ที่เหลืออยู่</string>
     <string name="send_beam_remaining">BEAM คงเหลือ</string>

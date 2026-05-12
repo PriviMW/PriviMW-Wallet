@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Masquer le solde</string>
     <string name="wallet_id_badge">ID : %1$d</string>
     <string name="send_title">Envoyer</string>
-    <string name="send_address_placeholder">Coller l\'adresse du destinataire ici</string>
+    <string name="send_address_placeholder">Coller adresse du destinataire ou @handle ici</string>
     <string name="send_amount_label">Montant à envoyer</string>
     <string name="send_remaining_label">Restant</string>
     <string name="send_beam_remaining">BEAM restants</string>

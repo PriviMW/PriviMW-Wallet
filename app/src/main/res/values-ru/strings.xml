@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Скрыть баланс</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">Отправить</string>
-    <string name="send_address_placeholder">Вставьте адрес получателя здесь</string>
+    <string name="send_address_placeholder">Вставить адрес получателя или @handle здесь</string>
     <string name="send_amount_label">Сумма</string>
     <string name="send_remaining_label">Остаток</string>
     <string name="send_beam_remaining">Осталось BEAM</string>

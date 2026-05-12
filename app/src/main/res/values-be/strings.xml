@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Схаваць баланс</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">Адправіць</string>
-    <string name="send_address_placeholder">Устаўце сюды адрас атрымальніка</string>
+    <string name="send_address_placeholder">Устаўце сюды адрас атрымальніка або @handle</string>
     <string name="send_amount_label">Сума для адпраўкі</string>
     <string name="send_remaining_label">Засталося</string>
     <string name="send_beam_remaining">BEAM засталося</string>

@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Dölj saldo</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">Skicka</string>
-    <string name="send_address_placeholder">Klistra in mottagarens adress här</string>
+    <string name="send_address_placeholder">Klistra in mottagarens adress eller @handle här</string>
     <string name="send_amount_label">Belopp att skicka</string>
     <string name="send_remaining_label">Återstående</string>
     <string name="send_beam_remaining">BEAM återstående</string>

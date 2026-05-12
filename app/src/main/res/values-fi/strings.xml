@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">Piilota saldo</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">Lähetä</string>
-    <string name="send_address_placeholder">Liitä tai kirjoita Beam-osoite</string>
+    <string name="send_address_placeholder">Liitä Beam-osoite tai @handle</string>
     <string name="send_amount_label">Määrä</string>
     <string name="send_remaining_label">Jäännös</string>
     <string name="send_beam_remaining">BEAM-käytössä päällä</string>

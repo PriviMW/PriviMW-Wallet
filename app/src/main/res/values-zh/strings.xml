@@ -194,7 +194,7 @@
     <string name="wallet_hide_balance">隐藏余额</string>
     <string name="wallet_id_badge">ID: %1$d</string>
     <string name="send_title">付款</string>
-    <string name="send_address_placeholder">在此粘贴收件人地址</string>
+    <string name="send_address_placeholder">在此粘贴收件人地址或@handle</string>
     <string name="send_amount_label">付款金额</string>
     <string name="send_remaining_label">剩余</string>
     <string name="send_beam_remaining">剩余 BEAM</string>

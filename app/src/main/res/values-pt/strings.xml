@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Max. Privacidade</string>
     <string name="receive_desc_regular_default">Endereco padrao. O remetente pode pagar online ou offline.</string>
-    <string name="receive_desc_sbbs">Endereco curto classico. Ambas carteiras devem estar abertas simultaneamente.</string>
+    <string name="receive_desc_sbbs">Endereco curto classico. Ambas carteiras devem estar abertas simultaneamente. Usar para retiros CEX.</string>
     <string name="receive_desc_max_privacy">Anonimato maximo. O remetente nao precisa estar online.</string>
     <string name="receive_desc_regular_remote">O remetente pode pagar online ou offline. Ambos os tipos de transacao sao suportados.</string>
     <string name="receive_fee_regular_format">Taxa: %1$s BEAM</string>

@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Макс приватност</string>
     <string name="receive_desc_regular_default">Подразумевана адреса. Шаљник може платити онлајн или офлајн.</string>
-    <string name="receive_desc_sbbs">Класична кратка адреса. Оба новчаника морају бити отворена истовремено.</string>
+    <string name="receive_desc_sbbs">Класична кратка адреса. Оба новчаника морају бити отворена истовремено. Користити за CEX исплате.</string>
     <string name="receive_desc_max_privacy">Максимална анонимност. Шаљник не мора бити онлајн.</string>
     <string name="receive_desc_regular_remote">Шаљник може платити онлајн или офлајн. Подржане су оба типа трансакција.</string>
     <string name="receive_fee_regular_format">Наканада: %1$s BEAM</string>

@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Максімальная прыватнасць</string>
     <string name="receive_desc_regular_default">Прадвызначаны адрас. Адпраўнік можа плаціць анлайн або афлайн.</string>
-    <string name="receive_desc_sbbs">Класічны кароткі адрас. Абодва гаманцы павінны быць адкрыты адначасова.</string>
+    <string name="receive_desc_sbbs">Класічны кароткі адрас. Абодва гаманцы павінны быць адкрыты адначасова. Выкарыстоўвайце для вываду з CEX.</string>
     <string name="receive_desc_max_privacy">Максімальная ананімнасць. Адпраўніку не трэба быць анлайн.</string>
     <string name="receive_desc_regular_remote">Адпраўнік можа плаціць анлайн або афлайн. Абодва тыпы транзакцый падтрымліваюцца.</string>
     <string name="receive_fee_regular_format">Камісія: %1$s BEAM</string>

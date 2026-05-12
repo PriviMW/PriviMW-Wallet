@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Riêng tư tối đa</string>
     <string name="receive_desc_regular_default">Địa chỉ mặc định. Người gửi có thể thanh toán trực tuyến hoặc ngoại tuyến.</string>
-    <string name="receive_desc_sbbs">Địa chỉ ngắn cổ điển. Cả hai ví phải mở cùng lúc.</string>
+    <string name="receive_desc_sbbs">Địa chỉ ngắn cổ điển. Cả hai ví phải mở cùng lúc. Dùng để rút từ CEX.</string>
     <string name="receive_desc_max_privacy">Ẩn danh tối đa. Người gửi không cần trực tuyến.</string>
     <string name="receive_desc_regular_remote">Người gửi có thể thanh toán trực tuyến hoặc ngoại tuyến. Hỗ trợ cả hai loại giao dịch.</string>
     <string name="receive_fee_regular_format">Phí: %1$s BEAM</string>

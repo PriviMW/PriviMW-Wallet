@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">ความเป็นส่วนตัวสูงสุด</string>
     <string name="receive_desc_regular_default">ที่อยู่เริ่มต้น ผู้ส่งสามารถชำระแบบออนไลน์หรือออฟไลน์</string>
-    <string name="receive_desc_sbbs">ที่อยู่แบบสั้นแบบดั้งเดิม กระเป๋าเงินทั้งสองต้องเปิดพร้อมกัน</string>
+    <string name="receive_desc_sbbs">ที่อยู่แบบสั้นแบบดั้งเดิม กระเป๋าเงินทั้งสองต้องเปิดพร้อมกัน ใช้สำหรับถอนจาก CEX</string>
     <string name="receive_desc_max_privacy">การไมะเปิดเผยตัวตนสูงสุด ผู้ส่งไม่จำเป็นต้องออนไลน์</string>
     <string name="receive_desc_regular_remote">ผู้ส่งสามารถชำระแบบออนไลน์หรือออฟไลน์ รองรับทั้งสองประเภทธุรกรรม</string>
     <string name="receive_fee_regular_format">ค่าธรรมเนียม: %1$s BEAM</string>

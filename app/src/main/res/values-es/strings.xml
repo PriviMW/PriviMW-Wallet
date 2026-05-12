@@ -1215,7 +1215,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Máx. Privacidad</string>
     <string name="receive_desc_regular_default">Dirección predeterminada. El remitente puede pagar en línea o sin conexión.</string>
-    <string name="receive_desc_sbbs">Dirección corta clásica. Ambas billeteras deben estar abiertas simultáneamente.</string>
+    <string name="receive_desc_sbbs">Dirección corta clásica. Ambas billeteras deben estar abiertas simultáneamente. Use para retiros de CEX.</string>
     <string name="receive_desc_max_privacy">Máximo anonimato. El remitente no necesita estar en línea.</string>
     <string name="receive_desc_regular_remote">El remitente puede pagar en línea o sin conexión. Ambos tipos de transacción compatibles.</string>
     <string name="receive_fee_regular_format">Comisión: %1$s BEAM</string>

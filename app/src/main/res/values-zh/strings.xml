@@ -1218,7 +1218,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">最大隐私</string>
     <string name="receive_desc_regular_default">默认地址。发送方可在线或离线支付。</string>
-    <string name="receive_desc_sbbs">经典短地址。双方钱包需同时在线。</string>
+    <string name="receive_desc_sbbs">经典短地址。双方钱包需同时在线。用于交易所提款。</string>
     <string name="receive_desc_max_privacy">最大匿名性。发送方无需在线。</string>
     <string name="receive_desc_regular_remote">发送方可在线或离线支付。支持两种交易类型。</string>
     <string name="receive_fee_regular_format">手续费：%1$s BEAM</string>

@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Maksimum Gizlilik</string>
     <string name="receive_desc_regular_default">Varsayılan adres. Gönderici çevrimiçi veya çevrimdışı ödeme yapabilir.</string>
-    <string name="receive_desc_sbbs">Klasik kısa adres. Her iki cüzdan da aynı anda açık olmalıdır.</string>
+    <string name="receive_desc_sbbs">Klasik kısa adres. Her iki cüzdan da aynı anda açık olmalıdır. CEX çekimleri için kullanın.</string>
     <string name="receive_desc_max_privacy">Maksimum anonimlik. Göndericinin çevrimiçi olmasına gerek yok.</string>
     <string name="receive_desc_regular_remote">Gönderici çevrimiçi veya çevrimdışı ödeme yapabilir. Her iki işlem tipi de desteklenir.</string>
     <string name="receive_fee_regular_format">Ücret: %1$s BEAM</string>

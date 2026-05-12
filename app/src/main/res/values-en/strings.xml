@@ -1424,7 +1424,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Max Privacy</string>
     <string name="receive_desc_regular_default">Default address. Sender can pay online or offline.</string>
-    <string name="receive_desc_sbbs">Classic short address. Both wallets must be open simultaneously.</string>
+    <string name="receive_desc_sbbs">Classic short address. Both wallets must be open simultaneously. Use for CEX withdrawals.</string>
     <string name="receive_desc_max_privacy">Maximum anonymity. Sender does not need to be online.</string>
     <string name="receive_desc_regular_remote">Sender can pay online or offline. Both transaction types supported.</string>
     <string name="receive_fee_regular_format">Fee: %1$s BEAM</string>

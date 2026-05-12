@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Maximale Privatsphäre</string>
     <string name="receive_desc_regular_default">Standard-Adresse. Sender kann online oder offline zahlen.</string>
-    <string name="receive_desc_sbbs">Klassische kurze Adresse. Beide Wallets müssen gleichzeitig geöffnet sein.</string>
+    <string name="receive_desc_sbbs">Klassische kurze Adresse. Beide Wallets müssen gleichzeitig geöffnet sein. Für CEX-Abhebungen verwenden.</string>
     <string name="receive_desc_max_privacy">Maximale Anonymität. Sender muss nicht online sein.</string>
     <string name="receive_desc_regular_remote">Sender kann online oder offline zahlen. Beide Transaktionstypen unterstützt.</string>
     <string name="receive_fee_regular_format">Gebühr: %1$s BEAM</string>

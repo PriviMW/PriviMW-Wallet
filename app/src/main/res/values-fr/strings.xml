@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Confidentialité maximale</string>
     <string name="receive_desc_regular_default">Adresse par défaut. L\'expéditeur peut payer en ligne ou hors ligne.</string>
-    <string name="receive_desc_sbbs">Adresse courte classique. Les deux portefeuilles doivent être ouverts simultanément.</string>
+    <string name="receive_desc_sbbs">Adresse courte classique. Les deux portefeuilles doivent être ouverts simultanément. À utiliser pour les retraits CEX.</string>
     <string name="receive_desc_max_privacy">Anonymat maximum. L\'expéditeur n\'a pas besoin d\'être en ligne.</string>
     <string name="receive_desc_regular_remote">L\'expéditeur peut payer en ligne ou hors ligne. Les deux types de transactions sont supportés.</string>
     <string name="receive_fee_regular_format">Frais : %1$s BEAM</string>

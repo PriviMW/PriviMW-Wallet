@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Privasi Maks</string>
     <string name="receive_desc_regular_default">Alamat default. Pengirim dapat bayar online atau offline.</string>
-    <string name="receive_desc_sbbs">Alamat pendek klasik. Kedua dompet harus terbuka secara bersamaan.</string>
+    <string name="receive_desc_sbbs">Alamat pendek klasik. Kedua dompet harus terbuka secara bersamaan. Gunakan untuk penarikan CEX.</string>
     <string name="receive_desc_max_privacy">Anonimitas maksimum. Pengirim tidak perlu online.</string>
     <string name="receive_desc_regular_remote">Pengirim dapat bayar online atau offline. Kedua jenis transaksi didukung.</string>
     <string name="receive_fee_regular_format">Biaya: %1$s BEAM</string>

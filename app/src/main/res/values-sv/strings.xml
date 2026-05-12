@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Max integritet</string>
     <string name="receive_desc_regular_default">Standardadress. Avsändaren kan betala online eller offline.</string>
-    <string name="receive_desc_sbbs">Klassisk kort adress. Båda plånbokarna måste vara öppna samtidigt.</string>
+    <string name="receive_desc_sbbs">Klassisk kort adress. Båda plånbokarna måste vara öppna samtidigt. Använd för CEX-uttag.</string>
     <string name="receive_desc_max_privacy">Maximal anonymitet. Avsändaren behöver inte vara online.</string>
     <string name="receive_desc_regular_remote">Avsändaren kan betala online eller offline. Båda transaktionstyperna stöds.</string>
     <string name="receive_fee_regular_format">Avgift: %1$s BEAM</string>

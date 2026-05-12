@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBSアドレス</string>
     <string name="receive_tab_max_privacy">最大プライバシー</string>
     <string name="receive_desc_regular_default">デフォルトのアドレス。送信者はオンラインまたはオフラインで支払えます。</string>
-    <string name="receive_desc_sbbs">クラシックな短いアドレス。両方のウォレットが同時に開いている必要があります。</string>
+    <string name="receive_desc_sbbs">クラシックな短いアドレス。両方のウォレットが同時に開いている必要があります。CEX出金に使用。</string>
     <string name="receive_desc_max_privacy">最大の匿名性。送信者はオンラインである必要がありません。</string>
     <string name="receive_desc_regular_remote">送信者はオンラインまたはオフラインで支払えます。両方の取引タイプに対応。</string>
     <string name="receive_fee_regular_format">手数料: %1$s BEAM</string>

@@ -1213,7 +1213,7 @@
     <string name="receive_tab_sbbs">SBBS</string>
     <string name="receive_tab_max_privacy">Max Privacy</string>
     <string name="receive_desc_regular_default">Indirizzo regolare predefinito per ricezione offline e online.</string>
-    <string name="receive_desc_sbbs">Indirizzo SBBS per ricezione online. Richiede wallet online.</string>
+    <string name="receive_desc_sbbs">Indirizzo SBBS per ricezione online. Richiede wallet online. Usare per prelievi CEX.</string>
     <string name="receive_desc_max_privacy">Indirizzo con massima anonimita\'. Monete spendibili immediatamente.</string>
     <string name="receive_desc_regular_remote">Indirizzo regolare. E\' possibile ricevere anche offline.</string>
     <string name="receive_fee_regular_format">Commissione: %1$s BEAM</string>

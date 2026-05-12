@@ -210,6 +210,7 @@ fun SwapScreen(
                         // Per-asset chips
                         assetIds.forEach { id ->
                             val ticker = com.privimemobile.wallet.assetTicker(id)
+                            val tickerWithId = if (id == 0) ticker else "$ticker($id)"
                             Surface(
                                 modifier = Modifier.clickable { filterAssetId = if (filterAssetId == id) -1 else id },
                                 shape = RoundedCornerShape(16.dp),
@@ -221,7 +222,7 @@ fun SwapScreen(
                                 ) {
                                     com.privimemobile.ui.components.AssetIcon(assetId = id, ticker = ticker, size = 16.dp)
                                     Spacer(Modifier.width(4.dp))
-                                    Text(ticker, color = if (filterAssetId == id) C.accent else C.textSecondary,
+                                    Text(tickerWithId, color = if (filterAssetId == id) C.accent else C.textSecondary,
                                         fontSize = 12.sp, fontWeight = FontWeight.Medium)
                                 }
                             }
@@ -360,10 +361,11 @@ fun SwapScreen(
                 )
                 val order = confirmOrder!!
                 val sendTicker = order.sendSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.sendAssetId) }
+                val sendTickerWithId = if (order.sendAssetId == 0) sendTicker else "$sendTicker(${order.sendAssetId})"
                 prompt.authenticate(
                     BiometricPrompt.PromptInfo.Builder()
                         .setTitle(context.getString(R.string.swap_confirm_title))
-                        .setSubtitle(context.getString(R.string.swap_authenticate_message, Helpers.formatBeam(order.sendAmount), sendTicker))
+                        .setSubtitle(context.getString(R.string.swap_authenticate_message, Helpers.formatBeam(order.sendAmount), sendTickerWithId))
                         .setNegativeButtonText(context.getString(R.string.lock_use_password_button))
                         .build()
                 )
@@ -377,7 +379,9 @@ fun SwapScreen(
     if (confirmOrder != null) {
         val order = confirmOrder!!
         val sendTicker = order.sendSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.sendAssetId) }
+        val sendTickerWithId = if (order.sendAssetId == 0) sendTicker else "$sendTicker(${order.sendAssetId})"
         val receiveTicker = order.receiveSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.receiveAssetId) }
+        val receiveTickerWithId = if (order.receiveAssetId == 0) receiveTicker else "$receiveTicker(${order.receiveAssetId})"
 
         AlertDialog(
             onDismissRequest = { confirmOrder = null },
@@ -404,7 +408,7 @@ fun SwapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.sendAssetId, ticker = sendTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                val sendText = "${Helpers.formatBeam(order.sendAmount)} $sendTicker"
+                                val sendText = "${Helpers.formatBeam(order.sendAmount)} $sendTickerWithId"
                                 BoxWithConstraints(contentAlignment = Alignment.CenterStart) {
                                     val density = LocalDensity.current
                                     val availPx = with(density) { maxWidth.toPx() }
@@ -438,7 +442,7 @@ fun SwapScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = order.receiveAssetId, ticker = receiveTicker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                val recvText = "${Helpers.formatBeam(order.receiveAmount)} $receiveTicker"
+                                val recvText = "${Helpers.formatBeam(order.receiveAmount)} $receiveTickerWithId"
                                 BoxWithConstraints(contentAlignment = Alignment.CenterStart) {
                                     val density = LocalDensity.current
                                     val availPx = with(density) { maxWidth.toPx() }
@@ -626,7 +630,9 @@ private fun SwapOfferCardContent(
     onCancel: () -> Unit,
 ) {
     val sendTicker = order.sendSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.sendAssetId) }
+    val sendTickerWithId = if (order.sendAssetId == 0) sendTicker else "$sendTicker(${order.sendAssetId})"
     val receiveTicker = order.receiveSname.ifEmpty { com.privimemobile.wallet.assetTicker(order.receiveAssetId) }
+    val receiveTickerWithId = if (order.receiveAssetId == 0) receiveTicker else "$receiveTicker(${order.receiveAssetId})"
 
     // Check if user can afford (sendAssetId = what viewer sends, perspective-aware)
     val neededAsset = order.sendAssetId
@@ -657,7 +663,7 @@ private fun SwapOfferCardContent(
                 com.privimemobile.ui.components.AssetIcon(assetId = order.sendAssetId, ticker = sendTicker, size = 24.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "${Helpers.formatBeam(order.sendAmount)} $sendTicker",
+                    "${Helpers.formatBeam(order.sendAmount)} $sendTickerWithId",
                     color = C.outgoing,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -666,7 +672,7 @@ private fun SwapOfferCardContent(
                 com.privimemobile.ui.components.AssetIcon(assetId = order.receiveAssetId, ticker = receiveTicker, size = 24.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "${Helpers.formatBeam(order.receiveAmount)} $receiveTicker",
+                    "${Helpers.formatBeam(order.receiveAmount)} $receiveTickerWithId",
                     color = C.incoming,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -753,7 +759,7 @@ private fun SwapOfferCardContent(
                     ),
                 ) {
                     if (!canAfford && order.isActive) {
-                        Text(stringResource(R.string.swap_insufficient_format, sendTicker), color = C.textMuted, fontSize = 12.sp)
+                        Text(stringResource(R.string.swap_insufficient_format, sendTickerWithId), color = C.textMuted, fontSize = 12.sp)
                     } else {
                         Text(stringResource(R.string.swap_accept_btn), color = C.bg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
@@ -816,21 +822,23 @@ private fun SwapHistoryCard(tx: TxItem, onClick: () -> Unit = {}, onDismiss: () 
                         val prefix = if (isSpending) "-" else "+"
                         val color = if (isSpending) C.outgoing else C.incoming
                         val ticker = com.privimemobile.wallet.assetTicker(ca.assetId)
+                        val tickerWithId = if (ca.assetId == 0) ticker else "$ticker(${ca.assetId})"
                         if (displayAmount > 0) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 com.privimemobile.ui.components.AssetIcon(assetId = ca.assetId, ticker = ticker, size = 20.dp)
                                 Spacer(Modifier.width(6.dp))
-                                Text("$prefix${Helpers.formatBeam(displayAmount)} $ticker", color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("$prefix${Helpers.formatBeam(displayAmount)} $tickerWithId", color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 } else {
                     // Fallback: single amount
                     val ticker = com.privimemobile.wallet.assetTicker(tx.assetId)
+                    val tickerWithId = if (tx.assetId == 0) ticker else "$ticker(${tx.assetId})"
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         com.privimemobile.ui.components.AssetIcon(assetId = tx.assetId, ticker = ticker, size = 20.dp)
                         Spacer(Modifier.width(6.dp))
-                        Text("${Helpers.formatBeam(tx.amount)} $ticker", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("${Helpers.formatBeam(tx.amount)} $tickerWithId", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 

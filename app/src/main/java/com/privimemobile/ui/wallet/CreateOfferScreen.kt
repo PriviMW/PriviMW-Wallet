@@ -119,11 +119,13 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
         val info = assetInfoCache[buyAssetId]
         info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${buyAssetId}"
     }
+    fun buyTickerWithId() = if (buyAssetId == 0) buyTicker() else "${buyTicker()}($buyAssetId)"
 
     fun sellTicker() = if (sellAssetId == 0) "BEAM" else {
         val info = assetInfoCache[sellAssetId]
         info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${sellAssetId}"
     }
+    fun sellTickerWithId() = if (sellAssetId == 0) sellTicker() else "${sellTicker()}($sellAssetId)"
 
     fun assetBalance(id: Int): Long {
         val bal = assetBalances[id] ?: return 0
@@ -202,7 +204,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                             size = 24.dp,
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(buyTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(buyTickerWithId(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
                 }
@@ -277,7 +279,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                                 size = 24.dp,
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(sellTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(sellTickerWithId(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                         Icon(Icons.Default.ArrowDropDown, null, tint = C.textSecondary)
                     }
@@ -334,7 +336,7 @@ fun CreateOfferScreen(onBack: () -> Unit = {}) {
                                 size = 24.dp,
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(buyTicker(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(buyTickerWithId(), color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -519,6 +521,7 @@ private fun AssetPickerDialog(
                         val info = assetInfoCache[id]
                         info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #$id"
                     }
+  val tickerWithId = if (id == 0) ticker else "$ticker($id)"
                     val bal = assetBalances[id]
                     val balText = if (bal != null) Helpers.formatBeam(bal.available + bal.shielded) else "0"
                     val isSelected = id == selectedId
@@ -535,7 +538,7 @@ private fun AssetPickerDialog(
                             com.privimemobile.ui.components.AssetIcon(assetId = id, ticker = ticker, size = 24.dp)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                ticker,
+                                tickerWithId,
                                 color = if (isSelected) C.accent else C.text,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 15.sp,

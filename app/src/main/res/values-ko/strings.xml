@@ -1214,7 +1214,7 @@
     <string name="receive_tab_max_privacy">Max Privacy</string>
     <string name="receive_desc_regular_default">기본 주소입니다. 발신자가 온라인 또는 오프라인으로 결제할 수 있습니다.</string>
     <string name="receive_desc_sbbs">클래식 단축 주소입니다. 양쪽 지갑이 동시에 열려 있어야 합니다. CEX 출금에 사용.</string>
-    <string name="receive_desc_max_privacy">최대 익명성입니다. 발신자가 온라인 상태일 필요가 없습니다.</string>
+    <string name="receive_desc_max_privacy">최대 64K 익명 집합의 최대 익명성입니다. 발신자가 온라인 상태일 필요가 없습니다.</string>
     <string name="receive_desc_regular_remote">발신자가 온라인 또는 오프라인으로 결제할 수 있습니다. 두 거래 유형 모두 지원됩니다.</string>
     <string name="receive_fee_regular_format">수수료: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">최소 %1$dh 동안 자금이 잠깁니다. 잠금 시간이 길수록 프라이버시가 강화됩니다. 설정에서 변경할 수 있습니다.</string>

@@ -1216,7 +1216,7 @@
     <string name="receive_tab_max_privacy">Max soukromí</string>
     <string name="receive_desc_regular_default">Výchozí adresa. Odesílatel může platit online nebo offline.</string>
     <string name="receive_desc_sbbs">Klasická krátká adresa. Obě peněženky musí být otevřeny současně. Použít pro výběry z CEX.</string>
-    <string name="receive_desc_max_privacy">Maximální anonymita. Odesílatel nemusí být online.</string>
+    <string name="receive_desc_max_privacy">Maximální anonymita s až 64K anonymní sadou. Odesílatel nemusí být online.</string>
     <string name="receive_desc_regular_remote">Odesílatel může platit online nebo offline. Podporovány oba typy transakcí.</string>
     <string name="receive_fee_regular_format">Poplatek: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">Prostředky budou uzamčeny na minimálně %1$dh. Delší doba uzamčení = silnější soukromí. Tento limit můžete změnit v Nastavení.</string>

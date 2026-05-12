@@ -1214,7 +1214,7 @@
     <string name="receive_tab_max_privacy">Maksimum Gizlilik</string>
     <string name="receive_desc_regular_default">Varsayılan adres. Gönderici çevrimiçi veya çevrimdışı ödeme yapabilir.</string>
     <string name="receive_desc_sbbs">Klasik kısa adres. Her iki cüzdan da aynı anda açık olmalıdır. CEX çekimleri için kullanın.</string>
-    <string name="receive_desc_max_privacy">Maksimum anonimlik. Göndericinin çevrimiçi olmasına gerek yok.</string>
+    <string name="receive_desc_max_privacy">64K\'ya kadar anonimlik kümesi ile maksimum anonimlik. Göndericinin çevrimiçi olmasına gerek yok.</string>
     <string name="receive_desc_regular_remote">Gönderici çevrimiçi veya çevrimdışı ödeme yapabilir. Her iki işlem tipi de desteklenir.</string>
     <string name="receive_fee_regular_format">Ücret: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">Fonlar minimum %1$dsaat kilitleme olacak. Daha uzun kilitleme süresi = daha güçlü gizlilik. Ayarlar\'dan değiştirebilirsiniz.</string>

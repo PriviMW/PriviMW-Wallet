@@ -1214,7 +1214,7 @@
     <string name="receive_tab_max_privacy">Maks. yksityisyys</string>
     <string name="receive_desc_regular_default">Vaki-osoite. Lahettaja voi olla online tai offline.</string>
     <string name="receive_desc_sbbs">Klassinen lyhyt osoite. Molempien lompikoiden on oltava samanaikaisesti auki. Käytä CEX-nostoissa.</string>
-    <string name="receive_desc_max_privacy">Maksimaalinen anonymiteetti. Lahettajan ei tarvitse olla online.</string>
+    <string name="receive_desc_max_privacy">Maksimaalinen anonymiteetti, jopa 64K anonymiteetti. Lahettajan ei tarvitse olla online.</string>
     <string name="receive_desc_regular_remote">Lahettaja voi olla online tai offline. Molemmat siirtotyypit tuettu.</string>
     <string name="receive_fee_regular_format">Maksu: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">Varat lukittu vähintään %1$dh ajaksi. Pitempi lukitus = vahvempi yksityisyys. Aika muokattavissa asetuksissa.</string>

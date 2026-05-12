@@ -1214,7 +1214,7 @@
     <string name="receive_tab_max_privacy">Max Privacy</string>
     <string name="receive_desc_regular_default">Indirizzo regolare predefinito per ricezione offline e online.</string>
     <string name="receive_desc_sbbs">Indirizzo SBBS per ricezione online. Richiede wallet online. Usare per prelievi CEX.</string>
-    <string name="receive_desc_max_privacy">Indirizzo con massima anonimita\'. Monete spendibili immediatamente.</string>
+    <string name="receive_desc_max_privacy">Massima anonimita\' con set di fino a 64K. Il mittente non deve essere online.</string>
     <string name="receive_desc_regular_remote">Indirizzo regolare. E\' possibile ricevere anche offline.</string>
     <string name="receive_fee_regular_format">Commissione: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">I fondi saranno bloccati per almeno %1$dh. Piu\' tempo = piu\' privacy. Puoi cambiarlo nelle Impostazioni.</string>

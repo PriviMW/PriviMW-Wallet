@@ -1219,7 +1219,7 @@
     <string name="receive_tab_max_privacy">Макс. Приватность</string>
     <string name="receive_desc_regular_default">Стандартный адрес. Отправитель может платить онлайн или офлайн.</string>
     <string name="receive_desc_sbbs">Классический короткий адрес. Оба кошелька должны быть открыты одновременно. Используйте для вывода с CEX.</string>
-    <string name="receive_desc_max_privacy">Максимальная анонимность. Отправителю не нужно быть онлайн.</string>
+    <string name="receive_desc_max_privacy">Максимальная анонимность с набором до 64K. Отправителю не нужно быть онлайн.</string>
     <string name="receive_desc_regular_remote">Отправитель может платить онлайн или офлайн. Поддерживаются оба типа транзакций.</string>
     <string name="receive_fee_regular_format">Комиссия: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">Средства будут заблокированы минимум на %1$dч. Дольше блокировка = выше приватность. Можно изменить в Настройках.</string>

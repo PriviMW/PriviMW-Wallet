@@ -1425,7 +1425,7 @@
     <string name="receive_tab_max_privacy">Max Privacy</string>
     <string name="receive_desc_regular_default">Default address. Sender can pay online or offline.</string>
     <string name="receive_desc_sbbs">Classic short address. Both wallets must be open simultaneously. Use for CEX withdrawals.</string>
-    <string name="receive_desc_max_privacy">Maximum anonymity. Sender does not need to be online.</string>
+    <string name="receive_desc_max_privacy">Maximum anonymity with up to 64K anonymity set. Sender does not need to be online.</string>
     <string name="receive_desc_regular_remote">Sender can pay online or offline. Both transaction types supported.</string>
     <string name="receive_fee_regular_format">Fee: %1$s BEAM</string>
     <string name="receive_max_privacy_locked">Funds will be locked for a minimum of %1$dh. Longer lock time = stronger privacy. You can change this in Settings.</string>

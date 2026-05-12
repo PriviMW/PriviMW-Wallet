@@ -514,7 +514,23 @@ fun SendScreen(
                 com.privimemobile.ui.components.AssetIcon(assetId = selectedAssetId, ticker = ticker, size = 36.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(ticker, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(ticker, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        if (selectedAssetId != 0) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = C.border,
+                            ) {
+                                Text(
+                                    stringResource(R.string.wallet_id_badge, selectedAssetId),
+                                    color = C.textSecondary,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
                     Text(
                         stringResource(R.string.send_available_balance, Helpers.formatBeam(assetAvailable), ticker),
                         color = C.textMuted,
@@ -912,12 +928,28 @@ fun SendScreen(
                             com.privimemobile.ui.components.AssetIcon(assetId = asset.assetId, ticker = asset.ticker, size = 36.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    asset.ticker,
-                                    color = if (isSelected) C.accent else C.text,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        asset.ticker,
+                                        color = if (isSelected) C.accent else C.text,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    if (asset.assetId != 0) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = C.border,
+                                        ) {
+                                            Text(
+                                                stringResource(R.string.wallet_id_badge, asset.assetId),
+                                                color = C.textSecondary,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                }
                                 Text(
                                     "${Helpers.formatBeam(asset.available)} ${asset.ticker}",
                                     color = C.textMuted,

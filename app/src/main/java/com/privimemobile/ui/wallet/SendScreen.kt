@@ -182,6 +182,7 @@ fun SendScreen(
             validatingAddr = true
             addressValid = null
             addrType = null
+            sendOffline = ownNode
         }
     }
 
@@ -292,6 +293,7 @@ fun SendScreen(
                             val query = trimmed.removePrefix("@")
                             handleQuery = query
                             addrType = null
+                            sendOffline = ownNode
                             addressValid = null
                             validatingAddr = false
                             return@OutlinedTextField
@@ -304,6 +306,7 @@ fun SendScreen(
 
                         if (trimmed.length < 20) {
                             addrType = null
+                            sendOffline = ownNode
                             addressValid = null
                             validatingAddr = false
                             return@OutlinedTextField
@@ -311,6 +314,7 @@ fun SendScreen(
                         validatingAddr = true
                         addressValid = null
                         addrType = null
+                        sendOffline = ownNode
                         focusManager.clearFocus()
                         validateAddress(trimmed) { validateReqId = it }
                     },
@@ -375,6 +379,7 @@ fun SendScreen(
                                                     validatingAddr = true
                                                     addressValid = null
                                                     addrType = null
+                                                    sendOffline = ownNode
                                                     validateAddress(normalized) { validateReqId = it }
                                                 } else {
                                                     address = "@$handle"

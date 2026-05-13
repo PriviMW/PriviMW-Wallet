@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1 시간</string>
     <string name="chat_timer_1day">1일</string>
     <string name="chat_next_message_hint">다음 메시지는 이 시간 후 자동 삭제됩니다. 상대방의 설정은 변경되지 않습니다.</string>
-    <string name="chat_reacted_on">%s 반응함</string>
+    <string name="chat_reacted_on">%s에 반응함</string>
     <string name="chat_messages_selected">%1$d개 메시지 선택됨</string>
     <string name="chat_group_invite">👥 그룹 초대</string>
     <string name="chat_group_invite_preview">👥 그룹 초대: %1$s (%2$d 멤버)</string>

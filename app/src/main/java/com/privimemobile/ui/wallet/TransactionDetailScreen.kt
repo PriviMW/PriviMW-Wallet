@@ -209,7 +209,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
             tx.status == TxStatus.FAILED ||
             tx.status == TxStatus.CANCELLED
     val isSelf = tx.selfTx
-    val isOnline = !tx.isShielded && !tx.isMaxPrivacy && !tx.isPublicOffline
+    val isOnline = !tx.isShielded && !tx.isMaxPrivacy && !tx.isOffline && !tx.isPublicOffline
     val isCancelable = isOutgoing && (tx.status == TxStatus.PENDING ||
             (tx.status == TxStatus.IN_PROGRESS && isOnline))
 

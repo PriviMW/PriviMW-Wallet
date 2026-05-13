@@ -1527,7 +1527,7 @@
     <string name="chat_timer_1h">1 час</string>
     <string name="chat_timer_1day">1 день</string>
     <string name="chat_next_message_hint">Следующее сообщение удалится само. Не меняет настройки другого.</string>
-    <string name="chat_reacted_on"> отреагировал(а) %s</string>
+    <string name="chat_reacted_on">отреагировал(а) %s</string>
     <string name="chat_messages_selected">Выбрано %1$d сообщений</string>
     <string name="chat_group_invite">👥 Приглашение в группу</string>
     <string name="chat_group_invite_preview">👥 Приглашение в группу: %1$s (%2$d участников)</string>

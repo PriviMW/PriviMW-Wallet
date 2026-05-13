@@ -1527,7 +1527,7 @@
     <string name="chat_timer_1h">1小时</string>
     <string name="chat_timer_1day">1天</string>
     <string name="chat_next_message_hint">下一条消息将在此后自动删除。不会更改对方的设置。</string>
-    <string name="chat_reacted_on"> 做出了反应 %s</string>
+    <string name="chat_reacted_on">做出了反应 %s</string>
     <string name="chat_messages_selected">%1$d 条消息已选</string>
     <string name="chat_group_invite">👥 群组邀请</string>
     <string name="chat_group_invite_preview">👥 群组邀请: %1$s (%2$d 名成员)</string>

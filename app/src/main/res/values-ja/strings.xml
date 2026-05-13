@@ -1522,7 +1522,7 @@
     <string name="chat_timer_1h">1時間</string>
     <string name="chat_timer_1day">1日</string>
     <string name="chat_next_message_hint">次のメッセージはこの時間後に自動削除されます。相手の設定は変更されません。</string>
-    <string name="chat_reacted_on">%s がリアクションしました</string>
+    <string name="chat_reacted_on">%sにリアクションしました</string>
     <string name="chat_messages_selected">%1$d件のメッセージを選択</string>
     <string name="chat_group_invite">👥 グループ招待</string>
     <string name="chat_group_invite_preview">👥 グループ招待: %1$s (%2$dメンバー)</string>

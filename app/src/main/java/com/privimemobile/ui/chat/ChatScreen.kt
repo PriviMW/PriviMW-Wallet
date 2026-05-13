@@ -2,6 +2,8 @@ package com.privimemobile.ui.chat
 
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedVisibility
@@ -3963,6 +3965,7 @@ fun ChatScreen(
                                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                                         maxLines = 4,
                                         enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading && !isDeletedAccount,
+                                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                                     )
 
                                     // Right side: animated morph icons ↔ send

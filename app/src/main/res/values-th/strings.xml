@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">ที่อยู่ส่งข้อความของคุณกำลังอัปเดตบนบล็อกเชน Beam โดยปกติใช้เวลาประมาณ 1 นาที</string>
     <string name="chats_welcome_back">ยินดีต้อนรับกลับ</string>
     <string name="chats_restored_notice">กระเป๋าเงินของคุณถูกกู้คืนบนอุปกรณ์ใหม่ ที่อยู่ส่งข้อความของคุณต้องอัปเดตเพื่อให้ผู้อื่นติดต่อคุณได้</string>
-    <string name="register_not_registered_title">ยินดีต้อนรับสู่ PriviMW Messenger</string>
+    <string name="register_not_registered_title">ยินดีต้อนรับสู่ PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">ลงทะเบียนแฮนเดิลเพื่อเริ่มส่งข้อความ</string>
     <string name="register_not_registered_button">ลงทะเบียนแฮนเดิล</string>
     <string name="chats_reregister_keep_name">ใช้ \"%1$s\" เดิม</string>

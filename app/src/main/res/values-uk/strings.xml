@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Ваша адреса месенджера оновлюється на блокчейні Beam. Звичайно це займає близько 1 хвилини.</string>
     <string name="chats_welcome_back">З поверненням</string>
     <string name="chats_restored_notice">Ваш гаманець відновлено на новому пристрої. Вашу адресу месенджера потрібно оновити, щоб інші могли вас знайти.</string>
-    <string name="register_not_registered_title">Ласкаво просимо до месенджера PriviMW</string>
+    <string name="register_not_registered_title">Ласкаво просимо до месенджера PriviMe</string>
     <string name="register_not_registered_subtitle">Зареєструйте хендл, щоб почати месенджинг</string>
     <string name="register_not_registered_button">Зареєструвати хендл</string>
     <string name="chats_reregister_keep_name">Зберегти \"%1$s\"</string>

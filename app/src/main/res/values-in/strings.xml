@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Alamat messaging Anda sedang diperbarui di blockchain Beam. Ini biasanya memakan waktu sekitar 1 menit.</string>
     <string name="chats_welcome_back">Selamat Datang Kembali</string>
     <string name="chats_restored_notice">Dompet Anda dipulihkan di perangkat baru. Alamat messaging Anda perlu diperbarui agar orang lain bisa menghubungi Anda.</string>
-    <string name="register_not_registered_title">Selamat Datang di PriviMW Messenger</string>
+    <string name="register_not_registered_title">Selamat Datang di PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Daftarkan handle untuk memulai messaging</string>
     <string name="register_not_registered_button">Daftarkan Handle</string>
     <string name="chats_reregister_keep_name">Tetap \"%1$s\"</string>

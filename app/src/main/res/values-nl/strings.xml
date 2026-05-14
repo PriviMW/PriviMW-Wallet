@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Uw berichtenadres wordt bijgewerkt op de Beam blockchain. Dit duurt meestal ongeveer 1 minuut.</string>
     <string name="chats_welcome_back">Welkom terug</string>
     <string name="chats_restored_notice">Uw wallet is hersteld op een nieuw apparaat. Uw berichtenadres moet worden bijgewerkt zodat anderen u kunnen bereiken.</string>
-    <string name="register_not_registered_title">Welkom bij PriviMW Messenger</string>
+    <string name="register_not_registered_title">Welkom bij PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registreer een handle om te beginnen met berichten</string>
     <string name="register_not_registered_button">Handle registreren</string>
     <string name="chats_reregister_keep_name">\\"%1$s\\" behouden</string>

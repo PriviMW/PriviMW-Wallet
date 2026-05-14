@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Ваша комуникациона адреса се ажурира на Beam блокчејну. Обично траје око 1 минут.</string>
     <string name="chats_welcome_back">Добро дошли назад</string>
     <string name="chats_restored_notice">Ваш новчаник је враћен на новом уређају. Ваша адреса за комуникацију треба да се ажурира како би вас други могли контактирати.</string>
-    <string name="register_not_registered_title">Добро дошли у PriviMW Messenger</string>
+    <string name="register_not_registered_title">Добро дошли у PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Региструјте корисничко име за почетак комуникације</string>
     <string name="register_not_registered_button">Региструј корисничко име</string>
     <string name="chats_reregister_keep_name">Задржи \"%1$s\"</string>

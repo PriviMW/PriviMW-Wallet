@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Viestinta-osoitettasi päivitetään Beam blockketjussa. Tama kestaa yleensä noin 1 minuutti.</string>
     <string name="chats_welcome_back">Tervetuloa takaisin</string>
     <string name="chats_restored_notice">Lompikkosi on palautettu uudella laitteella. Viestinta-osoitteesi on päivitettävä jotta muut voivat saavuttaa sinut.</string>
-    <string name="register_not_registered_title">Tervetuloa PriviMW Messengeriin</string>
+    <string name="register_not_registered_title">Tervetuloa PriviMe Messengeriin</string>
     <string name="register_not_registered_subtitle">Rekisteroi handle aloittaaksesi viestinnän</string>
     <string name="register_not_registered_button">Rekisteroi handle</string>
     <string name="chats_reregister_keep_name">Säilytä \"%1$s\"</string>

@@ -951,7 +951,7 @@
     <string name="chats_updating_address_msg">Your messaging address is being updated on the Beam blockchain. This usually takes about 1 minute.</string>
     <string name="chats_welcome_back">Welcome Back</string>
     <string name="chats_restored_notice">Your wallet was restored on a new device. Your messaging address needs to be updated so others can reach you.</string>
-    <string name="register_not_registered_title">Welcome to PriviMW Messenger</string>
+    <string name="register_not_registered_title">Welcome to PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Register a handle to start messaging</string>
     <string name="register_not_registered_button">Register Handle</string>
 

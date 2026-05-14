@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Votre adresse de messagerie est mise à jour sur la blockchain Beam. Cela prend environ 1 minute.</string>
     <string name="chats_welcome_back">Bon retour</string>
     <string name="chats_restored_notice">Votre portefeuille a été restauré sur un nouvel appareil. Votre adresse de messagerie doit être mise à jour pour que d\'autres puissent vous joindre.</string>
-    <string name="register_not_registered_title">Bienvenue sur PriviMW Messenger</string>
+    <string name="register_not_registered_title">Bienvenue sur PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Enregistrez un handle pour commencer à discuter</string>
     <string name="register_not_registered_button">Enregistrer le handle</string>
     <string name="chats_reregister_keep_name">Garder \"%1$s\"</string>

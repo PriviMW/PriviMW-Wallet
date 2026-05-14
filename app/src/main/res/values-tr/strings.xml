@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Mesajlaşma adresiniz Beam blokzincirinde güncelleniyor. Bu genellikle yaklaşık 1 dakika sürer.</string>
     <string name="chats_welcome_back">Tekrar Hoş Geldiniz</string>
     <string name="chats_restored_notice">Cüzdanınız yeni bir cihazda geri yüklendi. Mesajlaşma adresinizin güncellenmesi gerekiyor başkaları ulaşabilsin.</string>
-    <string name="register_not_registered_title">PriviMW Mesajlaşma\'ya Hoş Geldiniz</string>
+    <string name="register_not_registered_title">PriviMe Mesajlaşma\'ya Hoş Geldiniz</string>
     <string name="register_not_registered_subtitle">Mesajlaşma kullanmak için bir kullanıcı adı kaydedin</string>
     <string name="register_not_registered_button">Kullanıcı Adı Kaydet</string>
     <string name="chats_reregister_keep_name">\"%1$s\"\'i koru</string>

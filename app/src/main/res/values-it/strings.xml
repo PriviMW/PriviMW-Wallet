@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Aggiornamento dell\'indirizzo di messaggistica...</string>
     <string name="chats_welcome_back">Bentornato!</string>
     <string name="chats_restored_notice">Chat ripristinate</string>
-    <string name="register_not_registered_title">Non Registrato</string>
+    <string name="register_not_registered_title">Benvenuto in PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registra un handle Beam per inviare e ricevere messaggi</string>
     <string name="register_not_registered_button">Registra Handle</string>
     <string name="chats_reregister_keep_name">Mantieni \"%1$s\"</string>

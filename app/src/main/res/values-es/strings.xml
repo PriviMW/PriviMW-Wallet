@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Tu dirección de mensajería se está actualizando en la blockchain de Beam. Suele tardar 1 minuto.</string>
     <string name="chats_welcome_back">Bienvenido de nuevo</string>
     <string name="chats_restored_notice">Tu billetera fue restaurada en un nuevo dispositivo. Tu dirección de mensajería necesita ser actualizada.</string>
-    <string name="register_not_registered_title">Bienvenido a PriviMW Messenger</string>
+    <string name="register_not_registered_title">Bienvenido a PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registra un Handle para empezar a enviar mensajes</string>
     <string name="register_not_registered_button">Registrar Handle</string>
     <string name="chats_reregister_keep_name">Conservar \"%1$s\"</string>

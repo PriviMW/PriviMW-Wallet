@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Ihre Messaging-Adresse wird auf der Beam-Blockchain aktualisiert. Dies dauert normalerweise etwa 1 Minute.</string>
     <string name="chats_welcome_back">Willkommen zurück</string>
     <string name="chats_restored_notice">Ihre Wallet wurde auf einem neuen Gerät wiederhergestellt. Ihre Messaging-Adresse muss aktualisiert werden, damit andere Sie erreichen können.</string>
-    <string name="register_not_registered_title">Willkommen bei PriviMW Messenger</string>
+    <string name="register_not_registered_title">Willkommen bei PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registrieren Sie ein Handle zum Starten von Messaging</string>
     <string name="register_not_registered_button">Handle registrieren</string>
     <string name="chats_reregister_keep_name">\"%1$s\" beibehalten</string>

@@ -789,7 +789,7 @@
     <string name="chats_updating_address_msg">Vaše messaging adresa je aktualizována na Beam chainu. To obvykle trvá asi 1 minutu.</string>
     <string name="chats_welcome_back">Vítejte zpět</string>
     <string name="chats_restored_notice">Vaše peněženka byla obnovena na novém zařízení. Vaše messaging adresa musí být aktualizována, aby vás ostatní mohli kontaktovat.</string>
-    <string name="register_not_registered_title">Vítejte v PriviMW Messenger</string>
+    <string name="register_not_registered_title">Vítejte v PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registrovejte handle pro zahájení messagingu</string>
     <string name="register_not_registered_button">Registrovat handle</string>
     <string name="chats_reregister_keep_name">Ponechat \"%1$s\"</string>

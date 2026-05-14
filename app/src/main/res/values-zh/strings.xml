@@ -790,7 +790,7 @@
     <string name="chats_updating_address_msg">您的通讯地址正在 Beam 区块链上更新，通常需要约 1 分钟。</string>
     <string name="chats_welcome_back">欢迎回来</string>
     <string name="chats_restored_notice">您的钱包已在新设备上恢复。需要更新通讯地址以便其他人联系您。</string>
-    <string name="register_not_registered_title">欢迎使用 PriviMW Messenger</string>
+    <string name="register_not_registered_title">欢迎使用 PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">注册一个 Handle 以开始聊天</string>
     <string name="register_not_registered_button">注册 Handle</string>
     <string name="chats_reregister_keep_name">保留 \"%1$s\"</string>

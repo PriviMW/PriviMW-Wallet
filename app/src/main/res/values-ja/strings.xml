@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">メッセージングアドレスをBeamブロックチェーンで更新しています。通常約1分かかります。</string>
     <string name="chats_welcome_back">おかえりなさい</string>
     <string name="chats_restored_notice">ウォレットが新しいデバイスで復元されました。メッセージングアドレスを更新する必要があります。</string>
-    <string name="register_not_registered_title">PriviMWメッセンジャーへようこそ</string>
+    <string name="register_not_registered_title">PriviMeメッセンジャーへようこそ</string>
     <string name="register_not_registered_subtitle">メッセージングを開始するにはハンドルを登録</string>
     <string name="register_not_registered_button">ハンドルを登録</string>
     <string name="chats_reregister_keep_name">\"%1$s\"を維持</string>

@@ -790,7 +790,7 @@
     <string name="chats_updating_address_msg">Ваш адрес для сообщений обновляется в блокчейне Beam. Обычно это занимает около 1 минуты.</string>
     <string name="chats_welcome_back">С возвращением</string>
     <string name="chats_restored_notice">Ваш кошелёк восстановлен на новом устройстве. Адрес для сообщений нужно обновить, чтобы другие могли с вами связаться.</string>
-    <string name="register_not_registered_title">Добро пожаловать в PriviMW Messenger</string>
+    <string name="register_not_registered_title">Добро пожаловать в PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Зарегистрируйте Handle, чтобы начать общение</string>
     <string name="register_not_registered_button">Зарегистрировать Handle</string>
     <string name="chats_reregister_keep_name">Сохранить \"%1$s\"</string>

@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">Din meddeladeadress uppdateras på Beam-blockkedjan. Detta tar vanligtvis cirka 1 minut.</string>
     <string name="chats_welcome_back">Välkommen tillbaka</string>
     <string name="chats_restored_notice">Din plånbok har återställts på en ny enhet. Din meddeladeadress måste uppdateras för att andra ska kunna nå dig.</string>
-    <string name="register_not_registered_title">Välkommen till PriviMW Messenger</string>
+    <string name="register_not_registered_title">Välkommen till PriviMe Messenger</string>
     <string name="register_not_registered_subtitle">Registrera en handle för att starta messaging</string>
     <string name="register_not_registered_button">Registrera handle</string>
     <string name="chats_reregister_keep_name">Behåll \"%1$s\"</string>

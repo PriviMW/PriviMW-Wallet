@@ -787,7 +787,7 @@
     <string name="chats_updating_address_msg">메시징 주소가 Beam 블록체인에서 업데이트되고 있습니다. 보통 약 1분이 걸립니다.</string>
     <string name="chats_welcome_back">다시 오셨군요</string>
     <string name="chats_restored_notice">새 기기에서 지갑이 복원되었습니다. 메시징 주소를 업데이트해야 다른 사람들이 연락할 수 있습니다.</string>
-    <string name="register_not_registered_title">PriviMW 메신저에 오신 것을 환영합니다</string>
+    <string name="register_not_registered_title">PriviMe 메신저에 오신 것을 환영합니다</string>
     <string name="register_not_registered_subtitle">메시지를 시작하려면 핸들을 등록하세요</string>
     <string name="register_not_registered_button">핸들 등록</string>
     <string name="chats_reregister_keep_name">\"%1$s\" 유지</string>

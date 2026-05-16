@@ -1,5 +1,7 @@
 package com.privimemobile.ui.wallet
 
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -12,6 +14,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.*
@@ -25,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
@@ -79,6 +85,7 @@ fun SendScreen(
     initialAssetId: Int = 0,
     onNavigateConfirm: (address: String, amountGroth: Long, fee: Long, comment: String, assetId: Int, txType: String) -> Unit = { _, _, _, _, _, _ -> },
 ) {
+    val context = LocalContext.current
     val beamStatus by WalletEventBus.beamStatus.collectAsState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -315,7 +322,6 @@ fun SendScreen(
                         addressValid = null
                         addrType = null
                         sendOffline = ownNode
-                        focusManager.clearFocus()
                         validateAddress(trimmed) { validateReqId = it }
                     },
                     placeholder = {
@@ -336,10 +342,63 @@ fun SendScreen(
                     maxLines = 3,
                 )
                 IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = clipboard.primaryClip
+                        if (clip != null && clip.itemCount > 0) {
+                            val text = clip.getItemAt(0)?.text?.toString()?.trim() ?: ""
+                            if (text.isNotEmpty()) {
+                                address = text
+                                resolvedHandle = null
+                                focusManager.clearFocus()
+                                if (text.startsWith("@")) {
+                                    val query = text.removePrefix("@")
+                                    handleQuery = query
+                                    addrType = null
+                                    sendOffline = ownNode
+                                    addressValid = null
+                                    validatingAddr = false
+                                } else if (text.length >= 20) {
+                                    handleQuery = ""
+                                    showHandleDropdown = false
+                                    handleResults = emptyList()
+                                    validatingAddr = true
+                                    addressValid = null
+                                    addrType = null
+                                    sendOffline = ownNode
+                                    validateAddress(text) { validateReqId = it }
+                                } else {
+                                    // Too short for validation — reset all state
+                                    handleQuery = ""
+                                    showHandleDropdown = false
+                                    handleResults = emptyList()
+                                    addrType = null
+                                    sendOffline = ownNode
+                                    addressValid = null
+                                    validatingAddr = false
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.ContentPaste,
+                        contentDescription = stringResource(R.string.general_paste),
+                        tint = C.accent,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                IconButton(
                     onClick = onScanQr,
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    Text("\u2399", color = C.accent, fontSize = 22.sp)
+                    Icon(
+                        Icons.Filled.QrCodeScanner,
+                        contentDescription = stringResource(R.string.send_scan_qr),
+                        tint = C.accent,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
             }
 

@@ -5,13 +5,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Stores hourly portfolio snapshots (raw BEAM groth + all currency rates) and computes change.
+ * Stores hourly portfolio snapshots (total portfolio in BEAM-equivalent groth + all currency rates)
+ * and computes change.
  *
- * By storing the raw BEAM balance and per-currency rates at snapshot time, we can
+ * The groth value includes BEAM + all DEX-priced assets converted to BEAM-equivalent groth.
+ * By storing the total portfolio value and per-currency rates at snapshot time, we can
  * recompute the portfolio value in ANY currency on demand. This means currency changes
  * do not reset the change history — the 24h change is always accurate for the selected currency.
  *
- * Each snapshot: { "ts": epochSeconds, "groth": beamGroth, "rates": { "usd": 0.02, ... } }
+ * Each snapshot: { "ts": epochSeconds, "groth": totalPortfolioGrothEquiv, "rates": { "usd": 0.02, ... } }
  */
 object PortfolioSnapshotStore {
 
@@ -24,8 +26,11 @@ object PortfolioSnapshotStore {
      * shifted by >5%, in which case it captures the change immediately.
      * Never replaces existing snapshots — always appends — so the timeline
      * has continuous coverage for the 24h change window.
+     *
+     * @param totalGrothEquiv Total portfolio value in BEAM-equivalent groth
+     *   (BEAM balance + all DEX-priced assets converted to BEAM groth).
      */
-    fun saveSnapshot(beamGroth: Long, rates: Map<String, Double>) {
+    fun saveSnapshot(totalGrothEquiv: Long, rates: Map<String, Double>) {
         val now = System.currentTimeMillis() / 1000
         val snapshots = getSnapshots().toMutableList()
         val last = snapshots.lastOrNull()
@@ -34,13 +39,13 @@ object PortfolioSnapshotStore {
             val timeDiff = now - last.ts
             if (timeDiff < 3600) {
                 val valueDiff = if (last.groth > 0)
-                    kotlin.math.abs(beamGroth - last.groth).toDouble() / last.groth.toDouble()
+                    kotlin.math.abs(totalGrothEquiv - last.groth).toDouble() / last.groth.toDouble()
                 else 1.0
                 if (valueDiff < 0.05) return // already have a recent snapshot, no major change
             }
         }
 
-        snapshots.add(Snapshot(now, beamGroth, rates))
+        snapshots.add(Snapshot(now, totalGrothEquiv, rates))
 
         val cutoff = now - (MAX_AGE_DAYS * 24 * 3600)
         val pruned = snapshots.filter { it.ts >= cutoff }

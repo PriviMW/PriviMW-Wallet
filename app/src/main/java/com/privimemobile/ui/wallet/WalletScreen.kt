@@ -448,7 +448,10 @@ fun WalletScreen(
                         }
 
                         if (!balanceHidden && rate > 0) {
-                            PortfolioSnapshotStore.saveSnapshot(totalGroth, exchangeRates)
+                            // Convert total portfolio fiat value back to BEAM-equivalent groth
+                            // so the 24h change correctly includes all assets, not just BEAM.
+                            val totalGrothEquiv = (totalFiat / rate * 100_000_000.0).toLong()
+                            PortfolioSnapshotStore.saveSnapshot(totalGrothEquiv, exchangeRates)
                             val fiatText = CurrencyManager.formatPortfolioValue(totalFiat, currency)
                             androidx.compose.foundation.layout.BoxWithConstraints(
                                 modifier = Modifier.fillMaxWidth(),

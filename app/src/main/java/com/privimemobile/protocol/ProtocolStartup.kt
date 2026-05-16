@@ -2,6 +2,7 @@ package com.privimemobile.protocol
 
 import android.content.Context
 import android.util.Log
+import com.privimemobile.wallet.CurrencyManager
 import com.privimemobile.wallet.PortfolioSnapshotStore
 import com.privimemobile.wallet.WalletEventBus
 import kotlinx.coroutines.*
@@ -187,16 +188,35 @@ object ProtocolStartup {
         }
     }
 
-    /** Save portfolio snapshot using current BEAM balance + rates, if available. */
+    /** Save portfolio snapshot using total balance (BEAM + all assets) + rates, if available. */
     private fun maybeSaveSnapshot() {
         try {
             val rates = WalletEventBus.exchangeRates.value
             if (rates.isEmpty()) return
             val beam = WalletEventBus.beamStatus.value
-            val totalGroth = beam.available + beam.shielded
-            if (totalGroth > 0) {
-                PortfolioSnapshotStore.saveSnapshot(totalGroth, rates)
+            val beamGroth = beam.available + beam.shielded + beam.receiving
+            val beamRate = rates["beam_${CurrencyManager.getPreferredCurrency().lowercase()}"] ?: 0.0
+            if (beamRate <= 0 || beamGroth <= 0) return
+
+            // Total portfolio fiat value (BEAM + all DEX-priced assets)
+            var totalFiat = CurrencyManager.grothToFiat(beamGroth, CurrencyManager.getPreferredCurrency(), beamRate)
+            val assetMap = WalletEventBus.assetBalances
+            for ((assetId, status) in assetMap) {
+                if (assetId == 0) continue
+                val ratio = rates["${assetId}_beam"] ?: 0.0
+                if (ratio > 0) {
+                    val assetGroth = status.available + status.shielded + status.receiving
+                    if (assetGroth > 0) {
+                        val decimals = rates["${assetId}_decimals"]?.toInt() ?: 8
+                        val humanBalance = assetGroth.toDouble() / Math.pow(10.0, decimals.toDouble())
+                        totalFiat += humanBalance * ratio * beamRate
+                    }
+                }
             }
+
+            // Convert total fiat back to BEAM-equivalent groth
+            val totalGrothEquiv = (totalFiat / beamRate * 100_000_000.0).toLong()
+            PortfolioSnapshotStore.saveSnapshot(totalGrothEquiv, rates)
         } catch (_: Exception) {}
     }
 

@@ -762,6 +762,8 @@
     <string name="chats_swipe_unmute">Вкл. увед.</string>
     <string name="chats_archive">Архивировать</string>
     <string name="chats_unarchive">Разархивировать</string>
+    <string name="chats_archive_confirm">Архивировать %1$s? Вы найдете это во вкладке Архив.</string>
+    <string name="chats_unarchive_confirm">Разархивировать %1$s?</string>
     <string name="chats_leave_group">Покинуть группу</string>
     <string name="chats_cd_muted">Без звука</string>
     <string name="chats_cd_pinned">Закреплен</string>

@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Aktiv</string>
     <string name="chats_archive">Arkiv</string>
     <string name="chats_unarchive">Avarkivera</string>
+    <string name="chats_archive_confirm">Arkivera %1$s? Du hittar det i fliken Arkiverat.</string>
+    <string name="chats_unarchive_confirm">Avarkivera %1$s?</string>
     <string name="chats_leave_group">Lämna grupp</string>
     <string name="chats_cd_muted">Ljudlös</string>
     <string name="chats_cd_pinned">Fäst</string>

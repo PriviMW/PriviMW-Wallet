@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Susturmayı Kaldır</string>
     <string name="chats_archive">Arşive Al</string>
     <string name="chats_unarchive">Arşivden Çıkar</string>
+    <string name="chats_archive_confirm">%1$s arşivlensin mi? Arşivlenmişler sekmesinde bulabilirsiniz.</string>
+    <string name="chats_unarchive_confirm">%1$s arşivden çıkarılsın mı?</string>
     <string name="chats_leave_group">Gruptan Ayrıl</string>
     <string name="chats_cd_muted">Susturuldu</string>
     <string name="chats_cd_pinned">Sabitledi</string>

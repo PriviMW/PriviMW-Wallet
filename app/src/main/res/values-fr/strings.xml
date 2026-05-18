@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Réactiver</string>
     <string name="chats_archive">Archiver</string>
     <string name="chats_unarchive">Désarchiver</string>
+    <string name="chats_archive_confirm">Archiver %1$s ? Vous le trouverez dans l\'onglet Archivés.</string>
+    <string name="chats_unarchive_confirm">Désarchiver %1$s ?</string>
     <string name="chats_leave_group">Quitter le groupe</string>
     <string name="chats_cd_muted">En sourdine</string>
     <string name="chats_cd_pinned">Épinglé</string>

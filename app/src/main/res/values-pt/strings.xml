@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Ativar</string>
     <string name="chats_archive">Arquivar</string>
     <string name="chats_unarchive">Desarquivar</string>
+    <string name="chats_archive_confirm">Arquivar %1$s? Você pode encontrá-lo na aba Arquivados.</string>
+    <string name="chats_unarchive_confirm">Desarquivar %1$s?</string>
     <string name="chats_leave_group">Sair do grupo</string>
     <string name="chats_cd_muted">Silenciada</string>
     <string name="chats_cd_pinned">Fixada</string>

@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">เปิดเสียง</string>
     <string name="chats_archive">เก็บถาวร</string>
     <string name="chats_unarchive">ยกเลิกเก็บถาวร</string>
+    <string name="chats_archive_confirm">เก็บถาวร %1$s? คุณสามารถหาได้ในแท็บเก็บถาวร</string>
+    <string name="chats_unarchive_confirm">ยกเลิกการเก็บถาวร %1$s?</string>
     <string name="chats_leave_group">ออกจากกลุ่ม</string>
     <string name="chats_cd_muted">ปิดเสียงแล้ว</string>
     <string name="chats_cd_pinned">ปักหมุดแล้ว</string>

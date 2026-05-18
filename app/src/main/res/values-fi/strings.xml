@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Soita</string>
     <string name="chats_archive">Arkisto</string>
     <string name="chats_unarchive">Palauta arkistosta</string>
+    <string name="chats_archive_confirm">Arkistoida %1$s? Löydät sen Arkisto-välilehdeltä.</string>
+    <string name="chats_unarchive_confirm">Palauttaa %1$s arkistosta?</string>
     <string name="chats_leave_group">Poistu ryhmästä</string>
     <string name="chats_cd_muted">Hiljennetty</string>
     <string name="chats_cd_pinned">Kiinnitetty</string>

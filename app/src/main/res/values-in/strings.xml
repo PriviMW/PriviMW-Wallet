@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Unbisukan</string>
     <string name="chats_archive">Arsip</string>
     <string name="chats_unarchive">Buka Arsip</string>
+    <string name="chats_archive_confirm">Arsipkan %1$s? Anda dapat menemukannya di tab Arsip.</string>
+    <string name="chats_unarchive_confirm">Batalkan arsip %1$s?</string>
     <string name="chats_leave_group">Keluar dari grup</string>
     <string name="chats_cd_muted">Dibisukan</string>
     <string name="chats_cd_pinned">Disematkan</string>

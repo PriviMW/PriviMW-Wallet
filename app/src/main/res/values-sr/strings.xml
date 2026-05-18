@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Укључи</string>
     <string name="chats_archive">Архивирај</string>
     <string name="chats_unarchive">Деархивирај</string>
+    <string name="chats_archive_confirm">Архивирати %1$s? Можете га пронаћи у картици Архива.</string>
+    <string name="chats_unarchive_confirm">Деархивирати %1$s?</string>
     <string name="chats_leave_group">Напусти групу</string>
     <string name="chats_cd_muted">Искључено</string>
     <string name="chats_cd_pinned">Закачено</string>

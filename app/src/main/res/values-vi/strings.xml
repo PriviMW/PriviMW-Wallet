@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Bật tiếng</string>
     <string name="chats_archive">Lưu trữ</string>
     <string name="chats_unarchive">Bỏ lưu trữ</string>
+    <string name="chats_archive_confirm">Lưu trữ %1$s? Bạn có thể tìm thấy trong tab Đã lưu trữ.</string>
+    <string name="chats_unarchive_confirm">Bỏ lưu trữ %1$s?</string>
     <string name="chats_leave_group">Rời nhóm</string>
     <string name="chats_cd_muted">Đã tắt tiếng</string>
     <string name="chats_cd_pinned">Đã ghim</string>

@@ -762,6 +762,8 @@
     <string name="chats_swipe_unmute">取消静音</string>
     <string name="chats_archive">归档</string>
     <string name="chats_unarchive">取消归档</string>
+    <string name="chats_archive_confirm">归档 %1$s？你可以在已归档标签中找到。</string>
+    <string name="chats_unarchive_confirm">取消归档 %1$s？</string>
     <string name="chats_leave_group">退出群组</string>
     <string name="chats_cd_muted">已静音</string>
     <string name="chats_cd_pinned">已置顶</string>

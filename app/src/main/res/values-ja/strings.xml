@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">ミュート解除</string>
     <string name="chats_archive">アーカイブ</string>
     <string name="chats_unarchive">アーカイブ解除</string>
+    <string name="chats_archive_confirm">%1$sをアーカイブしますか？アーカイブタブで見つけられます。</string>
+    <string name="chats_unarchive_confirm">%1$sのアーカイブを解除しますか？</string>
     <string name="chats_leave_group">グループを退出</string>
     <string name="chats_cd_muted">ミュート済み</string>
     <string name="chats_cd_pinned">ピン留め</string>

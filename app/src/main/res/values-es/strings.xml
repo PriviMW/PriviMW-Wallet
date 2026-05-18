@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Activar sonido</string>
     <string name="chats_archive">Archivar</string>
     <string name="chats_unarchive">Desarchivar</string>
+    <string name="chats_archive_confirm">Archivar %1$s? Puedes encontrarlo en la pestaña Archivados.</string>
+    <string name="chats_unarchive_confirm">Desarchivar %1$s?</string>
     <string name="chats_leave_group">Abandonar grupo</string>
     <string name="chats_cd_muted">Silenciado</string>
     <string name="chats_cd_pinned">Fijado</string>

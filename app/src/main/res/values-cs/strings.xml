@@ -761,6 +761,8 @@
     <string name="chats_swipe_unmute">Zrušit ztlumení</string>
     <string name="chats_archive">Archiv</string>
     <string name="chats_unarchive">Odebrat z archivu</string>
+    <string name="chats_archive_confirm">Archivovat %1$s? Najdete ho na kartě Archiv.</string>
+    <string name="chats_unarchive_confirm">Odebrat z archivu: %1$s?</string>
     <string name="chats_leave_group">Opustit skupinu</string>
     <string name="chats_cd_muted">Ztlumeno</string>
     <string name="chats_cd_pinned">Připnuto</string>

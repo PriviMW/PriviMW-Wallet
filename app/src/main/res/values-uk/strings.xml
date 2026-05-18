@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Увімкнути звук</string>
     <string name="chats_archive">Архів</string>
     <string name="chats_unarchive">Розархівувати</string>
+    <string name="chats_archive_confirm">Архівувати %1$s? Ви знайдете це у вкладці Архів.</string>
+    <string name="chats_unarchive_confirm">Розархівувати %1$s?</string>
     <string name="chats_leave_group">Вийти з групи</string>
     <string name="chats_cd_muted">Без звуку</string>
     <string name="chats_cd_pinned">Закріплено</string>

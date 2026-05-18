@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Уключыць</string>
     <string name="chats_archive">Архіў</string>
     <string name="chats_unarchive">Разархіваваць</string>
+    <string name="chats_archive_confirm"> Архіўраваць %1$s? Вы можаце знайсці гэта ва ўкладцы Архіў.</string>
+    <string name="chats_unarchive_confirm">Разархіўраваць %1$s?</string>
     <string name="chats_leave_group">Пакінуць групу</string>
     <string name="chats_cd_muted">Адключаны</string>
     <string name="chats_cd_pinned">Замацаваны</string>

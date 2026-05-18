@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">음소거 해제</string>
     <string name="chats_archive">보관</string>
     <string name="chats_unarchive">보관 해제</string>
+    <string name="chats_archive_confirm">%1$s을(를) 보관하시겠습니까? 보관함 탭에서 찾을 수 있습니다.</string>
+    <string name="chats_unarchive_confirm">%1$s 보관을 해제하시겠습니까?</string>
     <string name="chats_leave_group">그룹 나가기</string>
     <string name="chats_cd_muted">음소거됨</string>
     <string name="chats_cd_pinned">고정됨</string>

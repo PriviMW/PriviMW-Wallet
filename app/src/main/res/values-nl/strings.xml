@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Ontdempen</string>
     <string name="chats_archive">Archiveren</string>
     <string name="chats_unarchive">Dearchiveren</string>
+    <string name="chats_archive_confirm">%1$s archiveren? Je vindt het in het tabblad Gearchiveerd.</string>
+    <string name="chats_unarchive_confirm">%1$s dearchiveren?</string>
     <string name="chats_leave_group">Groep verlaten</string>
     <string name="chats_cd_muted">Gedempt</string>
     <string name="chats_cd_pinned">Vastgepind</string>

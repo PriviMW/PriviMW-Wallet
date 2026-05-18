@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Aktiv</string>
     <string name="chats_archive">Archiv</string>
     <string name="chats_unarchive">Entarchivieren</string>
+    <string name="chats_archive_confirm">%1$s archivieren? Sie finden es im Archiv-Tab.</string>
+    <string name="chats_unarchive_confirm">%1$s aus dem Archiv holen?</string>
     <string name="chats_leave_group">Gruppe verlassen</string>
     <string name="chats_cd_muted">Stumm</string>
     <string name="chats_cd_pinned">Angeheftet</string>

@@ -759,6 +759,8 @@
     <string name="chats_swipe_unmute">Scorri per riattivare</string>
     <string name="chats_archive">Archivia</string>
     <string name="chats_unarchive">Ripristina</string>
+    <string name="chats_archive_confirm">Archiviare %1$s? Lo trovi nella scheda Archiviati.</string>
+    <string name="chats_unarchive_confirm">Ripristinare %1$s?</string>
     <string name="chats_leave_group">Esci dal Gruppo</string>
     <string name="chats_cd_muted">Non in ascolto</string>
     <string name="chats_cd_pinned">Fissato</string>

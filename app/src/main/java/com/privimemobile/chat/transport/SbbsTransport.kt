@@ -24,10 +24,13 @@ class SbbsTransport(
     private var pollingJob: Job? = null
     private val reading = AtomicBoolean(false)
     private var readStartTime = 0L  // auto-reset if stuck >30s
+    private var startupBoostEnd = 0L  // poll aggressively until this timestamp
 
     companion object {
         const val POLL_ACTIVE_MS = 2_000L    // 2s when chat is open — near-instant feel
         const val POLL_IDLE_MS = 180_000L   // 3 min safety net when idle (onInstantMessage is primary)
+        const val POLL_STARTUP_MS = 3_000L  // 3s during startup boost — fast initial sync
+        const val STARTUP_BOOST_MS = 30_000L // 30s aggressive polling after node connects
     }
 
     /** Start adaptive polling — fast when chat open, slow otherwise. */
@@ -41,7 +44,11 @@ class SbbsTransport(
         pollingJob = scope.launch {
             while (isActive) {
                 pollNow()
-                val interval = if (ChatService.activeChat.value != null) POLL_ACTIVE_MS else POLL_IDLE_MS
+                val interval = when {
+                    System.currentTimeMillis() < startupBoostEnd -> POLL_STARTUP_MS
+                    ChatService.activeChat.value != null -> POLL_ACTIVE_MS
+                    else -> POLL_IDLE_MS
+                }
                 delay(interval)
             }
         }
@@ -67,9 +74,11 @@ class SbbsTransport(
         scope.launch { safeReadMessages() }
     }
 
-    /** Called by ProtocolStartup's onSystemStateChanged hook. */
+    /** Called by ProtocolStartup's onSystemStateChanged hook — fires when node syncs. */
     fun onSystemState() {
-        // Identity check delegated to IdentityManager
+        Log.d(TAG, "ev_system_state — immediate poll + startup boost")
+        startupBoostEnd = System.currentTimeMillis() + STARTUP_BOOST_MS
+        scope.launch { safeReadMessages() }
     }
 
     /** Poll from timer or manual refresh. */

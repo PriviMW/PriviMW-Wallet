@@ -188,18 +188,16 @@ object ChatService {
         // so this first poll catches messages received during wallet startup.
         scope.launch { sbbs.pollNow() }
 
-        // On first node connection (cold start), immediately poll for queued SBBS messages.
-        // The C++ core takes ~30s to connect; polling before that returns empty.
-        // This observer fires once when the node connects, triggering an instant message fetch.
+        // On first node connection (cold start), immediately poll for queued SBBS messages
+        // and enter startup boost mode (3s intervals for 30s).
         scope.launch {
             var firstConnection = true
             com.privimemobile.wallet.WalletEventBus.nodeConnection.collect { event ->
                 if (event.connected) {
                     if (firstConnection) {
                         firstConnection = false
-                        // Small delay to let C++ core stabilize after connection
-                        delay(2000)
-                        sbbs.pollNow()
+                        delay(2000) // let C++ core stabilize
+                        sbbs.onSystemState() // poll + activate startup boost
                         Log.d(TAG, "First node connection — polling SBBS messages")
                     }
                 }

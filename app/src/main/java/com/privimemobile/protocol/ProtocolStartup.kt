@@ -46,6 +46,7 @@ object ProtocolStartup {
             refreshWalletData()
             if (com.privimemobile.chat.ChatService.initialized.value) {
                 com.privimemobile.chat.ChatService.identity.onSystemState()
+                com.privimemobile.chat.ChatService.sbbs.onSystemState()
             }
         }
         WalletApi.onTxsChanged = {

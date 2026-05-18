@@ -21,7 +21,7 @@ import net.sqlcipher.database.SupportFactory
         ChatStateEntity::class,
         PendingTxEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -248,6 +248,22 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        /** V22→V23: Split wallet_id / sbbs_address — two fields for two purposes.
+         *  wallet_id = on-chain registered wallet (from contract). Used for /tip money, display.
+         *  sbbs_address = per-conversation SBBS channel address (from SBBS envelope). Used for send_message.
+         *  Migrate existing data: copy wallet_id → sbbs_address so sends don't break. */
+        private val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE contacts ADD COLUMN sbbs_address TEXT DEFAULT NULL")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_contacts_sbbs_address ON contacts (sbbs_address)")
+                db.execSQL("UPDATE contacts SET sbbs_address = wallet_id WHERE sbbs_address IS NULL")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN sbbs_address TEXT DEFAULT NULL")
+                db.execSQL("UPDATE conversations SET sbbs_address = wallet_id WHERE sbbs_address IS NULL")
+                db.execSQL("ALTER TABLE group_members ADD COLUMN sbbs_address TEXT DEFAULT NULL")
+                db.execSQL("UPDATE group_members SET sbbs_address = wallet_id WHERE sbbs_address IS NULL")
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -256,7 +272,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
                 .fallbackToDestructiveMigration()
                 .build()
         }

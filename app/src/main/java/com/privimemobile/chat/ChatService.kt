@@ -170,10 +170,14 @@ object ChatService {
         // Ensure wallet events are subscribed (may have been skipped on wallet reuse path)
         com.privimemobile.protocol.WalletApi.subscribeToEvents()
 
-        // Start identity check + SBBS polling
+        // Start SBBS polling immediately (don't wait for contract calls)
+        sbbs.startPolling()
+
+        // Start identity check + contact resolution in parallel with polling
         scope.launch {
             identity.refreshIdentity()
-            sbbs.startPolling()
+            // Batch-resolve contacts with null sbbs_address (warm cache for sending)
+            contacts.resolveUnresolved()
         }
 
         _initialized.value = true
@@ -183,6 +187,24 @@ object ChatService {
         // onInstantMessage silently drops callbacks when initialized.value is false,
         // so this first poll catches messages received during wallet startup.
         scope.launch { sbbs.pollNow() }
+
+        // On first node connection (cold start), immediately poll for queued SBBS messages.
+        // The C++ core takes ~30s to connect; polling before that returns empty.
+        // This observer fires once when the node connects, triggering an instant message fetch.
+        scope.launch {
+            var firstConnection = true
+            com.privimemobile.wallet.WalletEventBus.nodeConnection.collect { event ->
+                if (event.connected) {
+                    if (firstConnection) {
+                        firstConnection = false
+                        // Small delay to let C++ core stabilize after connection
+                        delay(2000)
+                        sbbs.pollNow()
+                        Log.d(TAG, "First node connection — polling SBBS messages")
+                    }
+                }
+            }
+        }
 
         // Observe total unread (DMs + groups) → update launcher badge via notification summary
         scope.launch {
@@ -297,7 +319,7 @@ object ChatService {
                         Log.w(TAG, "Scheduled msg ${msg.id}: group not found for convKey=${conv.convKey}")
                         continue
                     }
-                    val memberWalletIds = db?.groupDao()?.getMemberWalletIds(group.groupId, myHandle)
+                    val memberSbbsAddresses = db?.groupDao()?.getMemberSbbsAddresses(group.groupId, myHandle)
                         ?.filterNotNull()?.filter { it.isNotEmpty() } ?: continue
                     val payload = mutableMapOf<String, Any?>(
                         "v" to 1, "t" to "group_msg", "ts" to ts,
@@ -305,8 +327,8 @@ object ChatService {
                         "msg" to (msg.text ?: ""),
                     )
                     if (!state.myDisplayName.isNullOrEmpty()) payload["dn"] = state.myDisplayName
-                    for (walletId in memberWalletIds) {
-                        try { sbbs.sendOnce(walletId, payload) } catch (_: Exception) {}
+                    for (addr in memberSbbsAddresses) {
+                        try { sbbs.sendOnce(addr, payload) } catch (_: Exception) {}
                         kotlinx.coroutines.delay(200)
                     }
                     db?.groupDao()?.updateLastMessage(group.groupId, ts, "${appContext.getString(R.string.chat_you_prefix)}${msg.text?.take(40) ?: appContext.getString(R.string.chat_msg_message)}")
@@ -314,14 +336,14 @@ object ChatService {
                     // DM scheduled message
                     val contactHandle = conv.convKey.removePrefix("@")
                     val contact = db?.contactDao()?.findByHandle(contactHandle)
-                    val walletId = contact?.walletId ?: continue
+                    val sendAddress = contact?.sbbsAddress ?: contact?.walletId ?: continue
                     val payload = mutableMapOf<String, Any?>(
                         "v" to 1, "t" to "dm", "ts" to ts,
                         "from" to myHandle, "to" to contactHandle,
                         "dn" to (state.myDisplayName ?: ""),
                         "msg" to (msg.text ?: ""),
                     )
-                    sbbs.sendWithRetry(walletId, payload)
+                    sbbs.sendWithRetry(sendAddress, payload)
                 }
                 // Update message: clear scheduled_at + move timestamp to actual send time
                 db?.messageDao()?.clearScheduled(msg.id)
@@ -368,9 +390,9 @@ object ChatService {
             val needsDesc = group.description.isNullOrEmpty()
             if (needsAvatar || needsDesc) {
                 // Send request to first member with a wallet_id
-                val memberWids = db?.groupDao()?.getMemberWalletIds(group.groupId, myHandle)
+                val memberAddrs = db?.groupDao()?.getMemberSbbsAddresses(group.groupId, myHandle)
                     ?.filterNotNull()?.filter { it.isNotEmpty() } ?: continue
-                val targetWid = memberWids.firstOrNull() ?: continue
+                val targetWid = memberAddrs.firstOrNull() ?: continue
                 val reqPayload = mapOf(
                     "v" to 1, "t" to "group_info_request",
                     "from" to myHandle,

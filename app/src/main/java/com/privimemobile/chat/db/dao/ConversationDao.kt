@@ -36,7 +36,7 @@ interface ConversationDao {
 
     /** Get or create conversation for a conv_key. Does NOT un-delete tombstoned conversations. */
     @Transaction
-    suspend fun getOrCreate(convKey: String, handle: String? = null, displayName: String? = null, walletId: String? = null): ConversationEntity {
+    suspend fun getOrCreate(convKey: String, handle: String? = null, displayName: String? = null, walletId: String? = null, sbbsAddress: String? = null): ConversationEntity {
         val existing = findByKey(convKey)
         if (existing != null) return existing
         val entity = ConversationEntity(
@@ -44,6 +44,7 @@ interface ConversationDao {
             handle = handle,
             displayName = displayName,
             walletId = walletId,
+            sbbsAddress = sbbsAddress,
         )
         val id = insert(entity)
         return entity.copy(id = id)
@@ -97,13 +98,17 @@ interface ConversationDao {
     @Query("UPDATE conversations SET deleted_at_ts = :ts WHERE id = :convId")
     suspend fun setDeletedTs(convId: Long, ts: Long)
 
-    /** Update contact info on conversation. */
+    /** Update on-chain contact info (wallet_id) on conversation. */
     @Query("""
         UPDATE conversations
         SET display_name = :displayName, wallet_id = :walletId, avatar_cid = :avatarCid
         WHERE conv_key = :convKey
     """)
     suspend fun updateContactInfo(convKey: String, displayName: String?, walletId: String?, avatarCid: String?)
+
+    /** Update sbbs_address on conversation (SBBS channel address from envelope). */
+    @Query("UPDATE conversations SET sbbs_address = :sbbsAddress WHERE conv_key = :convKey")
+    suspend fun updateSbbsAddress(convKey: String, sbbsAddress: String?)
 
     /** Check if conversation is blocked. */
     @Query("SELECT is_blocked FROM conversations WHERE conv_key = :convKey LIMIT 1")

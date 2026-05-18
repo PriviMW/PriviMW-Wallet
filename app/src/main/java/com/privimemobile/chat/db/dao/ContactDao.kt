@@ -15,9 +15,17 @@ interface ContactDao {
     @Query("SELECT * FROM contacts WHERE handle = :handle LIMIT 1")
     suspend fun findByHandle(handle: String): ContactEntity?
 
-    /** Find by wallet_id. */
+    /** Find by wallet_id (on-chain registered). */
     @Query("SELECT * FROM contacts WHERE wallet_id = :walletId LIMIT 1")
     suspend fun findByWalletId(walletId: String): ContactEntity?
+
+    /** Find by sbbs_address (SBBS channel). */
+    @Query("SELECT * FROM contacts WHERE sbbs_address = :sbbsAddress LIMIT 1")
+    suspend fun findBySbbsAddress(sbbsAddress: String): ContactEntity?
+
+    /** Update sbbs_address for a contact (SBBS channel address from envelope). */
+    @Query("UPDATE contacts SET sbbs_address = :sbbsAddress WHERE handle = :handle")
+    suspend fun updateSbbsAddress(handle: String, sbbsAddress: String?)
 
     /** Search contacts by handle or display_name prefix (for NewChatScreen). */
     @Query("""
@@ -35,12 +43,12 @@ interface ContactDao {
     @Update
     suspend fun update(contact: ContactEntity)
 
-    /** Upsert: insert or update on handle conflict. */
+    /** Upsert: insert or update on handle conflict. Preserves sbbsAddress from existing. */
     @Transaction
     suspend fun upsert(contact: ContactEntity) {
         val existing = findByHandle(contact.handle)
         if (existing != null) {
-            update(contact.copy(id = existing.id))
+            update(contact.copy(id = existing.id, sbbsAddress = contact.sbbsAddress ?: existing.sbbsAddress))
         } else {
             insert(contact)
         }
@@ -82,8 +90,8 @@ interface ContactDao {
     @Query("UPDATE contacts SET is_deleted = 1, display_name = 'Deleted Account' WHERE handle = :handle")
     suspend fun markDeleted(handle: String)
 
-    /** Get contacts that need resolution (no wallet_id or stale). */
-    @Query("SELECT * FROM contacts WHERE wallet_id IS NULL OR last_resolved_at < :staleThreshold")
+    /** Get contacts with missing sbbs_address (need contract resolution for sending). */
+    @Query("SELECT * FROM contacts WHERE sbbs_address IS NULL OR last_resolved_at < :staleThreshold")
     suspend fun getUnresolved(staleThreshold: Long): List<ContactEntity>
 
     /**

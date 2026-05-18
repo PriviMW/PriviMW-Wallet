@@ -151,16 +151,16 @@ class SbbsTransport(
             if (state.myHandle == null) return@launch
 
             val conv = db.conversationDao().findByKey(convKey) ?: return@launch
-            var toWalletId = conv.walletId
-            if (toWalletId.isNullOrEmpty()) {
+            var toAddress = conv.sbbsAddress
+            if (toAddress.isNullOrEmpty()) {
                 val handle = convKey.removePrefix("@")
-                toWalletId = db.contactDao().findByHandle(handle)?.walletId
-                if (toWalletId.isNullOrEmpty()) {
+                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
+                if (toAddress.isNullOrEmpty()) {
                     val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
-                    toWalletId = resolved?.walletId
+                    toAddress = resolved?.walletId
                 }
-                if (!toWalletId.isNullOrEmpty()) {
-                    db.conversationDao().updateContactInfo(convKey, null, toWalletId, null)
+                if (!toAddress.isNullOrEmpty()) {
+                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
                 } else return@launch
             }
 
@@ -170,7 +170,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "delivered" to timestamps,
             )
-            sendWithRetry(toWalletId, payload)
+            sendWithRetry(toAddress, payload)
         }
     }
 
@@ -182,19 +182,19 @@ class SbbsTransport(
             if (state.myHandle == null) { Log.w(TAG, "sendReadReceipts: no myHandle"); return@launch }
 
             val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "sendReadReceipts: conv not found for $convKey"); return@launch }
-            var toWalletId = conv.walletId
-            if (toWalletId.isNullOrEmpty()) {
-                // Resolve wallet_id from contact DB or on-chain
+            var toAddress = conv.sbbsAddress
+            if (toAddress.isNullOrEmpty()) {
+                // Resolve sbbs_address from contact DB or on-chain
                 val handle = convKey.removePrefix("@")
-                toWalletId = db.contactDao().findByHandle(handle)?.walletId
-                if (toWalletId.isNullOrEmpty()) {
+                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
+                if (toAddress.isNullOrEmpty()) {
                     val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
-                    toWalletId = resolved?.walletId
+                    toAddress = resolved?.walletId
                 }
-                if (!toWalletId.isNullOrEmpty()) {
-                    db.conversationDao().updateContactInfo(convKey, null, toWalletId, null)
+                if (!toAddress.isNullOrEmpty()) {
+                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
                 } else {
-                    Log.w(TAG, "sendReadReceipts: no walletId for $convKey after resolve")
+                    Log.w(TAG, "sendReadReceipts: no sbbs_address for $convKey after resolve")
                     return@launch
                 }
             }
@@ -205,7 +205,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "read" to timestamps,
             )
-            sendWithRetry(toWalletId, payload)
+            sendWithRetry(toAddress, payload)
 
             // Mark local messages as acked
             db.messageDao().markAcked(conv.id, timestamps)
@@ -236,11 +236,11 @@ class SbbsTransport(
             Log.d(TAG, "sendGroupReadReceipts($groupId): ${bySender.size} senders, ${allReceived.size} msgs")
 
             for ((senderHandle, timestamps) in bySender) {
-                // Resolve sender's wallet ID from group members or contacts
-                val walletId = db.groupDao().getMemberWalletId(groupId, senderHandle)
-                    ?: db.contactDao().findByHandle(senderHandle)?.walletId
-                if (walletId.isNullOrEmpty()) {
-                    Log.w(TAG, "sendGroupReadReceipts: no walletId for @$senderHandle")
+                // Resolve sender's sbbs_address from group members or contacts
+                val sbbsAddr = db.groupDao().getMemberSbbsAddress(groupId, senderHandle)
+                    ?: db.contactDao().findByHandle(senderHandle)?.sbbsAddress
+                if (sbbsAddr.isNullOrEmpty()) {
+                    Log.w(TAG, "sendGroupReadReceipts: no sbbs_address for @$senderHandle")
                     continue
                 }
 
@@ -251,7 +251,7 @@ class SbbsTransport(
                     "group_id" to groupId,
                     "read" to timestamps,
                 )
-                sendOnce(walletId, payload)
+                sendOnce(sbbsAddr, payload)
                 delay(100) // small spacing between sends
             }
 
@@ -276,7 +276,17 @@ class SbbsTransport(
 
             val handle = convKey.removePrefix("@")
             val conv = db.conversationDao().findByKey(convKey) ?: return@launch
-            val toWalletId = conv.walletId ?: return@launch
+            var toAddress = conv.sbbsAddress
+            if (toAddress.isNullOrEmpty()) {
+                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
+                if (toAddress.isNullOrEmpty()) {
+                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
+                    toAddress = resolved?.walletId
+                }
+                if (!toAddress.isNullOrEmpty()) {
+                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
+                } else return@launch
+            }
 
             val payload = mapOf(
                 "v" to 1,
@@ -284,7 +294,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "to" to handle,
             )
-            sendSbbsMessage(toWalletId, payload)
+            sendSbbsMessage(toAddress, payload)
         }
     }
 

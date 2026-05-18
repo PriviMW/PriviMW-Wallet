@@ -316,6 +316,7 @@ fun ChatScreen(
         }
     }
     val resolvedWalletId = contact?.walletId
+    val resolvedSbbsAddress = contact?.sbbsAddress ?: contact?.walletId
     val isDeletedAccount = contact?.isDeleted == true
 
     // Input state — use TextFieldValue for cursor control
@@ -849,7 +850,7 @@ fun ChatScreen(
         val waveform = voicePreviewWaveform
         val durationMs = voicePreviewDuration
 
-        if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+        if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
             Toast.makeText(context, R.string.toast_cannot_send_no_address, Toast.LENGTH_SHORT).show()
             return
         }
@@ -951,7 +952,7 @@ fun ChatScreen(
             com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
         } else {
             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
-            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
         }
 
         // Clean up temp file
@@ -960,7 +961,7 @@ fun ChatScreen(
 
     // Send voice message (direct from RecordingResult - Telegram-style release to send)
     suspend fun sendVoiceMessage(result: com.privimemobile.chat.voice.VoiceRecorder.RecordingResult) {
-        if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+        if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
             Toast.makeText(context, R.string.toast_cannot_send_no_address, Toast.LENGTH_SHORT).show()
             result.file.delete()
             return
@@ -1060,7 +1061,7 @@ fun ChatScreen(
             com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
         } else {
             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
-            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
         }
     }
 
@@ -1149,9 +1150,9 @@ fun ChatScreen(
                         if (isGroupMode && groupId != null) {
                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, editPayload)
                         } else {
-                            val walletId = resolvedWalletId
-                            if (!walletId.isNullOrEmpty()) {
-                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, editPayload)
+                            val sendAddr = resolvedSbbsAddress
+                            if (!sendAddr.isNullOrEmpty()) {
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(sendAddr, editPayload)
                             }
                         }
                     }
@@ -1200,7 +1201,7 @@ fun ChatScreen(
                 return
             }
 
-            // Resolve wallet ID for tip target
+            // Resolve wallet ID (on-chain for money) and sbbs_address (SBBS channel for notification)
             scope.launch {
                 val tipWalletId = if (isGroupMode) {
                     // Look up target handle's wallet ID from group members or contacts
@@ -1209,8 +1210,16 @@ fun ChatScreen(
                 } else {
                     resolvedWalletId
                 }
+                val tipSbbsAddress = if (isGroupMode) {
+                    val member = com.privimemobile.chat.ChatService.db?.groupDao()?.findMember(groupId!!, tipTargetHandle)
+                    member?.sbbsAddress ?: member?.walletId
+                        ?: com.privimemobile.chat.ChatService.db?.contactDao()?.findByHandle(tipTargetHandle)?.sbbsAddress
+                        ?: com.privimemobile.chat.ChatService.db?.contactDao()?.findByHandle(tipTargetHandle)?.walletId
+                } else {
+                    resolvedSbbsAddress
+                }
 
-                if (tipWalletId.isNullOrEmpty()) {
+                if (tipWalletId.isNullOrEmpty() || tipSbbsAddress.isNullOrEmpty()) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, context.getString(R.string.toast_cannot_resolve, tipTargetHandle), Toast.LENGTH_SHORT).show()
                     }
@@ -1303,7 +1312,7 @@ fun ChatScreen(
                             val tipConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, tipTargetHandle)
                             if (tipConv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(tipConv.id)
                             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(tipConv.id, ts, tipLabel)
-                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(tipWalletId, payload)
+                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(tipSbbsAddress, payload)
                         }
                     }
                     withContext(Dispatchers.Main) {
@@ -1367,7 +1376,7 @@ fun ChatScreen(
                             val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                             if (convDb.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(convDb.id)
                             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(convDb.id, ts, "\uD83D\uDCCA $question")
-                            val walletId = resolvedWalletId
+                            val walletId = resolvedSbbsAddress
                             if (!walletId.isNullOrEmpty()) {
                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
                             }
@@ -1385,7 +1394,7 @@ fun ChatScreen(
         if (pendingFile != null) {
             val file = pendingFile!!
             Log.d("ChatScreen", "Sending file: ${file.name}, ${file.size} bytes, isGroup=$isGroupMode")
-            if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+            if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
                 Log.w("ChatScreen", "Cannot send file — no resolved wallet ID")
                 return
             }
@@ -1488,7 +1497,7 @@ fun ChatScreen(
                                 com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
                             } else {
                                 com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fileConvId, ts, preview)
-                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
                             }
                         }
                     }
@@ -1532,8 +1541,8 @@ fun ChatScreen(
             return
         }
 
-        val walletId = resolvedWalletId
-        if (walletId.isNullOrEmpty()) return
+        val sendAddress = resolvedSbbsAddress
+        if (sendAddress.isNullOrEmpty()) return
 
         // Capture state BEFORE coroutine (state may be cleared by main thread before coroutine runs)
         val replyText = replyingTo?.text?.take(200)?.ifEmpty { null }
@@ -1586,7 +1595,7 @@ fun ChatScreen(
                 com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(convDb.id, ts, trimmed.take(100))
 
                 // Send via SBBS
-                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(sendAddress, payload)
             }
         }
 
@@ -1649,7 +1658,7 @@ fun ChatScreen(
         }
     }
 
-    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && (isGroupMode || !resolvedWalletId.isNullOrEmpty())
+    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && (isGroupMode || !resolvedSbbsAddress.isNullOrEmpty())
 
     // BackHandler: intercept system back when overlays are visible
     BackHandler(enabled = selectionMode) { selectionMode = false; selectedIds.clear() }
@@ -2691,7 +2700,7 @@ fun ChatScreen(
                                         if (isGroupMode && groupId != null) {
                                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, votePayload)
                                         } else {
-                                            val walletId = resolvedWalletId
+                                            val walletId = resolvedSbbsAddress
                                             if (!walletId.isNullOrEmpty()) {
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, votePayload)
                                             }
@@ -2721,7 +2730,7 @@ fun ChatScreen(
                                         if (isGroupMode && groupId != null) {
                                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, unreactPayload)
                                         } else {
-                                            val walletId = resolvedWalletId
+                                            val walletId = resolvedSbbsAddress
                                             if (!walletId.isNullOrEmpty()) {
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, unreactPayload)
                                             }
@@ -2750,7 +2759,7 @@ fun ChatScreen(
                                         if (isGroupMode && groupId != null) {
                                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, reactPayload)
                                         } else {
-                                            val walletId = resolvedWalletId
+                                            val walletId = resolvedSbbsAddress
                                             if (!walletId.isNullOrEmpty()) {
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, reactPayload)
                                             }
@@ -3298,7 +3307,7 @@ fun ChatScreen(
                                             val packFiles = currentPack?.second ?: emptyList()
                                             if (packFiles.isEmpty()) {
                                                 Toast.makeText(context, R.string.toast_pack_empty, Toast.LENGTH_SHORT).show()
-                                            } else if (!isGroupMode && resolvedWalletId.isNullOrEmpty()) {
+                                            } else if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
                                                 Toast.makeText(context, R.string.toast_resolving_address, Toast.LENGTH_SHORT).show()
                                             } else {
                                                 val pName = currentPack!!.first
@@ -3397,7 +3406,7 @@ fun ChatScreen(
                                                                 com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
                                                             } else {
                                                                 com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(stkConvId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
-                                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedWalletId!!, payload)
+                                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
                                                             }
                                                             withContext(Dispatchers.Main) {
                                                                 Toast.makeText(context, context.getString(R.string.toast_pack_shared, pTotal, zipFile.length() / 1024), Toast.LENGTH_SHORT).show()
@@ -3949,7 +3958,7 @@ fun ChatScreen(
                                                 when {
                                                     pendingFile != null -> stringResource(R.string.chat_add_caption)
                                                     isDeletedAccount -> stringResource(R.string.chat_account_deleted_notice)
-                                                    !isGroupMode && resolvedWalletId.isNullOrEmpty() -> stringResource(R.string.chat_resolving_address)
+                                                    !isGroupMode && resolvedSbbsAddress.isNullOrEmpty() -> stringResource(R.string.chat_resolving_address)
                                                     else -> stringResource(R.string.chat_message_placeholder)
                                                 },
                                                 color = C.textMuted, fontSize = 15.sp,
@@ -3964,7 +3973,7 @@ fun ChatScreen(
                                         ),
                                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                                         maxLines = 4,
-                                        enabled = (isGroupMode || !resolvedWalletId.isNullOrEmpty()) && !uploading && !isDeletedAccount,
+                                        enabled = (isGroupMode || !resolvedSbbsAddress.isNullOrEmpty()) && !uploading && !isDeletedAccount,
                                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                                     )
 
@@ -4371,7 +4380,7 @@ fun ChatScreen(
                                                     if (isGroupMode && groupId != null) {
                                                         com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
                                                     } else {
-                                                        val walletId = resolvedWalletId
+                                                        val walletId = resolvedSbbsAddress
                                                         if (!walletId.isNullOrEmpty()) {
                                                             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                                                         }
@@ -4839,7 +4848,7 @@ fun ChatScreen(
                                     if (isGroupMode && groupId != null) {
                                         com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, reactPayload)
                                     } else {
-                                        val walletId = resolvedWalletId
+                                        val walletId = resolvedSbbsAddress
                                         if (!walletId.isNullOrEmpty()) {
                                             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, reactPayload)
                                         }
@@ -5108,7 +5117,7 @@ fun ChatScreen(
                                             }
                                         } else {
                                             // DM: rebuild payload based on original type
-                                            val wid = resolvedWalletId
+                                            val wid = resolvedSbbsAddress
                                             if (!wid.isNullOrEmpty()) {
                                                 val payload = when {
                                                     targetMsg.type == "tip" -> mapOf<String, Any?>(
@@ -5206,7 +5215,7 @@ fun ChatScreen(
                                         if (isGroupMode && groupId != null) {
                                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
                                         } else {
-                                            val walletId = resolvedWalletId
+                                            val walletId = resolvedSbbsAddress
                                             if (!walletId.isNullOrEmpty()) {
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                                             }
@@ -5637,7 +5646,7 @@ fun ChatScreen(
                                                             }
                                                             lastPreview = if (isFile) context.getString(R.string.chat_forward_file_msg, m.file!!.name.ifEmpty { "" }) else m.text.take(100)
                                                             lastTs = ts
-                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.walletId!!, payload)
+                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.sbbsAddress ?: contact.walletId!!, payload)
                                                             // Delay between forwards to avoid SBBS rate-limiting
                                                             if (i < allFwdMsgs.size - 1) delay(2000)
                                                         }
@@ -5810,7 +5819,7 @@ fun ChatScreen(
                         if (isGroupMode && groupId != null) {
                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
                         } else {
-                            val walletId = resolvedWalletId
+                            val walletId = resolvedSbbsAddress
                             if (!walletId.isNullOrEmpty()) {
                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                             }

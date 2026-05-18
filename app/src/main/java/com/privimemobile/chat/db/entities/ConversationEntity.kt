@@ -15,6 +15,7 @@ data class ConversationEntity(
     val handle: String? = null,
     @ColumnInfo(name = "display_name") val displayName: String? = null,
     @ColumnInfo(name = "wallet_id") val walletId: String? = null,
+    @ColumnInfo(name = "sbbs_address") val sbbsAddress: String? = null,
     @ColumnInfo(name = "avatar_cid") val avatarCid: String? = null,
     @ColumnInfo(name = "unread_count") val unreadCount: Int = 0,
     @ColumnInfo(name = "last_message_ts") val lastMessageTs: Long = 0,

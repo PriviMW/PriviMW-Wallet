@@ -183,12 +183,13 @@ class MessageProcessor(
         val hash = hashInput.hashCode().toString(16)
         val dedupKey = "$ts:$hash:$sent"
 
-        // Get or create conversation
+        // Get or create conversation — sbbsAddress from SBBS envelope, walletId from contract (resolved later)
         val conv = db.conversationDao().getOrCreate(
             convKey = convKey,
             handle = if (sent) to else from,
             displayName = displayName,
-            walletId = if (sent) null else senderWalletId,
+            walletId = null,
+            sbbsAddress = if (sent) null else senderWalletId,
         )
 
         // Compute expiresAt from TTL if present
@@ -910,11 +911,11 @@ class MessageProcessor(
     /**
      * Verify SBBS sender authenticity.
      * Compares the SBBS envelope sender (raw["sender"], set by Beam core, not spoofable)
-     * against the stored wallet_id for the claimed "from" handle.
+     * against the stored sbbs_address for the claimed "from" handle.
      *
      * Returns:
-     *   true  — sender is verified (wallet_id matches) or is unknown (new contact)
-     *   false — sender wallet_id DOES NOT match stored wallet_id (spoofed)
+     *   true  — sender is verified (sbbs_address matches) or is unknown (new contact)
+     *   false — sender sbbs_address DOES NOT match stored sbbs_address (spoofed)
      *
      * For state-changing actions (edit, delete, service messages), reject on false.
      * For new messages, allow unknown senders (first contact scenario).
@@ -923,11 +924,11 @@ class MessageProcessor(
         if (from.isEmpty() || senderWalletId.isNullOrEmpty()) return false
         val normalizedSender = Helpers.normalizeWalletId(senderWalletId) ?: return false
         val contact = db.contactDao().findByHandle(from) ?: return true // unknown contact = allow
-        val storedWalletId = contact.walletId ?: return true // no stored wallet_id = allow
-        val normalizedStored = Helpers.normalizeWalletId(storedWalletId) ?: return true
+        val storedSbbs = contact.sbbsAddress ?: return true // no stored sbbs_address = allow
+        val normalizedStored = Helpers.normalizeWalletId(storedSbbs) ?: return true
         val match = normalizedSender == normalizedStored
         if (!match) {
-            Log.w(TAG, "verifySender MISMATCH for @$from: sender=${senderWalletId.take(16)}... stored=${storedWalletId.take(16)}... normSender=${normalizedSender.take(16)}... normStored=${normalizedStored.take(16)}...")
+            Log.w(TAG, "verifySender MISMATCH for @$from: sender=${senderWalletId.take(16)}... stored=${storedSbbs.take(16)}... normSender=${normalizedSender.take(16)}... normStored=${normalizedStored.take(16)}...")
         }
         return match
     }
@@ -956,15 +957,15 @@ class MessageProcessor(
             return
         }
 
-        // Auto-update sender's wallet_id if it changed (catches re-registration)
+        // Auto-update sender's sbbs_address if it changed (catches re-registration)
         if (!sent && from.isNotEmpty()) {
             val senderWalletId = raw["sender"] as? String
             if (!senderWalletId.isNullOrEmpty()) {
                 val cachedMember = db.groupDao().findMember(groupId, from)
-                if (cachedMember != null && cachedMember.walletId != senderWalletId) {
-                    db.groupDao().updateMemberWalletId(groupId, from, senderWalletId)
-                    db.contactDao().updateResolved(from, senderWalletId, null, null, 0)
-                    Log.d(TAG, "Auto-updated wallet_id for @$from in group $groupId")
+                if (cachedMember != null && cachedMember.sbbsAddress != senderWalletId) {
+                    db.groupDao().updateMemberSbbsAddress(groupId, from, senderWalletId)
+                    db.contactDao().updateSbbsAddress(from, senderWalletId)
+                    Log.d(TAG, "Auto-updated sbbs_address for @$from in group $groupId")
                 }
             }
         }
@@ -1018,12 +1019,13 @@ class MessageProcessor(
                 db.groupDao().incrementUnread(groupId)
             }
 
-            // Resolve sender's wallet ID for receipts
-            val senderWalletId = db.groupDao().getMemberWalletId(groupId, from)
+            // Resolve sender's sbbs_address for receipts
+            val senderAddress = db.groupDao().getMemberSbbsAddress(groupId, from)
+                ?: db.contactDao().findByHandle(from)?.sbbsAddress
                 ?: db.contactDao().findByHandle(from)?.walletId
             val state = db.chatStateDao().get()
 
-            if (isActive && senderWalletId != null && state?.myHandle != null) {
+            if (isActive && senderAddress != null && state?.myHandle != null) {
                 // Chat is open — send read receipt directly (✓✓ blue)
                 val ackPayload = mapOf(
                     "v" to 1, "t" to "ack",
@@ -1031,8 +1033,8 @@ class MessageProcessor(
                     "group_id" to groupId,
                     "read" to listOf(ts),
                 )
-                ChatService.sbbs.sendOnce(senderWalletId, ackPayload)
-            } else if (senderWalletId != null && state?.myHandle != null) {
+                ChatService.sbbs.sendOnce(senderAddress, ackPayload)
+            } else if (senderAddress != null && state?.myHandle != null) {
                 // Chat is NOT open — send delivery receipt (✓✓ grey)
                 val deliveredPayload = mapOf(
                     "v" to 1, "t" to "delivered",
@@ -1040,7 +1042,7 @@ class MessageProcessor(
                     "group_id" to groupId,
                     "delivered" to listOf(ts),
                 )
-                ChatService.sbbs.sendOnce(senderWalletId, deliveredPayload)
+                ChatService.sbbs.sendOnce(senderAddress, deliveredPayload)
             }
 
             // Notification — bypass mute if @mentioned
@@ -1211,20 +1213,21 @@ class MessageProcessor(
                         db.groupDao().incrementUnread(groupId)
                     }
 
-                    // Send delivery/read receipt
-                    val senderWalletId2 = db.groupDao().getMemberWalletId(groupId, from)
+  // Send delivery/read receipt
+                    val senderAddress2 = db.groupDao().getMemberSbbsAddress(groupId, from)
+                        ?: db.contactDao().findByHandle(from)?.sbbsAddress
                         ?: db.contactDao().findByHandle(from)?.walletId
                     val state2 = db.chatStateDao().get()
-                    if (senderWalletId2 != null && state2?.myHandle != null) {
+                    if (senderAddress2 != null && state2?.myHandle != null) {
                         if (isActive) {
                             // Chat open → read receipt (✓✓ blue)
-                            ChatService.sbbs.sendOnce(senderWalletId2, mapOf(
+                            ChatService.sbbs.sendOnce(senderAddress2, mapOf(
                                 "v" to 1, "t" to "ack", "from" to state2.myHandle,
                                 "group_id" to groupId, "read" to listOf(ts),
                             ))
                         } else {
                             // Chat closed → delivery receipt (✓✓ grey)
-                            ChatService.sbbs.sendOnce(senderWalletId2, mapOf(
+                            ChatService.sbbs.sendOnce(senderAddress2, mapOf(
                                 "v" to 1, "t" to "delivered", "from" to state2.myHandle,
                                 "group_id" to groupId, "delivered" to listOf(ts),
                             ))

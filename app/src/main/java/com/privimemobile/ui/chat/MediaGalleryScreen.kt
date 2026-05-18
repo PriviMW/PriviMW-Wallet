@@ -374,8 +374,9 @@ fun MediaGalleryScreen(
                                                         ChatService.groups.sendGroupPayload(handle, delPayload)
                                                     } else {
                                                         val contact = ChatService.db?.contactDao()?.findByHandle(handle)
-                                                        if (!contact?.walletId.isNullOrEmpty()) {
-                                                            ChatService.sbbs.sendWithRetry(contact!!.walletId!!, delPayload)
+                                                        val sendAddr = contact?.sbbsAddress ?: contact?.walletId
+                                                        if (!sendAddr.isNullOrEmpty()) {
+                                                            ChatService.sbbs.sendWithRetry(sendAddr, delPayload)
                                                         }
                                                     }
                                                 }

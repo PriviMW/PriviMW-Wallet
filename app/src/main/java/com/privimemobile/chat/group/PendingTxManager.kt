@@ -133,21 +133,22 @@ class PendingTxManager(
                         )
                         // Send to all DM contacts
                         val contacts = db.contactDao().getAll()
-                        val sentWalletIds = mutableSetOf<String>()
+                        val sentAddresses = mutableSetOf<String>()
                         for (contact in contacts) {
-                            if (contact.walletId.isNullOrEmpty()) continue
-                            try { ChatService.sbbs.sendOnce(contact.walletId, payload) } catch (_: Exception) {}
-                            sentWalletIds.add(contact.walletId)
+                            val addr = contact.sbbsAddress ?: contact.walletId
+                            if (addr.isNullOrEmpty()) continue
+                            try { ChatService.sbbs.sendOnce(addr, payload) } catch (_: Exception) {}
+                            sentAddresses.add(addr)
                             delay(100)
                         }
                         // Also send to all group members (so they update cached wallet_id)
                         val groups = db.groupDao().getAllGroups()
                         for (group in groups) {
-                            val members = db.groupDao().getMemberWalletIds(group.groupId, state.myHandle)
-                            for (wid in members) {
-                                if (wid.isNullOrEmpty() || wid in sentWalletIds) continue
-                                try { ChatService.sbbs.sendOnce(wid, payload) } catch (_: Exception) {}
-                                sentWalletIds.add(wid)
+                            val members = db.groupDao().getMemberSbbsAddresses(group.groupId, state.myHandle)
+                            for (addr in members) {
+                                if (addr.isNullOrEmpty() || addr in sentAddresses) continue
+                                try { ChatService.sbbs.sendOnce(addr, payload) } catch (_: Exception) {}
+                                sentAddresses.add(addr)
                                 delay(100)
                             }
                         }

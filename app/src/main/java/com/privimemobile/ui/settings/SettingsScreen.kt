@@ -1926,7 +1926,7 @@ private suspend fun distributeAvatarToContacts(context: android.content.Context,
     val base64Data = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
 
     for (contact in contacts) {
-        val walletId = contact.walletId ?: continue
+        val walletId = contact.sbbsAddress ?: contact.walletId ?: continue
         try {
             val payload = mapOf(
                 "v" to 1, "t" to "profile_update",

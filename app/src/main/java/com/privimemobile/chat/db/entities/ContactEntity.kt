@@ -7,12 +7,14 @@ import androidx.room.*
     indices = [
         Index(value = ["handle"], unique = true),
         Index(value = ["wallet_id"]),
+        Index(value = ["sbbs_address"]),
     ]
 )
 data class ContactEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val handle: String,
     @ColumnInfo(name = "wallet_id") val walletId: String? = null,
+    @ColumnInfo(name = "sbbs_address") val sbbsAddress: String? = null,
     @ColumnInfo(name = "display_name") val displayName: String? = null,
     @ColumnInfo(name = "avatar_cid") val avatarCid: String? = null,
     @ColumnInfo(name = "registered_height") val registeredHeight: Long = 0,

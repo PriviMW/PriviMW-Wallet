@@ -48,5 +48,6 @@ data class GroupMemberEntity(
     val role: Int = 0,                                      // 0=member, 1=admin, 2=creator, 3=banned
     val permissions: Int = 3,
     @ColumnInfo(name = "wallet_id") val walletId: String? = null,
+    @ColumnInfo(name = "sbbs_address") val sbbsAddress: String? = null,
     @ColumnInfo(name = "joined_height") val joinedHeight: Long = 0,
 )

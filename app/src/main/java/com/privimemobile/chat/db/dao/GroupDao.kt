@@ -117,8 +117,14 @@ interface GroupDao {
     @Query("UPDATE group_members SET wallet_id = :walletId WHERE group_id = :groupId AND handle = :handle")
     suspend fun updateMemberWalletId(groupId: String, handle: String, walletId: String?)
 
+    @Query("UPDATE group_members SET sbbs_address = :sbbsAddress WHERE group_id = :groupId AND handle = :handle")
+    suspend fun updateMemberSbbsAddress(groupId: String, handle: String, sbbsAddress: String?)
+
     @Query("SELECT wallet_id FROM group_members WHERE group_id = :groupId AND handle = :handle LIMIT 1")
     suspend fun getMemberWalletId(groupId: String, handle: String): String?
+
+    @Query("SELECT sbbs_address FROM group_members WHERE group_id = :groupId AND handle = :handle LIMIT 1")
+    suspend fun getMemberSbbsAddress(groupId: String, handle: String): String?
 
     @Query("DELETE FROM group_members WHERE group_id = :groupId AND handle = :handle")
     suspend fun removeMember(groupId: String, handle: String)
@@ -128,8 +134,8 @@ interface GroupDao {
 
     // --- Convenience ---
 
-    @Query("SELECT wallet_id FROM group_members WHERE group_id = :groupId AND role != 3 AND handle != :excludeHandle")
-    suspend fun getMemberWalletIds(groupId: String, excludeHandle: String): List<String?>
+    @Query("SELECT sbbs_address FROM group_members WHERE group_id = :groupId AND role != 3 AND handle != :excludeHandle")
+    suspend fun getMemberSbbsAddresses(groupId: String, excludeHandle: String): List<String?>
 
     @Query("SELECT handle FROM group_members WHERE group_id = :groupId AND role != 3")
     suspend fun getMemberHandles(groupId: String): List<String>

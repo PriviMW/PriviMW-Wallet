@@ -27,11 +27,14 @@ class ContactManager(
     /**
      * Ensure a contact exists in DB. If new, queue for async resolution.
      * Called by MessageProcessor when a new sender is encountered.
+     *
+     * Writes sbbsAddress (SBBS channel) from the envelope sender.
+     * The walletId (on-chain) is resolved separately by resolveHandle.
      */
     fun ensureContact(handle: String, displayName: String?, walletId: String?) {
         scope.launch {
+            val normalized = Helpers.normalizeWalletId(walletId ?: "")
             val existing = db.contactDao().findByHandle(handle)
-            val effectiveWalletId: String?
             if (existing != null) {
                 // Update display name if we have a newer one
                 if (displayName != null && displayName != existing.displayName) {
@@ -39,38 +42,26 @@ class ContactManager(
                     // Also update conversation display info
                     db.conversationDao().updateContactInfo("@$handle", displayName, null, null)
                 }
-                // Re-resolve if wallet_id is missing
-                if (existing.walletId == null && walletId != null) {
-                    val normalized = Helpers.normalizeWalletId(walletId)
-                    db.contactDao().update(existing.copy(walletId = normalized))
-                    effectiveWalletId = normalized
-                } else {
-                    effectiveWalletId = existing.walletId
+                // Update sbbs_address from SBBS envelope (per-conversation channel)
+                if (normalized != null && existing.sbbsAddress != normalized) {
+                    db.contactDao().updateSbbsAddress(handle, normalized)
                 }
             } else {
-                // Insert new contact
-                val normalized = Helpers.normalizeWalletId(walletId ?: "")
+                // Insert new contact — sbbsAddress from envelope, walletId from contract (resolved later)
                 db.contactDao().insert(ContactEntity(
                     handle = handle,
-                    walletId = normalized,
+                    sbbsAddress = normalized,
                     displayName = displayName,
                 ))
-                effectiveWalletId = normalized
-
-                // If no wallet_id, resolve from contract (gets wallet_id + triggers avatar request)
-                if (walletId == null) {
-                    resolveHandle(handle)
-                    return@launch // resolveHandle handles avatar request
-                }
             }
 
             // Request avatar if no cached file exists
-            if (!effectiveWalletId.isNullOrEmpty()) {
+            if (normalized != null) {
                 val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
                 if (filesDir != null) {
                     val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
                     if (!avatarFile.exists()) {
-                        requestAvatar(handle, effectiveWalletId)
+                        requestAvatar(handle, normalized)
                     }
                 }
             }
@@ -143,9 +134,9 @@ class ContactManager(
         }
     }
 
-    /**
+   /**
      * Re-resolve on chat open — ensures latest wallet_id (recipient may have updated).
-     * Respects 5-minute cooldown.
+     * Respects 5-minute cooldown for refresh, but ALWAYS resolves if wallet_id is missing.
      */
     fun reResolveOnChatOpen(handle: String) {
         scope.launch {
@@ -153,11 +144,24 @@ class ContactManager(
 
             // Always check for missing avatar on chat open (no cooldown)
             val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
-            if (filesDir != null && !contact.walletId.isNullOrEmpty()) {
+            val avatarAddr = contact.sbbsAddress ?: contact.walletId
+            if (filesDir != null && !avatarAddr.isNullOrEmpty()) {
                 val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
                 if (!avatarFile.exists()) {
-                    requestAvatar(handle, contact.walletId!!)
+                    requestAvatar(handle, avatarAddr)
                 }
+            }
+
+            // If wallet_id is missing, resolve immediately (no cooldown) — needed for /tip
+            if (contact.walletId.isNullOrEmpty()) {
+                resolveHandle(handle)
+                return@launch
+            }
+
+            // If sbbs_address is missing, resolve to get the on-chain wallet_id as initial send address
+            if (contact.sbbsAddress.isNullOrEmpty()) {
+                resolveHandle(handle)
+                return@launch
             }
 
             // Resolve handle (with cooldown) to refresh wallet_id/display name
@@ -169,6 +173,7 @@ class ContactManager(
 
     /**
      * Resolve a wallet_id to a contact.
+     * Writes walletId (on-chain) only. sbbsAddress is filled by ensureContact from SBBS envelope.
      */
     suspend fun resolveWalletId(walletId: String): ContactEntity? {
         try {
@@ -221,7 +226,7 @@ class ContactManager(
                 val displayName = Helpers.fixBvmUtf8(map["display_name"] as? String)
                 val height = (map["registered_height"] as? Number)?.toLong() ?: 0
 
-                // Upsert into local DB
+                // Upsert into local DB (walletId only — sbbsAddress from SBBS envelope)
                 db.contactDao().updateResolved(handle, walletId, displayName, null, height)
                 contacts.add(ContactEntity(
                     handle = handle,
@@ -238,8 +243,8 @@ class ContactManager(
         }
     }
 
-    /**
-     * Batch-resolve all contacts with missing wallet_ids.
+   /**
+     * Batch-resolve all contacts with missing sbbs_address (need contract for sending).
      */
     fun resolveUnresolved() {
         scope.launch {
@@ -251,8 +256,8 @@ class ContactManager(
         }
     }
 
-    /** Send avatar_request to a contact. */
-    suspend fun requestAvatar(handle: String, walletId: String) {
+    /** Send avatar_request to a contact. Uses sbbsAddress (SBBS channel) for sending. */
+    suspend fun requestAvatar(handle: String, sbbsAddress: String) {
         try {
             val state = db.chatStateDao().get() ?: return
             val myHandle = state.myHandle ?: return
@@ -261,7 +266,7 @@ class ContactManager(
                 "ts" to System.currentTimeMillis() / 1000,
                 "from" to myHandle, "to" to handle,
             )
-            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(sbbsAddress, payload)
             Log.d(TAG, "Sent avatar_request to @$handle")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to request avatar from @$handle: ${e.message}")

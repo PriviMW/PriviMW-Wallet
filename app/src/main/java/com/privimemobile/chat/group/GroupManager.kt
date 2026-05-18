@@ -134,9 +134,9 @@ class GroupManager(
 
         // Resolve target's wallet ID for SBBS
         val contact = ChatService.contacts.resolveHandle(targetHandle)
-        val walletId = contact?.walletId
-        if (walletId.isNullOrEmpty()) {
-            Log.w(TAG, "Cannot invite @$targetHandle — no wallet ID")
+        val sendAddress = contact?.sbbsAddress ?: contact?.walletId
+        if (sendAddress.isNullOrEmpty()) {
+            Log.w(TAG, "Cannot invite @$targetHandle — no send address")
             return false
         }
 
@@ -155,7 +155,7 @@ class GroupManager(
         if (!group.joinPassword.isNullOrEmpty()) {
             payload["join_password"] = group.joinPassword
         }
-        ChatService.sbbs.sendWithRetry(walletId, payload)
+        ChatService.sbbs.sendWithRetry(sendAddress, payload)
 
         // Insert sender-side message in DM conversation
         val convKey = "@$targetHandle"
@@ -540,7 +540,7 @@ class GroupManager(
                 val permissions = (m["permissions"] as? Number)?.toInt() ?: 0
                 val joinedHeight = (m["joined_height"] as? Number)?.toLong() ?: 0
 
-                // Resolve wallet_id: self from state, others from contact DB or contract
+                // Resolve wallet_id (on-chain) and sbbs_address (send channel)
                 val walletId = if (handle == myHandle) {
                     state?.myWalletId
                 } else {
@@ -549,6 +549,13 @@ class GroupManager(
                         try { contact = ChatService.contacts.resolveHandle(handle) } catch (_: Exception) {}
                     }
                     contact?.walletId
+                }
+                // sbbs_address for sending: prefer SBBS channel, fall back to contract walletId
+                val sbbsAddr = if (handle == myHandle) {
+                    state?.myWalletId
+                } else {
+                    val contact = db.contactDao().findByHandle(handle)
+                    contact?.sbbsAddress ?: contact?.walletId
                 }
 
                 val memberDisplayName = if (handle == myHandle) state?.myDisplayName
@@ -562,7 +569,9 @@ class GroupManager(
                     ?: existingMember?.displayName
                 val resolvedWalletId = walletId
                     ?: existingMember?.walletId
-                Log.d(TAG, "insertMember: handle=$handle walletId=${resolvedWalletId?.take(12)} dn=${resolvedDisplayName?.take(12)}")
+                val resolvedSbbsAddr = sbbsAddr
+                    ?: existingMember?.sbbsAddress ?: existingMember?.walletId
+                Log.d(TAG, "insertMember: handle=$handle walletId=${resolvedWalletId?.take(12)} sbbs=${resolvedSbbsAddr?.take(12)} dn=${resolvedDisplayName?.take(12)}")
                 db.groupDao().insertMember(GroupMemberEntity(
                     groupId = groupId,
                     handle = handle,
@@ -570,6 +579,7 @@ class GroupManager(
                     role = role,
                     permissions = permissions,
                     walletId = resolvedWalletId,
+                    sbbsAddress = resolvedSbbsAddr,
                     joinedHeight = joinedHeight,
                 ))
 
@@ -579,7 +589,7 @@ class GroupManager(
                 }
             }
 
-            // Resolve/refresh wallet_ids for ALL members (catches address changes after wallet restore)
+            // Resolve/refresh wallet_ids + sbbs_addresses for ALL members (catches address changes after wallet restore)
             scope.launch {
                 val allMembers = db.groupDao().getActiveMembers(groupId)
                 for (member in allMembers) {
@@ -589,6 +599,12 @@ class GroupManager(
                         if (resolved?.walletId != null && resolved.walletId != member.walletId) {
                             db.groupDao().updateMemberWalletId(groupId, member.handle, resolved.walletId)
                             Log.d(TAG, "Updated wallet_id for @${member.handle} in group $groupId")
+                        }
+                        // Also update sbbs_address from contact if available
+                        val contact = db.contactDao().findByHandle(member.handle)
+                        val newSbbs = contact?.sbbsAddress ?: contact?.walletId
+                        if (newSbbs != null && newSbbs != member.sbbsAddress) {
+                            db.groupDao().updateMemberSbbsAddress(groupId, member.handle, newSbbs)
                         }
                     } catch (_: Exception) {}
                     delay(200)
@@ -635,19 +651,19 @@ class GroupManager(
 
         val convId = getOrCreateGroupConversation(groupId, group.name)
 
-        // Get all member wallet_ids (exclude self) — retry after refresh if empty
-        var memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+        // Get all member sbbs_addresses (exclude self) — retry after refresh if empty
+        var memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
             .filterNotNull()
             .filter { it.isNotEmpty() }
 
-        if (memberWalletIds.isEmpty()) {
-            Log.w(TAG, "No member wallet_ids for group $groupId — refreshing members")
+        if (memberSbbsAddresses.isEmpty()) {
+            Log.w(TAG, "No member sbbs_addresses for group $groupId — refreshing members")
             refreshGroupMembers(groupId)
-            memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
                 .filterNotNull()
                 .filter { it.isNotEmpty() }
-            if (memberWalletIds.isEmpty()) {
-                Log.e(TAG, "Still no wallet_ids after refresh — cannot send")
+            if (memberSbbsAddresses.isEmpty()) {
+                Log.e(TAG, "Still no sbbs_addresses after refresh — cannot send")
                 return
             }
         }
@@ -697,25 +713,25 @@ class GroupManager(
         db.groupDao().updateLastMessage(groupId, ts, "${context.getString(R.string.chat_sender_you)}: ${text.take(40)}")
 
         // Send to each member with 200ms spacing (first pass)
-        for (walletId in memberWalletIds) {
+        for (addr in memberSbbsAddresses) {
             try {
-                ChatService.sbbs.sendOnce(walletId, payload)
+                ChatService.sbbs.sendOnce(addr, payload)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to send group msg to $walletId: ${e.message}")
+                Log.w(TAG, "Failed to send group msg to $addr: ${e.message}")
             }
             delay(200)
         }
-        Log.d(TAG, "Sent group msg to ${memberWalletIds.size} members in $groupId")
+        Log.d(TAG, "Sent group msg to ${memberSbbsAddresses.size} members in $groupId")
 
         // Retry send after 5s for reliability (receiver dedup prevents duplicates)
         delay(5000)
-        for (walletId in memberWalletIds) {
+        for (addr in memberSbbsAddresses) {
             try {
-                ChatService.sbbs.sendOnce(walletId, payload)
+                ChatService.sbbs.sendOnce(addr, payload)
             } catch (_: Exception) {}
             delay(200)
         }
-        Log.d(TAG, "Retry sent group msg to ${memberWalletIds.size} members in $groupId")
+        Log.d(TAG, "Retry sent group msg to ${memberSbbsAddresses.size} members in $groupId")
     }
 
     /**
@@ -731,7 +747,7 @@ class GroupManager(
         val myMember = db.groupDao().findMember(groupId, myHandle)
         if (myMember?.role == 3) { Log.w(TAG, "Cannot send — banned from group $groupId"); return }
 
-        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+        val memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
             .filterNotNull()
             .filter { it.isNotEmpty() }
 
@@ -740,21 +756,21 @@ class GroupManager(
         fullPayload["group_id"] = groupId
         fullPayload["from"] = myHandle
 
-        for (walletId in memberWalletIds) {
+        for (addr in memberSbbsAddresses) {
             try {
-                ChatService.sbbs.sendOnce(walletId, fullPayload)
+                ChatService.sbbs.sendOnce(addr, fullPayload)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to send group payload to $walletId: ${e.message}")
+                Log.w(TAG, "Failed to send group payload to $addr: ${e.message}")
             }
             delay(200)
         }
-        Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberWalletIds.size} members in $groupId")
+        Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberSbbsAddresses.size} members in $groupId")
 
         // Retry after 5s for reliability (receiver dedup prevents duplicates)
         delay(5000)
-        for (walletId in memberWalletIds) {
+        for (addr in memberSbbsAddresses) {
             try {
-                ChatService.sbbs.sendOnce(walletId, fullPayload)
+                ChatService.sbbs.sendOnce(addr, fullPayload)
             } catch (_: Exception) {}
             delay(200)
         }
@@ -773,7 +789,7 @@ class GroupManager(
         scope.launch {
             val state = db.chatStateDao().get() ?: return@launch
             val myHandle = state.myHandle ?: return@launch
-            val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+            val memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
                 .filterNotNull().filter { it.isNotEmpty() }
 
             val payload = mapOf(
@@ -782,8 +798,8 @@ class GroupManager(
                 "group_id" to groupId,
                 "ts" to (now / 1000),
             )
-            for (walletId in memberWalletIds) {
-                try { ChatService.sbbs.sendOnce(walletId, payload) } catch (_: Exception) {}
+            for (addr in memberSbbsAddresses) {
+                try { ChatService.sbbs.sendOnce(addr, payload) } catch (_: Exception) {}
             }
         }
     }
@@ -802,14 +818,14 @@ class GroupManager(
             if (member.handle == myHandle) continue
             val avatarFile = java.io.File(filesDir, "avatars/${member.handle}.webp")
             if (avatarFile.exists()) continue // already have it
-            val walletId = member.walletId ?: continue
+            val sendAddr = member.sbbsAddress ?: member.walletId ?: continue
 
             val payload = mapOf(
                 "v" to 1, "t" to "avatar_request",
                 "from" to myHandle,
             )
             try {
-                ChatService.sbbs.sendOnce(walletId, payload)
+                ChatService.sbbs.sendOnce(sendAddr, payload)
                 Log.d(TAG, "Requested avatar for @${member.handle} in group $groupId")
             } catch (_: Exception) {}
             delay(200)
@@ -834,17 +850,17 @@ class GroupManager(
         if (hasAvatarLocally && hasDescLocally) return // have everything
 
         // Prefer the group creator (they're most likely to have set the avatar/description)
-        var targetWalletId: String? = null
+        var targetAddress: String? = null
         if (group.creatorHandle != myHandle) {
-            targetWalletId = db.groupDao().getMemberWalletId(groupId, group.creatorHandle)
+            targetAddress = db.groupDao().getMemberSbbsAddress(groupId, group.creatorHandle)
         }
-        // Fall back to first member with a wallet ID
-        if (targetWalletId.isNullOrEmpty()) {
-            targetWalletId = db.groupDao().getMemberWalletIds(groupId, myHandle)
+        // Fall back to first member with a send address
+        if (targetAddress.isNullOrEmpty()) {
+            targetAddress = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
                 .filterNotNull()
                 .firstOrNull { it.isNotEmpty() }
         }
-        if (targetWalletId.isNullOrEmpty()) return
+        if (targetAddress.isNullOrEmpty()) return
 
         // Get my wallet ID for the response to come back to
         val myWalletId = state.myWalletId ?: return
@@ -859,8 +875,8 @@ class GroupManager(
         )
 
         try {
-            ChatService.sbbs.sendOnce(targetWalletId, request)
-            Log.d(TAG, "Sent group_info_request for $groupId to creator=${targetWalletId == db.groupDao().getMemberWalletId(groupId, group.creatorHandle)} (hasAvatar=$hasAvatarLocally, hasDesc=$hasDescLocally)")
+            ChatService.sbbs.sendOnce(targetAddress, request)
+            Log.d(TAG, "Sent group_info_request for $groupId to creator=${targetAddress == db.groupDao().getMemberSbbsAddress(groupId, group.creatorHandle)} (hasAvatar=$hasAvatarLocally, hasDesc=$hasDescLocally)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send group_info_request: ${e.message}")
         }
@@ -909,18 +925,19 @@ class GroupManager(
 
         }
 
-        // Get all active member wallet IDs (excludes banned)
-        val memberWalletIds = db.groupDao().getMemberWalletIds(groupId, myHandle)
+        // Get all active member send addresses (excludes banned)
+        val memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
             .filterNotNull()
             .filter { it.isNotEmpty() }
             .toMutableList()
 
-        // For kick/ban: explicitly include the target's wallet ID (they need to receive the notification)
+        // For kick/ban: explicitly include the target's send address (they need to receive the notification)
         if ((action == "kicked" || action == "banned") && target != null) {
-            val targetWalletId = db.groupDao().getMemberWalletId(groupId, target)
+            val targetAddress = db.groupDao().getMemberSbbsAddress(groupId, target)
+                ?: db.contactDao().findByHandle(target)?.sbbsAddress
                 ?: db.contactDao().findByHandle(target)?.walletId
-            if (targetWalletId != null && targetWalletId !in memberWalletIds) {
-                memberWalletIds.add(0, targetWalletId) // send to target first
+            if (targetAddress != null && targetAddress !in memberSbbsAddresses) {
+                memberSbbsAddresses.add(0, targetAddress) // send to target first
             }
         }
 
@@ -934,11 +951,11 @@ class GroupManager(
         )
         if (target != null) payload["target"] = target
 
-        for (walletId in memberWalletIds) {
+        for (addr in memberSbbsAddresses) {
             try {
-                ChatService.sbbs.sendOnce(walletId, payload)
+                ChatService.sbbs.sendOnce(addr, payload)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to send group service to $walletId: ${e.message}")
+                Log.w(TAG, "Failed to send group service to $addr: ${e.message}")
             }
             delay(200)
         }

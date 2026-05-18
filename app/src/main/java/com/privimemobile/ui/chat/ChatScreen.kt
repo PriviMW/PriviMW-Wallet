@@ -947,9 +947,11 @@ fun ChatScreen(
         voicePreviewDuration = 0L
 
         // Send via SBBS
+        // Update preview BEFORE network send — survives early navigation
         if (isGroupMode && groupId != null) {
+            val youLabel = context.getString(R.string.chat_sender_you)
+            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youLabel: $preview")
             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
         } else {
             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
@@ -1055,10 +1057,11 @@ fun ChatScreen(
         // Delete temp recording file
         result.file.delete()
 
-        // Send via SBBS
+        // Update preview BEFORE network send — survives early navigation
         if (isGroupMode && groupId != null) {
+            val youLabel = context.getString(R.string.chat_sender_you)
+            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youLabel: $preview")
             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
         } else {
             com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(voiceConvId, ts, preview)
             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
@@ -1305,9 +1308,10 @@ fun ChatScreen(
                         if (caption.isNotEmpty()) payload["msg"] = caption
 
                         if (isGroupMode && groupId != null) {
-                            // Broadcast tip to group + update group preview
+                            // Update preview BEFORE network send — survives early navigation
+                            val youPrefix = context.getString(R.string.chat_sender_you)
+                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youPrefix: $tipLabel")
                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, tipLabel)
                         } else {
                             val tipConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, tipTargetHandle)
                             if (tipConv.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(tipConv.id)
@@ -1370,8 +1374,10 @@ fun ChatScreen(
                             "msg" to question, "poll" to pollJson,
                         )
                         if (isGroupMode && groupId != null) {
+                            // Update preview BEFORE network send \u2014 survives early navigation
+                            val youLabel = context.getString(R.string.chat_sender_you)
+                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youLabel: \uD83D\uDCCA $question")
                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-                            com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "\uD83D\uDCCA $question")
                         } else {
                             val convDb = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(convKey, handle)
                             if (convDb.deletedAtTs > 0) com.privimemobile.chat.ChatService.db!!.conversationDao().undelete(convDb.id)
@@ -1493,8 +1499,10 @@ fun ChatScreen(
                             replyingTo = null
 
                             if (isGroupMode && groupId != null) {
+                                // Update preview BEFORE network send — survives early navigation
+                                val youLabel = context.getString(R.string.chat_sender_you)
+                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youLabel: $preview")
                                 com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, preview)
                             } else {
                                 com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(fileConvId, ts, preview)
                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
@@ -1622,8 +1630,12 @@ fun ChatScreen(
             val group = com.privimemobile.chat.ChatService.db?.groupDao()?.findByGroupId(groupId!!)
             if (group != null) {
                 if (latest != null) {
-                    val senderLabel = if (latest.sent) context.getString(R.string.chat_you_label) else "@${latest.senderHandle}"
-                    val grpPreview = "$senderLabel: ${latest.text?.take(40) ?: context.getString(R.string.chat_message_label)}"
+                    val senderLabel = if (latest.sent) context.getString(R.string.chat_sender_you) else "@${latest.senderHandle}"
+                    val grpPreview = when (latest.type) {
+                        "tip" -> "$senderLabel: ${context.getString(R.string.chat_preview_tip)}"
+                        "file" -> "$senderLabel: \uD83D\uDCCE ${context.getString(R.string.chat_preview_file)}"
+                        else -> "$senderLabel: ${latest.text?.take(40) ?: context.getString(R.string.chat_delete_preview)}"
+                    }
                     com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, latest.timestamp, grpPreview)
                 } else {
                     com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId!!, 0, null)
@@ -3402,8 +3414,10 @@ fun ChatScreen(
                                                                 )
                                                             }
                                                             if (isGroupMode && groupId != null) {
+                                                                // Update preview BEFORE network send \u2014 survives early navigation
+                                                                val youLabel = context.getString(R.string.chat_sender_you)
+                                                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "$youLabel: \uD83D\uDCE6 Sticker pack: $pName")
                                                                 com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
-                                                                com.privimemobile.chat.ChatService.db?.groupDao()?.updateLastMessage(groupId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
                                                             } else {
                                                                 com.privimemobile.chat.ChatService.db!!.conversationDao().updateLastMessage(stkConvId, ts, "\uD83D\uDCE6 Sticker pack: $pName")
                                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(resolvedSbbsAddress!!, payload)
@@ -4369,6 +4383,10 @@ fun ChatScreen(
                                         if (state?.myHandle != null) {
                                             for ((i, msg) in msgsToDelete.withIndex()) {
                                                 com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(msg.id.toLong())
+                                            }
+                                            // Update preview BEFORE network sends — survives early navigation
+                                            refreshConversationPreview(capturedConvId)
+                                            for (msg in msgsToDelete) {
                                                 if (msg.sent) {
                                                     val delPayload = mapOf(
                                                         "v" to 1, "t" to "delete",
@@ -4385,12 +4403,9 @@ fun ChatScreen(
                                                             com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                                                         }
                                                     }
-                                                    if (i < msgsToDelete.size - 1) delay(1000)
                                                 }
                                             }
                                         }
-                                        // Update chat list preview
-                                        refreshConversationPreview(capturedConvId)
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -5206,6 +5221,8 @@ fun ChatScreen(
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
                                         com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
+                                        // Update preview BEFORE network send — survives early navigation
+                                        refreshConversationPreview(convId)
                                         val delPayload = mapOf(
                                             "v" to 1, "t" to "delete",
                                             "ts" to System.currentTimeMillis() / 1000,
@@ -5220,7 +5237,6 @@ fun ChatScreen(
                                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                                             }
                                         }
-                                        refreshConversationPreview(convId)
                                     }
                                 }
                                 contextMenuMsg = null
@@ -5810,6 +5826,8 @@ fun ChatScreen(
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {
                         com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
+                        // Update preview BEFORE network send — survives early navigation
+                        refreshConversationPreview(convId)
                         val delPayload = mapOf(
                             "v" to 1, "t" to "delete",
                             "ts" to System.currentTimeMillis() / 1000,
@@ -5824,7 +5842,6 @@ fun ChatScreen(
                                 com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
                             }
                         }
-                        refreshConversationPreview(convId)
                     }
                 }
                 fullscreenImage = null

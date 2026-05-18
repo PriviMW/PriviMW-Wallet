@@ -782,7 +782,11 @@ class MessageProcessor(
                 val latest = db.messageDao().getLatestMessage(conv.id)
                 if (latest != null) {
                     val senderLabel = if (latest.sent) ctx.getString(R.string.chat_sender_you) else "@${latest.senderHandle}"
-                    val preview = "$senderLabel: ${latest.text?.take(40) ?: ctx.getString(R.string.chat_delete_preview)}"
+                    val preview = when (latest.type) {
+                        "tip" -> "$senderLabel: ${ctx.getString(R.string.chat_preview_tip)}"
+                        "file" -> "$senderLabel: 📎 ${ctx.getString(R.string.chat_preview_file)}"
+                        else -> "$senderLabel: ${latest.text?.take(40) ?: ctx.getString(R.string.chat_delete_preview)}"
+                    }
                     db.groupDao().updateLastMessage(group.groupId, latest.timestamp, preview)
                 } else {
                     db.groupDao().updateLastMessage(group.groupId, 0, null)

@@ -470,29 +470,24 @@ fun ChatsScreen(
                         }) { i ->
                             val item = unifiedList[i]
                             var showDeleteConfirmItem by remember { mutableStateOf(false) }
+                            var showArchiveConfirmItem by remember { mutableStateOf(false) }
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     when (value) {
                                         SwipeToDismissBoxValue.EndToStart -> {
-                                            // Swipe left → show confirmation
+                                            // Swipe left → show delete confirmation
                                             showDeleteConfirmItem = true
                                             false // don't dismiss yet
                                         }
                                         SwipeToDismissBoxValue.StartToEnd -> {
-                                            // Swipe right → Archive
-                                            scope.launch {
-                                                if (item.isGroup) {
-                                                    ChatService.db?.groupDao()?.setArchived(item.group!!.groupId, !item.group.archived)
-                                                } else {
-                                                    ChatService.db?.conversationDao()?.setArchived(item.conv!!.id, !(item.conv.archived))
-                                                }
-                                            }
-                                            true
+                                            // Swipe right → show archive confirmation
+                                            showArchiveConfirmItem = true
+                                            false // don't dismiss yet
                                         }
                                         else -> false
                                     }
                                 },
-                                positionalThreshold = { it * 0.35f },
+                                positionalThreshold = { it * 0.5f },
                             )
                             if (showDeleteConfirmItem) {
                                 val name = if (item.isGroup) item.group!!.name else "@${item.conv!!.convKey.removePrefix("@")}"
@@ -538,6 +533,34 @@ fun ChatsScreen(
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { showDeleteConfirmItem = false }) {
+                                            Text(stringResource(R.string.general_cancel), color = C.textSecondary)
+                                        }
+                                    },
+                                )
+                            }
+                            if (showArchiveConfirmItem) {
+                                val isGrp = item.isGroup
+                                val name = if (item.isGroup) item.group!!.name else (item.conv!!.displayName?.ifEmpty { null } ?: "@${item.conv!!.convKey.removePrefix("@")}")
+                                val isCurrentlyArchived = if (isGrp) item.group!!.archived else item.conv!!.archived
+                                AlertDialog(
+                                    onDismissRequest = { showArchiveConfirmItem = false },
+                                    containerColor = C.card,
+                                    title = { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive else R.string.chats_archive), color = C.text, fontWeight = FontWeight.SemiBold) },
+                                    text = { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive_confirm else R.string.chats_archive_confirm, name), color = C.textSecondary) },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            showArchiveConfirmItem = false
+                                            scope.launch {
+                                                if (isGrp) {
+                                                    ChatService.db?.groupDao()?.setArchived(item.group!!.groupId, !item.group!!.archived)
+                                                } else {
+                                                    ChatService.db?.conversationDao()?.setArchived(item.conv!!.id, !item.conv!!.archived)
+                                                }
+                                            }
+                                        }) { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive else R.string.chats_archive), color = C.accent, fontWeight = FontWeight.Bold) }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showArchiveConfirmItem = false }) {
                                             Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                         }
                                     },

@@ -923,6 +923,8 @@
     <string name="chats_swipe_unmute">Unmute</string>
     <string name="chats_archive">Archive</string>
     <string name="chats_unarchive">Unarchive</string>
+    <string name="chats_archive_confirm">Archive %1$s? You can find it in the Archived tab.</string>
+    <string name="chats_unarchive_confirm">Unarchive %1$s?</string>
     <string name="chats_leave_group">Leave group</string>
     <string name="chats_cd_muted">Muted</string>
     <string name="chats_cd_pinned">Pinned</string>

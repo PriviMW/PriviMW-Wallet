@@ -490,13 +490,33 @@ fun ChatsScreen(
                                 positionalThreshold = { it * 0.5f },
                             )
                             if (showDeleteConfirmItem) {
-                                val name = if (item.isGroup) item.group!!.name else "@${item.conv!!.convKey.removePrefix("@")}"
+                                val name = if (item.isGroup) item.group!!.name
+                                else (item.conv!!.displayName?.ifEmpty { null } ?: "@${item.conv!!.convKey.removePrefix("@")}")
                                 val isGrp = item.isGroup
+                                val deleteMsg = stringResource(if (isGrp) R.string.chats_leave_group_confirm else R.string.chats_delete_chat_confirm, name)
                                 AlertDialog(
                                     onDismissRequest = { showDeleteConfirmItem = false },
                                     containerColor = C.card,
                                     title = { Text(stringResource(if (isGrp) R.string.chats_leave_group_title else R.string.chats_delete_chat_title), color = C.text, fontWeight = FontWeight.SemiBold) },
-                                    text = { Text(stringResource(if (isGrp) R.string.chats_leave_group_confirm else R.string.chats_delete_chat_confirm, name), color = C.textSecondary) },
+                                    text = {
+                                        val annotated = buildAnnotatedString {
+                                            val idx = deleteMsg.indexOf(name)
+                                            if (idx >= 0) {
+                                                val before = deleteMsg.substring(0, idx)
+                                                val after = deleteMsg.substring(idx + name.length)
+                                                if (before.isNotEmpty()) {
+                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(before) }
+                                                }
+                                                withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.Bold)) { append(name) }
+                                                if (after.isNotEmpty()) {
+                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(after) }
+                                                }
+                                            } else {
+                                                withStyle(SpanStyle(color = C.textSecondary)) { append(deleteMsg) }
+                                            }
+                                        }
+                                        Text(text = annotated)
+                                    },
                                     confirmButton = {
                                         TextButton(onClick = {
                                             showDeleteConfirmItem = false
@@ -542,11 +562,30 @@ fun ChatsScreen(
                                 val isGrp = item.isGroup
                                 val name = if (item.isGroup) item.group!!.name else (item.conv!!.displayName?.ifEmpty { null } ?: "@${item.conv!!.convKey.removePrefix("@")}")
                                 val isCurrentlyArchived = if (isGrp) item.group!!.archived else item.conv!!.archived
+                                val archiveMsg = stringResource(if (isCurrentlyArchived) R.string.chats_unarchive_confirm else R.string.chats_archive_confirm, name)
                                 AlertDialog(
                                     onDismissRequest = { showArchiveConfirmItem = false },
                                     containerColor = C.card,
                                     title = { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive else R.string.chats_archive), color = C.text, fontWeight = FontWeight.SemiBold) },
-                                    text = { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive_confirm else R.string.chats_archive_confirm, name), color = C.textSecondary) },
+                                    text = {
+                                        val annotated = buildAnnotatedString {
+                                            val idx = archiveMsg.indexOf(name)
+                                            if (idx >= 0) {
+                                                val before = archiveMsg.substring(0, idx)
+                                                val after = archiveMsg.substring(idx + name.length)
+                                                if (before.isNotEmpty()) {
+                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(before) }
+                                                }
+                                                withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.Bold)) { append(name) }
+                                                if (after.isNotEmpty()) {
+                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(after) }
+                                                }
+                                            } else {
+                                                withStyle(SpanStyle(color = C.textSecondary)) { append(archiveMsg) }
+                                            }
+                                        }
+                                        Text(text = annotated)
+                                    },
                                     confirmButton = {
                                         TextButton(onClick = {
                                             showArchiveConfirmItem = false

@@ -188,8 +188,9 @@ object ChatService {
         // so this first poll catches messages received during wallet startup.
         scope.launch { sbbs.pollNow() }
 
-        // On first node connection (cold start), immediately poll for queued SBBS messages
-        // and enter startup boost mode (3s intervals for 30s).
+        // On first node connection (cold start), immediately poll for queued SBBS messages.
+        // SBBS polling (2s active / 3min idle) handles ongoing delivery;
+        // onInstantMessage push is the primary real-time trigger.
         scope.launch {
             var firstConnection = true
             com.privimemobile.wallet.WalletEventBus.nodeConnection.collect { event ->
@@ -197,7 +198,7 @@ object ChatService {
                     if (firstConnection) {
                         firstConnection = false
                         delay(2000) // let C++ core stabilize
-                        sbbs.onSystemState() // poll + activate startup boost
+                        sbbs.pollNow() // poll for any queued SBBS messages
                         Log.d(TAG, "First node connection — polling SBBS messages")
                     }
                 }

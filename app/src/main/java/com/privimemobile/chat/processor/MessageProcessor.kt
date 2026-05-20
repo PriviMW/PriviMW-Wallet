@@ -297,6 +297,7 @@ class MessageProcessor(
                 isMuted = isMuted,
                 totalUnread = totalUnread,
                 senderHandle = from,
+                convDisplayName = senderLabel,
             )
         }
 
@@ -462,13 +463,10 @@ class MessageProcessor(
                         if (txt.length > maxPreviewLen) txt.take(maxPreviewLen) + "…" else txt
                     }
                     // For groups: use group entity name (conv.handle = full groupId for group convs)
-                    val senderName = if (convKey.startsWith("g_")) {
-                        val group = db.groupDao().findByGroupId(conv.handle ?: "")
-                        val groupName = group?.name?.ifEmpty { null } ?: ctx.getString(R.string.chat_group_name_fallback)
-                        "$groupName: $senderDisplayName"
-                    } else {
-                        senderDisplayName
-                    }
+                    val groupForNotif = if (convKey.startsWith("g_")) db.groupDao().findByGroupId(conv.handle ?: "") else null
+                    val groupNameForNotif = groupForNotif?.name?.ifEmpty { null } ?: ctx.getString(R.string.chat_group_name_fallback)
+                    val senderName = if (convKey.startsWith("g_")) "$groupNameForNotif: $senderDisplayName" else senderDisplayName
+                    val reactionConvDisplay = if (convKey.startsWith("g_")) groupNameForNotif else senderDisplayName
                     // Merge reaction into the conversation's message notification (Telegram-style)
                     com.privimemobile.chat.notification.ChatNotificationManager.notifyMessage(
                         convKey = convKey,
@@ -481,6 +479,7 @@ class MessageProcessor(
                         senderHandle = from,
                         reactionEmoji = emoji,
                         reactedMessageText = reactedPreview,
+                        convDisplayName = reactionConvDisplay,
                     )
                 }
             }
@@ -891,6 +890,7 @@ class MessageProcessor(
                 senderName = displayName ?: "@$from",
                 text = inviteText, type = "group_invite",
                 isMuted = false, totalUnread = totalUnread,
+                convDisplayName = displayName ?: "@$from",
             )
         }
         db.conversationDao().incrementUnread(conv.id)
@@ -1066,6 +1066,7 @@ class MessageProcessor(
                     isMuted = false,
                     totalUnread = totalUnread,
                     senderHandle = from,
+                    convDisplayName = group.name,
                 )
             }
         }
@@ -1250,6 +1251,7 @@ class MessageProcessor(
                             isMuted = false,
                             totalUnread = totalUnread,
                             senderHandle = from,
+                            convDisplayName = group.name,
                         )
                     }
                 }

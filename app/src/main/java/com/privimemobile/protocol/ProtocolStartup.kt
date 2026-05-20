@@ -18,6 +18,7 @@ object ProtocolStartup {
     private var nodeRecoveryJob: Job? = null
     private var pollingScope: CoroutineScope? = null
     private var wasDisconnected = false
+    private var refreshJob: Job? = null  // debounced refresh coalesces rapid ev_txs_changed/ev_system_state
 
     /**
      * Initialize — call after wallet opens and API is ready.
@@ -41,20 +42,20 @@ object ProtocolStartup {
         restoreCachedRates()
         maybeSaveSnapshot()
 
-        // Wire wallet events
+        // Wire wallet events — debounced refresh coalesces rapid ev_txs_changed
+        // events during startup (C++ core fires 3+ times on node sync) into a single refreshWalletData().
+        // Identity refresh and pending-TX checks run immediately (lightweight, no wallet API contention).
         WalletApi.onSystemStateChanged = {
-            refreshWalletData()
             if (com.privimemobile.chat.ChatService.initialized.value) {
                 com.privimemobile.chat.ChatService.identity.onSystemState()
-                com.privimemobile.chat.ChatService.sbbs.onSystemState()
             }
+            scheduleRefresh()
         }
         WalletApi.onTxsChanged = {
-            refreshWalletData()
             if (com.privimemobile.chat.ChatService.initialized.value) {
-                com.privimemobile.chat.ChatService.sbbs.onTxsChanged()
                 com.privimemobile.chat.ChatService.pendingTxs.onTxsChanged()
             }
+            scheduleRefresh()
         }
 
         // Node reconnection recovery
@@ -139,6 +140,8 @@ object ProtocolStartup {
     fun shutdown() {
         nodeRecoveryJob?.cancel()
         nodeRecoveryJob = null
+        refreshJob?.cancel()
+        refreshJob = null
         NodeReconnect.stop()
         WalletApi.onSystemStateChanged = null
         WalletApi.onTxsChanged = null
@@ -155,6 +158,18 @@ object ProtocolStartup {
         NodeReconnect.onForegroundRecovery()
         refreshWalletData()
         maybeSaveSnapshot()
+    }
+
+    /** Debounced refresh — coalesces rapid ev_txs_changed/ev_system_state into a single refreshWalletData().
+     *  C++ core fires ev_txs_changed 3+ times during startup node sync; without debounce, each triggers
+     *  a full getTransactions() + getWalletStatus() + getAddresses() round trip, queuing behind each other
+     *  in the wallet's serial API and delaying balance display by seconds. */
+    private fun scheduleRefresh() {
+        refreshJob?.cancel()
+        refreshJob = pollingScope?.launch {
+            delay(300)
+            refreshWalletData()
+        }
     }
 
     /** Refresh wallet balance, transactions, and addresses. */

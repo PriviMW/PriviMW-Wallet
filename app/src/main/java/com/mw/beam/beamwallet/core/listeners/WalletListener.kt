@@ -25,6 +25,12 @@ object WalletListener {
     private val walletThread = android.os.HandlerThread("BeamWalletDispatch").apply { start() }
     private val walletHandler = android.os.Handler(walletThread.looper)
 
+    // Background executor for TX JSON serialization — frees JNI thread for other callbacks
+    // (onStatus for balance, sendDAOApiResult for read_messages) while TX data processes.
+    private val txExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "TxProcessor").apply { isDaemon = true }
+    }
+
     // === Wallet Status ===
 
     @JvmStatic
@@ -33,19 +39,19 @@ object WalletListener {
         // Mark data received for error 4 suppression (matches RN lastDataTs pattern)
         com.privimemobile.protocol.NodeReconnect.onDataReceived()
         status.forEach { asset ->
+            val event = WalletStatusEvent(
+                assetId = asset.assetId,
+                available = asset.available,
+                receiving = asset.receiving,
+                sending = asset.sending,
+                maturing = asset.maturing,
+                height = asset.system.height,
+                shielded = asset.shielded,
+                maxPrivacy = asset.maxPrivacy,
+            )
+            Log.d(TAG, "onStatus: assetId=${asset.assetId} available=${asset.available} shielded=${asset.shielded}")
             uiHandler.post {
-                WalletEventBus.emitWalletStatus(
-                    WalletStatusEvent(
-                        assetId = asset.assetId,
-                        available = asset.available,
-                        receiving = asset.receiving,
-                        sending = asset.sending,
-                        maturing = asset.maturing,
-                        height = asset.system.height,
-                        shielded = asset.shielded,
-                        maxPrivacy = asset.maxPrivacy,
-                    )
-                )
+                WalletEventBus.emitWalletStatus(event)
             }
         }
     }
@@ -64,66 +70,71 @@ object WalletListener {
     @JvmStatic
     fun onTxStatus(action: Int, tx: Array<TxDescriptionDTO>?) {
         com.privimemobile.protocol.NodeReconnect.onDataReceived()
-        val arr = JSONArray()
-        tx?.forEach { t ->
-            val obj = JSONObject()
-            obj.put("txId", t.id)
-            obj.put("amount", t.amount)
-            obj.put("fee", t.fee)
-            obj.put("sender", t.sender)
-            obj.put("status", t.status)
-            obj.put("peerId", t.peerId ?: "")
-            obj.put("myId", t.myId ?: "")
-            obj.put("message", t.message ?: "")
-            obj.put("createTime", t.createTime)
-            obj.put("assetId", t.assetId)
-            obj.put("kernelId", t.kernelId ?: "")
-            obj.put("isShielded", t.isShielded)
-            obj.put("isMaxPrivacy", t.isMaxPrivacy)
-            obj.put("isPublicOffline", t.isPublicOffline)
-            obj.put("failureReason", t.failureReason)
-            obj.put("selfTx", t.selfTx)
-            obj.put("minConfirmations", t.minConfirmations ?: 0)
-            obj.put("minConfirmationsProgress", t.minConfirmationsProgress ?: "")
-            obj.put("token", t.token ?: "")
-            obj.put("senderAddress", t.senderAddress ?: "")
-            obj.put("receiverAddress", t.receiverAddress ?: "")
-            obj.put("senderIdentity", t.senderIdentity ?: "")
-            obj.put("receiverIdentity", t.receiverIdentity ?: "")
-            obj.put("isDapps", t.isDapps)
-            obj.put("appName", t.appName ?: "")
-            obj.put("appID", t.appID ?: "")
-            obj.put("contractCids", t.contractCids ?: "")
-            if (t.isDapps) {
-                Log.d(TAG, "DApp TX '${t.appName}': sender=${t.sender}, amount=${t.amount}, assets=${t.assets?.javaClass?.name ?: "null"}, size=${t.assets?.size ?: -1}")
-                try {
-                    val assetsList = t.assets
-                    if (assetsList != null && assetsList.isNotEmpty()) {
-                        val assetsArr = JSONArray()
-                        assetsList.forEach { a ->
-                            Log.d(TAG, "  contractAsset: id=${a.assetId} sending=${a.sending} receiving=${a.receiving}")
-                            val aObj = JSONObject()
-                            aObj.put("assetId", a.assetId)
-                            aObj.put("sending", a.sending)
-                            aObj.put("receiving", a.receiving)
-                            assetsArr.put(aObj)
+        // Process JSON on background thread — return JNI thread immediately so other callbacks
+        // (onStatus for balance, sendDAOApiResult for read_messages) can be delivered without delay.
+        val actionCopy = action
+        txExecutor.execute {
+            val arr = JSONArray()
+            tx?.forEach { t ->
+                val obj = JSONObject()
+                obj.put("txId", t.id)
+                obj.put("amount", t.amount)
+                obj.put("fee", t.fee)
+                obj.put("sender", t.sender)
+                obj.put("status", t.status)
+                obj.put("peerId", t.peerId ?: "")
+                obj.put("myId", t.myId ?: "")
+                obj.put("message", t.message ?: "")
+                obj.put("createTime", t.createTime)
+                obj.put("assetId", t.assetId)
+                obj.put("kernelId", t.kernelId ?: "")
+                obj.put("isShielded", t.isShielded)
+                obj.put("isMaxPrivacy", t.isMaxPrivacy)
+                obj.put("isPublicOffline", t.isPublicOffline)
+                obj.put("failureReason", t.failureReason)
+                obj.put("selfTx", t.selfTx)
+                obj.put("minConfirmations", t.minConfirmations ?: 0)
+                obj.put("minConfirmationsProgress", t.minConfirmationsProgress ?: "")
+                obj.put("token", t.token ?: "")
+                obj.put("senderAddress", t.senderAddress ?: "")
+                obj.put("receiverAddress", t.receiverAddress ?: "")
+                obj.put("senderIdentity", t.senderIdentity ?: "")
+                obj.put("receiverIdentity", t.receiverIdentity ?: "")
+                obj.put("isDapps", t.isDapps)
+                obj.put("appName", t.appName ?: "")
+                obj.put("appID", t.appID ?: "")
+                obj.put("contractCids", t.contractCids ?: "")
+                if (t.isDapps) {
+                    Log.d(TAG, "DApp TX '${t.appName}': sender=${t.sender}, amount=${t.amount}, assets=${t.assets?.javaClass?.name ?: "null"}, size=${t.assets?.size ?: -1}")
+                    try {
+                        val assetsList = t.assets
+                        if (assetsList != null && assetsList.isNotEmpty()) {
+                            val assetsArr = JSONArray()
+                            assetsList.forEach { a ->
+                                Log.d(TAG, "  contractAsset: id=${a.assetId} sending=${a.sending} receiving=${a.receiving}")
+                                val aObj = JSONObject()
+                                aObj.put("assetId", a.assetId)
+                                aObj.put("sending", a.sending)
+                                aObj.put("receiving", a.receiving)
+                                assetsArr.put(aObj)
+                            }
+                            obj.put("contractAssets", assetsArr)
+                        } else {
+                            Log.d(TAG, "  assets list is null or empty")
                         }
-                        obj.put("contractAssets", assetsArr)
-                    } else {
-                        Log.d(TAG, "  assets list is null or empty")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Contract assets error: ${e.javaClass.simpleName}: ${e.message}", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Contract assets error: ${e.javaClass.simpleName}: ${e.message}", e)
                 }
+                arr.put(obj)
             }
-            arr.put(obj)
-        }
-        val json = arr.toString()
-        uiHandler.post {
-            // action 3 = reset (full replace), otherwise merge to avoid partial updates
-            // wiping out the full transaction list (e.g. after sendTransaction).
-            if (action == 3) WalletEventBus.emitTransactions(json)
-            else WalletEventBus.mergeTransactions(json)
+            val json = arr.toString()
+            uiHandler.post {
+                // action 3 = reset (full replace), otherwise merge to avoid partial updates
+                // wiping out the full transaction list (e.g. after sendTransaction).
+                if (actionCopy == 3) WalletEventBus.emitTransactions(json)
+                else WalletEventBus.mergeTransactions(json)
+            }
         }
     }
 

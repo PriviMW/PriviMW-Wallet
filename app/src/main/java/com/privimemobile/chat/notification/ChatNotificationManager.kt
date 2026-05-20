@@ -80,6 +80,7 @@ object ChatNotificationManager {
         senderHandle: String? = null,
         reactionEmoji: String? = null,
         reactedMessageText: String? = null,
+        convDisplayName: String? = null,
     ) {
         if (!initialized) return
 
@@ -240,10 +241,16 @@ object ChatNotificationManager {
             val chatChannelId = "privime_chat_${convKey.hashCode().and(0x7FFFFFFF)}"
             val version = prefs.getInt("notif_channel_ver_$convKey", 0)
             val versionedChannelId = "${chatChannelId}_v$version"
+            // Delete previous versioned channel (prevents accumulation in system settings)
+            if (version > 1) {
+                nm2.deleteNotificationChannel("${chatChannelId}_v${version - 1}")
+            }
+            // Use human-readable name instead of raw convKey
+            val channelLabel = convDisplayName ?: convKey.removePrefix("@")
             // Create/recreate channel with custom sound
             nm2.createNotificationChannel(NotificationChannel(
                 versionedChannelId,
-                "Chat: ${convKey.removePrefix("@")}",
+                "Chat: $channelLabel",
                 if (soundUri == "silent") NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 group = GROUP_ID
@@ -375,6 +382,19 @@ object ChatNotificationManager {
 
         // Remove old badge-only channel if it exists
         nm.deleteNotificationChannel("privime_badge")
+
+        // Clean up stale per-conversation channels (old versions with ugly "g_xxx" names)
+        for (channel in nm.notificationChannels) {
+            val id = channel.id
+            if (id.startsWith("privime_chat_") && id.contains("_v")) {
+                val channelName = channel.name?.toString() ?: ""
+                // Delete channels with raw group IDs in the name (g_ prefix in display name)
+                if (channelName.startsWith("Chat: g_") || channelName.startsWith("Chat: G_")) {
+                    nm.deleteNotificationChannel(id)
+                    Log.d(TAG, "Deleted stale per-chat channel: $id ($channelName)")
+                }
+            }
+        }
 
         Log.d(TAG, "Notification channels created")
     }

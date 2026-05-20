@@ -1938,6 +1938,20 @@ fun ChatScreen(
                             }
                         } else {
                             OverflowItem("\uD83D\uDC64", stringResource(R.string.chat_overflow_view_profile)) { showOverflowMenu = false; onContactInfo() }
+                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, groupNotifSoundName)) {
+                                showOverflowMenu = false
+                                val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    val current = chatPrefs.getString("notif_sound_$convKey", null)
+                                    if (current != null && current != "silent") {
+                                        putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(current))
+                                    }
+                                }
+                                groupSoundPicker.launch(intent)
+                            }
                         }
                         OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { showOverflowMenu = false; showWallpaperPicker = true }
                         // Per-message self-destruct timer

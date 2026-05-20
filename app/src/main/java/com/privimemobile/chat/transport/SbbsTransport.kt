@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Uses callback ID range 2,000,000+ to coexist with WalletApi (1,000,000+).
  * Primary trigger: onInstantMessage push from C++ wallet core (fires on every incoming SBBS message).
- * Fallback: slow polling timer (3 min idle, 2s active) catches any missed push callbacks.
+ * Fallback: adaptive polling (2s active, 3min idle) catches any missed push callbacks.
  */
 class SbbsTransport(
     private val db: ChatDatabase,
@@ -24,13 +24,10 @@ class SbbsTransport(
     private var pollingJob: Job? = null
     private val reading = AtomicBoolean(false)
     private var readStartTime = 0L  // auto-reset if stuck >30s
-    private var startupBoostEnd = 0L  // poll aggressively until this timestamp
 
     companion object {
         const val POLL_ACTIVE_MS = 2_000L    // 2s when chat is open — near-instant feel
         const val POLL_IDLE_MS = 180_000L   // 3 min safety net when idle (onInstantMessage is primary)
-        const val POLL_STARTUP_MS = 3_000L  // 3s during startup boost — fast initial sync
-        const val STARTUP_BOOST_MS = 30_000L // 30s aggressive polling after node connects
     }
 
     /** Start adaptive polling — fast when chat open, slow otherwise. */
@@ -44,11 +41,7 @@ class SbbsTransport(
         pollingJob = scope.launch {
             while (isActive) {
                 pollNow()
-                val interval = when {
-                    System.currentTimeMillis() < startupBoostEnd -> POLL_STARTUP_MS
-                    ChatService.activeChat.value != null -> POLL_ACTIVE_MS
-                    else -> POLL_IDLE_MS
-                }
+                val interval = if (ChatService.activeChat.value != null) POLL_ACTIVE_MS else POLL_IDLE_MS
                 delay(interval)
             }
         }
@@ -68,17 +61,11 @@ class SbbsTransport(
         startPolling()
     }
 
-    /** Called by ProtocolStartup's onTxsChanged hook — fires on financial TX changes, not SBBS messages. */
-    fun onTxsChanged() {
-        Log.d(TAG, "ev_txs_changed — immediate poll")
-        scope.launch { safeReadMessages() }
-    }
-
-    /** Called by ProtocolStartup's onSystemStateChanged hook — fires when node syncs. */
+    /** Called by ProtocolStartup's onSystemStateChanged hook — no-op.
+     *  Balances refresh via debounced refreshWalletData, messages via onInstantMessage push + polling. */
     fun onSystemState() {
-        Log.d(TAG, "ev_system_state — immediate poll + startup boost")
-        startupBoostEnd = System.currentTimeMillis() + STARTUP_BOOST_MS
-        scope.launch { safeReadMessages() }
+        // No-op: startup boost removed — balances load via debounced refreshWalletData,
+        // messages via onInstantMessage push + 2s/3min polling safety net.
     }
 
     /** Poll from timer or manual refresh. */
@@ -125,7 +112,10 @@ class SbbsTransport(
             }
             if (messages.isEmpty()) return
             Log.d(TAG, "Received ${messages.size} SBBS messages")
-            processor.processRawMessages(messages)
+            // Process messages on background thread — 17K+ messages can block main thread
+            withContext(kotlinx.coroutines.Dispatchers.Default) {
+                processor.processRawMessages(messages)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "read_messages error: ${e.message}")
         }

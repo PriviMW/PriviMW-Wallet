@@ -30,6 +30,9 @@ object WalletApi {
     private var ownJob = SupervisorJob()
     private var ownScope = CoroutineScope(Dispatchers.Main + ownJob)
 
+    // Background scope for heavy JSON parsing (read_messages can be 47MB+)
+    private val parseScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     private var listenerJob: Job? = null
     private var isSubscribed = false
 
@@ -324,7 +327,19 @@ object WalletApi {
             }
             is org.json.JSONArray -> {
                 // Array results (e.g., read_messages returns [{...}, {...}])
-                info.callback(mapOf("messages" to jsonArrayToList(rawResult)))
+                // Heavy arrays (>100 elements) parsed on background thread to avoid
+                // blocking the main thread — read_messages can be 47MB+ (17K elements).
+                if (rawResult.length() > 100) {
+                    val cb = info.callback
+                    parseScope.launch {
+                        val list = jsonArrayToList(rawResult)
+                        withContext(Dispatchers.Main) {
+                            cb(mapOf("messages" to list))
+                        }
+                    }
+                } else {
+                    info.callback(mapOf("messages" to jsonArrayToList(rawResult)))
+                }
             }
             else -> {
                 info.callback(emptyMap())

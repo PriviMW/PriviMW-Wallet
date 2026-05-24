@@ -143,26 +143,15 @@ class GroupManager(
         // Match ChatScreen DM routing (contact.sbbs ?: wallet_id). conv.sbbs is only set on
         // first receive and can be an envelope routing address ≠ on-chain wallet_id — common
         // for desktop-dapp peers (gary). If conv.sbbs != wallet_id, use wallet_id for invite.
-        val sendAddress: String?
-        val addrSource: String
-        if (!walletId.isNullOrEmpty() && !convSbbs.isNullOrEmpty() && convSbbs != walletId) {
-            sendAddress = walletId
-            addrSource = "on-chain wallet_id (conv.sbbs ${convSbbs.take(12)}… != wallet_id)"
-            Log.d(TAG, "Invite @$targetHandle: conv.sbbs mismatch — using on-chain wallet_id")
+        val sendAddress: String? = if (!walletId.isNullOrEmpty() && !convSbbs.isNullOrEmpty() && convSbbs != walletId) {
+            walletId
         } else {
-            sendAddress = contactSbbs ?: walletId ?: convSbbs
-            addrSource = when (sendAddress) {
-                contactSbbs -> "contact.sbbs"
-                walletId -> "on-chain wallet_id"
-                convSbbs -> "conv.sbbs"
-                else -> "none"
-            }
+            contactSbbs ?: walletId ?: convSbbs
         }
         if (sendAddress.isNullOrEmpty()) {
-            Log.w(TAG, "Cannot invite @$targetHandle — no send address (no conv/contact SBBS or wallet_id)")
+            Log.w(TAG, "Cannot invite @$targetHandle — no send address")
             return false
         }
-        Log.d(TAG, "Inviting @$targetHandle via $addrSource (${sendAddress.take(16)}...)")
 
         val inviteTs = System.currentTimeMillis() / 1000
         val payload = mutableMapOf<String, Any?>(
@@ -180,7 +169,6 @@ class GroupManager(
         if (!group.joinPassword.isNullOrEmpty()) {
             payload["join_password"] = group.joinPassword
         }
-        Log.d(TAG, "group_invite ts=$inviteTs to @$targetHandle (${payload.size} fields)")
         ChatService.sbbs.sendWithRetry(sendAddress, payload)
 
         // Avatar after invite (deferred — never share ts with group_invite)

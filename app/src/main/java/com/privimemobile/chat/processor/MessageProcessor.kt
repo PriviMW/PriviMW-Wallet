@@ -133,9 +133,18 @@ class MessageProcessor(
         // Skip if from blocked user
         val convKey = if (sent) "@$to" else if (from.isNotEmpty()) "@$from" else senderWalletId ?: return
         val isBlocked = db.conversationDao().isBlocked(convKey) ?: false
-        if (isBlocked && !sent) return
+        if (isBlocked && !sent) {
+            if (type == "group_invite") Log.w(TAG, "DROP group_invite: @$from blocked (convKey=$convKey)")
+            return
+        }
 
-        // Check tombstone
+        // group_invite before tombstone — handler undeletes the DM thread
+        if (type == "group_invite") {
+            handleGroupInvite(payload, ts, from, sent, convKey)
+            return
+        }
+
+        // Check tombstone (regular DMs only)
         val tombstoneTs = db.conversationDao().getDeletedTs(convKey)
         if (tombstoneTs != null && tombstoneTs > 0 && ts < tombstoneTs) return
 
@@ -849,7 +858,11 @@ class MessageProcessor(
         convKey: String,
     ) {
         if (sent) return // ignore our own invite echoes
-        val groupId = payload["invite_group_id"] as? String ?: return
+        val groupId = payload["invite_group_id"] as? String
+        if (groupId.isNullOrEmpty()) {
+            Log.w(TAG, "DROP group_invite: missing invite_group_id from @$from keys=${payload.keys}")
+            return
+        }
         val groupName = payload["group_name"] as? String ?: ctx.getString(R.string.chat_group_name_fallback)
         val memberCount = (payload["member_count"] as? Number)?.toInt() ?: 0
         val displayName = Helpers.fixBvmUtf8(payload["dn"] as? String)
@@ -879,7 +892,10 @@ class MessageProcessor(
             pollData = inviteData, // reuse pollData to store invite metadata
         )
         val insertedId = db.messageDao().insert(entity)
-        if (insertedId == -1L) return
+        if (insertedId == -1L) {
+            Log.w(TAG, "DROP group_invite: dedup (dedupKey=$dedupKey convKey=$convKey groupId=${groupId.take(16)}...)")
+            return
+        }
 
         db.conversationDao().updateLastMessage(conv.id, ts, inviteText)
         if (!conv.muted) {

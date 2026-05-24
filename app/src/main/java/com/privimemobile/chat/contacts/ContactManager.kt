@@ -72,7 +72,7 @@ class ContactManager(
      * Resolve a handle from the contract.
      * Updates contact DB + conversation display info.
      */
-    suspend fun resolveHandle(handle: String): ContactEntity? {
+    suspend fun resolveHandle(handle: String, requestAvatarIfMissing: Boolean = true): ContactEntity? {
         try {
             val result = ShaderInvoker.invokeAsync("user", "resolve_handle", mapOf("handle" to handle))
             if (result.containsKey("error")) {
@@ -119,11 +119,13 @@ class ContactManager(
             db.conversationDao().updateContactInfo("@$handle", displayName, walletId, avatarHash)
 
             // Request avatar if no cached file exists (avatar is SBBS-only, no on-chain hash)
-            val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
-            if (filesDir != null) {
-                val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
-                if (!avatarFile.exists()) {
-                    requestAvatar(handle, walletId)
+            if (requestAvatarIfMissing) {
+                val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
+                if (filesDir != null) {
+                    val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
+                    if (!avatarFile.exists()) {
+                        requestAvatar(handle, walletId)
+                    }
                 }
             }
 

@@ -132,18 +132,43 @@ class GroupManager(
         val myHandle = state.myHandle ?: return false
         val group = db.groupDao().findByGroupId(groupId) ?: return false
 
-        // Resolve target's wallet ID for SBBS
-        val contact = ChatService.contacts.resolveHandle(targetHandle)
-        val sendAddress = contact?.sbbsAddress ?: contact?.walletId
+        // Do not send avatar_request before invite — same-second ts causes wallet to drop group_invite
+        val contact = ChatService.contacts.resolveHandle(targetHandle, requestAvatarIfMissing = false)
+        val convKey = "@$targetHandle"
+        val existingConv = db.conversationDao().findByKey(convKey)
+        val walletId = contact?.walletId?.takeIf { it.isNotEmpty() }
+        val contactSbbs = contact?.sbbsAddress?.takeIf { it.isNotEmpty() }
+        val convSbbs = existingConv?.sbbsAddress?.takeIf { it.isNotEmpty() }
+
+        // Match ChatScreen DM routing (contact.sbbs ?: wallet_id). conv.sbbs is only set on
+        // first receive and can be an envelope routing address ≠ on-chain wallet_id — common
+        // for desktop-dapp peers (gary). If conv.sbbs != wallet_id, use wallet_id for invite.
+        val sendAddress: String?
+        val addrSource: String
+        if (!walletId.isNullOrEmpty() && !convSbbs.isNullOrEmpty() && convSbbs != walletId) {
+            sendAddress = walletId
+            addrSource = "on-chain wallet_id (conv.sbbs ${convSbbs.take(12)}… != wallet_id)"
+            Log.d(TAG, "Invite @$targetHandle: conv.sbbs mismatch — using on-chain wallet_id")
+        } else {
+            sendAddress = contactSbbs ?: walletId ?: convSbbs
+            addrSource = when (sendAddress) {
+                contactSbbs -> "contact.sbbs"
+                walletId -> "on-chain wallet_id"
+                convSbbs -> "conv.sbbs"
+                else -> "none"
+            }
+        }
         if (sendAddress.isNullOrEmpty()) {
-            Log.w(TAG, "Cannot invite @$targetHandle — no send address")
+            Log.w(TAG, "Cannot invite @$targetHandle — no send address (no conv/contact SBBS or wallet_id)")
             return false
         }
+        Log.d(TAG, "Inviting @$targetHandle via $addrSource (${sendAddress.take(16)}...)")
 
+        val inviteTs = System.currentTimeMillis() / 1000
         val payload = mutableMapOf<String, Any?>(
             "v" to 1,
             "t" to "group_invite",
-            "ts" to System.currentTimeMillis() / 1000,
+            "ts" to inviteTs,
             "from" to myHandle,
             "to" to targetHandle,
             "dn" to (state.myDisplayName ?: ""),
@@ -155,14 +180,23 @@ class GroupManager(
         if (!group.joinPassword.isNullOrEmpty()) {
             payload["join_password"] = group.joinPassword
         }
+        Log.d(TAG, "group_invite ts=$inviteTs to @$targetHandle (${payload.size} fields)")
         ChatService.sbbs.sendWithRetry(sendAddress, payload)
 
+        // Avatar after invite (deferred — never share ts with group_invite)
+        scope.launch {
+            delay(1500)
+            val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir ?: return@launch
+            val avatarFile = java.io.File(filesDir, "avatars/$targetHandle.webp")
+            if (!avatarFile.exists()) {
+                ChatService.contacts.requestAvatar(targetHandle, sendAddress)
+            }
+        }
+
         // Insert sender-side message in DM conversation
-        val convKey = "@$targetHandle"
         val conv = db.conversationDao().getOrCreate(convKey, targetHandle, contact?.displayName)
         if (conv.deletedAtTs > 0) db.conversationDao().undelete(conv.id)
 
-        val inviteTs = payload["ts"] as Long
         val inviteText = context.getString(R.string.chat_you_invited_group, "@$targetHandle", group.name)
         val dedupKey = "$inviteTs:group_invite_sent:$groupId:$targetHandle:$myHandle".hashCode().toString(16)
 

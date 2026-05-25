@@ -31,12 +31,34 @@ class MessageProcessor(
 
     private val lastGroupInfoResponseMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    /** Inbound types that are safe to skip during a large inbox replay (already in Room / no user action). */
+    /** Inbound types safe to skip during a large inbox replay. Never skip ack/delivered — they update tick state. */
     private val bulkReplaySkipTypes = setOf(
-        "typing", "ack", "delivered",
+        "typing",
         "group_info_request", "group_info_response",
         "avatar_request", "avatar_response",
     )
+
+    /** Receipt types must run even when SBBS id was seen (e.g. previously skipped in an older build). */
+    private val alwaysReprocessTypes = setOf("ack", "delivered")
+
+    /** True if ack/delivered still needs applying (e.g. SBBS id was seen but bulk-replay skipped earlier). */
+    private suspend fun receiptStillNeeded(type: String, payload: Map<String, Any?>): Boolean {
+        val groupId = payload["group_id"] as? String
+        val from = sanitizeHandle(payload["from"] as? String ?: "")
+        val convKey = if (!groupId.isNullOrEmpty()) "g_${groupId.take(16)}" else "@$from"
+        val conv = db.conversationDao().findByKey(convKey) ?: return false
+        val timestamps = when (type) {
+            "ack" -> (payload["read"] as? List<*>)?.mapNotNull { (it as? Number)?.toLong() }
+            "delivered" -> (payload["delivered"] as? List<*>)?.mapNotNull { (it as? Number)?.toLong() }
+            else -> null
+        } ?: return false
+        if (timestamps.isEmpty()) return false
+        return when (type) {
+            "ack" -> db.messageDao().countSentUnread(conv.id, timestamps) > 0
+            "delivered" -> db.messageDao().countSentUndelivered(conv.id, timestamps) > 0
+            else -> false
+        }
+    }
 
     private fun allowGroupInfoResponse(groupId: String, from: String): Boolean {
         val key = "$groupId:$from"
@@ -85,13 +107,14 @@ class MessageProcessor(
         for (raw in sorted) {
             try {
                 val msg = raw as? Map<*, *> ?: continue
+                val payload = extractPayload(msg) ?: continue
+                val type = (payload["t"] as? String) ?: "dm"
                 val sbbsId = (msg["id"] as? Number)?.toLong()
-                if (!com.privimemobile.chat.SbbsSeenStore.claim(ctx, sbbsId)) continue
-                if (bulkReplay) {
-                    val payload = extractPayload(msg)
-                    val type = (payload?.get("t") as? String) ?: "dm"
-                    if (type in bulkReplaySkipTypes) continue
+                val claimed = com.privimemobile.chat.SbbsSeenStore.claim(ctx, sbbsId)
+                if (!claimed) {
+                    if (type !in alwaysReprocessTypes || !receiptStillNeeded(type, payload)) continue
                 }
+                if (bulkReplay && type in bulkReplaySkipTypes) continue
                 processOneMessage(msg, myHandle, contractStartTs)
             } catch (e: Exception) {
                 Log.w(TAG, "Error processing message: ${e.message}")

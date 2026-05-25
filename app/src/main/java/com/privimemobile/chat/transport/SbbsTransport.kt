@@ -158,6 +158,21 @@ class SbbsTransport(
         }
     }
 
+    /** Resolve DM peer SBBS address (same rules as outbound DMs). */
+    private suspend fun resolveDmToAddress(convKey: String): String? {
+        val handle = convKey.removePrefix("@")
+        val conv = db.conversationDao().findByKey(convKey) ?: return null
+        val contact = db.contactDao().findByHandle(handle)
+        var toAddress = com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
+        if (toAddress.isNullOrEmpty()) {
+            toAddress = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)?.walletId
+        }
+        if (!toAddress.isNullOrEmpty() && conv.sbbsAddress != toAddress) {
+            db.conversationDao().updateSbbsAddress(convKey, toAddress)
+        }
+        return toAddress
+    }
+
     /** Send delivery ack — confirms message arrived (3x retry like regular messages). */
     fun sendDeliveryAck(convKey: String, timestamps: List<Long>) {
         Log.d(TAG, "sendDeliveryAck($convKey): ${timestamps.size} timestamps")
@@ -165,19 +180,7 @@ class SbbsTransport(
             val state = db.chatStateDao().get() ?: return@launch
             if (state.myHandle == null) return@launch
 
-            val conv = db.conversationDao().findByKey(convKey) ?: return@launch
-            var toAddress = conv.sbbsAddress
-            if (toAddress.isNullOrEmpty()) {
-                val handle = convKey.removePrefix("@")
-                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
-                if (toAddress.isNullOrEmpty()) {
-                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
-                    toAddress = resolved?.walletId
-                }
-                if (!toAddress.isNullOrEmpty()) {
-                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
-                } else return@launch
-            }
+            val toAddress = resolveDmToAddress(convKey) ?: return@launch
 
             val payload = mapOf(
                 "v" to 1,
@@ -196,23 +199,10 @@ class SbbsTransport(
             val state = db.chatStateDao().get() ?: return@launch
             if (state.myHandle == null) { Log.w(TAG, "sendReadReceipts: no myHandle"); return@launch }
 
-            val conv = db.conversationDao().findByKey(convKey) ?: run { Log.w(TAG, "sendReadReceipts: conv not found for $convKey"); return@launch }
-            var toAddress = conv.sbbsAddress
-            if (toAddress.isNullOrEmpty()) {
-                // Resolve sbbs_address from contact DB or on-chain
-                val handle = convKey.removePrefix("@")
-                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
-                if (toAddress.isNullOrEmpty()) {
-                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
-                    toAddress = resolved?.walletId
-                }
-                if (!toAddress.isNullOrEmpty()) {
-                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
-                } else {
-                    Log.w(TAG, "sendReadReceipts: no sbbs_address for $convKey after resolve")
-                    return@launch
-                }
-            }
+            val conv = db.conversationDao().findByKey(convKey)
+                ?: run { Log.w(TAG, "sendReadReceipts: conv not found for $convKey"); return@launch }
+            val toAddress = resolveDmToAddress(convKey)
+                ?: run { Log.w(TAG, "sendReadReceipts: no sbbs_address for $convKey after resolve"); return@launch }
 
             val payload = mapOf(
                 "v" to 1,
@@ -290,18 +280,7 @@ class SbbsTransport(
             if (state.myHandle == null) return@launch
 
             val handle = convKey.removePrefix("@")
-            val conv = db.conversationDao().findByKey(convKey) ?: return@launch
-            var toAddress = conv.sbbsAddress
-            if (toAddress.isNullOrEmpty()) {
-                toAddress = db.contactDao().findByHandle(handle)?.sbbsAddress
-                if (toAddress.isNullOrEmpty()) {
-                    val resolved = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)
-                    toAddress = resolved?.walletId
-                }
-                if (!toAddress.isNullOrEmpty()) {
-                    db.conversationDao().updateSbbsAddress(convKey, toAddress)
-                } else return@launch
-            }
+            val toAddress = resolveDmToAddress(convKey) ?: return@launch
 
             val payload = mapOf(
                 "v" to 1,

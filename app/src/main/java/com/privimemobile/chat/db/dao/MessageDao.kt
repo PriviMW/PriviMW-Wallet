@@ -31,6 +31,14 @@ interface MessageDao {
     @Query("UPDATE messages SET read = 1, delivered = 1 WHERE conversation_id = :convId AND sent = 1 AND timestamp IN (:timestamps)")
     suspend fun markRead(convId: Long, timestamps: List<Long>)
 
+    /** Sent messages still missing delivery tick (for replaying skipped delivered receipts). */
+    @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND sent = 1 AND delivered = 0 AND timestamp IN (:timestamps)")
+    suspend fun countSentUndelivered(convId: Long, timestamps: List<Long>): Int
+
+    /** Sent messages still missing read tick (for replaying skipped read receipts). */
+    @Query("SELECT COUNT(*) FROM messages WHERE conversation_id = :convId AND sent = 1 AND read = 0 AND timestamp IN (:timestamps)")
+    suspend fun countSentUnread(convId: Long, timestamps: List<Long>): Int
+
     /** Mark received messages as acked (we sent ack). */
     @Query("UPDATE messages SET acked = 1 WHERE conversation_id = :convId AND sent = 0 AND acked = 0 AND timestamp IN (:timestamps)")
     suspend fun markAcked(convId: Long, timestamps: List<Long>)

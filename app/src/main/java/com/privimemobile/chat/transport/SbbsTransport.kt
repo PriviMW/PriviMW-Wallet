@@ -19,6 +19,7 @@ class SbbsTransport(
     private val db: ChatDatabase,
     private val processor: MessageProcessor,
     private val scope: CoroutineScope,
+    private val appContext: android.content.Context,
 ) {
     private val TAG = "SbbsTransport"
     private var pollingJob: Job? = null
@@ -112,9 +113,24 @@ class SbbsTransport(
             }
             if (messages.isEmpty()) return
             Log.d(TAG, "Received ${messages.size} SBBS messages")
+
+            val toProcess = if (messages.size >= 500) {
+                messages.filter { raw ->
+                    val msg = raw as? Map<*, *> ?: return@filter true
+                    val id = (msg["id"] as? Number)?.toLong()
+                    id == null || !com.privimemobile.chat.SbbsSeenStore.isSeen(appContext, id)
+                }
+            } else {
+                messages
+            }
+            if (toProcess.isEmpty()) {
+                Log.d(TAG, "All ${messages.size} SBBS messages already seen — skip processing")
+                return
+            }
+
             // Process messages on background thread — 17K+ messages can block main thread
             withContext(kotlinx.coroutines.Dispatchers.Default) {
-                processor.processRawMessages(messages)
+                processor.processRawMessages(toProcess)
             }
         } catch (e: Exception) {
             Log.e(TAG, "read_messages error: ${e.message}")
@@ -305,9 +321,17 @@ class SbbsTransport(
     /** Low-level SBBS send — message must be a Map (serialized as JSON object by WalletApi). */
     private fun sendSbbsMessage(toWalletId: String, message: Map<String, Any?>) {
         Log.d(TAG, "Sending SBBS to ${toWalletId.take(16)}...: ${message["msg"] ?: message["t"]}")
-        WalletApi.call("send_message", mapOf(
+        val params = mapOf(
             "receiver" to toWalletId,
             "message" to message,
-        ))
+        )
+        // JNI wallet API must run on main thread (see AGENTS.md).
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            WalletApi.call("send_message", params)
+        } else {
+            scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                WalletApi.call("send_message", params)
+            }
+        }
     }
 }

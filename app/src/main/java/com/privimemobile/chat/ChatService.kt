@@ -157,7 +157,7 @@ object ChatService {
         identity = IdentityManager(db!!, scope, localeContext)
         contacts = ContactManager(db!!, scope)
         processor = MessageProcessor(db!!, contacts, scope, context.applicationContext)
-        sbbs = SbbsTransport(db!!, processor, scope)
+        sbbs = SbbsTransport(db!!, processor, scope, context.applicationContext)
         groups = com.privimemobile.chat.group.GroupManager(db!!, scope, localeContext)
         pendingTxs = com.privimemobile.chat.group.PendingTxManager(db!!, scope)
 
@@ -171,6 +171,7 @@ object ChatService {
         com.privimemobile.protocol.WalletApi.subscribeToEvents()
 
         // Start SBBS polling immediately (don't wait for contract calls)
+        com.privimemobile.chat.SbbsSeenStore.ensureLoaded(context.applicationContext)
         sbbs.startPolling()
 
         // Start identity check + contact resolution in parallel with polling
@@ -335,7 +336,7 @@ object ChatService {
                     // DM scheduled message
                     val contactHandle = conv.convKey.removePrefix("@")
                     val contact = db?.contactDao()?.findByHandle(contactHandle)
-                    val sendAddress = contact?.sbbsAddress ?: contact?.walletId ?: continue
+                    val sendAddress = com.privimemobile.chat.DmAddressResolver.resolve(contact, conv) ?: continue
                     val payload = mutableMapOf<String, Any?>(
                         "v" to 1, "t" to "dm", "ts" to ts,
                         "from" to myHandle, "to" to contactHandle,
@@ -444,13 +445,13 @@ object ChatService {
         }
     }
 
-    /** Send read receipts for ALL received messages in a conversation (catch-all on chat open). */
+    /** Send read receipts for unacked received messages when opening a chat (not full history). */
     private fun sendAllAcksForConv(convKey: String, convId: Long) {
         scope.launch {
-            val allTimestamps = db?.messageDao()?.getAllReceivedTimestamps(convId) ?: return@launch
-            Log.d(TAG, "sendAllAcksForConv($convKey, convId=$convId): ${allTimestamps.size} total received")
-            if (allTimestamps.isNotEmpty()) {
-                sbbs.sendReadReceipts(convKey, allTimestamps)
+            val unacked = db?.messageDao()?.getUnackedTimestamps(convId) ?: return@launch
+            Log.d(TAG, "sendAllAcksForConv($convKey, convId=$convId): ${unacked.size} unacked")
+            if (unacked.isNotEmpty()) {
+                sbbs.sendReadReceipts(convKey, unacked)
             }
         }
     }

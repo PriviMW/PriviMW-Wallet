@@ -42,9 +42,14 @@ class ContactManager(
                     // Also update conversation display info
                     db.conversationDao().updateContactInfo("@$handle", displayName, null, null)
                 }
-                // Update sbbs_address from SBBS envelope (per-conversation channel)
-                if (normalized != null && existing.sbbsAddress != normalized) {
-                    db.contactDao().updateSbbsAddress(handle, normalized)
+                // Envelope sender is a per-conversation routing address — do not overwrite
+                // contact.sbbs when it disagrees with on-chain wallet_id (poisoned send path).
+                if (normalized != null) {
+                    val onChain = existing.walletId
+                    val mayUpdate = onChain.isNullOrEmpty() || normalized == onChain
+                    if (mayUpdate && existing.sbbsAddress != normalized) {
+                        db.contactDao().updateSbbsAddress(handle, normalized)
+                    }
                 }
             } else {
                 // Insert new contact — sbbsAddress from envelope, walletId from contract (resolved later)
@@ -146,7 +151,9 @@ class ContactManager(
 
             // Always check for missing avatar on chat open (no cooldown)
             val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir
-            val avatarAddr = contact.sbbsAddress ?: contact.walletId
+            val conv = db.conversationDao().findByKey("@${handle.removePrefix("@")}")
+            val avatarAddr = com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
+                ?: contact.walletId
             if (filesDir != null && !avatarAddr.isNullOrEmpty()) {
                 val avatarFile = java.io.File(filesDir, "avatars/$handle.webp")
                 if (!avatarFile.exists()) {
@@ -268,7 +275,7 @@ class ContactManager(
                 "ts" to System.currentTimeMillis() / 1000,
                 "from" to myHandle, "to" to handle,
             )
-            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(sbbsAddress, payload)
+            com.privimemobile.chat.ChatService.sbbs.sendOnce(sbbsAddress, payload)
             Log.d(TAG, "Sent avatar_request to @$handle")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to request avatar from @$handle: ${e.message}")

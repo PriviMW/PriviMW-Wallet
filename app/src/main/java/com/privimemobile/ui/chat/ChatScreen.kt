@@ -316,7 +316,9 @@ fun ChatScreen(
         }
     }
     val resolvedWalletId = contact?.walletId
-    val resolvedSbbsAddress = contact?.sbbsAddress ?: contact?.walletId
+    val resolvedSbbsAddress = remember(contact, conv) {
+        com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
+    }
     val isDeletedAccount = contact?.isDeleted == true
 
     // Input state — use TextFieldValue for cursor control
@@ -560,6 +562,9 @@ fun ChatScreen(
             // Set active chat (sends acks via internal scope.launch — async)
             com.privimemobile.chat.ChatService.setActiveChat(convKey)
             if (!isGroupMode) {
+                com.privimemobile.chat.ChatService.db?.let {
+                    com.privimemobile.chat.DmAddressResolver.syncContactSbbs(it, handle)
+                }
                 com.privimemobile.chat.ChatService.contacts.reResolveOnChatOpen(handle)
             }
         }
@@ -5616,10 +5621,12 @@ fun ChatScreen(
                                                 // Send forwarded message(s) — use ChatService scope so it survives navigation
                                                 com.privimemobile.chat.ChatService.scope.launch {
                                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                                    if (state?.myHandle != null && !contact.walletId.isNullOrEmpty()) {
+                                                    if (state?.myHandle != null) {
                                                         val toHandle = contact.handle
                                                         val toConvKey = "@$toHandle"
                                                         val fwdConv = com.privimemobile.chat.ChatService.db!!.conversationDao().getOrCreate(toConvKey, toHandle)
+                                                        val sendAddr = com.privimemobile.chat.DmAddressResolver.resolve(contact, fwdConv)
+                                                            ?: return@launch
                                                         var lastPreview: String? = null
                                                         var lastTs = 0L
                                                         for ((i, m) in allFwdMsgs.withIndex()) {
@@ -5676,7 +5683,7 @@ fun ChatScreen(
                                                             }
                                                             lastPreview = if (isFile) context.getString(R.string.chat_forward_file_msg, m.file!!.name.ifEmpty { "" }) else m.text.take(100)
                                                             lastTs = ts
-                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(contact.sbbsAddress ?: contact.walletId!!, payload)
+                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(sendAddr, payload)
                                                             // Delay between forwards to avoid SBBS rate-limiting
                                                             if (i < allFwdMsgs.size - 1) delay(2000)
                                                         }

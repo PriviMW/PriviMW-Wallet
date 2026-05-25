@@ -29,6 +29,24 @@ class MessageProcessor(
 ) {
     private val TAG = "MessageProcessor"
 
+    private val lastGroupInfoResponseMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Inbound types that are safe to skip during a large inbox replay (already in Room / no user action). */
+    private val bulkReplaySkipTypes = setOf(
+        "typing", "ack", "delivered",
+        "group_info_request", "group_info_response",
+        "avatar_request", "avatar_response",
+    )
+
+    private fun allowGroupInfoResponse(groupId: String, from: String): Boolean {
+        val key = "$groupId:$from"
+        val now = System.currentTimeMillis()
+        val last = lastGroupInfoResponseMs[key] ?: 0L
+        if (now - last < 30_000L) return false
+        lastGroupInfoResponseMs[key] = now
+        return true
+    }
+
     /**
      * Process a batch of raw SBBS messages.
      * Called by SbbsTransport after read_messages.
@@ -63,14 +81,23 @@ class MessageProcessor(
                 ?: 0L
         }
 
+        val bulkReplay = sorted.size >= 500
         for (raw in sorted) {
             try {
                 val msg = raw as? Map<*, *> ?: continue
+                val sbbsId = (msg["id"] as? Number)?.toLong()
+                if (!com.privimemobile.chat.SbbsSeenStore.claim(ctx, sbbsId)) continue
+                if (bulkReplay) {
+                    val payload = extractPayload(msg)
+                    val type = (payload?.get("t") as? String) ?: "dm"
+                    if (type in bulkReplaySkipTypes) continue
+                }
                 processOneMessage(msg, myHandle, contractStartTs)
             } catch (e: Exception) {
                 Log.w(TAG, "Error processing message: ${e.message}")
             }
         }
+        com.privimemobile.chat.SbbsSeenStore.flush(ctx)
     }
 
     private suspend fun processOneMessage(
@@ -80,6 +107,8 @@ class MessageProcessor(
     ) {
         // Extract payload — try .message, then .payload, then the object itself
         val payload = extractPayload(raw) ?: run { Log.w(TAG, "DROP: no payload in $raw"); return }
+
+        // SBBS id dedup is enforced in processRawMessages via SbbsSeenStore before we get here.
 
         // Version check
         val version = (payload["v"] as? Number)?.toInt() ?: run { Log.w(TAG, "DROP: no version in ${payload.keys}"); return }
@@ -115,7 +144,12 @@ class MessageProcessor(
                 "group_msg" -> handleGroupMessage(payload, raw, ts, from, sent, myHandle)
                 "group_service" -> handleGroupService(payload, from)
                 "group_info_update" -> handleGroupInfoUpdate(payload, from)
-                "group_info_request" -> handleGroupInfoRequest(payload, from, groupId)
+                "group_info_request" -> handleGroupInfoRequest(
+                    payload,
+                    from,
+                    groupId,
+                    (raw["id"] as? Number)?.toLong(),
+                )
                 "group_info_response" -> handleGroupInfoResponse(payload, groupId)
                 "group_delete" -> handleGroupDelete(payload, from)
                 "ack" -> handleAck(payload, "@$from")
@@ -607,7 +641,7 @@ class MessageProcessor(
             "avatar_hash" to avatarHash,
             "avatar_data" to base64Data,
         )
-        ChatService.sbbs.sendWithRetry(senderWalletId, payload)
+        ChatService.sbbs.sendOnce(senderWalletId, payload)
         avatarResponseTimes[from] = now
         Log.d(TAG, "Sent avatar_response to @$from (${bytes.size} bytes)")
     }
@@ -1455,7 +1489,13 @@ class MessageProcessor(
      * Handle group_info_request — someone asks for group avatar + description.
      * If we have them locally, respond directly to the requester.
      */
-    private suspend fun handleGroupInfoRequest(payload: Map<String, Any?>, from: String, groupId: String) {
+    private suspend fun handleGroupInfoRequest(
+        payload: Map<String, Any?>,
+        from: String,
+        groupId: String,
+        sbbsMsgId: Long?,
+    ) {
+        if (!allowGroupInfoResponse(groupId, from)) return
         val group = db.groupDao().findByGroupId(groupId) ?: return
         val senderWalletId = payload["requester_wallet_id"] as? String ?: return
 

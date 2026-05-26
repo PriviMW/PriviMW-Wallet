@@ -6,6 +6,7 @@ import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.processor.MessageProcessor
 import com.privimemobile.protocol.WalletApi
 import kotlinx.coroutines.*
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -29,6 +30,25 @@ class SbbsTransport(
     companion object {
         const val POLL_ACTIVE_MS = 2_000L    // 2s when chat is open — near-instant feel
         const val POLL_IDLE_MS = 180_000L   // 3 min safety net when idle (onInstantMessage is primary)
+        private val RECEIPT_TYPES = setOf("ack", "delivered")
+    }
+
+    /** Payload type from raw read_messages row (matches MessageProcessor.extractPayload). */
+    private fun sbbsPayloadType(msg: Map<*, *>): String {
+        val message = msg["message"]
+        if (message is Map<*, *>) {
+            return (message["t"] as? String) ?: "dm"
+        }
+        if (message is String) {
+            try {
+                return JSONObject(message).optString("t", "dm")
+            } catch (_: Exception) { /* fall through */ }
+        }
+        val payload = msg["payload"]
+        if (payload is Map<*, *>) {
+            return (payload["t"] as? String) ?: "dm"
+        }
+        return "dm"
     }
 
     /** Start adaptive polling — fast when chat open, slow otherwise. */
@@ -117,6 +137,8 @@ class SbbsTransport(
             val toProcess = if (messages.size >= 500) {
                 messages.filter { raw ->
                     val msg = raw as? Map<*, *> ?: return@filter true
+                    // Always pass receipts — processor may re-apply ticks for seen ids.
+                    if (sbbsPayloadType(msg) in RECEIPT_TYPES) return@filter true
                     val id = (msg["id"] as? Number)?.toLong()
                     id == null || !com.privimemobile.chat.SbbsSeenStore.isSeen(appContext, id)
                 }

@@ -109,12 +109,12 @@ class MessageProcessor(
                 val msg = raw as? Map<*, *> ?: continue
                 val payload = extractPayload(msg) ?: continue
                 val type = (payload["t"] as? String) ?: "dm"
+                if (bulkReplay && type in bulkReplaySkipTypes) continue
                 val sbbsId = (msg["id"] as? Number)?.toLong()
                 val claimed = com.privimemobile.chat.SbbsSeenStore.claim(ctx, sbbsId)
                 if (!claimed) {
                     if (type !in alwaysReprocessTypes || !receiptStillNeeded(type, payload)) continue
                 }
-                if (bulkReplay && type in bulkReplaySkipTypes) continue
                 processOneMessage(msg, myHandle, contractStartTs)
             } catch (e: Exception) {
                 Log.w(TAG, "Error processing message: ${e.message}")

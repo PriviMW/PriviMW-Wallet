@@ -606,7 +606,10 @@ class GroupManager(
             }
 
             // Drop local rows not returned by list_members (e.g. missed SBBS left/kicked).
+            // Exclude banned members (role=3) — the contract may omit them from list_members,
+            // but we keep them locally for ban enforcement and kick/ban SBBS delivery.
             for (local in db.groupDao().getAllMembers(groupId)) {
+                if (local.role == 3) continue
                 if (local.handle !in onChainHandles) {
                     db.groupDao().removeMember(groupId, local.handle)
                     Log.d(TAG, "Removed stale member @${local.handle} from $groupId (not on-chain)")

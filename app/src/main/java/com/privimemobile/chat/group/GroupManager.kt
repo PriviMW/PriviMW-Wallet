@@ -544,11 +544,15 @@ class GroupManager(
 
             val state = db.chatStateDao().get()
             val myHandle = state?.myHandle
+            val onChainHandles = mutableSetOf<String>()
+            var onChainActiveCount = 0
 
             for (item in members) {
                 val m = item as? Map<*, *> ?: continue
                 val handle = m["handle"] as? String ?: continue
+                onChainHandles.add(handle)
                 val role = (m["role"] as? Number)?.toInt() ?: 0
+                if (role != 3) onChainActiveCount++
                 val permissions = (m["permissions"] as? Number)?.toInt() ?: 0
                 val joinedHeight = (m["joined_height"] as? Number)?.toLong() ?: 0
 
@@ -601,6 +605,15 @@ class GroupManager(
                 }
             }
 
+            // Drop local rows not returned by list_members (e.g. missed SBBS left/kicked).
+            for (local in db.groupDao().getAllMembers(groupId)) {
+                if (local.handle !in onChainHandles) {
+                    db.groupDao().removeMember(groupId, local.handle)
+                    Log.d(TAG, "Removed stale member @${local.handle} from $groupId (not on-chain)")
+                }
+            }
+            db.groupDao().updateMemberCount(groupId, onChainActiveCount)
+
             // Resolve/refresh wallet_ids + sbbs_addresses for ALL members (catches address changes after wallet restore)
             scope.launch {
                 val allMembers = db.groupDao().getActiveMembers(groupId)
@@ -623,7 +636,7 @@ class GroupManager(
                 }
             }
 
-            Log.d(TAG, "Refreshed ${members.size} members for group $groupId")
+            Log.d(TAG, "Refreshed $onChainActiveCount active members for group $groupId (${onChainHandles.size} on-chain rows)")
         } catch (e: Exception) {
             Log.e(TAG, "refreshGroupMembers($groupId) error: ${e.message}")
         }

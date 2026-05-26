@@ -96,6 +96,9 @@ interface GroupDao {
     @Query("SELECT * FROM group_members WHERE group_id = :groupId AND handle = :handle LIMIT 1")
     suspend fun findMember(groupId: String, handle: String): GroupMemberEntity?
 
+    @Query("SELECT * FROM group_members WHERE group_id = :groupId ORDER BY role DESC, handle ASC")
+    suspend fun getAllMembers(groupId: String): List<GroupMemberEntity>
+
     @Query("SELECT * FROM group_members WHERE group_id = :groupId AND role != 3 ORDER BY role DESC, handle ASC")
     suspend fun getActiveMembers(groupId: String): List<GroupMemberEntity>
 

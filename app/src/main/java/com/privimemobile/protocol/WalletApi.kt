@@ -251,8 +251,27 @@ object WalletApi {
 
     // --- Internal ---
 
-    private fun handleApiResult(json: String) {
+    private suspend fun handleApiResult(json: String) {
         Log.d(TAG, "handleApiResult: ${json.length} chars, prefix=${json.take(80)}")
+
+        // Heavy responses (>1MB) can OOM the main thread if parsed synchronously.
+        // read_messages can be 47MB+ with 17K+ elements. Parse on background scope.
+        if (json.length > 1_000_000) {
+            val cbRef = callbacks
+            parseScope.launch {
+                try {
+                    val answer = JSONObject(json)
+                    dispatchParsedResult(answer, cbRef)
+                } catch (e: OutOfMemoryError) {
+                    Log.e(TAG, "OOM parsing ${json.length}-char API result — dropping response")
+                    System.gc()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse large API result (${json.length} chars): ${e.message}")
+                }
+            }
+            return
+        }
+
         val answer: JSONObject
         try {
             answer = JSONObject(json)
@@ -261,10 +280,15 @@ object WalletApi {
             return
         }
 
+        dispatchParsedResult(answer, callbacks)
+    }
+
+    /** Dispatch a parsed JSONObject to the appropriate callback. Called on Main or background. */
+    private suspend fun dispatchParsedResult(answer: JSONObject, activeCallbacks: ConcurrentHashMap<Int, CallbackInfo>) {
         // Handle wallet events (string IDs like "ev_system_state")
         val rawId = answer.opt("id")
         if (rawId is String && rawId.startsWith("ev_")) {
-            onWalletEvent(rawId)
+            withContext(Dispatchers.Main) { onWalletEvent(rawId) }
             return
         }
 
@@ -276,12 +300,12 @@ object WalletApi {
             else -> return
         }
 
-        val info = callbacks.remove(callId)
+        val info = activeCallbacks.remove(callId)
         if (info == null) {
             Log.d(TAG, "← response for unknown id=$callId (stale callback?)")
             return
         }
-        Log.d(TAG, "← ${info.method} (id=$callId, remaining=${callbacks.size}), raw=${json.take(300)}")
+        Log.d(TAG, "← ${info.method} (id=$callId, remaining=${activeCallbacks.size})")
 
         // Error response
         if (answer.has("error")) {
@@ -291,14 +315,14 @@ object WalletApi {
                 is String -> mapOf("message" to err)
                 else -> mapOf("message" to "Unknown error")
             }
-            info.callback(mapOf("error" to errorMap))
+            withContext(Dispatchers.Main) { info.callback(mapOf("error" to errorMap)) }
             return
         }
 
         val rawResult = answer.opt("result")
 
         // Result can be: JSONObject, String, Array, or null
-        when (rawResult) {
+        val result = when (rawResult) {
             is JSONObject -> {
                 // Parse shader output (invoke_contract responses)
                 if (rawResult.has("output")) {
@@ -306,45 +330,68 @@ object WalletApi {
                     try {
                         val shader = JSONObject(output)
                         if (shader.has("error")) {
-                            info.callback(mapOf("error" to shader.opt("error")))
-                            return
+                            mapOf("error" to shader.opt("error"))
+                        } else {
+                            val shaderMap = jsonToMap(shader).toMutableMap()
+                            if (rawResult.has("raw_data")) {
+                                shaderMap["raw_data"] = rawResult.opt("raw_data")
+                            }
+                            shaderMap
                         }
-                        val shaderMap = jsonToMap(shader).toMutableMap()
-                        if (rawResult.has("raw_data")) {
-                            shaderMap["raw_data"] = rawResult.opt("raw_data")
-                        }
-                        info.callback(shaderMap)
                     } catch (_: Exception) {
-                        info.callback(mapOf("error" to "Failed to parse shader response"))
+                        mapOf("error" to "Failed to parse shader response")
                     }
                 } else {
-                    info.callback(jsonToMap(rawResult))
+                    jsonToMap(rawResult)
                 }
             }
             is String -> {
                 // Some methods return raw string (e.g., create_address returns address string)
-                info.callback(mapOf("address" to rawResult))
+                mapOf("address" to rawResult)
             }
             is org.json.JSONArray -> {
                 // Array results (e.g., read_messages returns [{...}, {...}])
-                // Heavy arrays (>100 elements) parsed on background thread to avoid
-                // blocking the main thread — read_messages can be 47MB+ (17K elements).
-                if (rawResult.length() > 100) {
-                    val cb = info.callback
-                    parseScope.launch {
-                        val list = jsonArrayToList(rawResult)
-                        withContext(Dispatchers.Main) {
-                            cb(mapOf("messages" to list))
-                        }
-                    }
+                // For large arrays, filter seen messages early to reduce memory pressure.
+                if (rawResult.length() > 500 && info.method == "read_messages") {
+                    mapOf("messages" to filterSeenMessages(rawResult))
                 } else {
-                    info.callback(mapOf("messages" to jsonArrayToList(rawResult)))
+                    mapOf("messages" to jsonArrayToList(rawResult))
                 }
             }
-            else -> {
-                info.callback(emptyMap())
+            else -> emptyMap<String, Any?>()
+        }
+
+        withContext(Dispatchers.Main) { info.callback(result) }
+    }
+
+    /** Filter read_messages array: skip already-seen SBBS messages to reduce memory. */
+    private fun filterSeenMessages(arr: org.json.JSONArray): List<Any?> {
+        val ctx = com.privimemobile.PriviMWApp.instance?.applicationContext
+        if (ctx == null) {
+            Log.w(TAG, "filterSeenMessages: no app context — converting all messages")
+            return jsonArrayToList(arr)
+        }
+        var filtered = 0
+        val result = mutableListOf<Any?>()
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i)
+            if (item != null) {
+                val id = item.optLong("id", -1L)
+                if (id > 0 && com.privimemobile.chat.SbbsSeenStore.isSeen(ctx, id)) {
+                    filtered++
+                    continue
+                }
+                result.add(jsonToMap(item))
+            } else {
+                result.add(when (val value = arr.opt(i)) {
+                    is org.json.JSONArray -> jsonArrayToList(value)
+                    org.json.JSONObject.NULL -> null
+                    else -> value
+                })
             }
         }
+        Log.d(TAG, "filterSeenMessages: ${arr.length()} total, $filtered already seen, ${result.size} to process")
+        return result
     }
 
     private fun onWalletEvent(eventId: String) {

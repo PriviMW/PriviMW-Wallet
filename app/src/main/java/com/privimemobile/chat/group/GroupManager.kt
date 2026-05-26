@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.privimemobile.R
 import com.privimemobile.chat.ChatService
+import com.privimemobile.chat.DmAddressResolver
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.GroupEntity
 import com.privimemobile.chat.db.entities.GroupMemberEntity
@@ -136,18 +137,7 @@ class GroupManager(
         val contact = ChatService.contacts.resolveHandle(targetHandle, requestAvatarIfMissing = false)
         val convKey = "@$targetHandle"
         val existingConv = db.conversationDao().findByKey(convKey)
-        val walletId = contact?.walletId?.takeIf { it.isNotEmpty() }
-        val contactSbbs = contact?.sbbsAddress?.takeIf { it.isNotEmpty() }
-        val convSbbs = existingConv?.sbbsAddress?.takeIf { it.isNotEmpty() }
-
-        // Match ChatScreen DM routing (contact.sbbs ?: wallet_id). conv.sbbs is only set on
-        // first receive and can be an envelope routing address ≠ on-chain wallet_id — common
-        // for desktop-dapp peers (gary). If conv.sbbs != wallet_id, use wallet_id for invite.
-        val sendAddress: String? = if (!walletId.isNullOrEmpty() && !convSbbs.isNullOrEmpty() && convSbbs != walletId) {
-            walletId
-        } else {
-            contactSbbs ?: walletId ?: convSbbs
-        }
+        val sendAddress = DmAddressResolver.resolve(contact, existingConv)
         if (sendAddress.isNullOrEmpty()) {
             Log.w(TAG, "Cannot invite @$targetHandle — no send address")
             return false

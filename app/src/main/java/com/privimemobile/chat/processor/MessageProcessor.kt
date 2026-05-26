@@ -167,12 +167,7 @@ class MessageProcessor(
                 "group_msg" -> handleGroupMessage(payload, raw, ts, from, sent, myHandle)
                 "group_service" -> handleGroupService(payload, from)
                 "group_info_update" -> handleGroupInfoUpdate(payload, from)
-                "group_info_request" -> handleGroupInfoRequest(
-                    payload,
-                    from,
-                    groupId,
-                    (raw["id"] as? Number)?.toLong(),
-                )
+                "group_info_request" -> handleGroupInfoRequest(payload, from, groupId)
                 "group_info_response" -> handleGroupInfoResponse(payload, groupId)
                 "group_delete" -> handleGroupDelete(payload, from)
                 "ack" -> handleAck(payload, "@$from")
@@ -1516,7 +1511,6 @@ class MessageProcessor(
         payload: Map<String, Any?>,
         from: String,
         groupId: String,
-        sbbsMsgId: Long?,
     ) {
         if (!allowGroupInfoResponse(groupId, from)) return
         val group = db.groupDao().findByGroupId(groupId) ?: return

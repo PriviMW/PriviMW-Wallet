@@ -13,6 +13,8 @@ object SbbsSeenStore {
     private const val TAG = "SbbsSeenStore"
     private const val FILE_NAME = "sbbs_seen_ids.txt"
     private const val MAX_IDS = 30_000
+    /** When at cap, drop this many oldest entries (LinkedHashSet insertion order). */
+    private const val EVICT_COUNT = MAX_IDS / 2
 
     private val seen = java.util.Collections.synchronizedSet(java.util.LinkedHashSet<Long>())
     @Volatile private var loaded = false
@@ -51,15 +53,24 @@ object SbbsSeenStore {
         synchronized(seen) {
             if (seen.contains(sbbsId)) return false
             if (seen.size >= MAX_IDS) {
-                // Drop oldest half — ids are not ordered; clear and rebuild from file on next load is costly.
-                // Prefer keeping recent: clear set (one slow replay) over unbounded growth.
-                seen.clear()
-                Log.w(TAG, "Seen-id set full — cleared for cap")
+                evictOldestLocked()
             }
             seen.add(sbbsId)
             dirty = true
             return true
         }
+    }
+
+    /** Drop oldest half of seen ids (caller must hold lock on [seen]). */
+    private fun evictOldestLocked() {
+        var removed = 0
+        val iter = seen.iterator()
+        while (iter.hasNext() && removed < EVICT_COUNT) {
+            iter.next()
+            iter.remove()
+            removed++
+        }
+        Log.w(TAG, "Seen-id set full — evicted $removed oldest ids (${seen.size} remain)")
     }
 
     fun flush(ctx: Context) {

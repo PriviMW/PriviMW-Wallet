@@ -438,7 +438,7 @@ object ChatService {
                         db?.groupDao()?.clearUnread(groupId)
                     }
                 } else {
-                    // DM — send read receipts for ALL received messages (catch-all)
+                    // DM — read receipts for unacked received messages only
                     sendAllAcksForConv(convKey, conv.id)
                 }
             }

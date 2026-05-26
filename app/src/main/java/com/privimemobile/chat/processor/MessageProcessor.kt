@@ -405,7 +405,7 @@ class MessageProcessor(
             fileSize = (fileData["size"] as? Number)?.toLong() ?: 0,
             mimeType = fileData["mime"] as? String ?: "application/octet-stream",
             inlineData = inlineData,
-            downloadStatus = if (inlineData != null) "idle" else "idle",
+            downloadStatus = if (!inlineData.isNullOrEmpty()) "done" else "idle",
             extras = extras,
         )
         db.attachmentDao().insert(attachment)

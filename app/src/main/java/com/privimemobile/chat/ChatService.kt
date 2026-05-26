@@ -487,6 +487,7 @@ object ChatService {
     fun onForegroundRecovery() {
         if (!_initialized.value) return
         Log.d(TAG, "Foreground recovery — refreshing")
+        SbbsSeenStore.flush(appContext)
         // Re-subscribe to wallet events (may have been dropped)
         com.privimemobile.protocol.WalletApi.subscribeToEvents()
         // Force restart polling (old job may be stuck)
@@ -501,6 +502,7 @@ object ChatService {
     fun shutdown() {
         Log.d(TAG, "Shutting down chat system")
         sbbs.stopPolling()
+        SbbsSeenStore.flush(appContext)
         ChatDatabase.close()
         db = null
         _initialized.value = false

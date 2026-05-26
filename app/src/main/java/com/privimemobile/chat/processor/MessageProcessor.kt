@@ -1514,6 +1514,14 @@ class MessageProcessor(
     ) {
         if (!allowGroupInfoResponse(groupId, from)) return
         val group = db.groupDao().findByGroupId(groupId) ?: return
+
+        // Security: only respond if the requester is a member (or it's a public group)
+        val member = db.groupDao().findMember(groupId, from)
+        if (member == null && !group.isPublic) {
+            Log.w(TAG, "Ignoring group_info_request from non-member @$from for private group $groupId")
+            return
+        }
+
         val senderWalletId = payload["requester_wallet_id"] as? String ?: return
 
         val filesDir = com.privimemobile.chat.transport.IpfsTransport.filesDir

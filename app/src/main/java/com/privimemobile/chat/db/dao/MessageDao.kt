@@ -47,10 +47,6 @@ interface MessageDao {
     @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0 AND acked = 0")
     suspend fun getUnackedTimestamps(convId: Long): List<Long>
 
-    /** Get ALL received message timestamps — for catch-all read receipt on chat open. */
-    @Query("SELECT timestamp FROM messages WHERE conversation_id = :convId AND sent = 0")
-    suspend fun getAllReceivedTimestamps(convId: Long): List<Long>
-
     /** Get ALL received messages with sender info — for group read receipts (grouped by sender). */
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND sent = 0 AND acked = 0 AND sender_handle IS NOT NULL")
     suspend fun getAllReceivedWithSender(convId: Long): List<com.privimemobile.chat.db.entities.MessageEntity>?

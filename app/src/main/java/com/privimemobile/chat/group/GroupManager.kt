@@ -588,7 +588,7 @@ class GroupManager(
                 val resolvedSbbsAddr = sbbsAddr
                     ?: existingMember?.sbbsAddress ?: existingMember?.walletId
                 Log.d(TAG, "insertMember: handle=$handle walletId=${resolvedWalletId?.take(12)} sbbs=${resolvedSbbsAddr?.take(12)} dn=${resolvedDisplayName?.take(12)}")
-                db.groupDao().insertMember(GroupMemberEntity(
+                db.groupDao().upsertMember(GroupMemberEntity(
                     groupId = groupId,
                     handle = handle,
                     displayName = resolvedDisplayName,

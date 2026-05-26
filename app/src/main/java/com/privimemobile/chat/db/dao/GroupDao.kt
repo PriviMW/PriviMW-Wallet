@@ -90,8 +90,28 @@ interface GroupDao {
 
     // --- Members ---
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMember(member: GroupMemberEntity): Long
+
+    /** Upsert member: insert if new, update fields if existing. Preserves auto-increment id and avoids REPLACE row-delete. */
+    @Transaction
+    suspend fun upsertMember(member: GroupMemberEntity) {
+        val existing = findMember(member.groupId, member.handle)
+        if (existing != null) {
+            updateMemberRole(member.groupId, member.handle, member.role, member.permissions)
+            if (member.walletId != null) {
+                updateMemberWalletId(member.groupId, member.handle, member.walletId)
+            }
+            if (member.sbbsAddress != null) {
+                updateMemberSbbsAddress(member.groupId, member.handle, member.sbbsAddress)
+            }
+            if (member.displayName != null) {
+                updateMemberDisplayName(member.groupId, member.handle, member.displayName)
+            }
+        } else {
+            insertMember(member)
+        }
+    }
 
     @Query("SELECT * FROM group_members WHERE group_id = :groupId AND handle = :handle LIMIT 1")
     suspend fun findMember(groupId: String, handle: String): GroupMemberEntity?

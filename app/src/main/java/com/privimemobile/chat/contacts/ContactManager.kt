@@ -42,13 +42,13 @@ class ContactManager(
                     // Also update conversation display info
                     db.conversationDao().updateContactInfo("@$handle", displayName, null, null)
                 }
-                // Envelope sender is a per-conversation routing address — do not overwrite
-                // contact.sbbs when it disagrees with on-chain wallet_id (poisoned send path).
-                if (normalized != null) {
-                    val onChain = existing.walletId
-                    val mayUpdate = onChain.isNullOrEmpty() || normalized == onChain
-                    if (mayUpdate && existing.sbbsAddress != normalized) {
-                        db.contactDao().updateSbbsAddress(handle, normalized)
+                // Update sbbsAddress from message sender (catches wallet restore)
+                // Trust the message's wallet ID — it's cryptographically signed by sender
+                if (normalized != null && existing.sbbsAddress != normalized) {
+                    db.contactDao().updateSbbsAddress(handle, normalized)
+                    // Also update walletId if it differs (wallet restore scenario)
+                    if (existing.walletId != normalized) {
+                        db.contactDao().updateWalletId(handle, normalized)
                     }
                 }
             } else {

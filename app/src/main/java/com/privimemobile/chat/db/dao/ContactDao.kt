@@ -27,6 +27,10 @@ interface ContactDao {
     @Query("UPDATE contacts SET sbbs_address = :sbbsAddress WHERE handle = :handle")
     suspend fun updateSbbsAddress(handle: String, sbbsAddress: String?)
 
+    /** Update wallet_id for a contact (catches wallet restore scenario). */
+    @Query("UPDATE contacts SET wallet_id = :walletId WHERE handle = :handle")
+    suspend fun updateWalletId(handle: String, walletId: String?)
+
     /** Search contacts by handle or display_name prefix (for NewChatScreen). */
     @Query("""
         SELECT * FROM contacts

@@ -359,6 +359,15 @@ class MessageProcessor(
             )
         }
 
+        // Auto-update sender's sbbs_address if it changed (catches wallet restore)
+        if (!sent && from.isNotEmpty() && !senderWalletId.isNullOrEmpty()) {
+            val cachedContact = db.contactDao().findByHandle(from)
+            if (cachedContact != null && cachedContact.sbbsAddress != senderWalletId) {
+                db.contactDao().updateSbbsAddress(from, senderWalletId)
+                Log.d(TAG, "Auto-updated sbbs_address for @$from (wallet restore detected)")
+            }
+        }
+
         // Send ack for received messages
         if (!sent) {
             if (ChatService.activeChat.value == convKey) {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -242,7 +243,9 @@ fun SwapScreen(
                         }
                     }
                 } else {
+                    val historyListState = rememberLazyListState()
                     LazyColumn(
+                        state = historyListState,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
@@ -286,7 +289,9 @@ fun SwapScreen(
                     }
                 }
             } else {
+                val offersListState = rememberLazyListState()
                 LazyColumn(
+                    state = offersListState,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {

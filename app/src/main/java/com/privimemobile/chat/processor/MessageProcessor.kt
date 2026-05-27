@@ -715,6 +715,7 @@ class MessageProcessor(
             val avatarFile = java.io.File(avatarDir, "${from}.webp")
             avatarFile.writeBytes(bytes)
             db.contactDao().updateProfileUpdate(from, claimedHash, if (ts > 0) ts else System.currentTimeMillis() / 1000)
+            com.privimemobile.chat.ChatService.onAvatarUpdated()
             Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes, ts=$ts)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to process avatar for @$from: ${e.message}")
@@ -802,6 +803,7 @@ class MessageProcessor(
                 avatarFile.writeBytes(bytes)
                 // Update both avatar hash and timestamp
                 db.contactDao().updateProfileUpdate(from, avatarHash, ts)
+                com.privimemobile.chat.ChatService.onAvatarUpdated()
                 Log.d(TAG, "Saved verified avatar for @$from (${bytes.size} bytes)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save avatar for @$from: ${e.message}")

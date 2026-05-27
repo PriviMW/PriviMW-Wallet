@@ -1328,6 +1328,9 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
     val initial = (conv.displayName ?: conv.handle ?: conv.convKey)
         .removePrefix("@").firstOrNull()?.uppercase() ?: "?"
 
+    // Observe avatar version to trigger refresh when avatars are updated
+    val avatarVersion by ChatService.avatarVersion.collectAsState()
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -1349,6 +1352,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
                 handle = conv.convKey.removePrefix("@"),
                 displayName = conv.displayName,
                 size = 52.dp,
+                version = avatarVersion,
             )
             Spacer(Modifier.width(14.dp))
 

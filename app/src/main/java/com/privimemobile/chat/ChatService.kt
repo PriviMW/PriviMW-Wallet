@@ -61,6 +61,15 @@ object ChatService {
     val typingVersion: StateFlow<Int> = _typingVersion.asStateFlow()
     private val typingExpiry = mutableMapOf<String, Long>()
 
+    // Avatar version counter — increment when any avatar is updated to trigger UI refresh
+    private val _avatarVersion = MutableStateFlow(0)
+    val avatarVersion: StateFlow<Int> = _avatarVersion.asStateFlow()
+
+    /** Called when an avatar file is saved/updated to trigger UI refresh. */
+    fun onAvatarUpdated() {
+        _avatarVersion.value++
+    }
+
     /** Called by MessageProcessor when a typing indicator arrives. */
     fun onTypingReceived(convKey: String) {
         Log.d(TAG, "onTypingReceived: $convKey")

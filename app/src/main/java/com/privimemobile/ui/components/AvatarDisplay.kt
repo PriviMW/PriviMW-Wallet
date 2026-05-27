@@ -46,6 +46,7 @@ private val avatarColors = listOf(
  * @param displayName Display name (used for letter if available)
  * @param size Circle size
  * @param isMe If true, loads from my_avatar.webp instead of avatars/{handle}.webp
+ * @param version Optional version counter to trigger reload when avatar changes
  */
 @Composable
 fun AvatarDisplay(
@@ -53,9 +54,10 @@ fun AvatarDisplay(
     displayName: String? = null,
     size: Dp = 44.dp,
     isMe: Boolean = false,
+    version: Int = 0,
 ) {
     val context = LocalContext.current
-    val avatarBitmap = remember(handle, isMe) {
+    val avatarBitmap = remember(handle, isMe, version) {
         try {
             val file = if (isMe) {
                 File(context.filesDir, "my_avatar.webp")

@@ -450,9 +450,18 @@ private fun CreatePasswordScreen(
 
         NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
 
-        if (error != null) {
+        // Real-time validation feedback
+        val validationError = when {
+            confirmPassword.isNotEmpty() && password != confirmPassword ->
+                stringResource(R.string.onboarding_error_passwords_mismatch)
+            password.isNotEmpty() && password.length < 6 ->
+                stringResource(R.string.onboarding_error_password_short)
+            else -> null
+        }
+
+        if (error != null || validationError != null) {
             Spacer(Modifier.height(12.dp))
-            Text(error, color = C.error, fontSize = 13.sp)
+            Text(error ?: validationError!!, color = C.error, fontSize = 13.sp)
         }
 
         Spacer(Modifier.height(24.dp))
@@ -787,9 +796,18 @@ private fun RestorePasswordScreen(
 
         NodeSelector(nodeMode, customNode, onNodeModeChange, onCustomNodeChange)
 
-        if (error != null) {
+        // Real-time validation feedback
+        val validationError = when {
+            confirmPassword.isNotEmpty() && password != confirmPassword ->
+                stringResource(R.string.onboarding_error_passwords_mismatch)
+            password.isNotEmpty() && password.length < 6 ->
+                stringResource(R.string.onboarding_error_password_short)
+            else -> null
+        }
+
+        if (error != null || validationError != null) {
             Spacer(Modifier.height(12.dp))
-            Text(error, color = C.error, fontSize = 13.sp)
+            Text(error ?: validationError!!, color = C.error, fontSize = 13.sp)
         }
 
         Spacer(Modifier.height(24.dp))

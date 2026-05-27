@@ -185,10 +185,18 @@ class SbbsTransport(
         val handle = convKey.removePrefix("@")
         val conv = db.conversationDao().findByKey(convKey) ?: return null
         val contact = db.contactDao().findByHandle(handle)
-        var toAddress = com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
-        if (toAddress.isNullOrEmpty()) {
-            toAddress = com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)?.walletId
+        
+        // Always try to resolve the contact's walletId first (on-chain address)
+        // This ensures acks are sent to the address the recipient is definitely listening to
+        val resolvedWalletId = if (contact?.walletId.isNullOrEmpty()) {
+            com.privimemobile.chat.ChatService.contacts.resolveHandle(handle)?.walletId
+        } else {
+            contact?.walletId
         }
+        
+        // Prefer walletId over SBBS envelope sender for acks
+        var toAddress = resolvedWalletId ?: com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
+        
         if (!toAddress.isNullOrEmpty() && conv.sbbsAddress != toAddress) {
             db.conversationDao().updateSbbsAddress(convKey, toAddress)
         }

@@ -182,6 +182,10 @@ gh attestation verify libwallet-jni.so --repo PriviMW/beam
 gh attestation verify libipfs-bindings.so --repo PriviMW/beam
 ```
 
+### GitHub release notes
+
+Every wallet release on GitHub should include the **APK SHA-256**. When native libraries change for that version, also include beam commit, JNI release tag, and per-`.so` SHA-256 (from `PROVENANCE.json` / `SHA256SUMS`). Copy-paste template: [RELEASE_NATIVE_LIBS.md](RELEASE_NATIVE_LIBS.md).
+
 ## Smart Contracts
 
 The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https://github.com/PriviMW/privimw-dapps). The compiled `app.wasm` shader is bundled in `app/src/main/assets/`.

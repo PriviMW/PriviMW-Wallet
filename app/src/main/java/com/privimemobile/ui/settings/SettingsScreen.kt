@@ -137,8 +137,9 @@ fun SettingsScreen(
     // Rescan confirmation dialog
     var showRescanConfirm by remember { mutableStateOf(false) }
 
-    // Public offline address dialog
+    // Public offline address dialog (only after user taps "Show public offline address")
     var publicAddress by remember { mutableStateOf("") }
+    var awaitingPublicAddress by remember { mutableStateOf(false) }
 
     // IPFS test result dialog
     var ipfsTestResult by remember { mutableStateOf("") }
@@ -208,11 +209,13 @@ fun SettingsScreen(
         }
     }
 
-    // Listen for public address events
+    // Listen for getPublicAddress() response only (not Receive-screen generateAddress events)
     LaunchedEffect(Unit) {
         WalletEventBus.addresses.collect { event ->
+            if (!awaitingPublicAddress) return@collect
             if (event.own && event.json.length > 20 && !event.json.startsWith("[")) {
                 publicAddress = event.json
+                awaitingPublicAddress = false
             }
         }
     }
@@ -1308,9 +1311,11 @@ fun SettingsScreen(
             HorizontalDivider(color = C.border, modifier = Modifier.padding(vertical = 4.dp))
             SettingsAction(stringResource(R.string.settings_show_public_offline_address), stringResource(R.string.settings_public_offline_desc), enabled = isOwnNode) {
                 try {
+                    awaitingPublicAddress = true
                     WalletManager.walletInstance?.getPublicAddress()
                     toast(context.getString(R.string.settings_requesting_public_addr))
                 } catch (e: Exception) {
+                    awaitingPublicAddress = false
                     toast(context.getString(R.string.toast_error_message, e.message))
                 }
             }

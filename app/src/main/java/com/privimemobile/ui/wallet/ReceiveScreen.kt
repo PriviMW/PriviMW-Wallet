@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,11 +79,23 @@ fun ReceiveScreen(onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    var ownNode by remember { mutableStateOf(false) }
+    val initialOwnNode = remember {
+        val trusted = try {
+            WalletManager.walletInstance?.isConnectionTrusted() ?: false
+        } catch (_: Exception) {
+            false
+        }
+        val mobileProtocol = SecureStorage.getString("node_mode") == "mobile"
+        trusted || mobileProtocol
+    }
+    var ownNode by remember { mutableStateOf(initialOwnNode) }
     val nodeConn by WalletEventBus.nodeConnection.collectAsState(initial = NodeConnectionEvent(false))
     val isFallback = nodeConn.isFallback
-    var addressType by remember { mutableStateOf("regular") }
-    var currentAddress by remember { mutableStateOf<String?>(null) }
+    var addressType by rememberSaveable {
+        mutableStateOf(if (initialOwnNode) "offline" else "regular")
+    }
+    var addressInitialized by rememberSaveable { mutableStateOf(false) }
+    var currentAddress by rememberSaveable { mutableStateOf<String?>(null) }
     var generating by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
     var lockHours by remember { mutableIntStateOf(72) }
@@ -190,21 +203,25 @@ fun ReceiveScreen(onBack: () -> Unit) {
         }
     }
 
-    // Detect own node / mobile protocol vs remote — then generate initial address
+    // Detect own node / mobile protocol vs remote — generate address only on first open
+    // (tab switch disposes this screen; re-running generateAddress caused Settings dialog flash)
     LaunchedEffect(Unit) {
         try {
             val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
             val mobileProtocol = SecureStorage.getString("node_mode") == "mobile"
-            ownNode = trusted || mobileProtocol
-            if (ownNode) {
-                addressType = "offline"
-                generateAddress("offline")
-            } else {
+            val isOwn = trusted || mobileProtocol
+            ownNode = isOwn
+            if (addressInitialized) return@LaunchedEffect
+            addressInitialized = true
+            val type = if (isOwn) "offline" else "regular"
+            addressType = type
+            generateAddress(type)
+        } catch (_: Exception) {
+            if (!addressInitialized) {
+                addressInitialized = true
                 addressType = "regular"
                 generateAddress("regular")
             }
-        } catch (_: Exception) {
-            generateAddress("regular")
         }
     }
 

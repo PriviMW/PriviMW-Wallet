@@ -60,6 +60,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.delay
 import com.privimemobile.R
 import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.WalletScreen
@@ -106,6 +107,8 @@ enum class Tab(
 
 private fun isDmOrGroupChatRoute(route: String?): Boolean =
     route?.startsWith("chat/") == true || route?.startsWith("group_chat/") == true
+
+private const val CHAT_OVERLAY_EXIT_MS = 200
 
 private fun PaddingValues.withoutBottomPadding(): PaddingValues {
     val direction = LayoutDirection.Ltr
@@ -163,13 +166,31 @@ fun AppNavigation() {
 
     // Reveal chats list + bottom nav before chat overlay finishes exiting (smooth pop from ChatScreen)
     var revealChatsListChrome by remember { mutableStateOf(false) }
+    var dismissingChatOverlay by remember { mutableStateOf(false) }
     val currentRoute = currentDestination?.route
     val onDmOrGroupChat = isDmOrGroupChatRoute(currentRoute)
+    val showPersistedChatsList =
+        currentRoute == Tab.CHATS.route || onDmOrGroupChat || revealChatsListChrome
+    val showChatOverlay = onDmOrGroupChat && !dismissingChatOverlay
 
     LaunchedEffect(currentRoute) {
         if (currentRoute == Tab.CHATS.route) {
             revealChatsListChrome = false
+            dismissingChatOverlay = false
         }
+    }
+
+    LaunchedEffect(onDmOrGroupChat) {
+        if (onDmOrGroupChat) dismissingChatOverlay = false
+    }
+
+    LaunchedEffect(dismissingChatOverlay) {
+        if (!dismissingChatOverlay) return@LaunchedEffect
+        delay(CHAT_OVERLAY_EXIT_MS.toLong())
+        if (isDmOrGroupChatRoute(navController.currentDestination?.route)) {
+            navController.popBackStack()
+        }
+        dismissingChatOverlay = false
     }
 
     // Hide bottom bar on full-screen chat; show early when popping back to the list
@@ -184,11 +205,13 @@ fun AppNavigation() {
     } ?: false
 
     val popChatToChatsList: () -> Unit = {
-        revealChatsListChrome = true
-        navController.popBackStack()
+        if (!dismissingChatOverlay) {
+            revealChatsListChrome = true
+            dismissingChatOverlay = true
+        }
     }
 
-    if (onDmOrGroupChat) {
+    if (onDmOrGroupChat && !dismissingChatOverlay) {
         BackHandler(onBack = popChatToChatsList)
     }
 
@@ -235,7 +258,17 @@ fun AppNavigation() {
     ) { innerPadding ->
         // Keep NavHost full-height while chat overlay is up so revealing the bottom bar does not resize chat.
         val navHostPadding = if (onDmOrGroupChat) innerPadding.withoutBottomPadding() else innerPadding
+        val persistedListPadding = when {
+            revealChatsListChrome -> innerPadding
+            onDmOrGroupChat -> innerPadding.withoutBottomPadding()
+            else -> innerPadding
+        }
         Box(Modifier.fillMaxSize()) {
+        if (showPersistedChatsList) {
+            Box(Modifier.fillMaxSize().padding(persistedListPadding)) {
+                ChatsTabContent(navController)
+            }
+        }
         Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
         NavHost(
             navController = navController,
@@ -423,14 +456,9 @@ fun AppNavigation() {
                 popEnterTransition = { EnterTransition.None },
                 popExitTransition = { ExitTransition.None },
             ) {
-                ChatsScreen(
-                    onOpenChat = { handle -> navController.navigate("chat/$handle") },
-                    onNewChat = { navController.navigate("new_chat") },
-                    onRegister = { navController.navigate("register") },
-                    onSearch = { navController.navigate("search_messages") },
-                    onCreateGroup = { navController.navigate("create_group") },
-                    onOpenGroup = { groupId -> navController.navigate("group_chat/$groupId") },
-                )
+                if (!showPersistedChatsList) {
+                    ChatsTabContent(navController)
+                }
             }
             composable(
                 "chat/{handle}?scrollToTs={scrollToTs}",
@@ -441,9 +469,9 @@ fun AppNavigation() {
                 enterTransition = { fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) },
                 exitTransition = { fadeOut(tween(150)) },
                 popEnterTransition = { EnterTransition.None },
-                popExitTransition = { fadeOut(tween(150)) },
+                popExitTransition = { fadeOut(tween(CHAT_OVERLAY_EXIT_MS)) },
             ) {
-                // Chat UI is drawn in the full-screen overlay so list + bottom bar layout stay stable on pop.
+                // Chat UI is in the overlay; list stays in the persisted layer beneath.
                 Box(Modifier.fillMaxSize())
             }
             composable("new_chat") {
@@ -511,7 +539,7 @@ fun AppNavigation() {
                 enterTransition = { fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) },
                 exitTransition = { fadeOut(tween(150)) },
                 popEnterTransition = { EnterTransition.None },
-                popExitTransition = { fadeOut(tween(150)) },
+                popExitTransition = { fadeOut(tween(CHAT_OVERLAY_EXIT_MS)) },
             ) {
                 Box(Modifier.fillMaxSize())
             }
@@ -603,9 +631,9 @@ fun AppNavigation() {
             }
         }
         AnimatedVisibility(
-            visible = onDmOrGroupChat,
+            visible = showChatOverlay,
             enter = fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))),
-            exit = fadeOut(tween(150)),
+            exit = fadeOut(tween(CHAT_OVERLAY_EXIT_MS, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))),
             // Same top/side insets as NavHost (status bar); no bottom inset — chat stays full-screen above nav bar.
             modifier = Modifier
                 .fillMaxSize()
@@ -620,6 +648,18 @@ fun AppNavigation() {
         }
         }
     }
+}
+
+@Composable
+private fun ChatsTabContent(navController: NavHostController) {
+    ChatsScreen(
+        onOpenChat = { handle -> navController.navigate("chat/$handle") },
+        onNewChat = { navController.navigate("new_chat") },
+        onRegister = { navController.navigate("register") },
+        onSearch = { navController.navigate("search_messages") },
+        onCreateGroup = { navController.navigate("create_group") },
+        onOpenGroup = { groupId -> navController.navigate("group_chat/$groupId") },
+    )
 }
 
 @Composable

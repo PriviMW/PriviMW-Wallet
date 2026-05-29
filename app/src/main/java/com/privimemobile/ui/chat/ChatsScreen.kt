@@ -607,7 +607,6 @@ fun ChatsScreen(
                             }
                             SwipeToDismissBox(
                                 state = dismissState,
-                                modifier = Modifier.animateItem(),
                                 backgroundContent = {
                                     val progress = dismissState.progress
                                     val direction = dismissState.dismissDirection

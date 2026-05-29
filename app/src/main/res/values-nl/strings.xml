@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Deelnemen mislukt</string>
     <string name="new_chat_join_request_sent">Deelnameverzoek verzonden!</string>
     <string name="dapps_updated_toast">%1$s succesvol bijgewerkt</string>
+    <string name="dapps_updated_reopen_toast">%1$s is op de achtergrond bijgewerkt. Sluit en open opnieuw om de nieuwste versie te gebruiken.</string>
     <string name="settings_file_empty">Geselecteerd bestand is leeg</string>
     <string name="settings_invalid_json">Ongeldig JSON-bestand</string>
     <string name="settings_file_read_failed">Bestand lezen mislukt: %1$s</string>

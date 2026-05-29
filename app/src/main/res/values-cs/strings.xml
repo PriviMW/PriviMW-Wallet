@@ -1315,6 +1315,7 @@
     <string name="new_chat_failed_to_join">Připojení selhalo</string>
     <string name="new_chat_join_request_sent">Žádost o připojení odeslána!</string>
     <string name="dapps_updated_toast">%1$s úspěšně aktualizován</string>
+    <string name="dapps_updated_reopen_toast">%1$s byl aktualizován na pozadí. Zavřete jej a znovu otevřete, abyste použili nejnovější verzi.</string>
     <string name="settings_file_empty">Vybraný soubor je prázdný</string>
     <string name="settings_invalid_json">Neplatný JSON soubor</string>
     <string name="settings_file_read_failed">Selhalo čtení souboru: %1$s</string>

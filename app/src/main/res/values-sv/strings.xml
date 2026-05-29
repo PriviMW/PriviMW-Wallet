@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Misslyckades att gå med</string>
     <string name="new_chat_join_request_sent">Medlemsförfrågan skickad!</string>
     <string name="dapps_updated_toast">%1$s uppdaterad framgångsrikt</string>
+    <string name="dapps_updated_reopen_toast">%1$s uppdaterades i bakgrunden. Stäng och öppna igen för att använda den senaste versionen.</string>
     <string name="settings_file_empty">Vald fil är tom</string>
     <string name="settings_invalid_json">Ogiltig JSON-fil</string>
     <string name="settings_file_read_failed">Misslyckades att läsa fil: %1$s</string>

@@ -1315,6 +1315,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="new_chat_failed_to_join">Error al unirse</string>
     <string name="new_chat_join_request_sent">¡Solicitud de ingreso enviada!</string>
     <string name="dapps_updated_toast">%1$s actualizado correctamente</string>
+    <string name="dapps_updated_reopen_toast">%1$s se actualizó en segundo plano. Ciérralo y ábrelo de nuevo para usar la última versión.</string>
     <string name="settings_file_empty">Archivo vacío</string>
     <string name="settings_invalid_json">Archivo JSON no válido</string>
     <string name="settings_file_read_failed">Error al leer archivo: %1$s</string>

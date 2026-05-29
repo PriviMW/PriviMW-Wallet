@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Неуспешно придруживање</string>
     <string name="new_chat_join_request_sent">Захтев за придруживање послат!</string>
     <string name="dapps_updated_toast">%1$s је успешно ажурирано</string>
+    <string name="dapps_updated_reopen_toast">%1$s је ажуриран у позадини. Затворите и поново отворите да бисте користили најновију верзију.</string>
     <string name="settings_file_empty">Изабрани фајл је празан</string>
     <string name="settings_invalid_json">Неисправан JSON фајл</string>
     <string name="settings_file_read_failed">Неуспешно читање фајла: %1$s</string>

@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Tham gia thất bại</string>
     <string name="new_chat_join_request_sent">Đã gửi yêu cầu tham gia!</string>
     <string name="dapps_updated_toast">%1$s đã cập nhật thành công</string>
+    <string name="dapps_updated_reopen_toast">%1$s đã được cập nhật trong nền. Đóng và mở lại để dùng phiên bản mới nhất.</string>
     <string name="settings_file_empty">Tệp đã chọn trống</string>
     <string name="settings_invalid_json">Tệp JSON không hợp lệ</string>
     <string name="settings_file_read_failed">Không thể đọc tệp: %1$s</string>

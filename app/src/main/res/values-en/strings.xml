@@ -1563,6 +1563,7 @@
     <!--  DAPPS TOASTS  —  PriviMW-specific                                 -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <string name="dapps_updated_toast">%1$s successfully updated</string>
+    <string name="dapps_updated_reopen_toast">%1$s was updated in the background. Close and open it again to use the latest version.</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!--  SETTINGS TOASTS  —  PriviMW-specific                              -->

@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">가입 실패</string>
     <string name="new_chat_join_request_sent">가입 요청이 전송되었습니다!</string>
     <string name="dapps_updated_toast">%1$s이(가) 성공적으로 업데이트되었습니다</string>
+    <string name="dapps_updated_reopen_toast">%1$s이(가) 백그라운드에서 업데이트되었습니다. 최신 버전을 사용하려면 닫았다가 다시 여세요.</string>
     <string name="settings_file_empty">선택한 파일이 비어 있습니다</string>
     <string name="settings_invalid_json">잘못된 JSON 파일</string>
     <string name="settings_file_read_failed">파일 읽기 실패: %1$s</string>

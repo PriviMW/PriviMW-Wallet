@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Не атрымалася далучыцца</string>
     <string name="new_chat_join_request_sent">Запыт на далучэнне адпраўлены!</string>
     <string name="dapps_updated_toast">%1$s паспяхова абноўлены</string>
+    <string name="dapps_updated_reopen_toast">%1$s быў абноўлены ў фоне. Закрыйце і адкрыйце яго зноў, каб выкарыстоўваць апошнюю версію.</string>
     <string name="settings_file_empty">Выбраны файл пусты</string>
     <string name="settings_invalid_json">Няправільны JSON-файл</string>
     <string name="settings_file_read_failed">Не атрымалася прачытаць файл: %1$s</string>

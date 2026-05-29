@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">参加に失敗しました</string>
     <string name="new_chat_join_request_sent">参加リクエストを送信しました！</string>
     <string name="dapps_updated_toast">%1$sを更新しました</string>
+    <string name="dapps_updated_reopen_toast">%1$sはバックグラウンドで更新されました。最新版を使うには閉じて再度開いてください。</string>
     <string name="settings_file_empty">選択されたファイルは空です</string>
     <string name="settings_invalid_json">無効なJSONファイル</string>
     <string name="settings_file_read_failed">ファイルの読み取りに失敗しました: %1$s</string>

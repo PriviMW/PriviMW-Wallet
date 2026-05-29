@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Beitreten fehlgeschlagen</string>
     <string name="new_chat_join_request_sent">Beitrittsanfrage gesendet!</string>
     <string name="dapps_updated_toast">%1$s erfolgreich aktualisiert</string>
+    <string name="dapps_updated_reopen_toast">%1$s wurde im Hintergrund aktualisiert. Schließen Sie die DApp und öffnen Sie sie erneut, um die neueste Version zu verwenden.</string>
     <string name="settings_file_empty">Ausgewählte Datei ist leer</string>
     <string name="settings_invalid_json">Ungültige JSON-Datei</string>
     <string name="settings_file_read_failed">Datei lesen fehlgeschlagen: %1$s</string>

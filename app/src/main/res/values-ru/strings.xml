@@ -1318,6 +1318,7 @@
     <string name="new_chat_failed_to_join">Не удалось присоединиться</string>
     <string name="new_chat_join_request_sent">Запрос на вступление отправлен!</string>
     <string name="dapps_updated_toast">%1$s успешно обновлён</string>
+    <string name="dapps_updated_reopen_toast">%1$s обновлён в фоне. Закройте и откройте снова, чтобы использовать последнюю версию.</string>
     <string name="settings_file_empty">Файл пуст</string>
     <string name="settings_invalid_json">Неверный JSON-файл</string>
     <string name="settings_file_read_failed">Ошибка чтения файла: %1$s</string>

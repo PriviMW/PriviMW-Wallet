@@ -1318,6 +1318,7 @@
     <string name="new_chat_failed_to_join">加入失败</string>
     <string name="new_chat_join_request_sent">加入请求已发送！</string>
     <string name="dapps_updated_toast">%1$s 已成功更新</string>
+    <string name="dapps_updated_reopen_toast">%1$s 已在后台更新。请关闭后重新打开以使用最新版本。</string>
     <string name="settings_file_empty">文件为空</string>
     <string name="settings_invalid_json">无效的 JSON 文件</string>
     <string name="settings_file_read_failed">读取文件失败：%1$s</string>

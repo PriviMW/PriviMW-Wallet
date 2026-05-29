@@ -770,9 +770,6 @@
     <string name="chats_cd_archive">Архів</string>
     <string name="chats_swipe_pin">Закріпити</string>
     <string name="chats_swipe_unpin">Відкріпити</string>
-    <string name="chats_change_pin_order">Змінити порядок</string>
-    <string name="chats_reorder_pinned_title">Закріплені чати</string>
-    <string name="chats_reorder_pinned_hint">Перетягніть ручку, щоб змінити порядок. Закріплені чати залишаються вгорі списку.</string>
     <string name="chats_swipe_read">Прочитано</string>
     <string name="chats_swipe_unread">Непрочитано</string>
     <string name="chats_confirm_delete">Видалити розмову? Це дію не можна скасувати.</string>
@@ -1313,6 +1310,7 @@
     <string name="new_chat_failed_to_join">Не вдалося приєднатися</string>
     <string name="new_chat_join_request_sent">Запит на приєднання надіслано!</string>
     <string name="dapps_updated_toast">%1$s успішно оновлено</string>
+    <string name="dapps_updated_reopen_toast">%1$s оновлено у фоновому режимі. Закрийте та відкрийте знову, щоб використовувати останню версію.</string>
     <string name="settings_file_empty">Вибраний файл порожній</string>
     <string name="settings_invalid_json">Недійсний JSON-файл</string>
     <string name="settings_file_read_failed">Не вдалося прочитати файл: %1$s</string>

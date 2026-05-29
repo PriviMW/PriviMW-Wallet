@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Falha ao entrar</string>
     <string name="new_chat_join_request_sent">Solicitacao de entrada enviada!</string>
     <string name="dapps_updated_toast">%1$s atualizado com sucesso</string>
+    <string name="dapps_updated_reopen_toast">%1$s foi atualizado em segundo plano. Feche e abra novamente para usar a versão mais recente.</string>
     <string name="settings_file_empty">Arquivo selecionado está vazio</string>
     <string name="settings_invalid_json">Arquivo JSON invalido</string>
     <string name="settings_file_read_failed">Falha ao ler arquivo: %1$s</string>

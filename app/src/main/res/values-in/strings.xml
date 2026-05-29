@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Gagal bergabung</string>
     <string name="new_chat_join_request_sent">Permintaan bergabung dikirim!</string>
     <string name="dapps_updated_toast">%1$s berhasil diperbarui</string>
+    <string name="dapps_updated_reopen_toast">%1$s diperbarui di latar belakang. Tutup dan buka lagi untuk menggunakan versi terbaru.</string>
     <string name="settings_file_empty">File yang dipilih kosong</string>
     <string name="settings_invalid_json">File JSON tidak valid</string>
     <string name="settings_file_read_failed">Gagal membaca file: %1$s</string>

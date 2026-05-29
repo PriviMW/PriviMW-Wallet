@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Katılma başarısız</string>
     <string name="new_chat_join_request_sent">Katılma talebi gönderildi!</string>
     <string name="dapps_updated_toast">%1$s başarıyla güncellendi</string>
+    <string name="dapps_updated_reopen_toast">%1$s arka planda güncellendi. En son sürümü kullanmak için kapatıp yeniden açın.</string>
     <string name="settings_file_empty">Seçilen dosya boş</string>
     <string name="settings_invalid_json">Geçersiz JSON dosyası</string>
     <string name="settings_file_read_failed">Dosya okuma başarısız: %1$s</string>

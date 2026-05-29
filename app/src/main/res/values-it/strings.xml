@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Unione fallita</string>
     <string name="new_chat_join_request_sent">Richiesta di unione inviata</string>
     <string name="dapps_updated_toast">%1$s aggiornata con successo</string>
+    <string name="dapps_updated_reopen_toast">%1$s è stata aggiornata in background. Chiudila e riaprila per usare l\'ultima versione.</string>
     <string name="settings_file_empty">File vuoto</string>
     <string name="settings_invalid_json">JSON non valido</string>
     <string name="settings_file_read_failed">Lettura file fallita: %1$s</string>

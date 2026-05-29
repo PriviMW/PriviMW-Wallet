@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">Liittyminen epäonnistui</string>
     <string name="new_chat_join_request_sent">Liittymispyyntö lähetetty!</string>
     <string name="dapps_updated_toast">%1$s päivitetty onnistuneesti</string>
+    <string name="dapps_updated_reopen_toast">%1$s päivitettiin taustalla. Sulje ja avaa uudelleen käyttääksesi uusinta versiota.</string>
     <string name="settings_file_empty">Valittu tiedosto on tyhjä</string>
     <string name="settings_invalid_json">Virheellinen JSON-tiedosto</string>
     <string name="settings_file_read_failed">Tiedoston luku epäonnistui: %1$s</string>

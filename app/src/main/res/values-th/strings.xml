@@ -1313,6 +1313,7 @@
     <string name="new_chat_failed_to_join">เข้าร่วมไม่สำเร็จ</string>
     <string name="new_chat_join_request_sent">ส่งคำขอเข้าร่วมแล้ว!</string>
     <string name="dapps_updated_toast">อัปเดต %1$s สำเร็จ</string>
+    <string name="dapps_updated_reopen_toast">อัปเดต %1$s ในพื้นหลังแล้ว ปิดแล้วเปิดใหม่เพื่อใช้เวอร์ชันล่าสุด</string>
     <string name="settings_file_empty">ไฟล์ที่เลือกว่างเปล่า</string>
     <string name="settings_invalid_json">ไฟล์ JSON ไม่ถูกต้อง</string>
     <string name="settings_file_read_failed">อ่านไฟล์ไม่สำเร็จ: %1$s</string>

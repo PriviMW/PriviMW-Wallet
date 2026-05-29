@@ -1,0 +1,71 @@
+name: Verify Native Libraries
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app/src/main/jniLibs/**'
+  pull_request:
+    paths:
+      - 'app/src/main/jniLibs/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Read provenance
+        id: prov
+        run: |
+          PROV=app/src/main/jniLibs/arm64-v8a/PROVENANCE.json
+          TAG=$(jq -r .beam_release_tag "$PROV")
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "::error::beam_release_tag missing in PROVENANCE.json"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Verifying against PriviMW/beam release: $TAG"
+
+      - name: Download referenced beam binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ref
+          gh release download "${{ steps.prov.outputs.tag }}" \
+            --repo PriviMW/beam \
+            --pattern '*.so' \
+            --dir ref
+
+      - name: Assert byte-for-byte match
+        run: |
+          JNI=app/src/main/jniLibs/arm64-v8a
+          for f in libwallet-jni.so libipfs-bindings.so; do
+            committed=$(sha256sum "$JNI/$f" | awk '{print $1}')
+            reference=$(sha256sum "ref/$f" | awk '{print $1}')
+            echo "$f committed=$committed reference=$reference"
+            if [ "$committed" != "$reference" ]; then
+              echo "::error::SHA-256 mismatch for $f"
+              exit 1
+            fi
+          done
+          echo "SHA-256 match confirmed for all native libraries."
+
+      - name: Verify committed SHA256SUMS
+        run: |
+          cd app/src/main/jniLibs/arm64-v8a
+          sha256sum -c SHA256SUMS
+
+      - name: Verify build attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ref
+          gh attestation verify libwallet-jni.so --repo PriviMW/beam
+          gh attestation verify libipfs-bindings.so --repo PriviMW/beam

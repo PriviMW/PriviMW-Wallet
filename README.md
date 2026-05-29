@@ -150,6 +150,38 @@ Forked from the official [BeamMW/beam](https://github.com/BeamMW/beam) with mini
 
 Voice messages use a separate JNI library (`libvoice.so`) built from official Opus + Ogg sources in `app/src/main/jni/` — compiled directly during APK build via CMake.
 
+### Provenance and verification
+
+Native libraries are **not** rebuilt on every wallet commit. They are produced by [PriviMW/beam](https://github.com/PriviMW/beam) CI ([`build-android-jni.yml`](https://github.com/PriviMW/beam/blob/master/.github/workflows/build-android-jni.yml)), published to a permanent GitHub Release with build-provenance attestation, then committed to this repo (Git LFS) with a recorded reference.
+
+Chain of custody:
+
+1. **Producer** — [PriviMW/beam](https://github.com/PriviMW/beam) builds `libwallet-jni.so` and `libipfs-bindings.so` from source and publishes them to a GitHub Release.
+2. **Consumer** — This repo stores the binaries under `app/src/main/jniLibs/arm64-v8a/` and records the exact source reference in [`PROVENANCE.json`](app/src/main/jniLibs/arm64-v8a/PROVENANCE.json) (beam commit, release tag, SHA-256 hashes).
+3. **Verifier** — [`.github/workflows/verify-native-libs.yml`](.github/workflows/verify-native-libs.yml) downloads the referenced Release artifact and asserts a byte-for-byte SHA-256 match against the committed LFS binaries, then verifies GitHub build attestations.
+
+The verify workflow runs automatically when `app/src/main/jniLibs/**` changes, or manually via **Actions → Verify Native Libraries → Run workflow**.
+
+**Update native libraries** (when the beam fork changes):
+
+1. Merge your changes in [PriviMW/beam](https://github.com/PriviMW/beam) and run **Actions → Build Android JNI** (or wait for a push that touches wallet/core paths).
+2. Note the new Release tag (`jni-<version>-<commit>`) and Actions run ID from the completed workflow.
+3. Download the Release assets and copy into `app/src/main/jniLibs/arm64-v8a/`.
+4. Update `PROVENANCE.json` and `SHA256SUMS` to match the new Release and hashes.
+5. Commit and push; the verify workflow confirms the pin.
+
+**Local verification** (Git Bash or WSL, with [GitHub CLI](https://cli.github.com/) installed):
+
+```bash
+TAG=$(jq -r .beam_release_tag app/src/main/jniLibs/arm64-v8a/PROVENANCE.json)
+gh release download "$TAG" --repo PriviMW/beam --pattern '*.so' --dir /tmp/beam-jni
+cd app/src/main/jniLibs/arm64-v8a
+sha256sum -c SHA256SUMS
+# Compare each file to /tmp/beam-jni/
+gh attestation verify libwallet-jni.so --repo PriviMW/beam
+gh attestation verify libipfs-bindings.so --repo PriviMW/beam
+```
+
 ## Smart Contracts
 
 The PriviMe and PriviBets smart contract source code is in [privimw-dapps](https://github.com/PriviMW/privimw-dapps). The compiled `app.wasm` shader is bundled in `app/src/main/assets/`.

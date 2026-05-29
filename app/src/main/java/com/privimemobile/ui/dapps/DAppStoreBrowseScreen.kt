@@ -32,6 +32,7 @@ import com.privimemobile.R
 import com.privimemobile.protocol.AvailableDApp
 import com.privimemobile.protocol.DAppManager
 import com.privimemobile.protocol.DAppStore
+import com.privimemobile.protocol.DAppStoreCatalogCache
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -74,6 +75,7 @@ fun DAppStoreBrowseScreen(
     var installedMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     fun loadAvailable() {
         DAppStore.queryAvailableDApps(context) { dapps ->
+            DAppStoreCatalogCache.save(context, dapps)
             installedMap = DAppManager.getInstalled(context).associate { it.guid to it.version }
             available = dapps
             loading = false

@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * DApp Store — queries the on-chain DApp Store contract for published DApps.
@@ -14,6 +16,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 object DAppStore {
     private const val TAG = "DAppStore"
     private var storeShaderBytes: List<Int>? = null
+    private val catalogRefreshMutex = Mutex()
 
     /** Bundled DApps shipped with the APK — available for instant install without IPFS. */
     private val BUNDLED_DAPPS = listOf(
@@ -295,26 +298,81 @@ object DAppStore {
         return false
     }
 
+    /** Query on-chain store and persist guid → version cache. */
+    suspend fun refreshCatalogCache(context: Context, filterUnwanted: Boolean = true): Boolean {
+        return try {
+            val list = queryAvailableDAppsAsync(context, filterUnwanted)
+            DAppStoreCatalogCache.save(context, list)
+            Log.d(TAG, "Catalog cache refreshed: ${list.size} DApps")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshCatalogCache failed: ${e.message}")
+            false
+        }
+    }
+
+    /** Background refresh for My DApps tab / pull-to-refresh (debounced unless [force]). */
+    suspend fun refreshCatalogCacheIfStale(context: Context, force: Boolean = false) {
+        if (!force && !DAppStoreCatalogCache.isStale(context, DAppStoreCatalogCache.TAB_REFRESH_INTERVAL_MS)) {
+            return
+        }
+        catalogRefreshMutex.withLock {
+            if (!force && !DAppStoreCatalogCache.isStale(context, DAppStoreCatalogCache.TAB_REFRESH_INTERVAL_MS)) {
+                return
+            }
+            refreshCatalogCache(context)
+        }
+    }
+
+    private suspend fun installAvailableUpdate(
+        context: Context,
+        dapp: DApp,
+        available: AvailableDApp,
+    ): Boolean {
+        if (!isVersionOlder(dapp.version, available.version)) return false
+        if (available.bundledAsset.isNotEmpty()) {
+            DAppManager.installFromAsset(context, available.guid, available.bundledAsset, available.name)
+        } else if (available.ipfsCid.isNotEmpty()) {
+            val zipData = downloadFromIpfs(available.ipfsCid)
+            DAppManager.installFromZip(context, available.guid, zipData, available.name, available.icon)
+        } else {
+            return false
+        }
+        DAppStoreCatalogCache.putVersion(context, available.guid, available.version)
+        return true
+    }
+
     /**
-     * Check if an installed DApp has an update, and install it if so.
-     * Returns true if an update was applied.
+     * Full on-chain check — used when cache missing or cached version is newer than installed.
+     * Returns true if an update was applied (caller should not navigate).
      */
     suspend fun checkAndUpdate(context: Context, dapp: DApp): Boolean {
         return try {
             val availableList = queryAvailableDAppsAsync(context)
+            DAppStoreCatalogCache.save(context, availableList)
             val available = availableList.find { it.guid == dapp.guid } ?: return false
-            if (!isVersionOlder(dapp.version, available.version)) return false
+            installAvailableUpdate(context, dapp, available)
+        } catch (e: Exception) {
+            Log.w(TAG, "checkAndUpdate failed: ${e.message}")
+            false
+        }
+    }
 
-            if (available.bundledAsset.isNotEmpty()) {
-                DAppManager.installFromAsset(context, available.guid, available.bundledAsset, available.name)
-            } else if (available.ipfsCid.isNotEmpty()) {
-                val zipData = downloadFromIpfs(available.ipfsCid)
-                DAppManager.installFromZip(context, available.guid, zipData, available.name, available.icon)
-            } else {
+    /**
+     * After fast open: refresh store if cache is older than [DAppStoreCatalogCache.BACKGROUND_VERIFY_MIN_AGE_MS].
+     * Installs update when the chain reports a newer version. Returns true if package was updated.
+     */
+    suspend fun backgroundVerifyAfterLaunch(context: Context, dapp: DApp): Boolean {
+        return try {
+            if (!DAppStoreCatalogCache.isStale(context, DAppStoreCatalogCache.BACKGROUND_VERIFY_MIN_AGE_MS)) {
                 return false
             }
-            true
-        } catch (_: Exception) {
+            val availableList = queryAvailableDAppsAsync(context)
+            DAppStoreCatalogCache.save(context, availableList)
+            val available = availableList.find { it.guid == dapp.guid } ?: return false
+            installAvailableUpdate(context, dapp, available)
+        } catch (e: Exception) {
+            Log.w(TAG, "backgroundVerifyAfterLaunch failed: ${e.message}")
             false
         }
     }

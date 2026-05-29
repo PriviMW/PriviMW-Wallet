@@ -53,10 +53,14 @@ fun SwapScreen(
     val assetInfoVersion by WalletEventBus.assetInfo.collectAsState(initial = null)
     var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = All, 1 = My Offers, 2 = History
 
-    // Refresh on mount + fetch asset info for all order assets
+    // Single mount effect — debounced refresh avoids triple getDexOrders on tab hops.
     LaunchedEffect(Unit) {
         SwapManager.loadParams()
-        SwapManager.refreshOrders()
+        SwapManager.refreshOrdersDebounced()
+        while (true) {
+            kotlinx.coroutines.delay(30_000)
+            SwapManager.refreshOrdersDebounced()
+        }
     }
 
     // Auto-fetch asset info for any unknown assets in orders
@@ -67,14 +71,6 @@ fun SwapScreen(
             if (id !in knownIds) {
                 WalletManager.walletInstance?.getAssetInfo(id)
             }
-        }
-    }
-
-    // Auto-refresh every 30s
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(30_000)
-            SwapManager.refreshOrders()
         }
     }
 

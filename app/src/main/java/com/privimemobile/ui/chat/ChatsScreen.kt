@@ -227,10 +227,15 @@ fun ChatsScreen(
         }
     }
 
-    // Refresh groups on mount and when identity becomes available
+    // Refresh groups when identity is ready — ChatService scope survives tab switches.
     LaunchedEffect(isRegistered) {
-        if (isRegistered) {
-            ChatService.groups.refreshMyGroups()
+        if (!isRegistered || !ChatService.initialized.value) return@LaunchedEffect
+        ChatService.scope.launch {
+            try {
+                ChatService.groups.refreshMyGroups()
+            } catch (e: Exception) {
+                android.util.Log.w("ChatsScreen", "refreshMyGroups failed: ${e.message}")
+            }
         }
     }
 

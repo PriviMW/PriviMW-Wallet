@@ -39,7 +39,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.privimemobile.R
 import com.privimemobile.dapp.DAppActivity
 import com.privimemobile.protocol.DApp
+import com.privimemobile.protocol.DAppLaunchGate
 import com.privimemobile.protocol.DAppManager
+import com.privimemobile.protocol.DAppStore
+import com.privimemobile.protocol.DAppStoreCatalogCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.privimemobile.ui.theme.C
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -104,38 +109,75 @@ fun DAppsScreen(
         }
     }
 
-    // Initial load
+    // Initial load + warm store version cache (debounced, does not block launch)
     LaunchedEffect(Unit) {
         loadDApps()
+        withContext(Dispatchers.IO) {
+            DAppStore.refreshCatalogCacheIfStale(context)
+        }
     }
 
     fun doRefresh() {
         refreshing = true
         scope.launch {
+            withContext(Dispatchers.IO) {
+                DAppStore.refreshCatalogCacheIfStale(context, force = true)
+            }
             loadDApps()
             delay(500)
             refreshing = false
         }
     }
 
+    fun openDApp(dapp: DApp) {
+        onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+    }
+
     fun handleLaunch(dapp: DApp) {
         if (launchingGuid == dapp.guid) return
         launchingGuid = dapp.guid
 
+        val cachedVersion = DAppStoreCatalogCache.getStoreVersion(context, dapp.guid)
+        val plan = DAppLaunchGate.plan(dapp.version, cachedVersion)
+
         scope.launch {
             try {
-                val updated = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    com.privimemobile.protocol.DAppStore.checkAndUpdate(context, dapp)
-                }
-                if (updated) {
-                    loadDApps()
-                    Toast.makeText(context, context.getString(R.string.dapps_updated_toast, dapp.name), Toast.LENGTH_SHORT).show()
-                } else {
-                    onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+                when (plan) {
+                    DAppLaunchGate.Plan.OpenNow -> {
+                        openDApp(dapp)
+                        val updated = withContext(Dispatchers.IO) {
+                            DAppStore.backgroundVerifyAfterLaunch(context, dapp)
+                        }
+                        if (updated) {
+                            loadDApps()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.dapps_updated_reopen_toast, dapp.name),
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                    DAppLaunchGate.Plan.UpdateFirst,
+                    DAppLaunchGate.Plan.FetchOnChainFirst,
+                    -> {
+                        val updated = withContext(Dispatchers.IO) {
+                            DAppStore.checkAndUpdate(context, dapp)
+                        }
+                        if (updated) {
+                            loadDApps()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.dapps_updated_toast, dapp.name),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            openDApp(dapp)
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                Log.w("DAppsScreen", "Update check failed: ${e.message}")
-                onLaunchDApp(dapp.name, DAppManager.getLaunchUrl(dapp), dapp.guid)
+                Log.w("DAppsScreen", "Launch failed: ${e.message}")
+                openDApp(dapp)
             } finally {
                 launchingGuid = null
             }

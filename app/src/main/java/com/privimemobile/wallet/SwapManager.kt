@@ -51,10 +51,24 @@ object SwapManager {
         return true
     }
 
+    private const val MIN_REFRESH_INTERVAL_MS = 10_000L
+    private var lastRefreshOrdersMs = 0L
+
     /** Request current DEX order book from the network. Results arrive via onDexOrdersChanged callback. */
     fun refreshOrders() {
         Log.d(TAG, "refreshOrders()")
+        lastRefreshOrdersMs = System.currentTimeMillis()
         WalletManager.walletInstance?.getDexOrders()
+    }
+
+    /** Coalesce rapid tab remounts / duplicate LaunchedEffect calls. */
+    fun refreshOrdersDebounced() {
+        val now = System.currentTimeMillis()
+        if (now - lastRefreshOrdersMs < MIN_REFRESH_INTERVAL_MS) {
+            Log.d(TAG, "refreshOrdersDebounced: skipped (${now - lastRefreshOrdersMs}ms since last)")
+            return
+        }
+        refreshOrders()
     }
 
     /** Load saved DEX params (SBBS key for orders). Call once on app startup. */

@@ -478,7 +478,10 @@ object ChatService {
 
     /** Observe chat state (identity, registration fee, etc). */
     fun observeState(): Flow<ChatStateEntity?> {
-        return db?.chatStateDao()?.observe() ?: flowOf(null)
+        val dao = db?.chatStateDao() ?: return flowOf(null)
+        return dao.observe().onStart {
+            emit(dao.get())
+        }
     }
 
     /** Check if user is registered. */

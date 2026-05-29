@@ -17,6 +17,16 @@ interface ConversationDao {
     """)
     fun observeAll(): Flow<List<ConversationEntity>>
 
+    /** Snapshot for first paint (same sort as [observeAll]). */
+    @Query("""
+        SELECT * FROM conversations
+        WHERE deleted_at_ts = 0
+        ORDER BY pinned DESC,
+            CASE WHEN pinned = 1 THEN pin_order ELSE 2147483647 END ASC,
+            last_message_ts DESC
+    """)
+    suspend fun getAllActive(): List<ConversationEntity>
+
     /** Total unread count across all conversations (for badge). */
     @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE deleted_at_ts = 0 AND is_blocked = 0")
     fun observeTotalUnread(): Flow<Int>

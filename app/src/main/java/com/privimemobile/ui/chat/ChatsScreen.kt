@@ -38,12 +38,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -115,8 +125,13 @@ fun ChatsScreen(
         return
     }
 
-    // Observe chat state from Room DB
-    val chatState by ChatService.observeState().collectAsState(initial = null)
+    // Seed from DB so first frame matches persisted state (avoids spinner/landing flash on tab switch)
+    val chatStateInitial = remember {
+        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            ChatService.db?.chatStateDao()?.get()
+        }
+    }
+    val chatState by ChatService.observeState().collectAsState(initial = chatStateInitial)
     val isRegistered = chatState?.myHandle != null
     val sbbsNeedsUpdate by ChatService.identity.sbbsNeedsUpdate.collectAsState()
 
@@ -126,6 +141,12 @@ fun ChatsScreen(
 
     // Landing page 1: Not registered (or pending registration TX)
     if (!isRegistered) {
+        if (chatState == null) {
+            Box(Modifier.fillMaxSize().background(C.bg), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = C.accent)
+            }
+            return
+        }
         val pendingRegTx = allPendingTxs.any {
             it.action == com.privimemobile.chat.db.entities.PendingTxEntity.ACTION_REGISTER_HANDLE
         }
@@ -161,19 +182,29 @@ fun ChatsScreen(
         return
     }
 
-    // Main conversation list — observe from Room DAO
-    val conversations by ChatService.db?.conversationDao()?.observeAll()
-        ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
-
-    // Group list — pre-load from DB, then observe reactive updates
-    var groups by remember { mutableStateOf<List<com.privimemobile.chat.db.entities.GroupEntity>>(emptyList()) }
+    // Seed from DB on first composition, then observe — list is present when Chats tab appears
+    var conversations by remember {
+        mutableStateOf(
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                ChatService.db?.conversationDao()?.getAllActive() ?: emptyList()
+            },
+        )
+    }
+    var groups by remember {
+        mutableStateOf(
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                ChatService.db?.groupDao()?.getAllGroups() ?: emptyList()
+            },
+        )
+    }
     LaunchedEffect(Unit) {
-        // Pre-load from DB first so the list always has existing groups on first render
-        val existingGroups = ChatService.db?.groupDao()?.getAllGroups() ?: emptyList()
-        groups = existingGroups
-        // Then observe reactive updates (Room may emit synchronously on start)
-        ChatService.db?.groupDao()?.observeAll()?.collect { updatedGroups ->
-            groups = updatedGroups
+        coroutineScope {
+            launch {
+                ChatService.db?.conversationDao()?.observeAll()?.collect { conversations = it }
+            }
+            launch {
+                ChatService.db?.groupDao()?.observeAll()?.collect { groups = it }
+            }
         }
     }
 
@@ -237,44 +268,9 @@ fun ChatsScreen(
     val dms = remember(conversations) { conversations.filter { !it.convKey.startsWith("g_") } }
     val groupConvs = remember(conversations) { conversations.filter { it.convKey.startsWith("g_") } }
 
-    val filteredConversations = remember(conversations, searchQuery, activeTab, dms, groupConvs) {
-        val tabFiltered = when (activeTab) {
-            0 -> conversations.filter { !it.archived }  // All — DMs + group convs + standalone groups
-            1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
-            2 -> emptyList()  // Groups tab — handled by filteredGroups
-            3 -> dms.filter { !it.archived }  // DMs tab — only non-group conversations
-            4 -> conversations.filter { it.archived }
-            else -> conversations.filter { !it.archived }
-        }
-        if (searchQuery.isBlank()) tabFiltered
-        else {
-            val q = searchQuery.trim().lowercase()
-            tabFiltered.filter { conv ->
-                (conv.displayName ?: "").lowercase().contains(q) ||
-                        (conv.handle ?: "").lowercase().contains(q)
-            }
-        }
-    }
-
     val pinnedCount = remember(conversations, groups) {
         conversations.count { it.pinned && !it.archived && !it.convKey.startsWith("g_") } +
             groups.count { it.pinned && !it.archived }
-    }
-
-    val filteredGroups = remember(groups, searchQuery, activeTab) {
-        val tabFiltered = when (activeTab) {
-            0 -> groups.filter { !it.archived }  // All — standalone group entries
-            1 -> groups.filter { !it.archived && it.unreadCount > 0 }
-            2 -> groups.filter { !it.archived }  // Groups tab — all non-archived groups
-            3 -> emptyList()  // DMs tab — no groups here
-            4 -> groups.filter { it.archived }
-            else -> groups.filter { !it.archived }
-        }
-        if (searchQuery.isBlank()) tabFiltered
-        else {
-            val q = searchQuery.trim().lowercase()
-            tabFiltered.filter { it.name.lowercase().contains(q) }
-        }
     }
 
     PullToRefreshBox(
@@ -290,8 +286,9 @@ fun ChatsScreen(
         },
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
-        // Non-saveable LazyListState — always starts at top, no flash on back navigation
-        val chatListState = remember { androidx.compose.foundation.lazy.LazyListState(0, 0) }
+        // Per-folder-tab scroll position (non-saveable)
+        val chatListState = remember(activeTab) { androidx.compose.foundation.lazy.LazyListState(0, 0) }
+        val listFadeEasing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ── Top bar ──
@@ -408,24 +405,52 @@ fun ChatsScreen(
                 }
 
                 // ── Conversation list ──
-                val hasOnChain = onChainNew.isNotEmpty() || onChainGroupsNew.isNotEmpty() || (isSearchingOnChain && searchQuery.isNotBlank())
+                val hasOnChain = onChainNew.isNotEmpty() || onChainGroupsNew.isNotEmpty() ||
+                    (isSearchingOnChain && searchQuery.isNotBlank())
 
-                if (filteredConversations.isEmpty() && filteredGroups.isEmpty() && !hasOnChain) {
-                    Box(
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    AnimatedContent(
+                        targetState = activeTab,
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (searchQuery.isNotBlank()) {
-                                Text(stringResource(R.string.chat_no_results, searchQuery), color = C.textSecondary, fontSize = 15.sp)
-                            } else {
-                                Text(stringResource(R.string.chats_empty), color = C.textSecondary, fontSize = 16.sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text(stringResource(R.string.chats_tap_to_chat), color = C.textMuted, fontSize = 13.sp)
-                            }
+                        transitionSpec = {
+                            fadeIn(
+                                animationSpec = tween(200, easing = listFadeEasing),
+                            ) togetherWith fadeOut(
+                                animationSpec = tween(150, easing = FastOutSlowInEasing),
+                            )
+                        },
+                        label = "chatsFolderList",
+                    ) { tab ->
+                        val tabConversations = remember(conversations, searchQuery, tab, dms) {
+                            filterConversationsForTab(tab, conversations, dms, searchQuery)
                         }
-                    }
-                } else {
+                        val tabGroups = remember(groups, searchQuery, tab) {
+                            filterGroupsForTab(tab, groups, searchQuery)
+                        }
+                        val tabUnifiedList = remember(tabConversations, tabGroups) {
+                            buildUnifiedChatList(tabConversations, tabGroups)
+                        }
+
+                        if (tabUnifiedList.isEmpty() && !hasOnChain) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    if (searchQuery.isNotBlank()) {
+                                        Text(stringResource(R.string.chat_no_results, searchQuery), color = C.textSecondary, fontSize = 15.sp)
+                                    } else {
+                                        Text(stringResource(R.string.chats_empty), color = C.textSecondary, fontSize = 16.sp)
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(stringResource(R.string.chats_tap_to_chat), color = C.textMuted, fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        } else {
                     // Observe typing state for all conversations
                     val typingVer by ChatService.typingVersion.collectAsState()
 
@@ -454,39 +479,20 @@ fun ChatsScreen(
                         }
                     }
 
-                    // Unified list: conversations + groups sorted by last message time
-                    val unifiedList = remember(filteredConversations, filteredGroups) {
-                        data class ChatListItem(
-                            val isGroup: Boolean,
-                            val sortTs: Long,
-                            val pinned: Boolean,
-                            val pinOrder: Int,
-                            val conv: ConversationEntity? = null,
-                            val group: com.privimemobile.chat.db.entities.GroupEntity? = null,
-                        )
-                        val items = mutableListOf<ChatListItem>()
-                        for (c in filteredConversations) {
-                            if (c.convKey.startsWith("g_")) continue // skip group conversation entries
-                            items.add(ChatListItem(false, c.lastMessageTs, c.pinned, c.pinOrder, conv = c))
-                        }
-                        for (g in filteredGroups) {
-                            items.add(ChatListItem(true, g.lastMessageTs, g.pinned, g.pinOrder, group = g))
-                        }
-                        items.sortedWith { a, b ->
-                            ChatPinOrder.compareChatListItems(
-                                a.pinned, a.pinOrder, a.sortTs,
-                                b.pinned, b.pinOrder, b.sortTs,
-                            )
-                        }
-                    }
-
-                    PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) {
-                    LazyColumn(state = chatListState) {
-                        items(unifiedList.size, key = { i ->
-                            val item = unifiedList[i]
-                            if (item.isGroup) "g_${item.group!!.groupId}" else "c_${item.conv!!.id}"
+                    PullToRefreshBox(
+                        isRefreshing = refreshing,
+                        onRefresh = onRefresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = chatListState,
+                    ) {
+                        items(tabUnifiedList.size, key = { i ->
+                            val listItem = tabUnifiedList[i]
+                            if (listItem.isGroup) "g_${listItem.group!!.groupId}" else "c_${listItem.conv!!.id}"
                         }) { i ->
-                            val item = unifiedList[i]
+                            val item = tabUnifiedList[i]
                             var showDeleteConfirmItem by remember { mutableStateOf(false) }
                             var showArchiveConfirmItem by remember { mutableStateOf(false) }
                             val dismissState = rememberSwipeToDismissBoxState(
@@ -671,7 +677,6 @@ fun ChatsScreen(
                             }
                         }
 
-
                     // ── On-chain search results (Telegram-style global search) ──
 
                     // Show spinner while searching
@@ -828,7 +833,9 @@ fun ChatsScreen(
                     }
                     } // close LazyColumn
                     } // close PullToRefreshBox
-                }
+                        }
+                    } // AnimatedContent folder list
+                } // Box list area
             }
 
             // FABs - New Chat + Create Group (hide on scroll down, show on scroll up)
@@ -1091,6 +1098,75 @@ fun ChatsScreen(
             },
         )
     }
+}
+
+private data class ChatListItem(
+    val isGroup: Boolean,
+    val sortTs: Long,
+    val pinned: Boolean,
+    val pinOrder: Int,
+    val conv: ConversationEntity? = null,
+    val group: com.privimemobile.chat.db.entities.GroupEntity? = null,
+)
+
+private fun buildUnifiedChatList(
+    conversations: List<ConversationEntity>,
+    groups: List<com.privimemobile.chat.db.entities.GroupEntity>,
+): List<ChatListItem> {
+    val items = mutableListOf<ChatListItem>()
+    for (c in conversations) {
+        if (c.convKey.startsWith("g_")) continue
+        items.add(ChatListItem(false, c.lastMessageTs, c.pinned, c.pinOrder, conv = c))
+    }
+    for (g in groups) {
+        items.add(ChatListItem(true, g.lastMessageTs, g.pinned, g.pinOrder, group = g))
+    }
+    return items.sortedWith { a, b ->
+        ChatPinOrder.compareChatListItems(
+            a.pinned, a.pinOrder, a.sortTs,
+            b.pinned, b.pinOrder, b.sortTs,
+        )
+    }
+}
+
+private fun filterConversationsForTab(
+    tab: Int,
+    conversations: List<ConversationEntity>,
+    dms: List<ConversationEntity>,
+    searchQuery: String,
+): List<ConversationEntity> {
+    val tabFiltered = when (tab) {
+        0 -> conversations.filter { !it.archived }
+        1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
+        2 -> emptyList()
+        3 -> dms.filter { !it.archived }
+        4 -> conversations.filter { it.archived }
+        else -> conversations.filter { !it.archived }
+    }
+    if (searchQuery.isBlank()) return tabFiltered
+    val q = searchQuery.trim().lowercase()
+    return tabFiltered.filter { conv ->
+        (conv.displayName ?: "").lowercase().contains(q) ||
+            (conv.handle ?: "").lowercase().contains(q)
+    }
+}
+
+private fun filterGroupsForTab(
+    tab: Int,
+    groups: List<com.privimemobile.chat.db.entities.GroupEntity>,
+    searchQuery: String,
+): List<com.privimemobile.chat.db.entities.GroupEntity> {
+    val tabFiltered = when (tab) {
+        0 -> groups.filter { !it.archived }
+        1 -> groups.filter { !it.archived && it.unreadCount > 0 }
+        2 -> groups.filter { !it.archived }
+        3 -> emptyList()
+        4 -> groups.filter { it.archived }
+        else -> groups.filter { !it.archived }
+    }
+    if (searchQuery.isBlank()) return tabFiltered
+    val q = searchQuery.trim().lowercase()
+    return tabFiltered.filter { it.name.lowercase().contains(q) }
 }
 
 @Composable

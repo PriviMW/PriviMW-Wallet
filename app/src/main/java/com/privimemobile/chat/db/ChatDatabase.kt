@@ -21,7 +21,7 @@ import net.sqlcipher.database.SupportFactory
         ChatStateEntity::class,
         PendingTxEntity::class,
     ],
-    version = 23,
+    version = 24,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -264,6 +264,53 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        /** V23→V24: Manual order for pinned chats (Telegram-style). */
+        private val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN pin_order INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE groups ADD COLUMN pin_order INTEGER NOT NULL DEFAULT 0")
+
+                data class PinRow(val ts: Long, val isGroup: Boolean, val convId: Long, val groupId: String?)
+
+                val rows = mutableListOf<PinRow>()
+                db.query(
+                    """
+                    SELECT id, last_message_ts FROM conversations
+                    WHERE pinned = 1 AND deleted_at_ts = 0 AND archived = 0 AND conv_key NOT LIKE 'g_%'
+                    """.trimIndent(),
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        rows.add(PinRow(cursor.getLong(1), false, cursor.getLong(0), null))
+                    }
+                }
+                db.query(
+                    """
+                    SELECT group_id, last_message_ts FROM groups
+                    WHERE pinned = 1 AND archived = 0
+                    """.trimIndent(),
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        rows.add(PinRow(cursor.getLong(1), true, 0L, cursor.getString(0)))
+                    }
+                }
+                rows.sortByDescending { it.ts }
+                rows.forEachIndexed { index, row ->
+                    val order = index + 1
+                    if (row.isGroup) {
+                        db.execSQL(
+                            "UPDATE groups SET pin_order = ? WHERE group_id = ?",
+                            arrayOf(order, row.groupId),
+                        )
+                    } else {
+                        db.execSQL(
+                            "UPDATE conversations SET pin_order = ? WHERE id = ?",
+                            arrayOf(order, row.convId),
+                        )
+                    }
+                }
+            }
+        }
+
         private fun buildDatabase(context: Context, passphrase: ByteArray): ChatDatabase {
             val factory = SupportFactory(passphrase)
             return Room.databaseBuilder(
@@ -272,7 +319,7 @@ abstract class ChatDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
                 .fallbackToDestructiveMigration()
                 .build()
         }

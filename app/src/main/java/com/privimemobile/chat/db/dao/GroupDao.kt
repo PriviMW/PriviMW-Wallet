@@ -30,7 +30,12 @@ interface GroupDao {
     @Query("SELECT * FROM groups")
     suspend fun getAllGroups(): List<GroupEntity>
 
-    @Query("SELECT * FROM groups ORDER BY last_message_ts DESC")
+    @Query("""
+        SELECT * FROM groups
+        ORDER BY pinned DESC,
+            CASE WHEN pinned = 1 THEN pin_order ELSE 2147483647 END ASC,
+            last_message_ts DESC
+    """)
     fun observeAll(): Flow<List<GroupEntity>>
 
     @Query("SELECT * FROM groups WHERE archived = 0 ORDER BY last_message_ts DESC")
@@ -72,6 +77,24 @@ interface GroupDao {
 
     @Query("UPDATE groups SET pinned = :pinned WHERE group_id = :groupId")
     suspend fun setPinned(groupId: String, pinned: Boolean)
+
+    @Query("UPDATE groups SET pinned = :pinned, pin_order = :pinOrder WHERE group_id = :groupId")
+    suspend fun updatePinState(groupId: String, pinned: Boolean, pinOrder: Int)
+
+    @Query("UPDATE groups SET pin_order = :pinOrder WHERE group_id = :groupId")
+    suspend fun setPinOrder(groupId: String, pinOrder: Int)
+
+    @Query("SELECT COALESCE(MAX(pin_order), 0) FROM groups WHERE pinned = 1 AND archived = 0")
+    suspend fun maxPinOrder(): Int
+
+    @Query("""
+        SELECT * FROM groups WHERE pinned = 1 AND archived = 0
+        ORDER BY pin_order ASC, last_message_ts DESC
+    """)
+    suspend fun getPinnedActive(): List<GroupEntity>
+
+    @Query("SELECT COUNT(*) FROM groups WHERE pinned = 1 AND archived = 0")
+    suspend fun countPinnedActive(): Int
 
     @Query("UPDATE groups SET archived = :archived WHERE group_id = :groupId")
     suspend fun setArchived(groupId: String, archived: Boolean)

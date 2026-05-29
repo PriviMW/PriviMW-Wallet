@@ -23,6 +23,7 @@ data class ConversationEntity(
     @ColumnInfo(name = "deleted_at_ts") val deletedAtTs: Long = 0,  // tombstone — 0 = not deleted
     @ColumnInfo(name = "is_blocked") val isBlocked: Boolean = false,
     val pinned: Boolean = false,
+    @ColumnInfo(name = "pin_order") val pinOrder: Int = 0,
     val muted: Boolean = false,
     @ColumnInfo(name = "is_group") val isGroup: Boolean = false,
     @ColumnInfo(name = "draft_text") val draftText: String? = null,

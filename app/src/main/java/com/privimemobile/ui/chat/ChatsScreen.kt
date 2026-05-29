@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.*
 import androidx.compose.ui.res.stringResource
 import com.privimemobile.R
+import com.privimemobile.chat.ChatPinOrder
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.db.entities.ChatStateEntity
 import com.privimemobile.chat.db.entities.ContactEntity
@@ -185,6 +186,7 @@ fun ChatsScreen(
 
     var menuTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     var menuTargetGroup by remember { mutableStateOf<com.privimemobile.chat.db.entities.GroupEntity?>(null) }
+    var showReorderPinned by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     // On-chain search state
@@ -252,6 +254,11 @@ fun ChatsScreen(
                         (conv.handle ?: "").lowercase().contains(q)
             }
         }
+    }
+
+    val pinnedCount = remember(conversations, groups) {
+        conversations.count { it.pinned && !it.archived && !it.convKey.startsWith("g_") } +
+            groups.count { it.pinned && !it.archived }
     }
 
     val filteredGroups = remember(groups, searchQuery, activeTab) {
@@ -449,17 +456,28 @@ fun ChatsScreen(
 
                     // Unified list: conversations + groups sorted by last message time
                     val unifiedList = remember(filteredConversations, filteredGroups) {
-                        data class ChatListItem(val isGroup: Boolean, val sortTs: Long, val pinned: Boolean, val conv: ConversationEntity? = null, val group: com.privimemobile.chat.db.entities.GroupEntity? = null)
+                        data class ChatListItem(
+                            val isGroup: Boolean,
+                            val sortTs: Long,
+                            val pinned: Boolean,
+                            val pinOrder: Int,
+                            val conv: ConversationEntity? = null,
+                            val group: com.privimemobile.chat.db.entities.GroupEntity? = null,
+                        )
                         val items = mutableListOf<ChatListItem>()
                         for (c in filteredConversations) {
                             if (c.convKey.startsWith("g_")) continue // skip group conversation entries
-                            items.add(ChatListItem(false, c.lastMessageTs, c.pinned, conv = c))
+                            items.add(ChatListItem(false, c.lastMessageTs, c.pinned, c.pinOrder, conv = c))
                         }
                         for (g in filteredGroups) {
-                            items.add(ChatListItem(true, g.lastMessageTs, g.pinned, group = g))
+                            items.add(ChatListItem(true, g.lastMessageTs, g.pinned, g.pinOrder, group = g))
                         }
-                        // Pinned items first, then by timestamp descending
-                        items.sortedWith(compareByDescending<ChatListItem> { it.pinned }.thenByDescending { it.sortTs })
+                        items.sortedWith { a, b ->
+                            ChatPinOrder.compareChatListItems(
+                                a.pinned, a.pinOrder, a.sortTs,
+                                b.pinned, b.pinOrder, b.sortTs,
+                            )
+                        }
                     }
 
                     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh) {
@@ -913,13 +931,19 @@ fun ChatsScreen(
                 HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
                 ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
-                    val gid = target.groupId; val newVal = !target.pinned
+                    val gid = target.groupId
+                    val newVal = !target.pinned
                     scope.launch {
-                        ChatService.db?.groupDao()?.setPinned(gid, newVal)
-                        val check = ChatService.db?.groupDao()?.findByGroupId(gid)
-                        android.util.Log.d("ChatsScreen", "setPinned($gid, $newVal) → DB now: pinned=${check?.pinned}")
+                        val db = ChatService.db ?: return@launch
+                        ChatPinOrder.setGroupPinned(db, gid, newVal)
                     }
                     menuTargetGroup = null
+                }
+                if (target.pinned && pinnedCount >= 2) {
+                    ChatListMenuItem(stringResource(R.string.chats_change_pin_order)) {
+                        menuTargetGroup = null
+                        showReorderPinned = true
+                    }
                 }
                 ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
                     val gid = target.groupId; val newVal = !target.muted
@@ -995,7 +1019,18 @@ fun ChatsScreen(
 
                 // Menu items with touch highlight
                 ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
-                    scope.launch { ChatService.db?.conversationDao()?.setPinned(target.id, !target.pinned) }; menuTarget = null
+                    val newVal = !target.pinned
+                    scope.launch {
+                        val db = ChatService.db ?: return@launch
+                        ChatPinOrder.setConversationPinned(db, target.id, newVal)
+                    }
+                    menuTarget = null
+                }
+                if (target.pinned && pinnedCount >= 2) {
+                    ChatListMenuItem(stringResource(R.string.chats_change_pin_order)) {
+                        menuTarget = null
+                        showReorderPinned = true
+                    }
                 }
                 ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
                     scope.launch { ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted) }; menuTarget = null
@@ -1038,6 +1073,23 @@ fun ChatsScreen(
                 }
             }
         }
+    }
+
+    if (showReorderPinned) {
+        androidx.activity.compose.BackHandler { showReorderPinned = false }
+        val pinnedItems = remember(conversations, groups) {
+            ChatPinOrder.buildPinnedListFromState(conversations, groups)
+        }
+        PinnedChatsReorderOverlay(
+            initialItems = pinnedItems,
+            onDismiss = { showReorderPinned = false },
+            onSave = { ordered ->
+                scope.launch {
+                    val db = ChatService.db ?: return@launch
+                    ChatPinOrder.applyReorder(db, ordered)
+                }
+            },
+        )
     }
 }
 

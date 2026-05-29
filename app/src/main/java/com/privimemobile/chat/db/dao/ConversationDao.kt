@@ -7,11 +7,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ConversationDao {
 
-    /** All active conversations sorted: pinned first, then by last message time. */
+    /** All active conversations sorted: pinned first (manual pin_order), then by last message time. */
     @Query("""
         SELECT * FROM conversations
         WHERE deleted_at_ts = 0
-        ORDER BY pinned DESC, last_message_ts DESC
+        ORDER BY pinned DESC,
+            CASE WHEN pinned = 1 THEN pin_order ELSE 2147483647 END ASC,
+            last_message_ts DESC
     """)
     fun observeAll(): Flow<List<ConversationEntity>>
 
@@ -82,9 +84,31 @@ interface ConversationDao {
     @Query("UPDATE conversations SET is_blocked = :blocked WHERE id = :convId")
     suspend fun setBlocked(convId: Long, blocked: Boolean)
 
-    /** Pin/unpin. */
+    /** Pin/unpin. Prefer [com.privimemobile.chat.ChatPinOrder.setConversationPinned]. */
     @Query("UPDATE conversations SET pinned = :pinned WHERE id = :convId")
     suspend fun setPinned(convId: Long, pinned: Boolean)
+
+    @Query("UPDATE conversations SET pinned = :pinned, pin_order = :pinOrder WHERE id = :convId")
+    suspend fun updatePinState(convId: Long, pinned: Boolean, pinOrder: Int)
+
+    @Query("UPDATE conversations SET pin_order = :pinOrder WHERE id = :convId")
+    suspend fun setPinOrder(convId: Long, pinOrder: Int)
+
+    @Query("SELECT COALESCE(MAX(pin_order), 0) FROM conversations WHERE pinned = 1 AND deleted_at_ts = 0 AND archived = 0")
+    suspend fun maxPinOrder(): Int
+
+    @Query("""
+        SELECT * FROM conversations
+        WHERE pinned = 1 AND deleted_at_ts = 0 AND archived = 0
+        ORDER BY pin_order ASC, last_message_ts DESC
+    """)
+    suspend fun getPinnedActive(): List<ConversationEntity>
+
+    @Query("""
+        SELECT COUNT(*) FROM conversations
+        WHERE pinned = 1 AND deleted_at_ts = 0 AND archived = 0 AND conv_key NOT LIKE 'g_%'
+    """)
+    suspend fun countPinnedActive(): Int
 
     /** Mute/unmute. */
     @Query("UPDATE conversations SET muted = :muted WHERE id = :convId")

@@ -148,6 +148,14 @@ private val chatBadgeFloors = mutableMapOf<String, Pair<Int, Int>>() // floor, v
 /** Saves initial unread count so re-entry preserves it (DB acked status is cleared by setActiveChat). */
 private val chatInitialUnread = mutableMapOf<String, Int>()
 
+/** Room snapshot on DM open — avoids input-bar flash while contact/conv Flows emit from empty initial. */
+private data class DmOpenSeed(
+    val contact: com.privimemobile.chat.db.entities.ContactEntity?,
+    val conv: com.privimemobile.chat.db.entities.ConversationEntity?,
+    val resolvedAddress: String?,
+    val draftText: String?,
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
@@ -214,6 +222,21 @@ fun ChatScreen(
 
     val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"
 
+    val dmOpenSeed = remember(handle, isGroupMode) {
+        if (isGroupMode) null
+        else kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            val db = com.privimemobile.chat.ChatService.db ?: return@runBlocking null
+            val contactRow = db.contactDao().findByHandle(handle)
+            val convRow = db.conversationDao().findByKey("@$handle")
+            DmOpenSeed(
+                contact = contactRow,
+                conv = convRow,
+                resolvedAddress = com.privimemobile.chat.DmAddressResolver.resolve(contactRow, convRow),
+                draftText = convRow?.draftText?.takeIf { it.isNotEmpty() },
+            )
+        }
+    }
+
     // Track first open per session
     val isFirstOpen = remember(convKey) { !openedChatSessions.contains(convKey) }
     if (isFirstOpen) openedChatSessions.add(convKey)
@@ -221,7 +244,7 @@ fun ChatScreen(
     // Observe conversation reactively
     val conversations by com.privimemobile.chat.ChatService.db?.conversationDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
-    val conv = conversations.firstOrNull { it.convKey == convKey }
+    val conv = conversations.firstOrNull { it.convKey == convKey } ?: dmOpenSeed?.conv
     val convId = if (isGroupMode) (groupConvId ?: conv?.id ?: 0L) else (conv?.id ?: 0L)
 
     // Messages from Room DB
@@ -304,7 +327,7 @@ fun ChatScreen(
     // Contact from Room DB
     val roomContact by com.privimemobile.chat.ChatService.db?.contactDao()?.observeAll()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
-    val contact = roomContact.firstOrNull { it.handle == handle }
+    val contact = roomContact.firstOrNull { it.handle == handle } ?: dmOpenSeed?.contact
 
     val resolvedName = if (isGroupMode) {
         group?.name ?: stringResource(R.string.chat_group_name_fallback)
@@ -316,13 +339,20 @@ fun ChatScreen(
         }
     }
     val resolvedWalletId = contact?.walletId
-    val resolvedSbbsAddress = remember(contact, conv) {
-        com.privimemobile.chat.DmAddressResolver.resolve(contact, conv)
+    val resolvedSbbsAddress = remember(contact, conv, dmOpenSeed, isGroupMode) {
+        if (isGroupMode) null
+        else com.privimemobile.chat.DmAddressResolver.resolve(contact, conv) ?: dmOpenSeed?.resolvedAddress
     }
     val isDeletedAccount = contact?.isDeleted == true
 
-    // Input state — use TextFieldValue for cursor control
-    var inputText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    // Input state — use TextFieldValue for cursor control; seed DM draft so right-side icons do not morph on open
+    var inputText by remember(handle, isGroupMode) {
+        mutableStateOf(
+            androidx.compose.ui.text.input.TextFieldValue(
+                if (isGroupMode) "" else dmOpenSeed?.draftText ?: "",
+            ),
+        )
+    }
     fun setInputText(text: String) {
         inputText = androidx.compose.ui.text.input.TextFieldValue(
             text = text,
@@ -554,9 +584,9 @@ fun ChatScreen(
                         com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.unreadCount ?: 0
                 }
             }
-            // Load draft
+            // Load draft when not already seeded (DM open uses dmOpenSeed; groups may get convId late)
             val draft = com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.draftText
-            if (!draft.isNullOrEmpty()) {
+            if (!draft.isNullOrEmpty() && inputText.text.isEmpty()) {
                 setInputText(draft)
             }
             // Set active chat (sends acks via internal scope.launch — async)

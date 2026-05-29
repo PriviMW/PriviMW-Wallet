@@ -368,10 +368,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.CHATS.route,
-                enterTransition = { fadeIn(tween(150)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(150)) },
-                popExitTransition = { fadeOut(tween(150)) },
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { ExitTransition.None },
             ) {
                 ChatsScreen(
                     onOpenChat = { handle -> navController.navigate("chat/$handle") },

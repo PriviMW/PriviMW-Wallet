@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Archiveren</string>
     <string name="chats_swipe_pin">Vastpinnen</string>
     <string name="chats_swipe_unpin">Losmaken</string>
+    <string name="chats_change_pin_order">Volgorde wijzigen</string>
+    <string name="chats_reorder_pinned_title">Vastgezette chats</string>
+    <string name="chats_reorder_pinned_hint">Sleep het handvat om te herschikken. Vastgezette chats blijven bovenaan je lijst.</string>
     <string name="chats_swipe_read">Gelezen</string>
     <string name="chats_swipe_unread">Ongelezen</string>
     <string name="chats_confirm_delete">Gesprek verwijderen? Dit kan niet ongedaan worden gemaakt.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Reageer op een bericht, of /tip @handle bedrag</string>
     <string name="chat_poll_args">Vraag | Optie 1 | Optie 2</string>
     <string name="chat_poll_desc">Een peiling aanmaken</string>
+    <string name="chat_poll_closed_label">Peiling gesloten</string>
+    <string name="chat_poll_close">Peiling sluiten</string>
+    <string name="chat_poll_reopen">Peiling heropenen</string>
+    <string name="toast_poll_closed">Deze peiling is gesloten</string>
+    <string name="toast_poll_already_voted">Je hebt al gestemd</string>
     <string name="chat_recording">Opnemen…</string>
     <string name="chat_file_send_failed">Bestand verzenden mislukt</string>
     <string name="chat_file_label">Bestand</string>

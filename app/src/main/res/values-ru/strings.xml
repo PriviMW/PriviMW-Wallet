@@ -773,6 +773,9 @@
     <string name="chats_cd_archive">Архивировать</string>
     <string name="chats_swipe_pin">Закрепить</string>
     <string name="chats_swipe_unpin">Открепить</string>
+    <string name="chats_change_pin_order">Изменить порядок</string>
+    <string name="chats_reorder_pinned_title">Закреплённые чаты</string>
+    <string name="chats_reorder_pinned_hint">Перетащите ручку, чтобы изменить порядок. Закреплённые чаты остаются вверху списка.</string>
     <string name="chats_swipe_read">Прочитано</string>
     <string name="chats_swipe_unread">Непрочитано</string>
     <string name="chats_confirm_delete">Удалить диалог? Это действие нельзя отменить.</string>
@@ -1483,6 +1486,11 @@
     <string name="chat_tip_hint">Ответьте на сообщение или используйте: /tip @handle сумма</string>
     <string name="chat_poll_args">Вопрос | Вариант 1 | Вариант 2</string>
     <string name="chat_poll_desc">Создать опрос</string>
+    <string name="chat_poll_closed_label">Опрос закрыт</string>
+    <string name="chat_poll_close">Закрыть опрос</string>
+    <string name="chat_poll_reopen">Открыть опрос снова</string>
+    <string name="toast_poll_closed">Этот опрос закрыт</string>
+    <string name="toast_poll_already_voted">Вы уже проголосовали</string>
     <string name="chat_recording">Запись…</string>
     <string name="chat_file_send_failed">Ошибка отправки файла</string>
     <string name="chat_file_label">Файл</string>

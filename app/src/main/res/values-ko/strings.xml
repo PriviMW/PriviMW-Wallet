@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">보관</string>
     <string name="chats_swipe_pin">고정</string>
     <string name="chats_swipe_unpin">고정 해제</string>
+    <string name="chats_change_pin_order">순서 변경</string>
+    <string name="chats_reorder_pinned_title">고정된 채팅</string>
+    <string name="chats_reorder_pinned_hint">핸들을 드래그해 순서를 변경하세요. 고정된 채팅은 목록 상단에 유지됩니다.</string>
     <string name="chats_swipe_read">읽음</string>
     <string name="chats_swipe_unread">읽지 않음</string>
     <string name="chats_confirm_delete">대화를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">메시지에 답장하거나 /tip @handle 금액 입력</string>
     <string name="chat_poll_args">질문 | 옵션 1 | 옵션 2</string>
     <string name="chat_poll_desc">투표 만들기</string>
+    <string name="chat_poll_closed_label">투표 종료됨</string>
+    <string name="chat_poll_close">투표 마감</string>
+    <string name="chat_poll_reopen">투표 다시 열기</string>
+    <string name="toast_poll_closed">이 투표는 마감되었습니다</string>
+    <string name="toast_poll_already_voted">이미 투표했습니다</string>
     <string name="chat_recording">녹음 중…</string>
     <string name="chat_file_send_failed">파일 전송 실패</string>
     <string name="chat_file_label">파일</string>

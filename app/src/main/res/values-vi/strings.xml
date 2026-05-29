@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Lưu trữ</string>
     <string name="chats_swipe_pin">Ghim</string>
     <string name="chats_swipe_unpin">Bỏ ghim</string>
+    <string name="chats_change_pin_order">Đổi thứ tự</string>
+    <string name="chats_reorder_pinned_title">Cuộc trò chuyện đã ghim</string>
+    <string name="chats_reorder_pinned_hint">Kéo tay cầm để sắp xếp lại. Cuộc trò chuyện đã ghim luôn ở đầu danh sách.</string>
     <string name="chats_swipe_read">Đã đọc</string>
     <string name="chats_swipe_unread">Chưa đọc</string>
     <string name="chats_confirm_delete">Xóa cuộc trò chuyện? Không thể hoàn tác.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Trả lời tin nhắn, hoặc /tip @handle số tiền</string>
     <string name="chat_poll_args">Câu hỏi | Lựa chọn 1 | Lựa chọn 2</string>
     <string name="chat_poll_desc">Tạo bình chọn</string>
+    <string name="chat_poll_closed_label">Đã đóng bình chọn</string>
+    <string name="chat_poll_close">Đóng bình chọn</string>
+    <string name="chat_poll_reopen">Mở lại bình chọn</string>
+    <string name="toast_poll_closed">Bình chọn này đã đóng</string>
+    <string name="toast_poll_already_voted">Bạn đã bình chọn rồi</string>
     <string name="chat_recording">Đang ghi…</string>
     <string name="chat_file_send_failed">Gửi tệp thất bại</string>
     <string name="chat_file_label">Tệp</string>

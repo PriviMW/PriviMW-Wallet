@@ -256,6 +256,8 @@ fun ChatScreen(
         }
     }.collectAsState(initial = emptyList())
 
+    val pollUi = rememberChatPollUiState(roomMessages)
+
     // File download tracking (declared early so attachment loading can pre-populate)
     val filePaths = remember { mutableStateMapOf<String, String>() }
     val downloadStatuses = remember { mutableStateMapOf<String, String>() } // idle, downloading, decrypting, done, error
@@ -280,7 +282,7 @@ fun ChatScreen(
     }
 
     val nowSecs = System.currentTimeMillis() / 1000
-    val messages = remember(roomMessages, attachmentMap) { roomMessages.filter { entity ->
+    val messages = remember(roomMessages, attachmentMap, pollUi.revision) { roomMessages.filter { entity ->
         // Skip expired disappearing messages (cleanup coroutine handles DB deletion)
         entity.expiresAt == 0L || entity.expiresAt > nowSecs
     }.map { entity ->
@@ -306,7 +308,7 @@ fun ChatScreen(
             expiresAt = entity.expiresAt,
             pinned = entity.pinned,
             pinnedAt = entity.pinnedAt,
-            pollData = entity.pollData,
+            pollData = pollUi.resolve(entity.id, entity.pollData),
             scheduledAt = entity.scheduledAt,
             stickerPackName = entity.stickerPackName,
             stickerPackId = entity.stickerPackId,
@@ -2446,7 +2448,10 @@ fun ChatScreen(
             contentPadding = PaddingValues(vertical = 8.dp),
             flingBehavior = remember { TelegramFlingBehavior() },
         ) {
-            items(reversedMessages, key = { it.id }) { msg ->
+            items(
+                reversedMessages,
+                key = { msg -> if (msg.type == "poll") "${msg.id}:${msg.pollData}" else msg.id },
+            ) { msg ->
                 // Skip non-first album images (rendered as grid in the first item)
                 if (msg.id in albumSkipIds) return@items
                 // Telegram-style message appear animation
@@ -2704,66 +2709,53 @@ fun ChatScreen(
                                 Toast.makeText(context, R.string.toast_wait_moment, Toast.LENGTH_SHORT).show()
                                 return@MessageBubble
                             }
-                            lastSendTime = now
+                            val pollData = msg.pollData
+                            if (pollData == null) return@MessageBubble
                             scope.launch {
                                 val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                if (state?.myHandle != null && msg.pollData != null) {
-                                    val pollObj = org.json.JSONObject(msg.pollData)
-                                    val options = pollObj.optJSONArray("options")
-                                    if (options != null && optIdx < options.length()) {
-                                        val myHandle = state.myHandle!!
-                                        // Check if tapping the same option (unvote)
-                                        val tappedOpt = options.getJSONObject(optIdx)
-                                        val tappedVoters = tappedOpt.optJSONArray("voters") ?: org.json.JSONArray()
-                                        var isUnvote = false
-                                        for (i in 0 until tappedVoters.length()) {
-                                            if (tappedVoters.getString(i) == myHandle) { isUnvote = true; break }
+                                val voteHandle = state?.myHandle ?: return@launch
+                                val freshPollData = com.privimemobile.chat.ChatService.db
+                                    ?.messageDao()?.findById(msg.id.toLong())?.pollData
+                                    ?: pollData
+                                when (val result = com.privimemobile.chat.poll.PollLogic.applyVote(
+                                    freshPollData, voteHandle, optIdx,
+                                )) {
+                                    is com.privimemobile.chat.poll.PollLogic.VoteResult.Rejected -> {
+                                        val toastRes = when (result.reason) {
+                                            com.privimemobile.chat.poll.PollLogic.VoteRejectReason.CLOSED ->
+                                                R.string.toast_poll_closed
+                                            com.privimemobile.chat.poll.PollLogic.VoteRejectReason.ALREADY_VOTED ->
+                                                R.string.toast_poll_already_voted
+                                            com.privimemobile.chat.poll.PollLogic.VoteRejectReason.INVALID_OPTION ->
+                                                return@launch
                                         }
-
-                                        if (isUnvote) {
-                                            // Remove vote from this option
-                                            val newVoters = org.json.JSONArray()
-                                            for (i in 0 until tappedVoters.length()) {
-                                                if (tappedVoters.getString(i) != myHandle) newVoters.put(tappedVoters.getString(i))
-                                            }
-                                            tappedOpt.put("voters", newVoters)
-                                            options.put(optIdx, tappedOpt)
-                                        } else {
-                                            // Single choice: remove vote from ALL other options first
-                                            for (j in 0 until options.length()) {
-                                                val o = options.getJSONObject(j)
-                                                val v = o.optJSONArray("voters") ?: org.json.JSONArray()
-                                                val cleaned = org.json.JSONArray()
-                                                for (i in 0 until v.length()) {
-                                                    if (v.getString(i) != myHandle) cleaned.put(v.getString(i))
-                                                }
-                                                o.put("voters", cleaned)
-                                                options.put(j, o)
-                                            }
-                                            // Add vote to tapped option
-                                            val voters = options.getJSONObject(optIdx).optJSONArray("voters") ?: org.json.JSONArray()
-                                            voters.put(myHandle)
-                                            options.getJSONObject(optIdx).put("voters", voters)
-                                        }
-
-                                        pollObj.put("options", options)
+                                        Toast.makeText(context, toastRes, Toast.LENGTH_SHORT).show()
+                                    }
+                                    is com.privimemobile.chat.poll.PollLogic.VoteResult.Applied -> {
+                                        lastSendTime = now
+                                        val voteMsgId = msg.id.toLong()
                                         com.privimemobile.chat.ChatService.db?.messageDao()?.updatePollData(
-                                            msg.id.toLong(), pollObj.toString()
+                                            voteMsgId, result.pollData,
                                         )
-                                        // Send vote/unvote via SBBS
+                                        pollUi.patch(voteMsgId, result.pollData)
                                         val votePayload = mapOf(
-                                            "v" to 1, "t" to if (isUnvote) "poll_unvote" else "poll_vote",
+                                            "v" to 1, "t" to "poll_vote",
                                             "ts" to System.currentTimeMillis() / 1000,
-                                            "from" to myHandle, "to" to (if (isGroupMode) groupId!! else handle),
+                                            "from" to voteHandle,
+                                            "to" to (if (isGroupMode) groupId!! else handle),
                                             "msg_ts" to msg.timestamp,
                                             "option" to optIdx,
                                         )
                                         if (isGroupMode && groupId != null) {
-                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, votePayload)
+                                            com.privimemobile.chat.ChatService.groups.sendGroupPayload(
+                                                groupId, votePayload,
+                                            )
                                         } else {
                                             val walletId = resolvedSbbsAddress
                                             if (!walletId.isNullOrEmpty()) {
-                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, votePayload)
+                                                com.privimemobile.chat.ChatService.sbbs.sendWithRetry(
+                                                    walletId, votePayload,
+                                                )
                                             }
                                         }
                                     }
@@ -4853,6 +4845,8 @@ fun ChatScreen(
         // ── Context menu (long-press on message) — Telegram-style bottom sheet ──
         if (contextMenuMsg != null) {
             val targetMsg = contextMenuMsg!!
+            val menuMsgId = targetMsg.id.toLong()
+            val menuPollData = pollUi.resolve(menuMsgId, targetMsg.pollData)
             ModalBottomSheet(
                 onDismissRequest = { contextMenuMsg = null },
                 containerColor = C.card,
@@ -5076,6 +5070,55 @@ fun ChatScreen(
                         }
 
                         MenuItemRow(stringResource(R.string.chat_reply)) { replyingTo = targetMsg; contextMenuMsg = null }
+
+                        // Poll creator: close or reopen voting
+                        if (targetMsg.type == "poll" && menuPollData != null &&
+                            myHandle != null && targetMsg.from == myHandle
+                        ) {
+                            val pollClosed = com.privimemobile.chat.poll.PollLogic.isClosed(menuPollData)
+                            MenuItemRow(
+                                stringResource(
+                                    if (pollClosed) R.string.chat_poll_reopen else R.string.chat_poll_close,
+                                ),
+                            ) {
+                                scope.launch {
+                                    val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
+                                    val creator = state?.myHandle ?: return@launch
+                                    // Always read live poll_data — snapshots can be stale and would wipe votes.
+                                    val freshPollData = com.privimemobile.chat.ChatService.db
+                                        ?.messageDao()?.findById(menuMsgId)?.pollData
+                                        ?: menuPollData
+                                    val isClosedNow = com.privimemobile.chat.poll.PollLogic.isClosed(freshPollData)
+                                    val ts = System.currentTimeMillis() / 1000
+                                    val updated = if (isClosedNow) {
+                                        com.privimemobile.chat.poll.PollLogic.applyReopen(freshPollData)
+                                    } else {
+                                        com.privimemobile.chat.poll.PollLogic.applyClose(freshPollData, ts)
+                                    }
+                                    com.privimemobile.chat.ChatService.db?.messageDao()?.updatePollData(
+                                        menuMsgId, updated,
+                                    )
+                                    pollUi.patch(menuMsgId, updated)
+                                    contextMenuMsg = targetMsg.copy(pollData = updated)
+                                    val payload = mapOf(
+                                        "v" to 1,
+                                        "t" to if (isClosedNow) "poll_reopen" else "poll_close",
+                                        "ts" to ts,
+                                        "from" to creator,
+                                        "to" to (if (isGroupMode) groupId!! else handle),
+                                        "msg_ts" to targetMsg.timestamp,
+                                    )
+                                    if (isGroupMode && groupId != null) {
+                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, payload)
+                                    } else {
+                                        val walletId = resolvedSbbsAddress
+                                        if (!walletId.isNullOrEmpty()) {
+                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, payload)
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // Pin/Unpin — in group mode, only admin (role>=1) or creator (role==2) can pin
                         val canPin = !isGroupMode || (group?.myRole ?: 0) >= 1
@@ -6482,6 +6525,13 @@ private fun MessageBubble(
                     val pollQuestion = remember(msg.pollData) {
                         try { org.json.JSONObject(msg.pollData).optString("question", msg.text) } catch (_: Exception) { msg.text }
                     }
+                    val pollClosed = remember(msg.pollData) {
+                        com.privimemobile.chat.poll.PollLogic.isClosed(msg.pollData)
+                    }
+                    val userHasVoted = remember(msg.pollData, myHandle) {
+                        myHandle != null && com.privimemobile.chat.poll.PollLogic.hasVoted(msg.pollData, myHandle)
+                    }
+                    val canVote = !pollClosed && !userHasVoted
                     data class PollOpt(val text: String, val voteCount: Int, val voters: List<String>)
                     val pollOptions = remember(msg.pollData) {
                         try {
@@ -6501,6 +6551,14 @@ private fun MessageBubble(
                     }
                     val totalVotes = pollOptions.sumOf { it.voteCount }
                     Text("\uD83D\uDCCA ${stringResource(R.string.chat_poll_label)}", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    if (pollClosed) {
+                        Text(
+                            stringResource(R.string.chat_poll_closed_label),
+                            color = C.textSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
                     Text(pollQuestion, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
                     pollOptions.forEachIndexed { optIdx, opt ->
                         val myVote = myHandle != null && myHandle in opt.voters
@@ -6509,7 +6567,7 @@ private fun MessageBubble(
                             shape = RoundedCornerShape(8.dp),
                             color = if (myVote) C.accent.copy(alpha = 0.2f) else C.bg.copy(alpha = 0.4f),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                                .clickable { onPollVote(optIdx) },
+                                .clickable(enabled = canVote) { onPollVote(optIdx) },
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),

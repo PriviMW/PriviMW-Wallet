@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Arkiv</string>
     <string name="chats_swipe_pin">Fäst</string>
     <string name="chats_swipe_unpin">Avfäst</string>
+    <string name="chats_change_pin_order">Ändra ordning</string>
+    <string name="chats_reorder_pinned_title">Fästa chattar</string>
+    <string name="chats_reorder_pinned_hint">Dra i handtaget för att ordna om. Fästa chattar stannar överst i din lista.</string>
     <string name="chats_swipe_read">Läst</string>
     <string name="chats_swipe_unread">Oläst</string>
     <string name="chats_confirm_delete">Radera konversation? Detta kan inte ångras.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Svara på ett meddelande eller /tip @handle belopp</string>
     <string name="chat_poll_args">Fråga | Alternativ 1 | Alternativ 2</string>
     <string name="chat_poll_desc">Skapa omröstning</string>
+    <string name="chat_poll_closed_label">Omröstning stängd</string>
+    <string name="chat_poll_close">Stäng omröstning</string>
+    <string name="chat_poll_reopen">Öppna omröstning igen</string>
+    <string name="toast_poll_closed">Denna omröstning är stängd</string>
+    <string name="toast_poll_already_voted">Du har redan röstat</string>
     <string name="chat_recording">Spela in…</string>
     <string name="chat_file_send_failed">Misslyckades att skicka fil</string>
     <string name="chat_file_label">Fil</string>

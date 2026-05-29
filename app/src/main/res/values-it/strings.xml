@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Archivia</string>
     <string name="chats_swipe_pin">Scorri per fissare</string>
     <string name="chats_swipe_unpin">Scorri per rimuovere fissato</string>
+    <string name="chats_change_pin_order">Cambia ordine</string>
+    <string name="chats_reorder_pinned_title">Chat fissate</string>
+    <string name="chats_reorder_pinned_hint">Trascina la maniglia per riordinare. Le chat fissate restano in cima all\'elenco.</string>
     <string name="chats_swipe_read">leggi</string>
     <string name="chats_swipe_unread">Scorri per segnare come letto</string>
     <string name="chats_confirm_delete">Eliminare questa chat?</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Usa /tip [importo] per fare una mancia</string>
     <string name="chat_poll_args">Argomenti sondaggio</string>
     <string name="chat_poll_desc">Descrizione sondaggio</string>
+    <string name="chat_poll_closed_label">Sondaggio chiuso</string>
+    <string name="chat_poll_close">Chiudi sondaggio</string>
+    <string name="chat_poll_reopen">Riapri sondaggio</string>
+    <string name="toast_poll_closed">Questo sondaggio è chiuso</string>
+    <string name="toast_poll_already_voted">Hai già votato</string>
     <string name="chat_recording">Registrazione...</string>
     <string name="chat_file_send_failed">Invio file fallito</string>
     <string name="chat_file_label">File</string>

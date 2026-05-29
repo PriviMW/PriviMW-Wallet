@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Arquivar</string>
     <string name="chats_swipe_pin">Fixar</string>
     <string name="chats_swipe_unpin">Desafixar</string>
+    <string name="chats_change_pin_order">Alterar ordem</string>
+    <string name="chats_reorder_pinned_title">Conversas fixadas</string>
+    <string name="chats_reorder_pinned_hint">Arraste a alça para reordenar. As conversas fixadas permanecem no topo da sua lista.</string>
     <string name="chats_swipe_read">Lida</string>
     <string name="chats_swipe_unread">Nao Lida</string>
     <string name="chats_confirm_delete">Excluir conversa? Isso nao pode ser desfeito.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Responda a uma mensagem, ou /tip @handle quantidade</string>
     <string name="chat_poll_args">Pergunta | Opcao 1 | Opcao 2</string>
     <string name="chat_poll_desc">Criar uma enquete</string>
+    <string name="chat_poll_closed_label">Enquete encerrada</string>
+    <string name="chat_poll_close">Encerrar enquete</string>
+    <string name="chat_poll_reopen">Reabrir enquete</string>
+    <string name="toast_poll_closed">Esta enquete está encerrada</string>
+    <string name="toast_poll_already_voted">Você já votou nesta enquete</string>
     <string name="chat_recording">Gravando...</string>
     <string name="chat_file_send_failed">Envio de arquivo falhou</string>
     <string name="chat_file_label">Arquivo</string>

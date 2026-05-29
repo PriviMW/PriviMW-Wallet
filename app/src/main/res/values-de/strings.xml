@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Archiv</string>
     <string name="chats_swipe_pin">Anheften</string>
     <string name="chats_swipe_unpin">Losheften</string>
+    <string name="chats_change_pin_order">Reihenfolge ändern</string>
+    <string name="chats_reorder_pinned_title">Angeheftete Chats</string>
+    <string name="chats_reorder_pinned_hint">Ziehen Sie am Griff, um die Reihenfolge zu ändern. Angeheftete Chats bleiben oben in Ihrer Liste.</string>
     <string name="chats_swipe_read">lesen</string>
     <string name="chats_swipe_unread">Ungelesen</string>
     <string name="chats_confirm_delete">Konversation löschen? Dies kann nicht rückgängig gemacht werden.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Auf eine Nachricht antworten oder /tip @handle betrag</string>
     <string name="chat_poll_args">Frage | Option 1 | Option 2</string>
     <string name="chat_poll_desc">Umfrage erstellen</string>
+    <string name="chat_poll_closed_label">Umfrage geschlossen</string>
+    <string name="chat_poll_close">Umfrage schließen</string>
+    <string name="chat_poll_reopen">Umfrage wieder öffnen</string>
+    <string name="toast_poll_closed">Diese Umfrage ist geschlossen</string>
+    <string name="toast_poll_already_voted">Sie haben bereits abgestimmt</string>
     <string name="chat_recording">Aufnehmen…</string>
     <string name="chat_file_send_failed">Dateisenden fehlgeschlagen</string>
     <string name="chat_file_label">Datei</string>

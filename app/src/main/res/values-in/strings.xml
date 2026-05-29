@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Arsip</string>
     <string name="chats_swipe_pin">Sematkan</string>
     <string name="chats_swipe_unpin">Lepas Sematan</string>
+    <string name="chats_change_pin_order">Ubah urutan</string>
+    <string name="chats_reorder_pinned_title">Obrolan yang disematkan</string>
+    <string name="chats_reorder_pinned_hint">Seret pegangan untuk mengurutkan ulang. Obrolan yang disematkan tetap di bagian atas daftar Anda.</string>
     <string name="chats_swipe_read">dibaca</string>
     <string name="chats_swipe_unread">Belum Dibaca</string>
     <string name="chats_confirm_delete">Hapus percakapan? Ini tidak dapat dibatalkan.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Balas pesan, atau /tip @handle jumlah</string>
     <string name="chat_poll_args">Pertanyaan | Opsi 1 | Opsi 2</string>
     <string name="chat_poll_desc">Buat jajak pendapat</string>
+    <string name="chat_poll_closed_label">Jajak pendapat ditutup</string>
+    <string name="chat_poll_close">Tutup jajak pendapat</string>
+    <string name="chat_poll_reopen">Buka kembali jajak pendapat</string>
+    <string name="toast_poll_closed">Jajak pendapat ini ditutup</string>
+    <string name="toast_poll_already_voted">Anda sudah memilih</string>
     <string name="chat_recording">Merekam...</string>
     <string name="chat_file_send_failed">Kirim file gagal</string>
     <string name="chat_file_label">Berkas</string>

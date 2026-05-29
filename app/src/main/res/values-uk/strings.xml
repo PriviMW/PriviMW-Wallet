@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Архів</string>
     <string name="chats_swipe_pin">Закріпити</string>
     <string name="chats_swipe_unpin">Відкріпити</string>
+    <string name="chats_change_pin_order">Змінити порядок</string>
+    <string name="chats_reorder_pinned_title">Закріплені чати</string>
+    <string name="chats_reorder_pinned_hint">Перетягніть ручку, щоб змінити порядок. Закріплені чати залишаються вгорі списку.</string>
     <string name="chats_swipe_read">Прочитано</string>
     <string name="chats_swipe_unread">Непрочитано</string>
     <string name="chats_confirm_delete">Видалити розмову? Це дію не можна скасувати.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Введіть суму кидка</string>
     <string name="chat_poll_args">Аргументи опитування</string>
     <string name="chat_poll_desc">Опис опитування</string>
+    <string name="chat_poll_closed_label">Опитування закрито</string>
+    <string name="chat_poll_close">Закрити опитування</string>
+    <string name="chat_poll_reopen">Відкрити опитування знову</string>
+    <string name="toast_poll_closed">Це опитування закрито</string>
+    <string name="toast_poll_already_voted">Ви вже проголосували</string>
     <string name="chat_recording">Запис...</string>
     <string name="chat_file_send_failed">Не вдалося надіслати файл</string>
     <string name="chat_file_label">Файл</string>

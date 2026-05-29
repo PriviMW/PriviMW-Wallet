@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">เก็บถาวร</string>
     <string name="chats_swipe_pin">ปักหมุด</string>
     <string name="chats_swipe_unpin">เลิกปักหมุด</string>
+    <string name="chats_change_pin_order">เปลี่ยนลำดับ</string>
+    <string name="chats_reorder_pinned_title">แชทที่ปักหมุด</string>
+    <string name="chats_reorder_pinned_hint">ลากที่ด้ามจับเพื่อจัดเรียงใหม่ แชทที่ปักหมุดจะอยู่ด้านบนของรายการ</string>
     <string name="chats_swipe_read">อ่าน</string>
     <string name="chats_swipe_unread">ยังไม่อ่าน</string>
     <string name="chats_confirm_delete">ลบการสนทนา? ไม่สามารถย้อนกลับได้</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">ตอบข้อความ หรือ /tip @handle amount</string>
     <string name="chat_poll_args">คำถาม | ตัวเลือก 1 | ตัวเลือก 2</string>
     <string name="chat_poll_desc">สร้างโพล</string>
+    <string name="chat_poll_closed_label">ปิดโพลแล้ว</string>
+    <string name="chat_poll_close">ปิดโพล</string>
+    <string name="chat_poll_reopen">เปิดโพลอีกครั้ง</string>
+    <string name="toast_poll_closed">โพลนี้ปิดแล้ว</string>
+    <string name="toast_poll_already_voted">คุณโหวตแล้ว</string>
     <string name="chat_recording">กำลังบันทึก…</string>
     <string name="chat_file_send_failed">ส่งไฟล์ไม่สำเร็จ</string>
     <string name="chat_file_label">ไฟล์</string>

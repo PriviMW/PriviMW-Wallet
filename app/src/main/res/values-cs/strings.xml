@@ -772,6 +772,9 @@
     <string name="chats_cd_archive">Archiv</string>
     <string name="chats_swipe_pin">Připnout</string>
     <string name="chats_swipe_unpin">Odepnout</string>
+    <string name="chats_change_pin_order">Změnit pořadí</string>
+    <string name="chats_reorder_pinned_title">Připnuté chaty</string>
+    <string name="chats_reorder_pinned_hint">Přetáhněte úchyt pro změnu pořadí. Připnuté chaty zůstanou nahoře v seznamu.</string>
     <string name="chats_swipe_read">Přečteno</string>
     <string name="chats_swipe_unread">Nepřečteno</string>
     <string name="chats_confirm_delete">Smazat konverzaci? Toto nelze vrátit zpět.</string>
@@ -1480,6 +1483,11 @@
     <string name="chat_tip_hint">Odpovězte na zprávu, nebo /tip @handle částka</string>
     <string name="chat_poll_args">Otázka | Možnost 1 | Možnost 2</string>
     <string name="chat_poll_desc">Vytvořit hlasování</string>
+    <string name="chat_poll_closed_label">Hlasování ukončeno</string>
+    <string name="chat_poll_close">Ukončit hlasování</string>
+    <string name="chat_poll_reopen">Znovu otevřít hlasování</string>
+    <string name="toast_poll_closed">Toto hlasování je ukončeno</string>
+    <string name="toast_poll_already_voted">Již jste hlasovali</string>
     <string name="chat_recording">Nahrávání...</string>
     <string name="chat_file_send_failed">Selhalo odeslání souboru</string>
     <string name="chat_file_label">Soubor</string>

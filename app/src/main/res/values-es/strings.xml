@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Archivar</string>
     <string name="chats_swipe_pin">Fijar</string>
     <string name="chats_swipe_unpin">Desfijar</string>
+    <string name="chats_change_pin_order">Cambiar orden</string>
+    <string name="chats_reorder_pinned_title">Chats fijados</string>
+    <string name="chats_reorder_pinned_hint">Arrastra el control para reordenar. Los chats fijados permanecen en la parte superior de tu lista.</string>
     <string name="chats_swipe_read">Leído</string>
     <string name="chats_swipe_unread">No leído</string>
     <string name="chats_confirm_delete">¿Eliminar conversación? No se puede deshacer.</string>
@@ -1480,6 +1483,11 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="chat_tip_hint">Responder a un mensaje o usa: /tip @handle cantidad</string>
     <string name="chat_poll_args">Pregunta | Opción 1 | Opción 2</string>
     <string name="chat_poll_desc">Crear una encuesta</string>
+    <string name="chat_poll_closed_label">Encuesta cerrada</string>
+    <string name="chat_poll_close">Cerrar encuesta</string>
+    <string name="chat_poll_reopen">Reabrir encuesta</string>
+    <string name="toast_poll_closed">Esta encuesta está cerrada</string>
+    <string name="toast_poll_already_voted">Ya has votado en esta encuesta</string>
     <string name="chat_recording">Grabando…</string>
     <string name="chat_file_send_failed">Error al enviar archivo</string>
     <string name="chat_file_label">Archivo</string>

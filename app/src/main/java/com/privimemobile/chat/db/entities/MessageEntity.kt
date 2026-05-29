@@ -43,7 +43,7 @@ data class MessageEntity(
     @ColumnInfo(name = "expires_at") val expiresAt: Long = 0,  // 0=never, unix seconds for disappearing msgs
     val pinned: Boolean = false,  // message is pinned in this conversation
     @ColumnInfo(name = "pinned_at") val pinnedAt: Long = 0,  // 0=not pinned, unix seconds when pinned (for ordering)
-    @ColumnInfo(name = "poll_data") val pollData: String? = null,  // JSON: {question, options: [{text, voters: [handle]}]}
+    @ColumnInfo(name = "poll_data") val pollData: String? = null,  // JSON: {question, options: [{text, voters}], closed?, closedAt?}
     @ColumnInfo(name = "scheduled_at") val scheduledAt: Long = 0,  // 0=send now, >0=unix seconds to send at
     @ColumnInfo(name = "sticker_pack_name") val stickerPackName: String? = null,
     @ColumnInfo(name = "sticker_pack_id") val stickerPackId: String? = null,

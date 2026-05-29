@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Archivé</string>
     <string name="chats_swipe_pin">Épingler</string>
     <string name="chats_swipe_unpin">Désépingler</string>
+    <string name="chats_change_pin_order">Modifier l\'ordre</string>
+    <string name="chats_reorder_pinned_title">Discussions épinglées</string>
+    <string name="chats_reorder_pinned_hint">Faites glisser la poignée pour réorganiser. Les discussions épinglées restent en haut de votre liste.</string>
     <string name="chats_swipe_read">lu</string>
     <string name="chats_swipe_unread">Non lu</string>
     <string name="chats_confirm_delete">Supprimer la conversation ? Cette action est irréversible.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Répondez à un message ou /tip @handle montant</string>
     <string name="chat_poll_args">Question | Option 1 | Option 2</string>
     <string name="chat_poll_desc">Créer un sondage</string>
+    <string name="chat_poll_closed_label">Sondage fermé</string>
+    <string name="chat_poll_close">Fermer le sondage</string>
+    <string name="chat_poll_reopen">Rouvrir le sondage</string>
+    <string name="toast_poll_closed">Ce sondage est fermé</string>
+    <string name="toast_poll_already_voted">Vous avez déjà voté</string>
     <string name="chat_recording">Enregistrement...</string>
     <string name="chat_file_send_failed">Échec de l\'envoi du fichier</string>
     <string name="chat_file_label">Fichier</string>

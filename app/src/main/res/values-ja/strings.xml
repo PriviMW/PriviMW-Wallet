@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">アーカイブ</string>
     <string name="chats_swipe_pin">ピン留め</string>
     <string name="chats_swipe_unpin">ピン留め解除</string>
+    <string name="chats_change_pin_order">順序を変更</string>
+    <string name="chats_reorder_pinned_title">ピン留めチャット</string>
+    <string name="chats_reorder_pinned_hint">ハンドルをドラッグして並べ替えます。ピン留めしたチャットは一覧の上部に固定されます。</string>
     <string name="chats_swipe_read">既読</string>
     <string name="chats_swipe_unread">未読</string>
     <string name="chats_confirm_delete">会話を削除しますか？この操作は取り消せません。</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">メッセージに返信、または /tip @ハンドル 金額</string>
     <string name="chat_poll_args">質問 | 選択肢1 | 選択肢2</string>
     <string name="chat_poll_desc">投票を作成</string>
+    <string name="chat_poll_closed_label">投票は終了しました</string>
+    <string name="chat_poll_close">投票を締め切る</string>
+    <string name="chat_poll_reopen">投票を再開</string>
+    <string name="toast_poll_closed">この投票は締め切られています</string>
+    <string name="toast_poll_already_voted">すでに投票済みです</string>
     <string name="chat_recording">録音中…</string>
     <string name="chat_file_send_failed">ファイルの送信に失敗しました</string>
     <string name="chat_file_label">ファイル</string>

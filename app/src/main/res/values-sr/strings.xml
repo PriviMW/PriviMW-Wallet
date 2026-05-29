@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Архива</string>
     <string name="chats_swipe_pin">Закачи</string>
     <string name="chats_swipe_unpin">Од закачи</string>
+    <string name="chats_change_pin_order">Промени редослед</string>
+    <string name="chats_reorder_pinned_title">Закачани ћаскања</string>
+    <string name="chats_reorder_pinned_hint">Превуците ручку да бисте променили редослед. Закачани ћаскања остају на врху листе.</string>
     <string name="chats_swipe_read">Прочитано</string>
     <string name="chats_swipe_unread">Непрочитано</string>
     <string name="chats_confirm_delete">Обрисати разговор? Ово се не може опозвати.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Odgовopите на поруку или /tip @handle износ</string>
     <string name="chat_poll_args">Питање | Опција 1 | Опција 2</string>
     <string name="chat_poll_desc">Креирајте анкету</string>
+    <string name="chat_poll_closed_label">Анкета је затворена</string>
+    <string name="chat_poll_close">Затвори анкету</string>
+    <string name="chat_poll_reopen">Поново отвори анкету</string>
+    <string name="toast_poll_closed">Ова анкета је затворена</string>
+    <string name="toast_poll_already_voted">Већ сте гласали</string>
     <string name="chat_recording">Снимање…</string>
     <string name="chat_file_send_failed">Неуспешно слање фајла</string>
     <string name="chat_file_label">Фајл</string>

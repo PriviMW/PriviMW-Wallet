@@ -1775,6 +1775,11 @@
     <string name="chat_tip_hint">Reply to a message, or /tip @handle amount</string>
     <string name="chat_poll_args">Question | Option 1 | Option 2</string>
     <string name="chat_poll_desc">Create a poll</string>
+    <string name="chat_poll_closed_label">Poll closed</string>
+    <string name="chat_poll_close">Close poll</string>
+    <string name="chat_poll_reopen">Reopen poll</string>
+    <string name="toast_poll_closed">This poll is closed</string>
+    <string name="toast_poll_already_voted">You already voted in this poll</string>
     <string name="chat_recording">Recording…</string>
     <string name="chat_file_send_failed">File send failed</string>
     <string name="chat_file_label">File</string>

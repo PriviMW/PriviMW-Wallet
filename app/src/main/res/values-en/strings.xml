@@ -934,6 +934,9 @@
     <string name="chats_cd_archive">Archive</string>
     <string name="chats_swipe_pin">Pin</string>
     <string name="chats_swipe_unpin">Unpin</string>
+    <string name="chats_change_pin_order">Change order</string>
+    <string name="chats_reorder_pinned_title">Pinned chats</string>
+    <string name="chats_reorder_pinned_hint">Drag the handle to reorder. Pinned chats stay at the top of your list.</string>
     <string name="chats_swipe_read">Read</string>
     <string name="chats_swipe_unread">Unread</string>
     <string name="chats_confirm_delete">Delete conversation? This cannot be undone.</string>
@@ -1772,6 +1775,11 @@
     <string name="chat_tip_hint">Reply to a message, or /tip @handle amount</string>
     <string name="chat_poll_args">Question | Option 1 | Option 2</string>
     <string name="chat_poll_desc">Create a poll</string>
+    <string name="chat_poll_closed_label">Poll closed</string>
+    <string name="chat_poll_close">Close poll</string>
+    <string name="chat_poll_reopen">Reopen poll</string>
+    <string name="toast_poll_closed">This poll is closed</string>
+    <string name="toast_poll_already_voted">You already voted in this poll</string>
     <string name="chat_recording">Recording…</string>
     <string name="chat_file_send_failed">File send failed</string>
     <string name="chat_file_label">File</string>

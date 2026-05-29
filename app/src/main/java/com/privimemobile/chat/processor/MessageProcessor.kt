@@ -4,6 +4,7 @@ import android.util.Log
 import com.privimemobile.R
 import com.privimemobile.chat.ChatService
 import com.privimemobile.chat.contacts.ContactManager
+import com.privimemobile.chat.poll.PollLogic
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.*
 import com.privimemobile.protocol.Helpers
@@ -207,8 +208,10 @@ class MessageProcessor(
             "delete" -> handleDelete(payload, convKey, from)
             "edit" -> handleEdit(payload, convKey, from)
             "disappear_config" -> handleDisappearConfig(payload, convKey)
-            "poll_vote" -> handlePollVote(payload, convKey, from, false)
-            "poll_unvote" -> handlePollVote(payload, convKey, from, true)
+            "poll_vote" -> handlePollVote(payload, convKey, from)
+            "poll_unvote" -> { /* legacy: one-vote polls ignore unvote */ }
+            "poll_close" -> handlePollClose(payload, convKey, from)
+            "poll_reopen" -> handlePollReopen(payload, convKey, from)
             "profile_update" -> handleProfileUpdate(payload, from)
             "avatar_request" -> handleAvatarRequest(from, senderWalletId)
             "avatar_response" -> handleAvatarResponse(payload, from)
@@ -571,61 +574,63 @@ class MessageProcessor(
         Log.d(TAG, "Disappear timer set to ${timer}s for $convKey")
     }
 
-    /** Handle poll vote/unvote (single-choice). */
-    private suspend fun handlePollVote(payload: Map<String, Any?>, convKey: String, from: String, isUnvote: Boolean) {
+    /** Handle poll vote (one vote per user; no changes after voting). */
+    private suspend fun handlePollVote(payload: Map<String, Any?>, convKey: String, from: String) {
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val optIdx = (payload["option"] as? Number)?.toInt() ?: return
-        val conv = db.conversationDao().findByKey(convKey) ?: return
-        val pollMsg = db.messageDao().findPollByTimestamp(conv.id, msgTs) ?: return
-        val msgId = pollMsg.id
-        val pollData = pollMsg.pollData ?: return
-        try {
-            val pollObj = JSONObject(pollData)
-            val options = pollObj.optJSONArray("options") ?: return
-            if (optIdx >= options.length()) return
-
-            if (isUnvote) {
-                // Check if actually voted on this option
-                val opt = options.getJSONObject(optIdx)
-                val voters = opt.optJSONArray("voters") ?: JSONArray()
-                var found = false
-                for (i in 0 until voters.length()) { if (voters.getString(i) == from) { found = true; break } }
-                if (!found) return // not voted — nothing to unvote
-                val cleaned = JSONArray()
-                for (i in 0 until voters.length()) {
-                    if (voters.getString(i) != from) cleaned.put(voters.getString(i))
-                }
-                opt.put("voters", cleaned)
-                options.put(optIdx, opt)
-            } else {
-                // Check if already voted on this exact option — skip if duplicate
-                val currentVoters = options.getJSONObject(optIdx).optJSONArray("voters") ?: JSONArray()
-                for (i in 0 until currentVoters.length()) {
-                    if (currentVoters.getString(i) == from) return // already voted here, skip
-                }
-                // Single choice: remove from all options first
-                for (j in 0 until options.length()) {
-                    val o = options.getJSONObject(j)
-                    val v = o.optJSONArray("voters") ?: JSONArray()
-                    val cleaned = JSONArray()
-                    for (i in 0 until v.length()) {
-                        if (v.getString(i) != from) cleaned.put(v.getString(i))
-                    }
-                    o.put("voters", cleaned)
-                    options.put(j, o)
-                }
-                // Add vote to tapped option
-                val voters = options.getJSONObject(optIdx).optJSONArray("voters") ?: JSONArray()
-                voters.put(from)
-                options.getJSONObject(optIdx).put("voters", voters)
+        val pollCtx = loadPollMessage(convKey, msgTs) ?: return
+        when (val result = PollLogic.applyVote(pollCtx.pollData, from, optIdx)) {
+            is PollLogic.VoteResult.Applied -> {
+                db.messageDao().updatePollData(pollCtx.msgId, result.pollData)
+                Log.d(TAG, "Poll vote from @$from on option $optIdx for ts=$msgTs")
             }
-
-            pollObj.put("options", options)
-            db.messageDao().updatePollData(msgId, pollObj.toString())
-            Log.d(TAG, "Poll ${if (isUnvote) "unvote" else "vote"} from @$from on option $optIdx for ts=$msgTs")
-        } catch (e: Exception) {
-            Log.w(TAG, "Poll vote error: ${e.message}")
+            is PollLogic.VoteResult.Rejected -> {
+                Log.d(TAG, "Poll vote rejected (${result.reason}) from @$from for ts=$msgTs")
+            }
         }
+    }
+
+    /** Creator closes poll — results frozen, no new votes. */
+    private suspend fun handlePollClose(payload: Map<String, Any?>, convKey: String, from: String) {
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val pollCtx = loadPollMessage(convKey, msgTs) ?: return
+        if (pollCtx.creatorHandle != from) {
+            Log.d(TAG, "Poll close ignored: @$from is not creator of ts=$msgTs")
+            return
+        }
+        if (PollLogic.isClosed(pollCtx.pollData)) return
+        val closedAt = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000)
+        val updated = PollLogic.applyClose(pollCtx.pollData, closedAt)
+        db.messageDao().updatePollData(pollCtx.msgId, updated)
+        Log.d(TAG, "Poll closed by @$from for ts=$msgTs")
+    }
+
+    /** Creator reopens poll — voting allowed again. */
+    private suspend fun handlePollReopen(payload: Map<String, Any?>, convKey: String, from: String) {
+        val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
+        val pollCtx = loadPollMessage(convKey, msgTs) ?: return
+        if (pollCtx.creatorHandle != from) {
+            Log.d(TAG, "Poll reopen ignored: @$from is not creator of ts=$msgTs")
+            return
+        }
+        if (!PollLogic.isClosed(pollCtx.pollData)) return
+        val updated = PollLogic.applyReopen(pollCtx.pollData)
+        db.messageDao().updatePollData(pollCtx.msgId, updated)
+        Log.d(TAG, "Poll reopened by @$from for ts=$msgTs")
+    }
+
+    private data class PollMessageContext(
+        val msgId: Long,
+        val pollData: String,
+        val creatorHandle: String,
+    )
+
+    private suspend fun loadPollMessage(convKey: String, msgTs: Long): PollMessageContext? {
+        val conv = db.conversationDao().findByKey(convKey) ?: return null
+        val pollMsg = db.messageDao().findPollByTimestamp(conv.id, msgTs) ?: return null
+        val pollData = pollMsg.pollData ?: return null
+        val creator = pollMsg.senderHandle ?: return null
+        return PollMessageContext(pollMsg.id, pollData, creator)
     }
 
     /** Handle message edit. */
@@ -1176,8 +1181,10 @@ class MessageProcessor(
             "unreact" -> handleUnreact(payload, from, sent)
             "delete" -> handleDelete(payload, groupConvKey, from)
             "edit" -> handleEdit(payload, groupConvKey, from)
-            "poll_vote" -> handlePollVote(payload, groupConvKey, from, false)
-            "poll_unvote" -> handlePollVote(payload, groupConvKey, from, true)
+            "poll_vote" -> handlePollVote(payload, groupConvKey, from)
+            "poll_unvote" -> { /* legacy: one-vote polls ignore unvote */ }
+            "poll_close" -> handlePollClose(payload, groupConvKey, from)
+            "poll_reopen" -> handlePollReopen(payload, groupConvKey, from)
             "group_pin" -> {
                 // Only process pins that were sent AFTER this app session started
                 // Prevents stale SBBS re-delivery from re-pinning after reinstall

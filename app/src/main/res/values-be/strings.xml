@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Архіў</string>
     <string name="chats_swipe_pin">Замацаваць</string>
     <string name="chats_swipe_unpin">Адмацаваць</string>
+    <string name="chats_change_pin_order">Змяніць парадак</string>
+    <string name="chats_reorder_pinned_title">Замацаваныя чаты</string>
+    <string name="chats_reorder_pinned_hint">Перацягніце ручку, каб змяніць парадак. Замацаваныя чаты застаюцца ўверсе спіса.</string>
     <string name="chats_swipe_read">прачытана</string>
     <string name="chats_swipe_unread">Нечытанае</string>
     <string name="chats_confirm_delete">Выдаліць размову? Гэта нельга адмяніць.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Адказаць на паведамленне або /tip @handle сума</string>
     <string name="chat_poll_args">Пытанне | Варыянт 1 | Варыянт 2</string>
     <string name="chat_poll_desc">Стварыць апытанне</string>
+    <string name="chat_poll_closed_label">Апытанне закрыта</string>
+    <string name="chat_poll_close">Закрыць апытанне</string>
+    <string name="chat_poll_reopen">Адкрыць апытанне</string>
+    <string name="toast_poll_closed">Гэта апытанне закрыта</string>
+    <string name="toast_poll_already_voted">Вы ўжо прагаласавалі</string>
     <string name="chat_recording">Запіс…</string>
     <string name="chat_file_send_failed">Не атрымалася адправіць файл</string>
     <string name="chat_file_label">Файл</string>

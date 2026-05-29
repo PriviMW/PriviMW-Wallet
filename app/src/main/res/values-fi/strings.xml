@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Arkisto</string>
     <string name="chats_swipe_pin">Kiinnitä</string>
     <string name="chats_swipe_unpin">Irrota</string>
+    <string name="chats_change_pin_order">Muuta järjestystä</string>
+    <string name="chats_reorder_pinned_title">Kiinnitetyt keskustelut</string>
+    <string name="chats_reorder_pinned_hint">Järjestä uudelleen vetämällä kahvasta. Kiinnitetyt keskustelut pysyvät listan yläosassa.</string>
     <string name="chats_swipe_read">Pyyhkäise luettuksi</string>
     <string name="chats_swipe_unread">Lukematon</string>
     <string name="chats_confirm_delete">Poista keskustelu? Tätä ei voi peruuttaa.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Vastaa viestiin tai /tip @handle maara</string>
     <string name="chat_poll_args">Kysymys | Vaihtoehto 1 | Vaihtoehto 2</string>
     <string name="chat_poll_desc">Luo kysely</string>
+    <string name="chat_poll_closed_label">Kysely suljettu</string>
+    <string name="chat_poll_close">Sulje kysely</string>
+    <string name="chat_poll_reopen">Avaa kysely uudelleen</string>
+    <string name="toast_poll_closed">Tämä kysely on suljettu</string>
+    <string name="toast_poll_already_voted">Olet jo äänestänyt</string>
     <string name="chat_recording">Nauhoitetaan...</string>
     <string name="chat_file_send_failed">Tiedoston lähetys epäonnistui</string>
     <string name="chat_file_label">Tiedosto</string>

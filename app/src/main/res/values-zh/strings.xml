@@ -773,6 +773,9 @@
     <string name="chats_cd_archive">归档</string>
     <string name="chats_swipe_pin">置顶</string>
     <string name="chats_swipe_unpin">取消置顶</string>
+    <string name="chats_change_pin_order">更改顺序</string>
+    <string name="chats_reorder_pinned_title">置顶聊天</string>
+    <string name="chats_reorder_pinned_hint">拖动把手即可重新排序。置顶的聊天将保持在列表顶部。</string>
     <string name="chats_swipe_read">已读</string>
     <string name="chats_swipe_unread">未读</string>
     <string name="chats_confirm_delete">删除对话？此操作不可撤销。</string>
@@ -1483,6 +1486,11 @@
     <string name="chat_tip_hint">回复消息，或使用：/tip @handle 金额</string>
     <string name="chat_poll_args">问题 | 选项1 | 选项2</string>
     <string name="chat_poll_desc">创建投票</string>
+    <string name="chat_poll_closed_label">投票已结束</string>
+    <string name="chat_poll_close">结束投票</string>
+    <string name="chat_poll_reopen">重新开放投票</string>
+    <string name="toast_poll_closed">此投票已结束</string>
+    <string name="toast_poll_already_voted">您已投过票</string>
     <string name="chat_recording">录制中…</string>
     <string name="chat_file_send_failed">文件发送失败</string>
     <string name="chat_file_label">文件</string>

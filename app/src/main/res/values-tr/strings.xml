@@ -770,6 +770,9 @@
     <string name="chats_cd_archive">Arşive al</string>
     <string name="chats_swipe_pin">Sabitle</string>
     <string name="chats_swipe_unpin">Sabitlemeyi Kaldır</string>
+    <string name="chats_change_pin_order">Sırayı değiştir</string>
+    <string name="chats_reorder_pinned_title">Sabitlenen sohbetler</string>
+    <string name="chats_reorder_pinned_hint">Yeniden sıralamak için tutamacı sürükleyin. Sabitlenen sohbetler listenizin en üstünde kalır.</string>
     <string name="chats_swipe_read">Oku</string>
     <string name="chats_swipe_unread">Okunmamış</string>
     <string name="chats_confirm_delete">Sohbeti sil? Bu işlem geri alınamaz.</string>
@@ -1478,6 +1481,11 @@
     <string name="chat_tip_hint">Bir mesaja yanıt verin, veya /tip @kullanıcıadı miktar</string>
     <string name="chat_poll_args">Soru | Seçenek 1 | Seçenek 2</string>
     <string name="chat_poll_desc">Anket oluştur</string>
+    <string name="chat_poll_closed_label">Anket kapandı</string>
+    <string name="chat_poll_close">Anketi kapat</string>
+    <string name="chat_poll_reopen">Anketi yeniden aç</string>
+    <string name="toast_poll_closed">Bu anket kapalı</string>
+    <string name="toast_poll_already_voted">Bu ankette zaten oy kullandınız</string>
     <string name="chat_recording">Kaydediliyor...</string>
     <string name="chat_file_send_failed">Dosya gönderme başarısız</string>
     <string name="chat_file_label">Dosya</string>

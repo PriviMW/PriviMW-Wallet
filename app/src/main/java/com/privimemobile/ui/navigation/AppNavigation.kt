@@ -11,6 +11,10 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.alpha
@@ -35,7 +39,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
+import androidx.navigation.NavBackStackEntry
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,6 +104,19 @@ enum class Tab(
     SETTINGS("settings", R.string.settings_title, Icons.Filled.Settings, Icons.Outlined.Settings),
 }
 
+private fun isDmOrGroupChatRoute(route: String?): Boolean =
+    route?.startsWith("chat/") == true || route?.startsWith("group_chat/") == true
+
+private fun PaddingValues.withoutBottomPadding(): PaddingValues {
+    val direction = LayoutDirection.Ltr
+    return PaddingValues(
+        start = calculateStartPadding(direction),
+        top = calculateTopPadding(),
+        end = calculateEndPadding(direction),
+        bottom = 0.dp,
+    )
+}
+
 @Composable
 fun AppNavigation() {
     // 1-pixel keepalive: tricks LTPO displays into staying at 120Hz by continuously
@@ -139,17 +161,36 @@ fun AppNavigation() {
         activity?.consumeDeepLink()
     }
 
-    // Hide bottom bar on certain screens (chat screens only — wallet sub-screens keep nav bar)
-    val hideBottomBar = currentDestination?.route?.let { route ->
-        route.startsWith("chat/") ||
-                route == "new_chat" ||
-                route == "search_messages" ||
-                route.startsWith("media_gallery/") ||
-                route.startsWith("contact_info/") ||
-                route.startsWith("group_chat/") ||
-                route.startsWith("group_settings/") ||
-                route == "create_group"
+    // Reveal chats list + bottom nav before chat overlay finishes exiting (smooth pop from ChatScreen)
+    var revealChatsListChrome by remember { mutableStateOf(false) }
+    val currentRoute = currentDestination?.route
+    val onDmOrGroupChat = isDmOrGroupChatRoute(currentRoute)
+
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == Tab.CHATS.route) {
+            revealChatsListChrome = false
+        }
+    }
+
+    // Hide bottom bar on full-screen chat; show early when popping back to the list
+    val hideBottomBar = currentRoute?.let { route ->
+        (isDmOrGroupChatRoute(route) && !revealChatsListChrome) ||
+            route == "new_chat" ||
+            route == "search_messages" ||
+            route.startsWith("media_gallery/") ||
+            route.startsWith("contact_info/") ||
+            route.startsWith("group_settings/") ||
+            route == "create_group"
     } ?: false
+
+    val popChatToChatsList: () -> Unit = {
+        revealChatsListChrome = true
+        navController.popBackStack()
+    }
+
+    if (onDmOrGroupChat) {
+        BackHandler(onBack = popChatToChatsList)
+    }
 
     Scaffold(
         containerColor = C.bg,
@@ -192,11 +233,14 @@ fun AppNavigation() {
             }
         },
     ) { innerPadding ->
+        // Keep NavHost full-height while chat overlay is up so revealing the bottom bar does not resize chat.
+        val navHostPadding = if (onDmOrGroupChat) innerPadding.withoutBottomPadding() else innerPadding
+        Box(Modifier.fillMaxSize()) {
         Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
         NavHost(
             navController = navController,
             startDestination = Tab.WALLET.route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(navHostPadding),
             // Telegram-style: 400ms forward, 500ms back, cubic ease-out
             enterTransition = {
                 slideInHorizontally(tween(400, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) { it } +
@@ -207,8 +251,14 @@ fun AppNavigation() {
                     fadeOut(tween(250))
             },
             popEnterTransition = {
-                slideInHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { -it / 3 } +
-                    fadeIn(tween(350))
+                val fromChat = isDmOrGroupChatRoute(initialState.destination.route)
+                val toChats = targetState.destination.route == Tab.CHATS.route
+                if (fromChat && toChats) {
+                    EnterTransition.None
+                } else {
+                    slideInHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { -it / 3 } +
+                        fadeIn(tween(350))
+                }
             },
             popExitTransition = {
                 slideOutHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { it } +
@@ -388,26 +438,13 @@ fun AppNavigation() {
                     navArgument("handle") { type = NavType.StringType },
                     navArgument("scrollToTs") { type = NavType.LongType; defaultValue = 0L },
                 ),
-            ) { backStackEntry ->
-                val handle = backStackEntry.arguments?.getString("handle") ?: ""
-                val scrollToTs = backStackEntry.arguments?.getLong("scrollToTs") ?: 0L
-                ChatScreen(
-                    handle = handle,
-                    onBack = { navController.popBackStack() },
-                    onMediaGallery = { navController.navigate("media_gallery/$handle") },
-                    onContactInfo = { navController.navigate("contact_info/$handle") },
-                    onNavigateToChat = { toHandle ->
-                        if (toHandle.startsWith("group:")) {
-                            val gid = toHandle.removePrefix("group:")
-                            navController.popBackStack("chats", false)
-                            navController.navigate("group_chat/$gid")
-                        } else {
-                            navController.popBackStack("chats", false)
-                            navController.navigate("chat/$toHandle")
-                        }
-                    },
-                    scrollToTimestamp = scrollToTs,
-                )
+                enterTransition = { fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { fadeOut(tween(150)) },
+            ) {
+                // Chat UI is drawn in the full-screen overlay so list + bottom bar layout stay stable on pop.
+                Box(Modifier.fillMaxSize())
             }
             composable("new_chat") {
                 NewChatScreen(
@@ -471,26 +508,12 @@ fun AppNavigation() {
             composable(
                 "group_chat/{groupId}",
                 arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
-                ChatScreen(
-                    handle = "",
-                    groupId = groupId,
-                    onBack = { navController.popBackStack() },
-                    onMediaGallery = { navController.navigate("media_gallery/$groupId") },
-                    onGroupSettings = { navController.navigate("group_settings/$groupId") },
-                    onViewContact = { h -> navController.navigate("contact_info/$h") },
-                    onNavigateToChat = { toHandle ->
-                        if (toHandle.startsWith("group:")) {
-                            val gid = toHandle.removePrefix("group:")
-                            navController.popBackStack("chats", false)
-                            navController.navigate("group_chat/$gid")
-                        } else {
-                            navController.popBackStack("chats", false)
-                            navController.navigate("chat/$toHandle")
-                        }
-                    },
-                )
+                enterTransition = { fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) },
+                exitTransition = { fadeOut(tween(150)) },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { fadeOut(tween(150)) },
+            ) {
+                Box(Modifier.fillMaxSize())
             }
             composable(
                 "group_settings/{groupId}",
@@ -577,6 +600,80 @@ fun AppNavigation() {
                     onNavigateAddresses = { navController.navigate("addresses") },
                     onNavigateUtxo = { navController.navigate("utxos") },
                 )
+            }
+        }
+        AnimatedVisibility(
+            visible = onDmOrGroupChat,
+            enter = fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))),
+            exit = fadeOut(tween(150)),
+            // Same top/side insets as NavHost (status bar); no bottom inset — chat stays full-screen above nav bar.
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding.withoutBottomPadding()),
+        ) {
+            ChatRouteOverlay(
+                route = currentRoute,
+                backStackEntry = navBackStackEntry,
+                navController = navController,
+                onBack = popChatToChatsList,
+            )
+        }
+        }
+    }
+}
+
+@Composable
+private fun ChatRouteOverlay(
+    route: String?,
+    backStackEntry: NavBackStackEntry?,
+    navController: NavHostController,
+    onBack: () -> Unit,
+) {
+    when {
+        route?.startsWith("chat/") == true -> {
+            val handle = backStackEntry?.arguments?.getString("handle") ?: return
+            val scrollToTs = backStackEntry.arguments?.getLong("scrollToTs") ?: 0L
+            Box(Modifier.fillMaxSize()) {
+            ChatScreen(
+                handle = handle,
+                onBack = onBack,
+                onMediaGallery = { navController.navigate("media_gallery/$handle") },
+                onContactInfo = { navController.navigate("contact_info/$handle") },
+                onNavigateToChat = { toHandle ->
+                    if (toHandle.startsWith("group:")) {
+                        val gid = toHandle.removePrefix("group:")
+                        navController.popBackStack("chats", false)
+                        navController.navigate("group_chat/$gid")
+                    } else {
+                        navController.popBackStack("chats", false)
+                        navController.navigate("chat/$toHandle")
+                    }
+                },
+                scrollToTimestamp = scrollToTs,
+            )
+            }
+        }
+        route?.startsWith("group_chat/") == true -> {
+            val groupId = backStackEntry?.arguments?.getString("groupId") ?: return
+            Box(Modifier.fillMaxSize()) {
+            ChatScreen(
+                handle = "",
+                groupId = groupId,
+                onBack = onBack,
+                onMediaGallery = { navController.navigate("media_gallery/$groupId") },
+                onGroupSettings = { navController.navigate("group_settings/$groupId") },
+                onViewContact = { h -> navController.navigate("contact_info/$h") },
+                onNavigateToChat = { toHandle ->
+                    if (toHandle.startsWith("group:")) {
+                        val gid = toHandle.removePrefix("group:")
+                        navController.popBackStack("chats", false)
+                        navController.navigate("group_chat/$gid")
+                    } else {
+                        navController.popBackStack("chats", false)
+                        navController.navigate("chat/$toHandle")
+                    }
+                },
+            )
             }
         }
     }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.lazy.items
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -85,6 +89,16 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
+
+/**
+ * In-memory snapshot while ChatsScreen is off-screen (e.g. inside a chat).
+ * Avoids re-reading Room and replaying list animations when popping back.
+ */
+private object ChatsListSnapshot {
+    var conversations: List<ConversationEntity> = emptyList()
+    var groups: List<com.privimemobile.chat.db.entities.GroupEntity> = emptyList()
+    var dbSeeded: Boolean = false
+}
 
 /** Deterministic avatar colors from handle/name hash. */
 private val avatarColors = listOf(
@@ -182,28 +196,33 @@ fun ChatsScreen(
         return
     }
 
-    // Seed from DB on first composition, then observe — list is present when Chats tab appears
-    var conversations by remember {
-        mutableStateOf(
-            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                ChatService.db?.conversationDao()?.getAllActive() ?: emptyList()
-            },
-        )
-    }
-    var groups by remember {
-        mutableStateOf(
-            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                ChatService.db?.groupDao()?.getAllGroups() ?: emptyList()
-            },
-        )
-    }
+    // Restore snapshot when returning from ChatScreen; observe for live updates
+    var conversations by remember { mutableStateOf(ChatsListSnapshot.conversations) }
+    var groups by remember { mutableStateOf(ChatsListSnapshot.groups) }
     LaunchedEffect(Unit) {
+        if (!ChatsListSnapshot.dbSeeded) {
+            withContext(Dispatchers.IO) {
+                ChatsListSnapshot.conversations =
+                    ChatService.db?.conversationDao()?.getAllActive() ?: emptyList()
+                ChatsListSnapshot.groups =
+                    ChatService.db?.groupDao()?.getAllGroups() ?: emptyList()
+                ChatsListSnapshot.dbSeeded = true
+            }
+            conversations = ChatsListSnapshot.conversations
+            groups = ChatsListSnapshot.groups
+        }
         coroutineScope {
             launch {
-                ChatService.db?.conversationDao()?.observeAll()?.collect { conversations = it }
+                ChatService.db?.conversationDao()?.observeAll()?.collect { updated ->
+                    conversations = updated
+                    ChatsListSnapshot.conversations = updated
+                }
             }
             launch {
-                ChatService.db?.groupDao()?.observeAll()?.collect { groups = it }
+                ChatService.db?.groupDao()?.observeAll()?.collect { updated ->
+                    groups = updated
+                    ChatsListSnapshot.groups = updated
+                }
             }
         }
     }
@@ -260,7 +279,7 @@ fun ChatsScreen(
     }
 
     // Chat folder tabs
-    var activeTab by remember { mutableStateOf(0) } // 0=All, 1=Unread, 2=Groups, 3=DMs, 4=Archived
+    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0=All, 1=Unread, 2=Groups, 3=DMs, 4=Archived
 
     // Filter conversations by tab + search query
     // Note: group conversations stored in ConversationEntity have convKey starting with "g_"
@@ -286,8 +305,8 @@ fun ChatsScreen(
         },
         modifier = Modifier.fillMaxSize().background(C.bg),
     ) {
-        // Per-folder-tab scroll position (non-saveable)
-        val chatListState = remember(activeTab) { androidx.compose.foundation.lazy.LazyListState(0, 0) }
+        // Saved across navigation to ChatScreen (scroll position preserved on back)
+        val chatListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
         val listFadeEasing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -417,11 +436,15 @@ fun ChatsScreen(
                         targetState = activeTab,
                         modifier = Modifier.fillMaxSize(),
                         transitionSpec = {
-                            fadeIn(
-                                animationSpec = tween(200, easing = listFadeEasing),
-                            ) togetherWith fadeOut(
-                                animationSpec = tween(150, easing = FastOutSlowInEasing),
-                            )
+                            if (initialState == targetState) {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            } else {
+                                fadeIn(
+                                    animationSpec = tween(200, easing = listFadeEasing),
+                                ) togetherWith fadeOut(
+                                    animationSpec = tween(150, easing = FastOutSlowInEasing),
+                                )
+                            }
                         },
                         label = "chatsFolderList",
                     ) { tab ->

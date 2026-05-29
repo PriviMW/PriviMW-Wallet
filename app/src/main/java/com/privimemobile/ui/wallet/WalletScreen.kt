@@ -333,6 +333,36 @@ fun WalletScreen(
         else -> C.accent
     }
 
+    // Portfolio totals — computed once per balance/rate change, not on every LazyColumn item re-entry.
+    val totalBeamGroth = beamStatus.available + beamStatus.shielded + beamStatus.receiving
+    val totalPortfolioFiat = remember(totalBeamGroth, otherAssets, rate, currency, balanceHidden) {
+        if (balanceHidden || rate <= 0) return@remember 0.0
+        var fiat = CurrencyManager.grothToFiat(totalBeamGroth, currency, rate)
+        for (asset in otherAssets) {
+            val beamRatio = exchangeRates["${asset.assetId}_beam"] ?: 0.0
+            if (beamRatio <= 0) continue
+            val assetGroth = asset.available + asset.shielded + asset.receiving
+            if (assetGroth <= 0) continue
+            val decimals = exchangeRates["${asset.assetId}_decimals"]?.toInt() ?: 8
+            val humanBalance = assetGroth.toDouble() / Math.pow(10.0, decimals.toDouble())
+            fiat += humanBalance * beamRatio * rate
+        }
+        fiat
+    }
+    val totalGrothEquiv = remember(totalPortfolioFiat, rate) {
+        if (rate > 0) (totalPortfolioFiat / rate * 100_000_000.0).toLong() else 0L
+    }
+    var portfolioDailyChange by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    LaunchedEffect(totalGrothEquiv, totalPortfolioFiat, currency, balanceHidden) {
+        if (balanceHidden || rate <= 0) {
+            portfolioDailyChange = null
+            return@LaunchedEffect
+        }
+        // Disk I/O off composition path — was saveSnapshot/get24hChange in balance card item (scroll stutter).
+        PortfolioSnapshotStore.saveSnapshot(totalGrothEquiv, exchangeRates)
+        portfolioDailyChange = PortfolioSnapshotStore.get24hChange(totalPortfolioFiat, currency)
+    }
+
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = { doRefresh() },
@@ -345,7 +375,7 @@ fun WalletScreen(
             contentPadding = PaddingValues(bottom = 20.dp),
         ) {
             // Balance Card
-            item {
+            item(key = "wallet_balance_card") {
                 Box {
                     Card(
                         modifier = Modifier
@@ -425,34 +455,8 @@ fun WalletScreen(
                                 }
                             }
 
-                        // Total portfolio fiat value (BEAM + DEX-priced assets)
-                        // When sending, available already excludes the spent UTXO but change isn't in available yet —
-                        // it's in receiving. Adding receiving back gives the true effective balance during pending TXs.
-                        val totalGroth = beamStatus.available + beamStatus.shielded + beamStatus.receiving
-                        var totalFiat = if (rate > 0) CurrencyManager.grothToFiat(totalGroth, currency, rate) else 0.0
-
-                        // Add non-BEAM assets: value = amount × beamRatio × beamRate
-                        if (rate > 0) {
-                            for ((assetId, status) in assetBalanceMap) {
-                                if (assetId == 0) continue
-                                val beamRatio = exchangeRates["${assetId}_beam"] ?: 0.0
-                                if (beamRatio > 0) {
-                                    val assetGroth = status.available + status.shielded + status.receiving
-                                    if (assetGroth > 0) {
-                                        val decimals = exchangeRates["${assetId}_decimals"]?.toInt() ?: 8
-                                        val humanBalance = assetGroth.toDouble() / Math.pow(10.0, decimals.toDouble())
-                                        totalFiat += humanBalance * beamRatio * rate
-                                    }
-                                }
-                            }
-                        }
-
                         if (!balanceHidden && rate > 0) {
-                            // Convert total portfolio fiat value back to BEAM-equivalent groth
-                            // so the 24h change correctly includes all assets, not just BEAM.
-                            val totalGrothEquiv = (totalFiat / rate * 100_000_000.0).toLong()
-                            PortfolioSnapshotStore.saveSnapshot(totalGrothEquiv, exchangeRates)
-                            val fiatText = CurrencyManager.formatPortfolioValue(totalFiat, currency)
+                            val fiatText = CurrencyManager.formatPortfolioValue(totalPortfolioFiat, currency)
                             androidx.compose.foundation.layout.BoxWithConstraints(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.Center,
@@ -475,8 +479,8 @@ fun WalletScreen(
                                     maxLines = 1,
                                 )
                             }
-                            // 24h portfolio change (vs snapshot ~24 hours ago)
-                            val daily = PortfolioSnapshotStore.get24hChange(totalFiat, currency)
+                            // 24h portfolio change (loaded in LaunchedEffect — avoids snapshot reads on scroll)
+                            val daily = portfolioDailyChange
                             if (daily != null) {
                                 val (diff, percent) = daily
                                 val isUp = diff >= 0
@@ -575,7 +579,7 @@ fun WalletScreen(
             }
 
             // BEAM asset row — tappable
-            item {
+            item(key = "wallet_beam_card") {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

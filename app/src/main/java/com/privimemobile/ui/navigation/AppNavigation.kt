@@ -108,7 +108,23 @@ enum class Tab(
 private fun isDmOrGroupChatRoute(route: String?): Boolean =
     route?.startsWith("chat/") == true || route?.startsWith("group_chat/") == true
 
+private fun isMainTabRoute(route: String?): Boolean = when (route) {
+    Tab.WALLET.route, Tab.CHATS.route, Tab.DAPPS.route, Tab.SWAP.route, Tab.SETTINGS.route -> true
+    else -> false
+}
+
 private const val CHAT_OVERLAY_EXIT_MS = 200
+
+/** Bottom-tab cross-fade (no slide). Slightly longer ease-out reads smoother than 150ms linear. */
+private val TabFadeEasing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+private const val TAB_FADE_IN_MS = 220
+private const val TAB_FADE_OUT_MS = 180
+
+private fun tabEnterFade(): EnterTransition =
+    fadeIn(tween(TAB_FADE_IN_MS, easing = TabFadeEasing))
+
+private fun tabExitFade(): ExitTransition =
+    fadeOut(tween(TAB_FADE_OUT_MS, easing = TabFadeEasing))
 
 private fun PaddingValues.withoutBottomPadding(): PaddingValues {
     val direction = LayoutDirection.Ltr
@@ -264,10 +280,15 @@ fun AppNavigation() {
             else -> innerPadding
         }
         Box(Modifier.fillMaxSize()) {
-        if (showPersistedChatsList) {
-            Box(Modifier.fillMaxSize().padding(persistedListPadding)) {
-                ChatsTabContent(navController)
-            }
+        // Chats list lives outside NavHost (stays composed under chat overlay). Fade it out when
+        // leaving Chats — instant removal here caused a blink under Wallet's tab fade-in.
+        AnimatedVisibility(
+            visible = showPersistedChatsList,
+            enter = tabEnterFade(),
+            exit = tabExitFade(),
+            modifier = Modifier.fillMaxSize().padding(persistedListPadding),
+        ) {
+            ChatsTabContent(navController)
         }
         Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
         NavHost(
@@ -284,27 +305,33 @@ fun AppNavigation() {
                     fadeOut(tween(250))
             },
             popEnterTransition = {
-                val fromChat = isDmOrGroupChatRoute(initialState.destination.route)
-                val toChats = targetState.destination.route == Tab.CHATS.route
-                if (fromChat && toChats) {
-                    EnterTransition.None
-                } else {
-                    slideInHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { -it / 3 } +
+                val fromRoute = initialState.destination.route
+                val toRoute = targetState.destination.route
+                when {
+                    isDmOrGroupChatRoute(fromRoute) && toRoute == Tab.CHATS.route -> EnterTransition.None
+                    isMainTabRoute(fromRoute) && isMainTabRoute(toRoute) -> tabEnterFade()
+                    else -> slideInHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { -it / 3 } +
                         fadeIn(tween(350))
                 }
             },
             popExitTransition = {
-                slideOutHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { it } +
-                    fadeOut(tween(300))
+                val fromRoute = initialState.destination.route
+                val toRoute = targetState.destination.route
+                if (isMainTabRoute(fromRoute) && isMainTabRoute(toRoute)) {
+                    tabExitFade()
+                } else {
+                    slideOutHorizontally(tween(500, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))) { it } +
+                        fadeOut(tween(300))
+                }
             },
         ) {
-            // Tab screens: instant fade (no slide — lateral navigation)
+            // Tab screens: cross-fade only (no slide — lateral bottom-nav switches)
             composable(
                 Tab.WALLET.route,
-                enterTransition = { fadeIn(tween(150)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(150)) },
-                popExitTransition = { fadeOut(tween(150)) },
+                enterTransition = { tabEnterFade() },
+                exitTransition = { tabExitFade() },
+                popEnterTransition = { tabEnterFade() },
+                popExitTransition = { tabExitFade() },
             ) {
                 WalletScreen(
                     onSend = { navController.navigate("send") },
@@ -561,10 +588,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.DAPPS.route,
-                enterTransition = { fadeIn(tween(150)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(150)) },
-                popExitTransition = { fadeOut(tween(150)) },
+                enterTransition = { tabEnterFade() },
+                exitTransition = { tabExitFade() },
+                popEnterTransition = { tabEnterFade() },
+                popExitTransition = { tabExitFade() },
             ) {
                 DAppsScreen(
                     onBrowseStore = { navController.navigate("dapp_store") },
@@ -606,10 +633,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.SWAP.route,
-                enterTransition = { fadeIn(tween(150)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(150)) },
-                popExitTransition = { fadeOut(tween(150)) },
+                enterTransition = { tabEnterFade() },
+                exitTransition = { tabExitFade() },
+                popEnterTransition = { tabEnterFade() },
+                popExitTransition = { tabExitFade() },
             ) {
                 com.privimemobile.ui.wallet.SwapScreen(
                     onBack = { navController.popBackStack() },
@@ -619,10 +646,10 @@ fun AppNavigation() {
             }
             composable(
                 Tab.SETTINGS.route,
-                enterTransition = { fadeIn(tween(150)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(150)) },
-                popExitTransition = { fadeOut(tween(150)) },
+                enterTransition = { tabEnterFade() },
+                exitTransition = { tabExitFade() },
+                popEnterTransition = { tabEnterFade() },
+                popExitTransition = { tabExitFade() },
             ) {
                 SettingsScreen(
                     onNavigateAddresses = { navController.navigate("addresses") },

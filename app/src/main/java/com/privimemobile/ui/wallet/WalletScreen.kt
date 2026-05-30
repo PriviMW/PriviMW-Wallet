@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -363,6 +365,8 @@ fun WalletScreen(
         portfolioDailyChange = PortfolioSnapshotStore.get24hChange(totalPortfolioFiat, currency)
     }
 
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = { doRefresh() },
@@ -371,6 +375,7 @@ fun WalletScreen(
             .background(C.bg),
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 20.dp),
         ) {

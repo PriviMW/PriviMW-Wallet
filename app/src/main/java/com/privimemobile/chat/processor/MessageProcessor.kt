@@ -600,7 +600,7 @@ class MessageProcessor(
         }
         if (PollLogic.isClosed(pollCtx.pollData)) return
         val closedAt = (payload["ts"] as? Number)?.toLong() ?: (System.currentTimeMillis() / 1000)
-        val updated = PollLogic.applyClose(pollCtx.pollData, closedAt)
+        val updated = PollLogic.applyClose(pollCtx.pollData, closedAt) ?: return
         db.messageDao().updatePollData(pollCtx.msgId, updated)
         Log.d(TAG, "Poll closed by @$from for ts=$msgTs")
     }
@@ -614,7 +614,7 @@ class MessageProcessor(
             return
         }
         if (!PollLogic.isClosed(pollCtx.pollData)) return
-        val updated = PollLogic.applyReopen(pollCtx.pollData)
+        val updated = PollLogic.applyReopen(pollCtx.pollData) ?: return
         db.messageDao().updatePollData(pollCtx.msgId, updated)
         Log.d(TAG, "Poll reopened by @$from for ts=$msgTs")
     }
@@ -1246,30 +1246,36 @@ class MessageProcessor(
                 // Handle file attachment if present
                 val fileData = payload["file"] as? Map<*, *>
                 if (fileData != null && insertedId > 0) {
-                    val cid = fileData["cid"] as? String ?: ""
-                    // Get extras (waveform, duration_ms for voice messages)
-                    // Sender sends extras as JSON String; handle both String and Map formats
-                    val rawExtras = payload["extras"]
-                    val groupExtras = when (rawExtras) {
-                        is String -> rawExtras
-                        is Map<*, *> -> runCatching { org.json.JSONObject(rawExtras).toString() }.getOrNull()
-                        else -> null
-                    }
-                    db.attachmentDao().insert(
-                        AttachmentEntity(
-                            messageId = insertedId,
-                            conversationId = convId,
-                            ipfsCid = cid.ifEmpty { "inline-${System.currentTimeMillis().toString(36)}" },
-                            encryptionKey = fileData["key"] as? String ?: "",
-                            encryptionIv = fileData["iv"] as? String ?: "",
-                            fileName = sanitizeFilename(fileData["name"] as? String ?: "file"),
-                            fileSize = (fileData["size"] as? Number)?.toLong() ?: 0,
-                            mimeType = fileData["mime"] as? String ?: "",
-                            inlineData = fileData["data"] as? String,
-                            downloadStatus = if (fileData["data"] is String && (fileData["data"] as String).isNotEmpty()) "done" else "idle",
-                            extras = groupExtras,
+                    val key = fileData["key"] as? String
+                    val iv = fileData["iv"] as? String
+                    if (key == null || iv == null || key.length != 64 || iv.length != 24) {
+                        Log.w(TAG, "Group file: invalid key/iv — skipping attachment")
+                    } else {
+                        val cid = fileData["cid"] as? String ?: ""
+                        // Get extras (waveform, duration_ms for voice messages)
+                        // Sender sends extras as JSON String; handle both String and Map formats
+                        val rawExtras = payload["extras"]
+                        val groupExtras = when (rawExtras) {
+                            is String -> rawExtras
+                            is Map<*, *> -> runCatching { org.json.JSONObject(rawExtras).toString() }.getOrNull()
+                            else -> null
+                        }
+                        db.attachmentDao().insert(
+                            AttachmentEntity(
+                                messageId = insertedId,
+                                conversationId = convId,
+                                ipfsCid = cid.ifEmpty { "inline-${System.currentTimeMillis().toString(36)}" },
+                                encryptionKey = key,
+                                encryptionIv = iv,
+                                fileName = sanitizeFilename(fileData["name"] as? String ?: "file"),
+                                fileSize = (fileData["size"] as? Number)?.toLong() ?: 0,
+                                mimeType = fileData["mime"] as? String ?: "application/octet-stream",
+                                inlineData = fileData["data"] as? String,
+                                downloadStatus = if (fileData["data"] is String && (fileData["data"] as String).isNotEmpty()) "done" else "idle",
+                                extras = groupExtras,
+                            )
                         )
-                    )
+                    }
                 }
 
                 // Update group preview + unread

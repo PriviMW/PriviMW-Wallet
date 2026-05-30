@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -48,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.asImageBitmap
 import com.privimemobile.R
 import com.privimemobile.chat.PinnedChatItem
 import com.privimemobile.ui.components.AvatarDisplay
@@ -190,11 +195,27 @@ private fun PinnedReorderRowContent(item: PinnedChatItem, modifier: Modifier = M
     ) {
         if (item.isGroup) {
             val group = item.group!!
-            Box(
-                modifier = Modifier.size(44.dp).background(C.accent.copy(alpha = 0.25f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Group, contentDescription = null, tint = C.accent, modifier = Modifier.size(22.dp))
+            val context = LocalContext.current
+            val groupAvatarBmp = remember(group.groupId, group.avatarHash) {
+                try {
+                    val f = java.io.File(context.filesDir, "group_avatars/${group.groupId}.webp")
+                    if (f.exists()) BitmapFactory.decodeFile(f.absolutePath) else null
+                } catch (_: Exception) { null }
+            }
+            if (groupAvatarBmp != null) {
+                Image(
+                    bitmap = groupAvatarBmp.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    modifier = Modifier.size(44.dp).background(C.accent.copy(alpha = 0.25f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Group, contentDescription = null, tint = C.accent, modifier = Modifier.size(22.dp))
+                }
             }
             Spacer(Modifier.width(12.dp))
             Text(

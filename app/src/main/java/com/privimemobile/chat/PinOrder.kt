@@ -1,5 +1,6 @@
 package com.privimemobile.chat
 
+import androidx.room.withTransaction
 import com.privimemobile.chat.db.ChatDatabase
 import com.privimemobile.chat.db.entities.ConversationEntity
 import com.privimemobile.chat.db.entities.GroupEntity
@@ -41,33 +42,39 @@ object ChatPinOrder {
     }
 
     suspend fun setConversationPinned(db: ChatDatabase, convId: Long, pinned: Boolean) {
-        if (pinned) {
-            val order = nextPinOrder(db)
-            db.conversationDao().updatePinState(convId, pinned = true, pinOrder = order)
-        } else {
-            db.conversationDao().updatePinState(convId, pinned = false, pinOrder = 0)
-            compactPinOrders(db)
+        db.withTransaction {
+            if (pinned) {
+                val order = nextPinOrder(db)
+                db.conversationDao().updatePinState(convId, pinned = true, pinOrder = order)
+            } else {
+                db.conversationDao().updatePinState(convId, pinned = false, pinOrder = 0)
+                compactPinOrders(db)
+            }
         }
     }
 
     suspend fun setGroupPinned(db: ChatDatabase, groupId: String, pinned: Boolean) {
-        if (pinned) {
-            val order = nextPinOrder(db)
-            db.groupDao().updatePinState(groupId, pinned = true, pinOrder = order)
-        } else {
-            db.groupDao().updatePinState(groupId, pinned = false, pinOrder = 0)
-            compactPinOrders(db)
+        db.withTransaction {
+            if (pinned) {
+                val order = nextPinOrder(db)
+                db.groupDao().updatePinState(groupId, pinned = true, pinOrder = order)
+            } else {
+                db.groupDao().updatePinState(groupId, pinned = false, pinOrder = 0)
+                compactPinOrders(db)
+            }
         }
     }
 
     /** Persist manual order from reorder UI (1-based positions). */
     suspend fun applyReorder(db: ChatDatabase, ordered: List<PinnedChatItem>) {
-        ordered.forEachIndexed { index, item ->
-            val order = index + 1
-            if (item.isGroup) {
-                db.groupDao().setPinOrder(item.group!!.groupId, order)
-            } else {
-                db.conversationDao().setPinOrder(item.conv!!.id, order)
+        db.withTransaction {
+            ordered.forEachIndexed { index, item ->
+                val order = index + 1
+                if (item.isGroup) {
+                    db.groupDao().setPinOrder(item.group!!.groupId, order)
+                } else {
+                    db.conversationDao().setPinOrder(item.conv!!.id, order)
+                }
             }
         }
     }

@@ -222,13 +222,14 @@ fun ChatScreen(
 
     val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"
 
-    val dmOpenSeed = remember(handle, isGroupMode) {
-        if (isGroupMode) null
-        else kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            val db = com.privimemobile.chat.ChatService.db ?: return@runBlocking null
+    var dmOpenSeed by remember { mutableStateOf<DmOpenSeed?>(null) }
+    LaunchedEffect(handle, isGroupMode) {
+        if (isGroupMode) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val db = com.privimemobile.chat.ChatService.db ?: return@withContext
             val contactRow = db.contactDao().findByHandle(handle)
             val convRow = db.conversationDao().findByKey("@$handle")
-            DmOpenSeed(
+            dmOpenSeed = DmOpenSeed(
                 contact = contactRow,
                 conv = convRow,
                 resolvedAddress = com.privimemobile.chat.DmAddressResolver.resolve(contactRow, convRow),
@@ -3931,7 +3932,7 @@ fun ChatScreen(
 
                                     // Right side: animated morph icons ↔ send
                                     AnimatedContent(
-                                        targetState = inputText.text.isNotBlank() || uploading,
+                                        targetState = inputText.text.isNotBlank() || pendingFile != null || uploading,
                                         transitionSpec = {
                                             (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.4f) +
                                                 slideInVertically(tween(180)) { it / 4 })
@@ -5021,11 +5022,12 @@ fun ChatScreen(
                                     } else {
                                         com.privimemobile.chat.poll.PollLogic.applyClose(freshPollData, ts)
                                     }
-                                    com.privimemobile.chat.ChatService.db?.messageDao()?.updatePollData(
-                                        menuMsgId, updated,
-                                    )
-                                    pollUi.patch(menuMsgId, updated)
-                                    contextMenuMsg = targetMsg.copy(pollData = updated)
+                                    if (updated != null) {
+                                        com.privimemobile.chat.ChatService.db?.messageDao()?.updatePollData(
+                                            menuMsgId, updated,
+                                        )
+                                        pollUi.patch(menuMsgId, updated)
+                                    }
                                     val payload = mapOf(
                                         "v" to 1,
                                         "t" to if (isClosedNow) "poll_reopen" else "poll_close",
@@ -5043,6 +5045,7 @@ fun ChatScreen(
                                         }
                                     }
                                 }
+                                contextMenuMsg = null
                             }
                         }
 

@@ -139,13 +139,8 @@ fun ChatsScreen(
         return
     }
 
-    // Seed from DB so first frame matches persisted state (avoids spinner/landing flash on tab switch)
-    val chatStateInitial = remember {
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            ChatService.db?.chatStateDao()?.get()
-        }
-    }
-    val chatState by ChatService.observeState().collectAsState(initial = chatStateInitial)
+    // observeState() seeds the initial value via onStart, so collectAsState gets it immediately
+    val chatState by ChatService.observeState().collectAsState(initial = null)
     val isRegistered = chatState?.myHandle != null
     val sbbsNeedsUpdate by ChatService.identity.sbbsNeedsUpdate.collectAsState()
 

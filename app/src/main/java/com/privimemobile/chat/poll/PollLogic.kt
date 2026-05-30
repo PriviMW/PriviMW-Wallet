@@ -62,15 +62,17 @@ object PollLogic {
         return VoteResult.Applied(poll.toString())
     }
 
-    fun applyClose(pollData: String, closedAtEpochSec: Long): String {
-        val poll = parsePoll(pollData) ?: JSONObject()
+    /** Close poll voting. Returns null if pollData is malformed (preserves existing data). */
+    fun applyClose(pollData: String, closedAtEpochSec: Long): String? {
+        val poll = parsePoll(pollData) ?: return null
         poll.put("closed", true)
         poll.put("closedAt", closedAtEpochSec)
         return poll.toString()
     }
 
-    fun applyReopen(pollData: String): String {
-        val poll = parsePoll(pollData) ?: JSONObject()
+    /** Reopen poll voting. Returns null if pollData is malformed (preserves existing data). */
+    fun applyReopen(pollData: String): String? {
+        val poll = parsePoll(pollData) ?: return null
         poll.put("closed", false)
         poll.remove("closedAt")
         return poll.toString()

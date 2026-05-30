@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -365,7 +364,7 @@ fun WalletScreen(
         portfolioDailyChange = PortfolioSnapshotStore.get24hChange(totalPortfolioFiat, currency)
     }
 
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val listState = remember { LazyListState() }
 
     PullToRefreshBox(
         isRefreshing = refreshing,

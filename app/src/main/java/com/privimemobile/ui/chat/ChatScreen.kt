@@ -3728,109 +3728,6 @@ fun ChatScreen(
             }
         }
 
-        // @mention autocomplete popup (group mode)
-        if (showMentionMenu && filteredMembers.isNotEmpty()) {
-            Surface(
-                color = C.card,
-                shadowElevation = 4.dp,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            ) {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    filteredMembers.forEach { member ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    // Replace @filter with @handle + space
-                                    val text = inputText.text
-                                    val before = text.substring(0, mentionStartIdx)
-                                    val after = if (inputText.selection.start < text.length) text.substring(inputText.selection.start) else ""
-                                    val newText = "$before@${member.handle} $after"
-                                    inputText = androidx.compose.ui.text.input.TextFieldValue(
-                                        text = newText,
-                                        selection = androidx.compose.ui.text.TextRange(before.length + member.handle.length + 2),
-                                    )
-                                    showMentionMenu = false
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // Small avatar
-                            val avatarFile = java.io.File(context.filesDir, "avatars/${member.handle}.webp")
-                            if (avatarFile.exists()) {
-                                val bmp = remember(member.handle) { android.graphics.BitmapFactory.decodeFile(avatarFile.absolutePath) }
-                                if (bmp != null) {
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(32.dp).clip(CircleShape),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                } else {
-                                    Box(Modifier.size(32.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
-                                        Text(member.handle.first().uppercase(), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            } else {
-                                Box(Modifier.size(32.dp).clip(CircleShape).background(C.accent), contentAlignment = Alignment.Center) {
-                                    Text(member.handle.first().uppercase(), color = C.textDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    member.displayName ?: member.handle,
-                                    color = C.text, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                                )
-                                if (!member.displayName.isNullOrEmpty()) {
-                                    Text("@${member.handle}", color = C.textMuted, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Command menu popup (Telegram-style)
-        if (showCommandMenu) {
-            Surface(
-                color = C.card,
-                shadowElevation = 4.dp,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Text(stringResource(R.string.chat_commands), color = C.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
-                    listOf(
-                        Triple("/tip",
-                            if (isGroupMode) "<amount> [asset_id] [msg] (reply to tip)" else "<amount> [asset_id] [message]",
-                            if (isGroupMode) stringResource(R.string.chat_tip_hint) else stringResource(R.string.chat_send_beam_hint)),
-                        Triple("/poll", stringResource(R.string.chat_poll_args), stringResource(R.string.chat_poll_desc)),
-                    ).forEach { (cmd, args, desc) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    setInputText("$cmd ")
-                                    showCommandMenu = false
-                                }
-                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(cmd, color = C.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.width(6.dp))
-                            Text(args, color = C.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                        }
-                        Text(desc, color = C.textMuted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
-                    }
-                }
-            }
-        }
-
         // Input bar — Telegram-X style (48dp bar, 180ms animations)
         // keyboardController declared at screen level
         val hasText = inputText.text.isNotBlank() || pendingFile != null
@@ -4181,6 +4078,35 @@ fun ChatScreen(
                     }
                 }
             } // close Surface (input bar)
+
+            // ── Command menu popup (floats above input bar, overlaying messages) ──
+            if (showCommandMenu) {
+                ChatCommandMenu(
+                    isGroupMode = isGroupMode,
+                    onCommandSelect = { cmd ->
+                        setInputText(cmd)
+                        showCommandMenu = false
+                    },
+                )
+            }
+
+            // ── @mention autocomplete popup (floats above input bar, overlaying messages) ──
+            if (showMentionMenu && filteredMembers.isNotEmpty()) {
+                MentionAutocompleteMenu(
+                    members = filteredMembers,
+                    onSelect = { member ->
+                        val text = inputText.text
+                        val before = text.substring(0, mentionStartIdx)
+                        val after = if (inputText.selection.start < text.length) text.substring(inputText.selection.start) else ""
+                        val newText = "$before@${member.handle} $after"
+                        inputText = androidx.compose.ui.text.input.TextFieldValue(
+                            text = newText,
+                            selection = androidx.compose.ui.text.TextRange(before.length + member.handle.length + 2),
+                        )
+                        showMentionMenu = false
+                    },
+                )
+            }
 
             // ── Record hint tooltip (anchored to input bar top-right, floats above into chat) ──
             if (micShowRecordHint) {

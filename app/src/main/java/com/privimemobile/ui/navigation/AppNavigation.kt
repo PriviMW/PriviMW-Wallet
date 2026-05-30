@@ -292,10 +292,12 @@ fun AppNavigation() {
             ChatsTabContent(navController)
         }
         Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
-        // Opaque background when not on Chats tab or revealing chats chrome prevents
-        // the persisted ChatsScreen layer from showing through the NavHost during
-        // chat→sub-screen transitions (contact_info, group_settings, media_gallery).
-        val navHostOpaque = currentRoute != Tab.CHATS.route && !revealChatsListChrome
+        // Opaque background prevents the persisted ChatsScreen layer from showing
+        // through the NavHost during chat→sub-screen transitions (contact_info,
+        // group_settings, media_gallery). Must be false on main tabs so the fading-out
+        // ChatsScreen can cross-fade with the incoming tab instead of being hidden
+        // behind an instant opaque flash.
+        val navHostOpaque = !isMainTabRoute(currentRoute) && currentRoute != Tab.CHATS.route && !revealChatsListChrome
         NavHost(
             navController = navController,
             startDestination = Tab.WALLET.route,

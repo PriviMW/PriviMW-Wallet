@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -291,10 +292,16 @@ fun AppNavigation() {
             ChatsTabContent(navController)
         }
         Box(Modifier.size(1.dp).alpha(fpsAlpha)) // keepalive inside Scaffold render tree
+        // Opaque background when not on Chats tab or revealing chats chrome prevents
+        // the persisted ChatsScreen layer from showing through the NavHost during
+        // chat→sub-screen transitions (contact_info, group_settings, media_gallery).
+        val navHostOpaque = currentRoute != Tab.CHATS.route && !revealChatsListChrome
         NavHost(
             navController = navController,
             startDestination = Tab.WALLET.route,
-            modifier = Modifier.padding(navHostPadding),
+            modifier = Modifier
+                .then(if (navHostOpaque) Modifier.background(C.bg) else Modifier)
+                .padding(navHostPadding),
             // Telegram-style: 400ms forward, 500ms back, cubic ease-out
             enterTransition = {
                 slideInHorizontally(tween(400, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))) { it } +
@@ -483,8 +490,12 @@ fun AppNavigation() {
                 popEnterTransition = { EnterTransition.None },
                 popExitTransition = { ExitTransition.None },
             ) {
+                // ChatsScreen is rendered in the persisted layer outside NavHost.
+                // When this destination is in the back stack (not current), render an
+                // opaque background to prevent ChatsScreen from showing through
+                // the NavHost back stack during sub-screen transitions.
                 if (!showPersistedChatsList) {
-                    ChatsTabContent(navController)
+                    Box(Modifier.fillMaxSize().background(C.bg))
                 }
             }
             composable(

@@ -41,6 +41,7 @@ import com.privimemobile.dapp.DAppActivity
 import com.privimemobile.protocol.DApp
 import com.privimemobile.protocol.DAppLaunchGate
 import com.privimemobile.protocol.DAppManager
+import com.privimemobile.protocol.DAppOnChainCheck
 import com.privimemobile.protocol.DAppStore
 import com.privimemobile.protocol.DAppStoreCatalogCache
 import kotlinx.coroutines.Dispatchers
@@ -160,18 +161,29 @@ fun DAppsScreen(
                     DAppLaunchGate.Plan.UpdateFirst,
                     DAppLaunchGate.Plan.FetchOnChainFirst,
                     -> {
-                        val updated = withContext(Dispatchers.IO) {
-                            DAppStore.checkAndUpdate(context, dapp)
+                        val outcome = withContext(Dispatchers.IO) {
+                            DAppStore.checkAndUpdateForLaunch(context, dapp)
                         }
-                        if (updated) {
-                            loadDApps()
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.dapps_updated_toast, dapp.name),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        } else {
-                            openDApp(dapp)
+                        when (outcome) {
+                            DAppOnChainCheck.Outcome.Updated -> {
+                                loadDApps()
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.dapps_updated_toast, dapp.name),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            DAppOnChainCheck.Outcome.Unchanged -> {
+                                openDApp(dapp)
+                            }
+                            DAppOnChainCheck.Outcome.TimedOut -> {
+                                openDApp(dapp)
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.dapps_launch_store_timeout, dapp.name),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                         }
                     }
                 }

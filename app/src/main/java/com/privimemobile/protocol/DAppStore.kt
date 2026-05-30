@@ -359,6 +359,13 @@ object DAppStore {
     }
 
     /**
+     * [checkAndUpdate] with a launch-time timeout — used for [DAppLaunchGate.Plan.FetchOnChainFirst]
+     * and [DAppLaunchGate.Plan.UpdateFirst] so a hung node cannot block opening the installed DApp.
+     */
+    suspend fun checkAndUpdateForLaunch(context: Context, dapp: DApp): DAppOnChainCheck.Outcome =
+        DAppOnChainCheck.runCheck { checkAndUpdate(context, dapp) }
+
+    /**
      * After fast open: refresh store if cache is older than [DAppStoreCatalogCache.BACKGROUND_VERIFY_MIN_AGE_MS].
      * Installs update when the chain reports a newer version. Returns true if package was updated.
      */

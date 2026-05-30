@@ -49,6 +49,9 @@ object Config {
     /** IPFS download timeout (ms) — needs to be long for relay-based NAT traversal */
     const val IPFS_GET_TIMEOUT = 180_000
 
+    /** Max wait for on-chain DApp Store query before launching installed copy (ms). */
+    const val DAPP_STORE_ON_CHAIN_TIMEOUT_MS = 15_000L
+
     /** Max filename display length */
     const val MAX_FILENAME_LEN = 60
 

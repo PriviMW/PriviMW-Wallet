@@ -222,14 +222,15 @@ fun ChatScreen(
 
     val convKey = if (isGroupMode) "g_${groupId!!.take(16)}" else "@$handle"
 
-    var dmOpenSeed by remember { mutableStateOf<DmOpenSeed?>(null) }
-    LaunchedEffect(handle, isGroupMode) {
-        if (isGroupMode) return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            val db = com.privimemobile.chat.ChatService.db ?: return@withContext
+    // Synchronous IO seed on first composition — LaunchedEffect left one frame without
+    // contact/address/draft and caused DM input bar flash (disabled field + icon morph).
+    val dmOpenSeed = remember(handle, isGroupMode) {
+        if (isGroupMode) null
+        else kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            val db = com.privimemobile.chat.ChatService.db ?: return@runBlocking null
             val contactRow = db.contactDao().findByHandle(handle)
             val convRow = db.conversationDao().findByKey("@$handle")
-            dmOpenSeed = DmOpenSeed(
+            DmOpenSeed(
                 contact = contactRow,
                 conv = convRow,
                 resolvedAddress = com.privimemobile.chat.DmAddressResolver.resolve(contactRow, convRow),

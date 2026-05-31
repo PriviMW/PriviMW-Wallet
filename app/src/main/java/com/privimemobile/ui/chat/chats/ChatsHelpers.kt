@@ -1,6 +1,9 @@
 package com.privimemobile.ui.chat.chats
 
 import androidx.compose.ui.graphics.Color
+import com.privimemobile.chat.ChatPinOrder
+import com.privimemobile.chat.db.entities.ConversationEntity
+import com.privimemobile.chat.db.entities.GroupEntity
 import com.privimemobile.ui.theme.C
 import java.text.SimpleDateFormat
 import java.util.*
@@ -36,4 +39,77 @@ internal fun formatTime(timestamp: Long): String {
     return if (now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR) &&
         now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
     ) timeFormat.format(date) else dateFormat.format(date)
+}
+
+/** Unified list item merging DMs and groups for sorted display. */
+internal data class ChatListItem(
+    val isGroup: Boolean,
+    val sortTs: Long,
+    val pinned: Boolean,
+    val pinOrder: Int,
+    val conv: ConversationEntity? = null,
+    val group: GroupEntity? = null,
+)
+
+/** Merge DMs and groups into a single list sorted by pinned order then timestamp. */
+internal fun buildUnifiedChatList(
+    conversations: List<ConversationEntity>,
+    groups: List<GroupEntity>,
+): List<ChatListItem> {
+    val items = mutableListOf<ChatListItem>()
+    for (c in conversations) {
+        if (c.convKey.startsWith("g_")) continue
+        items.add(ChatListItem(false, c.lastMessageTs, c.pinned, c.pinOrder, conv = c))
+    }
+    for (g in groups) {
+        items.add(ChatListItem(true, g.lastMessageTs, g.pinned, g.pinOrder, group = g))
+    }
+    return items.sortedWith { a, b ->
+        ChatPinOrder.compareChatListItems(
+            a.pinned, a.pinOrder, a.sortTs,
+            b.pinned, b.pinOrder, b.sortTs,
+        )
+    }
+}
+
+/** Filter conversations for a given tab index and search query. */
+internal fun filterConversationsForTab(
+    tab: Int,
+    conversations: List<ConversationEntity>,
+    dms: List<ConversationEntity>,
+    searchQuery: String,
+): List<ConversationEntity> {
+    val tabFiltered = when (tab) {
+        0 -> conversations.filter { !it.archived }
+        1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
+        2 -> emptyList()
+        3 -> dms.filter { !it.archived }
+        4 -> conversations.filter { it.archived }
+        else -> conversations.filter { !it.archived }
+    }
+    if (searchQuery.isBlank()) return tabFiltered
+    val q = searchQuery.trim().lowercase()
+    return tabFiltered.filter { conv ->
+        (conv.displayName ?: "").lowercase().contains(q) ||
+            (conv.handle ?: "").lowercase().contains(q)
+    }
+}
+
+/** Filter groups for a given tab index and search query. */
+internal fun filterGroupsForTab(
+    tab: Int,
+    groups: List<GroupEntity>,
+    searchQuery: String,
+): List<GroupEntity> {
+    val tabFiltered = when (tab) {
+        0 -> groups.filter { !it.archived }
+        1 -> groups.filter { !it.archived && it.unreadCount > 0 }
+        2 -> groups.filter { !it.archived }
+        3 -> emptyList()
+        4 -> groups.filter { it.archived }
+        else -> groups.filter { !it.archived }
+    }
+    if (searchQuery.isBlank()) return tabFiltered
+    val q = searchQuery.trim().lowercase()
+    return tabFiltered.filter { it.name.lowercase().contains(q) }
 }

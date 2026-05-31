@@ -1,11 +1,8 @@
 package com.privimemobile.ui.chat
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -16,13 +13,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -31,14 +25,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,7 +35,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -278,93 +266,21 @@ fun ChatsScreen(
 
                         // Search/filter bar — always visible (fixed above scrollable list)
                         Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = state.searchQuery,
-                            onValueChange = { state.setSearch(it) },
-                            placeholder = { Text(stringResource(R.string.chats_search_placeholder), color = C.textMuted, fontSize = 14.sp) },
-                            leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = null, tint = C.textSecondary, modifier = Modifier.size(18.dp))
-                            },
-                            trailingIcon = {
-                                if (state.isSearchingOnChain) {
-                                    CircularProgressIndicator(Modifier.size(16.dp), color = C.accent, strokeWidth = 2.dp)
-                                } else if (state.searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { state.setSearch("") }, modifier = Modifier.size(20.dp)) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = stringResource(R.string.chats_cd_clear_search),
-                                            tint = C.textSecondary,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedContainerColor = C.card,
-                                unfocusedContainerColor = C.card,
-                                cursorColor = C.accent,
-                                focusedTextColor = C.text,
-                                unfocusedTextColor = C.text,
-                            ),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                        ChatsSearchBar(
+                            searchQuery = state.searchQuery,
+                            isSearchingOnChain = state.isSearchingOnChain,
+                            onSearchQueryChange = { state.setSearch(it) },
                         )
                     }
                 }
 
                 // ── Tab bar (All / Unread / Groups / DMs / Archived) ──
-                val tabLabelRes = listOf(R.string.chats_tab_all, R.string.chats_tab_unread, R.string.chats_tab_groups, R.string.chats_tab_dms, R.string.chats_tab_archived)
-                val unreadTotal = conversations.count { !it.archived && it.unreadCount > 0 } + groups.count { !it.archived && it.unreadCount > 0 }
-                val groupsTotal = groups.count { !it.archived }
-                val dmsTotal = dms.count { !it.archived }
-                val archivedTotal = conversations.count { it.archived } + groups.count { it.archived }
-                // Telegram-style tab selector with animated pill indicator — horizontally scrollable
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    tabLabelRes.forEachIndexed { idx, labelRes ->
-                        val label = stringResource(labelRes)
-                        val badge = when (idx) {
-                            1 -> if (unreadTotal > 0) " ($unreadTotal)" else ""
-                            2 -> if (groupsTotal > 0) " ($groupsTotal)" else ""
-                            3 -> if (dmsTotal > 0) " ($dmsTotal)" else ""
-                            4 -> if (archivedTotal > 0) " ($archivedTotal)" else ""
-                            else -> ""
-                        }
-                        val selected = state.activeTab == idx
-                        val bgColor by animateColorAsState(
-                            if (selected) C.accent.copy(alpha = 0.15f) else Color.Transparent,
-                            animationSpec = tween(250), label = "tabBg$idx",
-                        )
-                        val textColor by animateColorAsState(
-                            if (selected) C.accent else C.textSecondary,
-                            animationSpec = tween(250), label = "tabTxt$idx",
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(bgColor)
-                                .clickable { state.setTab(idx) }
-                                .padding(horizontal = 14.dp, vertical = 7.dp),
-                        ) {
-                            Text(
-                                "$label$badge",
-                                color = textColor,
-                                fontSize = 13.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
+                ChatsTabBar(
+                    activeTab = state.activeTab,
+                    onTabSelected = { state.setTab(it) },
+                    conversations = conversations,
+                    groups = groups,
+                )
 
                 // ── Conversation list ──
                 val hasOnChain = onChainNew.isNotEmpty() || onChainGroupsNew.isNotEmpty() ||
@@ -805,247 +721,36 @@ fun ChatsScreen(
             }
 
             // FABs - New Chat + Create Group (hide on scroll down, show on scroll up)
-            val fabVisible = remember { mutableStateOf(true) }
-            val prevFirstVisible = remember { mutableIntStateOf(0) }
-            val prevScrollOffset = remember { mutableIntStateOf(0) }
-            LaunchedEffect(chatListState.firstVisibleItemIndex, chatListState.firstVisibleItemScrollOffset) {
-                val currentFirst = chatListState.firstVisibleItemIndex
-                val currentOffset = chatListState.firstVisibleItemScrollOffset
-                if (currentFirst > prevFirstVisible.intValue || (currentFirst == prevFirstVisible.intValue && currentOffset > prevScrollOffset.intValue + 20)) {
-                    fabVisible.value = false // scrolling down
-                } else if (currentFirst < prevFirstVisible.intValue || (currentFirst == prevFirstVisible.intValue && currentOffset < prevScrollOffset.intValue - 20)) {
-                    fabVisible.value = true // scrolling up
-                }
-                prevFirstVisible.intValue = currentFirst
-                prevScrollOffset.intValue = currentOffset
-            }
-            val fabScale by animateFloatAsState(
-                targetValue = if (fabVisible.value) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
-                label = "fabScale",
-            )
-            val fabAlpha by animateFloatAsState(
-                targetValue = if (fabVisible.value) 1f else 0f,
-                animationSpec = tween(200),
-                label = "fabAlpha",
-            )
             // Hide FABs while searching — they block the join button on search results
             if (state.searchQuery.isBlank()) {
-                Column(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                        .graphicsLayer { scaleX = fabScale; scaleY = fabScale; alpha = fabAlpha },
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    // Small FAB - Create Group
-                    SmallFloatingActionButton(
-                        onClick = onCreateGroup,
-                        containerColor = C.card,
-                        contentColor = C.accent,
-                        shape = CircleShape,
-                    ) {
-                        Icon(Icons.Filled.Group, contentDescription = stringResource(R.string.chats_create_group_desc), modifier = Modifier.size(20.dp))
-                    }
-                    // Main FAB - New Chat
-                    FloatingActionButton(
-                        onClick = onNewChat,
-                        containerColor = C.accent,
-                        contentColor = C.textDark,
-                        shape = CircleShape,
-                    ) {
-                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.chats_fab_new_chat))
-                    }
-                }
+                ChatsFabs(
+                    chatListState = chatListState,
+                    onNewChat = onNewChat,
+                    onCreateGroup = onCreateGroup,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
             }
         }
     }
 
     // Group context menu
     if (state.menuTargetGroup != null) {
-        val target = state.menuTargetGroup!!
-        ModalBottomSheet(
-            onDismissRequest = { state.menuTargetGroup = null },
-            containerColor = C.card,
-            dragHandle = {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.textMuted.copy(alpha = 0.4f)))
-                }
-            },
-        ) {
-            Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val grpAvatarBmp = remember(target.groupId, target.avatarHash) {
-                        try {
-                            val f = java.io.File(context.filesDir, "group_avatars/${target.groupId}.webp")
-                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
-                        } catch (_: Exception) { null }
-                    }
-                    if (grpAvatarBmp != null) {
-                        Image(
-                            bitmap = grpAvatarBmp.asImageBitmap(),
-                            contentDescription = stringResource(R.string.chat_section_groups),
-                            modifier = Modifier.size(40.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(target.groupId)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(target.name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(stringResource(R.string.group_member_count_format, target.memberCount), color = C.textSecondary, fontSize = 12.sp)
-                    }
-                }
-                HorizontalDivider(color = C.border.copy(alpha = 0.3f))
-
-                ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
-                    val gid = target.groupId
-                    val newVal = !target.pinned
-                    scope.launch {
-                        val db = ChatService.db ?: return@launch
-                        ChatPinOrder.setGroupPinned(db, gid, newVal)
-                    }
-                    state.menuTargetGroup = null
-                }
-                if (target.pinned && pinnedCount >= 2) {
-                    ChatListMenuItem(stringResource(R.string.chats_change_pin_order)) {
-                        state.menuTargetGroup = null
-                        showReorderPinned = true
-                    }
-                }
-                ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
-                    val gid = target.groupId; val newVal = !target.muted
-                    scope.launch {
-                        ChatService.db?.groupDao()?.setMuted(gid, newVal)
-                        val check = ChatService.db?.groupDao()?.findByGroupId(gid)
-                        android.util.Log.d("ChatsScreen", "setMuted($gid, $newVal) → DB now: muted=${check?.muted}")
-                    }
-                    state.menuTargetGroup = null
-                }
-                ChatListMenuItem(if (target.archived) stringResource(R.string.chats_unarchive) else stringResource(R.string.chats_archive)) {
-                    scope.launch { ChatService.db?.groupDao()?.setArchived(target.groupId, !target.archived) }
-                    state.menuTargetGroup = null
-                }
-                HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
-                ChatListMenuItem(stringResource(R.string.chats_leave_group), color = C.error) {
-                    scope.launch {
-                        ChatService.groups.leaveGroup(target.groupId)
-                    }
-                    state.menuTargetGroup = null
-                }
-            }
-        }
+        ChatsGroupContextMenu(
+            target = state.menuTargetGroup!!,
+            pinnedCount = pinnedCount,
+            onDismiss = { state.menuTargetGroup = null },
+            onReorderPinned = { showReorderPinned = true },
+        )
     }
 
     // Conversation context menu
     if (state.menuTarget != null) {
-        val target = state.menuTarget!!
-        ModalBottomSheet(
-            onDismissRequest = { state.menuTarget = null },
-            containerColor = C.card,
-            dragHandle = {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.textMuted.copy(alpha = 0.4f)))
-                }
-            },
-        ) {
-            Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                // Header with avatar
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val avatarKey = target.handle ?: target.convKey
-                    val dmAvatarBmp = remember(avatarKey) {
-                        try {
-                            val f = java.io.File(context.filesDir, "avatars/${avatarKey.removePrefix("@")}.webp")
-                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
-                        } catch (_: Exception) { null }
-                    }
-                    if (dmAvatarBmp != null) {
-                        Image(
-                            bitmap = dmAvatarBmp.asImageBitmap(),
-                            contentDescription = stringResource(R.string.contact_info_title),
-                            modifier = Modifier.size(40.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(avatarColor(avatarKey)), contentAlignment = Alignment.Center) {
-                            val initial = (target.displayName ?: target.handle ?: target.convKey).removePrefix("@").firstOrNull()?.uppercase() ?: "?"
-                            Text(initial, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(target.displayName?.ifEmpty { null } ?: target.handle?.let { "@$it" } ?: target.convKey, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        if (target.handle != null && target.displayName?.isNotEmpty() == true) {
-                            Text("@${target.handle}", color = C.textSecondary, fontSize = 12.sp)
-                        }
-                    }
-                }
-                HorizontalDivider(color = C.border.copy(alpha = 0.3f))
-
-                // Menu items with touch highlight
-                ChatListMenuItem(if (target.pinned) stringResource(R.string.chats_swipe_unpin) else stringResource(R.string.chats_swipe_pin)) {
-                    val newVal = !target.pinned
-                    scope.launch {
-                        val db = ChatService.db ?: return@launch
-                        ChatPinOrder.setConversationPinned(db, target.id, newVal)
-                    }
-                    state.menuTarget = null
-                }
-                if (target.pinned && pinnedCount >= 2) {
-                    ChatListMenuItem(stringResource(R.string.chats_change_pin_order)) {
-                        state.menuTarget = null
-                        showReorderPinned = true
-                    }
-                }
-                ChatListMenuItem(if (target.muted) stringResource(R.string.chats_swipe_unmute) else stringResource(R.string.chats_swipe_mute)) {
-                    scope.launch { ChatService.db?.conversationDao()?.setMuted(target.id, !target.muted) }; state.menuTarget = null
-                }
-                ChatListMenuItem(if (target.archived) stringResource(R.string.chats_unarchive) else stringResource(R.string.chats_archive)) {
-                    scope.launch { ChatService.db?.conversationDao()?.setArchived(target.id, !target.archived) }; state.menuTarget = null
-                }
-                ChatListMenuItem(if (target.isBlocked) stringResource(R.string.chat_unblock_user) else stringResource(R.string.chat_block_user), color = if (target.isBlocked) C.text else C.error) {
-                    scope.launch { ChatService.db?.conversationDao()?.setBlocked(target.id, !target.isBlocked) }; state.menuTarget = null
-                }
-                HorizontalDivider(color = C.border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
-                ChatListMenuItem(stringResource(R.string.general_delete), color = C.error) {
-                    scope.launch {
-                        val db = ChatService.db ?: return@launch
-                        // Delete attachment files from disk
-                        val attachments = db.attachmentDao().getAllByConversation(target.id)
-                        for (att in attachments) {
-                            if (att.localPath != null) {
-                                try { java.io.File(att.localPath).delete() } catch (_: Exception) {}
-                            }
-                        }
-                        // Delete attachment DB records
-                        db.attachmentDao().deleteByConversation(target.id)
-                        // Delete wallpaper file + prefs
-                        val handle = target.convKey.removePrefix("@")
-                        try { java.io.File(context.filesDir, "wallpaper_$handle.jpg").delete() } catch (_: Exception) {}
-                        context.getSharedPreferences("privime_prefs", 0).edit()
-                            .remove("wallpaper_${target.convKey}").apply()
-                        // Clear draft
-                        db.conversationDao().setDraft(target.id, null)
-                        // Soft-delete messages (keep dedup keys to prevent SBBS re-delivery)
-                        db.messageDao().softDeleteByConversation(target.id)
-                        // Soft-delete conversation
-                        db.conversationDao().softDelete(target.id)
-                        // Remove from contacts list if this was a DM
-                        if (!target.isGroup) {
-                            db.contactDao().deleteByHandle(handle)
-                        }
-                    }; state.menuTarget = null
-                }
-            }
-        }
+        ChatsConversationContextMenu(
+            target = state.menuTarget!!,
+            pinnedCount = pinnedCount,
+            onDismiss = { state.menuTarget = null },
+            onReorderPinned = { showReorderPinned = true },
+        )
     }
 
     if (showReorderPinned) {
@@ -1066,71 +771,3 @@ fun ChatsScreen(
     }
 }
 
-private data class ChatListItem(
-    val isGroup: Boolean,
-    val sortTs: Long,
-    val pinned: Boolean,
-    val pinOrder: Int,
-    val conv: ConversationEntity? = null,
-    val group: com.privimemobile.chat.db.entities.GroupEntity? = null,
-)
-
-private fun buildUnifiedChatList(
-    conversations: List<ConversationEntity>,
-    groups: List<com.privimemobile.chat.db.entities.GroupEntity>,
-): List<ChatListItem> {
-    val items = mutableListOf<ChatListItem>()
-    for (c in conversations) {
-        if (c.convKey.startsWith("g_")) continue
-        items.add(ChatListItem(false, c.lastMessageTs, c.pinned, c.pinOrder, conv = c))
-    }
-    for (g in groups) {
-        items.add(ChatListItem(true, g.lastMessageTs, g.pinned, g.pinOrder, group = g))
-    }
-    return items.sortedWith { a, b ->
-        ChatPinOrder.compareChatListItems(
-            a.pinned, a.pinOrder, a.sortTs,
-            b.pinned, b.pinOrder, b.sortTs,
-        )
-    }
-}
-
-private fun filterConversationsForTab(
-    tab: Int,
-    conversations: List<ConversationEntity>,
-    dms: List<ConversationEntity>,
-    searchQuery: String,
-): List<ConversationEntity> {
-    val tabFiltered = when (tab) {
-        0 -> conversations.filter { !it.archived }
-        1 -> conversations.filter { !it.archived && it.unreadCount > 0 }
-        2 -> emptyList()
-        3 -> dms.filter { !it.archived }
-        4 -> conversations.filter { it.archived }
-        else -> conversations.filter { !it.archived }
-    }
-    if (searchQuery.isBlank()) return tabFiltered
-    val q = searchQuery.trim().lowercase()
-    return tabFiltered.filter { conv ->
-        (conv.displayName ?: "").lowercase().contains(q) ||
-            (conv.handle ?: "").lowercase().contains(q)
-    }
-}
-
-private fun filterGroupsForTab(
-    tab: Int,
-    groups: List<com.privimemobile.chat.db.entities.GroupEntity>,
-    searchQuery: String,
-): List<com.privimemobile.chat.db.entities.GroupEntity> {
-    val tabFiltered = when (tab) {
-        0 -> groups.filter { !it.archived }
-        1 -> groups.filter { !it.archived && it.unreadCount > 0 }
-        2 -> groups.filter { !it.archived }
-        3 -> emptyList()
-        4 -> groups.filter { it.archived }
-        else -> groups.filter { !it.archived }
-    }
-    if (searchQuery.isBlank()) return tabFiltered
-    val q = searchQuery.trim().lowercase()
-    return tabFiltered.filter { it.name.lowercase().contains(q) }
-}

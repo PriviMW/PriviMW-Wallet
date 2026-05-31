@@ -43,6 +43,7 @@ import com.privimemobile.ui.chat.chats.ChatsSearchBar
 import com.privimemobile.ui.chat.chats.ChatsTabBar
 import com.privimemobile.ui.chat.chats.ChatsTabFolderContent
 import com.privimemobile.ui.chat.chats.ChatsTopBar
+import com.privimemobile.ui.chat.chats.runChatsListRefresh
 import com.privimemobile.ui.chat.chats.NotRegisteredLanding
 import com.privimemobile.ui.chat.chats.ReRegisterLanding
 import com.privimemobile.ui.theme.C
@@ -174,14 +175,18 @@ fun ChatsScreen(
             return@LaunchedEffect
         }
 
-        state.clearOnChainResults()
-        state.updateSearchingOnChain(true)
+        val epoch = state.beginOnChainSearch()
+        val querySnapshot = trimmed
         state.searchJob = scope.launch {
             delay(300)
-            val handles = try { ChatService.contacts.searchOnChain(trimmed) } catch (_: Exception) { emptyList() }
-            val chainGroups = try { ChatService.groups.searchGroups(trimmed) } catch (_: Exception) { emptyList() }
-            state.setOnChainResults(handles.filter { it.handle != myHandle }, chainGroups)
-            state.updateSearchingOnChain(false)
+            if (!state.isOnChainSearchEpoch(epoch)) return@launch
+            val handles = try { ChatService.contacts.searchOnChain(querySnapshot) } catch (_: Exception) { emptyList() }
+            val chainGroups = try { ChatService.groups.searchGroups(querySnapshot) } catch (_: Exception) { emptyList() }
+            state.finishOnChainSearch(
+                epoch,
+                handles.filter { it.handle != myHandle },
+                chainGroups,
+            )
         }
     }
 
@@ -196,10 +201,8 @@ fun ChatsScreen(
         isRefreshing = state.refreshing,
         onRefresh = {
             state.onRefreshStart()
-            ChatService.sbbs.pollNow()
             scope.launch {
-                ChatService.groups.refreshMyGroups()
-                delay(2000)
+                runChatsListRefresh()
                 state.onRefreshEnd()
             }
         },

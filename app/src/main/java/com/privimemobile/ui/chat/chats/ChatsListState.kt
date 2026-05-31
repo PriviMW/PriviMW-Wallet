@@ -40,6 +40,9 @@ class ChatsListState(activeTab: Int = 0) {
     var searchJob by mutableStateOf<Job?>(null)
         internal set // orchestrator manages coroutine lifecycle
 
+    /** Bumped on each valid query change so stale debounced jobs cannot clear the spinner. */
+    private var onChainSearchEpoch by mutableIntStateOf(0)
+
     fun setOnChainResults(handles: List<ContactEntity>, groups: List<Map<String, Any?>>) {
         onChainHandles = handles
         onChainGroups = groups
@@ -49,8 +52,7 @@ class ChatsListState(activeTab: Int = 0) {
         isSearchingOnChain = searching
     }
 
-    /** Clear on-chain results only — keep [isSearchingOnChain] unchanged.
-     *  Use when starting a new search to avoid briefly showing the spinner as off. */
+    /** Clear on-chain results only — keep [isSearchingOnChain] unchanged. */
     fun clearOnChainResults() {
         onChainHandles = emptyList()
         onChainGroups = emptyList()
@@ -64,16 +66,28 @@ class ChatsListState(activeTab: Int = 0) {
         isSearchingOnChain = false
     }
 
+    /** Start a new debounced on-chain search; returns epoch for [finishOnChainSearch]. */
+    fun beginOnChainSearch(): Int {
+        clearOnChainResults()
+        isSearchingOnChain = true
+        return ++onChainSearchEpoch
+    }
+
+    /** Apply results and hide spinner only if this job is still the latest search. */
+    fun finishOnChainSearch(epoch: Int, handles: List<ContactEntity>, groups: List<Map<String, Any?>>) {
+        if (epoch != onChainSearchEpoch) return
+        onChainHandles = handles
+        onChainGroups = groups
+        isSearchingOnChain = false
+    }
+
+    fun isOnChainSearchEpoch(epoch: Int): Boolean = epoch == onChainSearchEpoch
+
     // Context menus
     var menuTarget by mutableStateOf<ConversationEntity?>(null)
         internal set // set directly from composables
     var menuTargetGroup by mutableStateOf<com.privimemobile.chat.db.entities.GroupEntity?>(null)
         internal set
-
-    fun clearMenu() {
-        menuTarget = null
-        menuTargetGroup = null
-    }
 
     // Pull-to-refresh
     var refreshing by mutableStateOf(false)

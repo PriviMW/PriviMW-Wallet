@@ -49,6 +49,15 @@ class ChatsListState(activeTab: Int = 0) {
         isSearchingOnChain = searching
     }
 
+    /** Clear on-chain results only — keep [isSearchingOnChain] unchanged.
+     *  Use when starting a new search to avoid briefly showing the spinner as off. */
+    fun clearOnChainResults() {
+        onChainHandles = emptyList()
+        onChainGroups = emptyList()
+    }
+
+    /** Full reset: clear results AND set isSearchingOnChain = false.
+     *  Use only when the query becomes empty or invalid. */
     fun resetOnChainSearch() {
         onChainHandles = emptyList()
         onChainGroups = emptyList()

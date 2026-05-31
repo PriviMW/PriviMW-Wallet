@@ -180,11 +180,16 @@ fun ChatsScreen(
     // Debounced on-chain search when user types in the search bar
     LaunchedEffect(state.searchQuery) {
         state.searchJob?.cancel()
-        state.resetOnChainSearch()
 
         val trimmed = state.searchQuery.trim().removePrefix("@").lowercase()
-        if (trimmed.isEmpty() || !Regex("^[a-z0-9_]+$").matches(trimmed)) return@LaunchedEffect
+        if (trimmed.isEmpty() || !Regex("^[a-z0-9_]+$").matches(trimmed)) {
+            // Invalid/empty query: full reset (spinner off + results cleared)
+            state.resetOnChainSearch()
+            return@LaunchedEffect
+        }
 
+        // Valid query: clear old results but keep spinner ON (no false→true flash)
+        state.clearOnChainResults()
         state.updateSearchingOnChain(true)
         state.searchJob = scope.launch {
             delay(300) // debounce

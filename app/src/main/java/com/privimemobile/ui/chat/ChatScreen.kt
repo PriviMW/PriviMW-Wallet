@@ -116,7 +116,12 @@ import com.privimemobile.ui.chat.format.formatDateSeparator
 import com.privimemobile.ui.chat.format.formatMessageTime
 import com.privimemobile.ui.chat.format.formatTimerLabel
 import com.privimemobile.ui.chat.format.parseMarkdown
+import com.privimemobile.ui.chat.input.VoiceLockIndicator
+import com.privimemobile.ui.chat.input.VoicePreviewBar
+import com.privimemobile.ui.chat.input.VoiceRecordingBar
+import com.privimemobile.ui.chat.input.formatVoiceDuration
 import com.privimemobile.ui.chat.menu.MenuItemRow
+import com.privimemobile.ui.chat.message.TickIndicator
 import com.privimemobile.ui.chat.scroll.ChatListDerive
 import com.privimemobile.ui.chat.scroll.ChatScrollMath
 import com.privimemobile.ui.components.VoiceMessageBubble
@@ -5860,19 +5865,6 @@ fun ChatScreen(
     }
     } // end Box
 
-@Composable
-private fun TickIndicator(read: Boolean, delivered: Boolean) {
-    val tickText = if (read || delivered) "\u2713\u2713" else "\u2713"
-    val tickColor = if (read) C.accent else C.textSecondary
-    // Animate scale when status upgrades
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 800f),
-        label = "tickScale",
-    )
-    Text(tickText, color = tickColor, fontSize = 10.sp,
-        modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale))
-}
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
@@ -7500,225 +7492,6 @@ private fun loadGalleryImages(context: Context, limit: Int = 60): List<Uri> {
         Log.w("AttachmentPicker", "Failed to load gallery: ${e.message}")
     }
     return images
-}
-
-/** Format voice duration as m:ss */
-private fun formatVoiceDuration(ms: Long): String {
-    val totalSeconds = (ms / 1000).toInt()
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%d:%02d", minutes, seconds)
-}
-
-/**
- * Telegram-style voice recording bar.
- * Shows recording duration, slide-to-cancel and swipe-up-to-lock gestures.
- *
- * States:
- * - Recording: [red dot] duration  < Slide to Cancel  (or "Release to cancel" when sliding left)
- * - Locked: duration  CANCEL  [send]  — mic area shows pause overlay (handled by caller)
- */
-@Composable
-private fun VoiceRecordingBar(
-    durationMs: Long,
-    isLocked: Boolean,
-    onCancel: () -> Unit,
-    onLock: () -> Unit,
-    onSend: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var dragOffsetX by remember { mutableStateOf(0f) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-    val cancelThreshold = 120f
-    val lockThreshold = 80f
-
-    val shouldCancel = dragOffsetX < -cancelThreshold
-    val shouldLock = dragOffsetY < -lockThreshold
-
-    // Trigger lock when upward swipe crosses threshold
-    LaunchedEffect(shouldLock) {
-        if (shouldLock && !isLocked) {
-            onLock()
-        }
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(start = 12.dp, end = 8.dp)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        if (shouldCancel) onCancel()
-                        dragOffsetX = 0f
-                    },
-                    onHorizontalDrag = { _, drag ->
-                        dragOffsetX = (dragOffsetX + drag).coerceIn(-200f, 0f)
-                    },
-                )
-            }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = { dragOffsetY = 0f },
-                    onVerticalDrag = { _, drag ->
-                        if (!isLocked) {
-                            dragOffsetY = (dragOffsetY + drag).coerceIn(-150f, 0f)
-                        }
-                    },
-                )
-            },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Left side: recording indicator (red dot always shown during recording)
-        Box(
-            modifier = Modifier.size(24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(if (shouldCancel) C.textMuted else Color(0xFFE53935)),
-            )
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        // Duration
-        Text(
-            text = formatVoiceDuration(durationMs),
-            color = if (shouldCancel) C.textMuted else C.text,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-        )
-
-        // Center: slide hint / CANCEL (centered in available space)
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                shouldCancel -> {
-                    Text(
-                        text = stringResource(R.string.chat_voice_release_cancel),
-                        color = C.error,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-
-                isLocked -> {
-                    Text(
-                        text = stringResource(R.string.chat_voice_cancel),
-                        color = if (shouldLock) C.accent else C.accent.copy(alpha = 0.7f),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onCancel() },
-                    )
-                }
-
-                else -> {
-                    Text(
-                        text = "\u27F5 " + stringResource(R.string.chat_voice_slide_to_cancel),
-                        color = C.textSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-        }
-
-    }
-}
-
-/**
- * Telegram-style voice preview bar (shown after user pauses a locked recording).
- * [trash icon] [waveform] [duration] [send button]
- */
-@Composable
-private fun VoicePreviewBar(
-    waveform: ByteArray?,
-    durationMs: Long,
-    onDelete: () -> Unit,
-    onSend: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Delete/trash button
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.size(40.dp).clip(CircleShape),
-        ) {
-            Icon(Icons.Default.Delete, stringResource(R.string.chat_label_delete), tint = C.textSecondary, modifier = Modifier.size(22.dp))
-        }
-
-        Spacer(Modifier.width(4.dp))
-
-        // Waveform preview
-        VoiceWaveformView(
-            waveform = waveform,
-            progress = 0f,
-            isMine = true,
-            modifier = Modifier.weight(1f).height(24.dp),
-        )
-
-        Spacer(Modifier.width(8.dp))
-
-        // Duration
-        Text(
-            text = formatVoiceDuration(durationMs),
-            color = C.text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-        )
-
-        Spacer(Modifier.width(8.dp))
-
-        // Send button
-        IconButton(
-            onClick = onSend,
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(C.accent),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send_message), tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-/**
- * Telegram-style lock indicator overlay: dark pill with lock icon + up-arrow.
- * Shown during recording (not locked) to indicate swipe-up-to-lock.
- */
-@Composable
-private fun VoiceLockIndicator(
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF2A2D2E),
-        shadowElevation = 4.dp,
-        modifier = modifier,
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Icon(
-                Icons.Default.Lock,
-                stringResource(R.string.chat_send_message),
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(18.dp),
-            )
-            Text("↑", color = Color.White.copy(alpha = 0.7f), fontSize = 18.sp)
-        }
-    }
 }
 
 /** Telegram-style fling: reduce initial velocity for heavier, more controlled scroll feel. */

@@ -1,6 +1,13 @@
 package com.privimemobile.ui.chat.chats
 
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
 import com.privimemobile.chat.ChatPinOrder
 import com.privimemobile.chat.db.entities.ConversationEntity
 import com.privimemobile.chat.db.entities.GroupEntity
@@ -112,4 +119,26 @@ internal fun filterGroupsForTab(
     if (searchQuery.isBlank()) return tabFiltered
     val q = searchQuery.trim().lowercase()
     return tabFiltered.filter { it.name.lowercase().contains(q) }
+}
+
+/** Text that highlights a name within a confirmation message with accent color. */
+@Composable
+internal fun HighlightedNameText(message: String, name: String) {
+    val annotated = buildAnnotatedString {
+        val idx = message.indexOf(name)
+        if (idx >= 0) {
+            val before = message.substring(0, idx)
+            val after = message.substring(idx + name.length)
+            if (before.isNotEmpty()) {
+                withStyle(SpanStyle(color = C.textSecondary)) { append(before) }
+            }
+            withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.Bold)) { append(name) }
+            if (after.isNotEmpty()) {
+                withStyle(SpanStyle(color = C.textSecondary)) { append(after) }
+            }
+        } else {
+            withStyle(SpanStyle(color = C.textSecondary)) { append(message) }
+        }
+    }
+    Text(text = annotated)
 }

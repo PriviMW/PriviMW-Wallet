@@ -1,34 +1,19 @@
 package com.privimemobile.ui.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
@@ -242,36 +227,12 @@ fun ChatsScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // ── Top bar ──
-                Surface(color = C.bg) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(stringResource(R.string.chat_title), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.chats_encrypted_notice), color = C.textSecondary, fontSize = 10.sp)
-                            }
-                            IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = stringResource(R.string.chat_search),
-                                    tint = C.textSecondary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
-
-                        // Search/filter bar — always visible (fixed above scrollable list)
-                        Spacer(Modifier.height(8.dp))
-                        ChatsSearchBar(
-                            searchQuery = state.searchQuery,
-                            isSearchingOnChain = state.isSearchingOnChain,
-                            onSearchQueryChange = { state.setSearch(it) },
-                        )
-                    }
+                ChatsTopBar(onSearch = onSearch) {
+                    ChatsSearchBar(
+                        searchQuery = state.searchQuery,
+                        isSearchingOnChain = state.isSearchingOnChain,
+                        onSearchQueryChange = { state.setSearch(it) },
+                    )
                 }
 
                 // ── Tab bar (All / Unread / Groups / DMs / Archived) ──
@@ -318,20 +279,7 @@ fun ChatsScreen(
                         }
 
                         if (tabUnifiedList.isEmpty() && !hasOnChain) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    if (state.searchQuery.isNotBlank()) {
-                                        Text(stringResource(R.string.chat_no_results, state.searchQuery), color = C.textSecondary, fontSize = 15.sp)
-                                    } else {
-                                        Text(stringResource(R.string.chats_empty), color = C.textSecondary, fontSize = 16.sp)
-                                        Spacer(Modifier.height(6.dp))
-                                        Text(stringResource(R.string.chats_tap_to_chat), color = C.textMuted, fontSize = 13.sp)
-                                    }
-                                }
-                            }
+                            ChatsEmptyState(searchQuery = state.searchQuery)
                         } else {
                     // Observe typing state for all conversations
                     val typingVer by ChatService.typingVersion.collectAsState()
@@ -396,117 +344,55 @@ fun ChatsScreen(
                                 positionalThreshold = { it * 0.5f },
                             )
                             if (showDeleteConfirmItem) {
-                                val name = if (item.isGroup) item.group!!.name
-                                else (item.conv!!.displayName?.ifEmpty { null } ?: "@${item.conv!!.convKey.removePrefix("@")}")
-                                val isGrp = item.isGroup
-                                val deleteMsg = stringResource(if (isGrp) R.string.chats_leave_group_confirm else R.string.chats_delete_chat_confirm, name)
-                                AlertDialog(
-                                    onDismissRequest = { showDeleteConfirmItem = false },
-                                    containerColor = C.card,
-                                    title = { Text(stringResource(if (isGrp) R.string.chats_leave_group_title else R.string.chats_delete_chat_title), color = C.text, fontWeight = FontWeight.SemiBold) },
-                                    text = {
-                                        val annotated = buildAnnotatedString {
-                                            val idx = deleteMsg.indexOf(name)
-                                            if (idx >= 0) {
-                                                val before = deleteMsg.substring(0, idx)
-                                                val after = deleteMsg.substring(idx + name.length)
-                                                if (before.isNotEmpty()) {
-                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(before) }
-                                                }
-                                                withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.Bold)) { append(name) }
-                                                if (after.isNotEmpty()) {
-                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(after) }
-                                                }
-                                            } else {
-                                                withStyle(SpanStyle(color = C.textSecondary)) { append(deleteMsg) }
-                                            }
-                                        }
-                                        Text(text = annotated)
-                                    },
-                                    confirmButton = {
-                                        TextButton(onClick = {
-                                            showDeleteConfirmItem = false
-                                            if (isGrp) {
-                                                val gid = item.group!!.groupId
-                                                ChatService.groups.leaveGroup(gid) { success, error ->
-                                                    scope.launch {
-                                                        if (!success) {
-                                                            android.widget.Toast.makeText(
-                                                                context,
-                                                                context.getString(R.string.chats_leave_failed, error ?: context.getString(R.string.register_transaction_failed)),
-                                                                android.widget.Toast.LENGTH_LONG
-                                                            ).show()
-                                                        } else {
-                                                            // Wallet accepted TX data — soft-delete local conv
-                                                            val conv = ChatService.db?.conversationDao()?.findByKey("g_${gid.take(16)}")
-                                                            conv?.let {
-                                                                ChatService.db?.messageDao()?.softDeleteByConversation(it.id)
-                                                                ChatService.db?.conversationDao()?.softDelete(it.id)
-                                                            }
+                                ChatsDeleteConfirmDialog(
+                                    item = item,
+                                    onDismiss = { showDeleteConfirmItem = false },
+                                    onConfirm = {
+                                        showDeleteConfirmItem = false
+                                        if (item.isGroup) {
+                                            val gid = item.group!!.groupId
+                                            ChatService.groups.leaveGroup(gid) { success, error ->
+                                                scope.launch {
+                                                    if (!success) {
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            context.getString(R.string.chats_leave_failed, error ?: context.getString(R.string.register_transaction_failed)),
+                                                            android.widget.Toast.LENGTH_LONG
+                                                        ).show()
+                                                    } else {
+                                                        // Wallet accepted TX data — soft-delete local conv
+                                                        val conv = ChatService.db?.conversationDao()?.findByKey("g_${gid.take(16)}")
+                                                        conv?.let {
+                                                            ChatService.db?.messageDao()?.softDeleteByConversation(it.id)
+                                                            ChatService.db?.conversationDao()?.softDelete(it.id)
                                                         }
                                                     }
                                                 }
-                                            } else {
-                                                scope.launch {
-                                                    val cid = item.conv!!.id
-                                                    val handle = item.conv!!.convKey.removePrefix("@")
-                                                    ChatService.db?.messageDao()?.softDeleteByConversation(cid)
-                                                    ChatService.db?.conversationDao()?.softDelete(cid)
-                                                    ChatService.db?.contactDao()?.deleteByHandle(handle)
-                                                }
                                             }
-                                        }) { Text(stringResource(if (isGrp) R.string.chats_leave else R.string.general_delete), color = C.error, fontWeight = FontWeight.Bold) }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { showDeleteConfirmItem = false }) {
-                                            Text(stringResource(R.string.general_cancel), color = C.textSecondary)
+                                        } else {
+                                            scope.launch {
+                                                val cid = item.conv!!.id
+                                                val handle = item.conv!!.convKey.removePrefix("@")
+                                                ChatService.db?.messageDao()?.softDeleteByConversation(cid)
+                                                ChatService.db?.conversationDao()?.softDelete(cid)
+                                                ChatService.db?.contactDao()?.deleteByHandle(handle)
+                                            }
                                         }
                                     },
                                 )
                             }
                             if (showArchiveConfirmItem) {
-                                val isGrp = item.isGroup
-                                val name = if (item.isGroup) item.group!!.name else (item.conv!!.displayName?.ifEmpty { null } ?: "@${item.conv!!.convKey.removePrefix("@")}")
-                                val isCurrentlyArchived = if (isGrp) item.group!!.archived else item.conv!!.archived
-                                val archiveMsg = stringResource(if (isCurrentlyArchived) R.string.chats_unarchive_confirm else R.string.chats_archive_confirm, name)
-                                AlertDialog(
-                                    onDismissRequest = { showArchiveConfirmItem = false },
-                                    containerColor = C.card,
-                                    title = { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive else R.string.chats_archive), color = C.text, fontWeight = FontWeight.SemiBold) },
-                                    text = {
-                                        val annotated = buildAnnotatedString {
-                                            val idx = archiveMsg.indexOf(name)
-                                            if (idx >= 0) {
-                                                val before = archiveMsg.substring(0, idx)
-                                                val after = archiveMsg.substring(idx + name.length)
-                                                if (before.isNotEmpty()) {
-                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(before) }
-                                                }
-                                                withStyle(SpanStyle(color = C.accent, fontWeight = FontWeight.Bold)) { append(name) }
-                                                if (after.isNotEmpty()) {
-                                                    withStyle(SpanStyle(color = C.textSecondary)) { append(after) }
-                                                }
+                                ChatsArchiveConfirmDialog(
+                                    item = item,
+                                    onDismiss = { showArchiveConfirmItem = false },
+                                    onConfirm = {
+                                        showArchiveConfirmItem = false
+                                        scope.launch {
+                                            if (item.isGroup) {
+                                                ChatService.db?.groupDao()?.setArchived(item.group!!.groupId, !item.group!!.archived)
                                             } else {
-                                                withStyle(SpanStyle(color = C.textSecondary)) { append(archiveMsg) }
+                                                ChatService.db?.conversationDao()?.setArchived(item.conv!!.id, !item.conv!!.archived)
                                             }
-                                        }
-                                        Text(text = annotated)
-                                    },
-                                    confirmButton = {
-                                        TextButton(onClick = {
-                                            showArchiveConfirmItem = false
-                                            scope.launch {
-                                                if (isGrp) {
-                                                    ChatService.db?.groupDao()?.setArchived(item.group!!.groupId, !item.group!!.archived)
-                                                } else {
-                                                    ChatService.db?.conversationDao()?.setArchived(item.conv!!.id, !item.conv!!.archived)
-                                                }
-                                            }
-                                        }) { Text(stringResource(if (isCurrentlyArchived) R.string.chats_unarchive else R.string.chats_archive), color = C.accent, fontWeight = FontWeight.Bold) }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { showArchiveConfirmItem = false }) {
-                                            Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                         }
                                     },
                                 )
@@ -514,32 +400,10 @@ fun ChatsScreen(
                             SwipeToDismissBox(
                                 state = dismissState,
                                 backgroundContent = {
-                                    val progress = dismissState.progress
-                                    val direction = dismissState.dismissDirection
-                                    // Show color immediately as user starts swiping
-                                    val bgColor = when (direction) {
-                                        SwipeToDismissBoxValue.EndToStart -> C.error.copy(alpha = (progress * 2.5f).coerceIn(0f, 1f))
-                                        SwipeToDismissBoxValue.StartToEnd -> C.accent.copy(alpha = (progress * 2.5f).coerceIn(0f, 1f))
-                                        else -> Color.Transparent
-                                    }
-                                    val iconAlpha = (progress * 3f).coerceIn(0f, 1f)
-                                    val iconAlignment = when (direction) {
-                                        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
-                                        else -> Alignment.CenterEnd
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(bgColor)
-                                            .padding(horizontal = 24.dp),
-                                        contentAlignment = iconAlignment,
-                                    ) {
-                                        if (direction == SwipeToDismissBoxValue.EndToStart) {
-                                            Icon(Icons.Default.Delete, stringResource(R.string.chats_cd_delete), tint = Color.White.copy(alpha = iconAlpha))
-                                        } else if (direction == SwipeToDismissBoxValue.StartToEnd) {
-                                            Icon(Icons.Default.Archive, stringResource(R.string.chats_cd_archive), tint = Color.White.copy(alpha = iconAlpha))
-                                        }
-                                    }
+                                    SwipeDismissBackground(
+                                        progress = dismissState.progress,
+                                        direction = dismissState.dismissDirection,
+                                    )
                                 },
                                 enableDismissFromStartToEnd = true,
                                 enableDismissFromEndToStart = true,
@@ -560,159 +424,16 @@ fun ChatsScreen(
                         }
 
                     // ── On-chain search results (Telegram-style global search) ──
-
-                    // Show spinner while searching
-                    if (state.isSearchingOnChain && state.searchQuery.isNotBlank()) {
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                CircularProgressIndicator(Modifier.size(18.dp), color = C.accent, strokeWidth = 2.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Text(stringResource(R.string.search_searching), color = C.textSecondary, fontSize = 13.sp)
-                            }
-                        }
-                    }
-
-                    // On-chain handle results
-                    if (onChainNew.isNotEmpty()) {
-                        item {
-                            Text(
-                                stringResource(R.string.search_section_global),
-                                color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(onChainNew.size, key = { "oc_${onChainNew[it].handle}" }) { idx ->
-                            val contact = onChainNew[idx]
-                            Column(modifier = Modifier.background(C.bg)) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            scope.launch {
-                                                ChatService.contacts.ensureContact(contact.handle, contact.displayName, contact.walletId)
-                                            }
-                                            // Navigate to chat (clears search)
-                                            state.setSearch("")
-                                            onOpenChat(contact.handle)
-                                        }
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    com.privimemobile.ui.components.AvatarDisplay(
-                                        handle = contact.handle,
-                                        displayName = contact.displayName,
-                                        size = 44.dp,
-                                    )
-                                    Spacer(Modifier.width(14.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            contact.displayName?.ifEmpty { null } ?: "@${contact.handle}",
-                                            color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                                        )
-                                        if (!contact.displayName.isNullOrEmpty()) {
-                                            Text("@${contact.handle}", color = C.textSecondary, fontSize = 13.sp)
-                                        }
-                                    }
-                                    Surface(shape = RoundedCornerShape(20.dp), color = C.accent) {
-                                        Text(
-                                            stringResource(R.string.search_button_chat), color = C.textDark, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                        )
-                                    }
-                                }
-                                HorizontalDivider(
-                                    color = C.border.copy(alpha = 0.5f),
-                                    thickness = 0.5.dp,
-                                    modifier = Modifier.padding(start = 74.dp),
-                                )
-                            }
-                        }
-                    }
-
-                    // On-chain group results
-                    if (onChainGroupsNew.isNotEmpty()) {
-                        item {
-                            Text(
-                                stringResource(R.string.search_section_groups),
-                                color = C.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(onChainGroupsNew.size, key = { "ocg_${onChainGroupsNew[it]["group_id"]}" }) { idx ->
-                            val g = onChainGroupsNew[idx]
-                            val groupId = g["group_id"] as? String ?: return@items
-                            val name = g["name"] as? String ?: ""
-                            val creator = g["creator"] as? String ?: ""
-                            val memberCount = g["member_count"] as? Int ?: 0
-                            val needsApproval = (g["require_approval"] as? Int ?: 0) == 1
-                            var joining by remember { mutableStateOf(false) }
-
-                            Column(modifier = Modifier.background(C.bg)) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Box(
-                                        Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF5C6BC0)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(Icons.Filled.Group, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                                    }
-                                    Spacer(Modifier.width(14.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            context.getString(R.string.chat_join_group_subtitle, memberCount, creator),
-                                            color = C.textSecondary, fontSize = 13.sp,
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Button(
-                                        onClick = {
-                                            joining = true
-                                            ChatService.groups.joinGroup(groupId) { success, error ->
-                                                joining = false
-                                                if (success) {
-                                                    state.setSearch("")
-                                                    scope.launch {
-                                                        ChatService.groups.refreshMyGroups()
-                                                    }
-                                                    onOpenGroup(groupId)
-                                                }
-                                            }
-                                        },
-                                        enabled = !joining,
-                                        colors = ButtonDefaults.buttonColors(containerColor = C.accent),
-                                        shape = RoundedCornerShape(20.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                                        modifier = Modifier.height(34.dp),
-                                    ) {
-                                        if (joining) {
-                                            CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                                        } else {
-                                            Text(
-                                                if (needsApproval) stringResource(R.string.search_button_request) else stringResource(R.string.search_button_join),
-                                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                                            )
-                                        }
-                                    }
-                                }
-                                HorizontalDivider(
-                                    color = C.border.copy(alpha = 0.5f),
-                                    thickness = 0.5.dp,
-                                    modifier = Modifier.padding(start = 74.dp),
-                                )
-                            }
-                        }
-                    }
+                    onChainSearchResults(
+                        isSearching = state.isSearchingOnChain,
+                        searchQuery = state.searchQuery,
+                        onChainHandles = onChainNew,
+                        onChainGroups = onChainGroupsNew,
+                        scope = scope,
+                        onOpenChat = onOpenChat,
+                        onOpenGroup = onOpenGroup,
+                        onSearchCleared = { state.setSearch("") },
+                    )
                     } // close LazyColumn
                     } // close PullToRefreshBox
                         }

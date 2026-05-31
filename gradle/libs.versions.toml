@@ -15,6 +15,7 @@ room = "2.7.1"
 paging = "3.3.6"
 sqlcipher = "4.5.4"
 sqlite = "2.5.1"
+junit = "4.13.2"
 
 [libraries]
 # Compose BOM
@@ -67,6 +68,8 @@ paging-runtime = { group = "androidx.paging", name = "paging-runtime-ktx", versi
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
 sqlite-ktx = { group = "androidx.sqlite", name = "sqlite-ktx", version.ref = "sqlite" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

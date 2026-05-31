@@ -149,4 +149,6 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.biometric)
     implementation(libs.appcompat)
+
+    testImplementation(libs.junit)
 }

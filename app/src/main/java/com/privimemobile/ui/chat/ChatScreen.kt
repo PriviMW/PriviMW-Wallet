@@ -114,6 +114,8 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.res.stringResource
 import com.privimemobile.R
 import com.privimemobile.protocol.*
+import com.privimemobile.ui.chat.scroll.ChatListDerive
+import com.privimemobile.ui.chat.scroll.ChatScrollMath
 import com.privimemobile.ui.components.VoiceMessageBubble
 import com.privimemobile.ui.components.MicButton
 import com.privimemobile.chat.voice.VoiceWaveformView
@@ -678,7 +680,13 @@ fun ChatScreen(
     // (which would cause a flash before the list settles at its target position).
     LaunchedEffect(listState.firstVisibleItemIndex, messages) {
         val current = listState.firstVisibleItemIndex
-        if (current <= 2 && messages.isNotEmpty() && hasScrolledInitially) {
+        if (ChatScrollMath.shouldClearUnreadWhenAtBottom(
+                current,
+                hasScrolledInitially,
+                messages.isNotEmpty(),
+                initialUnreadCount,
+            )
+        ) {
             lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
             chatBadgeFloors.remove(convKey)
             chatInitialUnread.remove(convKey)
@@ -693,24 +701,7 @@ fun ChatScreen(
     // Scans from newest to oldest counting received messages until we hit initialUnreadCount.
     // This correctly handles interleaved sent messages that would throw off a simple index.
     val unreadBoundaryIndex = remember(messages, initialUnreadCount) {
-        val unread = initialUnreadCount ?: 0
-        if (unread <= 0) {
-            -1
-        } else {
-            var receivedCount = 0
-            var boundary = -1
-            // messages is ASC (oldest first), iterate newest first
-            for (i in messages.indices.reversed()) {
-                if (!messages[i].sent) {
-                    receivedCount++
-                    if (receivedCount == unread) {
-                        boundary = messages.size - 1 - i // convert to reversedLayout index
-                        break
-                    }
-                }
-            }
-            boundary
-        }
+        ChatScrollMath.computeUnreadBoundaryIndex(messages, initialUnreadCount)
     }
 
     // Scroll behavior:
@@ -2452,7 +2443,7 @@ fun ChatScreen(
         ) {
             items(
                 reversedMessages,
-                key = { msg -> if (msg.type == "poll") "${msg.id}:${msg.pollData}" else msg.id },
+                key = { msg -> ChatListDerive.messageItemKey(msg) },
             ) { msg ->
                 // Skip non-first album images (rendered as grid in the first item)
                 if (msg.id in albumSkipIds) return@items
@@ -2477,25 +2468,21 @@ fun ChatScreen(
                     label = "msgOffset",
                 )
 
-                val index = reversedMessages.indexOf(msg)
+                val index = ChatListDerive.indexInReversedList(reversedMessages, msg)
                 val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null // older
                 val nextMsg = if (index > 0) reversedMessages[index - 1] else null // newer
-                val showDateSep = prevMsg == null ||
-                        formatDateSeparator(msg.timestamp, context) != formatDateSeparator(prevMsg.timestamp, context)
-
-                // Bubble grouping: consecutive messages from same sender within 60s
-                val sameAsPrev = prevMsg != null && prevMsg.sent == msg.sent &&
-                        prevMsg.from == msg.from && !showDateSep &&
-                        kotlin.math.abs(msg.timestamp - prevMsg.timestamp) < 60
-                val sameAsNext = nextMsg != null && nextMsg.sent == msg.sent &&
-                        nextMsg.from == msg.from &&
-                        formatDateSeparator(msg.timestamp, context) == formatDateSeparator(nextMsg.timestamp, context) &&
-                        kotlin.math.abs(msg.timestamp - nextMsg.timestamp) < 60
-                // Position in cluster: first (top), middle, last (bottom), alone
-                val isFirstInCluster = !sameAsPrev
-                val isLastInCluster = !sameAsNext
-                // Hide timestamp for non-last messages in a cluster
-                val showTimestamp = isLastInCluster
+                val curDateLabel = formatDateSeparator(msg.timestamp, context)
+                val cluster = ChatListDerive.computeClusterFlags(
+                    index,
+                    reversedMessages,
+                    prevMsg?.let { formatDateSeparator(it.timestamp, context) },
+                    curDateLabel,
+                    nextMsg?.let { formatDateSeparator(it.timestamp, context) },
+                )
+                val showDateSep = cluster.showDateSep
+                val isFirstInCluster = cluster.isFirstInCluster
+                val isLastInCluster = cluster.isLastInCluster
+                val showTimestamp = cluster.showTimestamp
 
                 Column(
                     modifier = Modifier
@@ -2934,23 +2921,20 @@ fun ChatScreen(
                 @Suppress("UNUSED_EXPRESSION")
                 roomMessages.size // subscribe to new message arrivals
                 val current = listState.firstVisibleItemIndex
-                if (current <= 2) return@derivedStateOf 0
-                val unread = initialUnreadCount ?: 0
-                val raw = if (unread > 0) {
-                    reversedMessages.take(current).count { !it.sent }.coerceAtMost(unread)
-                } else {
-                    if (lastBottomTimestamp == 0L) 0
-                    else reversedMessages.take(current)
-                        .count { !it.sent && it.timestamp > lastBottomTimestamp }
-                }
-                // Reset floor when new messages arrive
-                if (newMsgVersion != badgeFloorVersion) {
-                    badgeFloor = raw
-                    badgeFloorVersion = newMsgVersion
-                }
-                // Floor only decreases (scroll-down), not increases (scroll-up)
-                if (raw <= badgeFloor) badgeFloor = raw
-                badgeFloor.coerceAtMost(raw)
+                val raw = ChatScrollMath.computeUnreadBelowRaw(
+                    reversedMessages,
+                    current,
+                    initialUnreadCount,
+                    lastBottomTimestamp,
+                )
+                val (newFloorState, display) = ChatScrollMath.applyBadgeFloor(
+                    raw,
+                    ChatScrollMath.BadgeFloorState(badgeFloor, badgeFloorVersion),
+                    newMsgVersion,
+                )
+                badgeFloor = newFloorState.floor
+                badgeFloorVersion = newFloorState.floorVersion
+                display
             }
         }
         val scrollBtnScale by animateFloatAsState(

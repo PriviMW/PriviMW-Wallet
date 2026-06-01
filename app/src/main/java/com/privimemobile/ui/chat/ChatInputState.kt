@@ -23,6 +23,13 @@ class ChatInputState(initialDraft: String = "") {
         inputText = TextFieldValue(text, TextRange(text.length))
     }
 
+    /** Inserts [fragment] at the current selection; cursor moves to end (same as legacy emoji picker). */
+    fun insertAtCursor(fragment: String) {
+        val current = inputText.text
+        val sel = inputText.selection.start.coerceIn(0, current.length)
+        setInputText(current.substring(0, sel) + fragment + current.substring(sel))
+    }
+
     fun clearReplyAndEdit() {
         replyingTo = null
         editingMsg = null

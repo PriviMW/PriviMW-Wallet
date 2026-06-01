@@ -1,5 +1,7 @@
 package com.privimemobile.ui.chat
 
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import com.privimemobile.protocol.ChatMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -98,6 +100,29 @@ class ChatStateHoldersTest {
         s.persistBadgeFloor("@alice")
         assertEquals(1 to 2, ChatSessionStore.chatBadgeFloors["@alice"])
         ChatSessionStore.chatBadgeFloors.clear()
+    }
+
+    @Test
+    fun emojiStickerState_flags() {
+        val e = ChatEmojiStickerState()
+        assertFalse(e.showEmojiPicker)
+        e.showEmojiPicker = true
+        e.emojiMainTab = 1
+        e.viewPackId = "abc"
+        e.showCreateStickerPack = true
+        assertTrue(e.showEmojiPicker)
+        assertEquals(1, e.emojiMainTab)
+        assertEquals("abc", e.viewPackId)
+        assertTrue(e.showCreateStickerPack)
+    }
+
+    @Test
+    fun input_insertAtCursor_matchesEmojiPickerBehavior() {
+        val i = ChatInputState()
+        i.inputText = TextFieldValue("hello", TextRange(2))
+        i.insertAtCursor("X")
+        assertEquals("heXllo", i.inputText.text)
+        assertEquals(6, i.inputText.selection.start)
     }
 
     @Test

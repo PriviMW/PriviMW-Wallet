@@ -64,8 +64,6 @@ fun ChatEmojiStickerPanel(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    ChatViewStickerPackDialog(emoji = emoji, messages = messages)
-
     if (!emoji.showEmojiPicker) return
 
     // Track recent emojis in SharedPreferences
@@ -81,11 +79,9 @@ fun ChatEmojiStickerPanel(
         if (recentEmojis.size > 32) recentEmojis.removeRange(32, recentEmojis.size)
         recentPrefs.edit().putString("recent", recentEmojis.joinToString(",")).apply()
     }
-    fun insertEmoji(emoji: String) {
-        val current = input.inputText.text
-        val sel = input.inputText.selection.start
-        input.setInputText(current.substring(0, sel) + emoji + current.substring(sel))
-        addRecent(emoji)
+    fun insertEmoji(emojiChar: String) {
+        input.insertAtCursor(emojiChar)
+        addRecent(emojiChar)
     }
 
     // All emoji categories
@@ -647,20 +643,25 @@ fun ChatEmojiStickerPanel(
     }
 }
 
+/** View local sticker pack (composed after wallpaper dialogs in [com.privimemobile.ui.chat.ChatScreen] for overlay z-order). */
 @Composable
-private fun ChatViewStickerPackDialog(
+fun ChatViewStickerPackDialog(
     emoji: ChatEmojiStickerState,
     messages: List<ChatMessage>,
 ) {
     val context = LocalContext.current
-    if (emoji.viewPackId != null) {
-    // Get pack name from the sticker message that triggered this
-    val packName = messages.firstOrNull { it.stickerPackId == emoji.viewPackId }?.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)
+    if (emoji.viewPackId == null) return
+
+    val packName = messages.firstOrNull { it.stickerPackId == emoji.viewPackId }?.stickerPackName
+        ?: stringResource(R.string.chat_sticker_pack_label)
     val stickersRoot = java.io.File(context.filesDir, "stickers")
     val localPackDir = java.io.File(stickersRoot, packName)
     val localFiles = remember(emoji.viewPackId) {
-        if (localPackDir.exists()) localPackDir.listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
-        else emptyList()
+        if (localPackDir.exists()) {
+            localPackDir.listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
+        } else {
+            emptyList()
+        }
     }
 
     AlertDialog(
@@ -690,8 +691,11 @@ private fun ChatViewStickerPackDialog(
                         val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
                         if (isTgs) {
                             val lottieJson = remember(file.absolutePath) {
-                                try { java.util.zip.GZIPInputStream(file.inputStream()).bufferedReader().readText() }
-                                catch (_: Exception) { null }
+                                try {
+                                    java.util.zip.GZIPInputStream(file.inputStream()).bufferedReader().readText()
+                                } catch (_: Exception) {
+                                    null
+                                }
                             }
                             if (lottieJson != null) {
                                 val composition by com.airbnb.lottie.compose.rememberLottieComposition(
@@ -721,9 +725,10 @@ private fun ChatViewStickerPackDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { emoji.viewPackId = null }) { Text(stringResource(R.string.general_ok), color = C.accent) }
+            TextButton(onClick = { emoji.viewPackId = null }) {
+                Text(stringResource(R.string.general_ok), color = C.accent)
+            }
         },
         dismissButton = {},
     )
-    }
 }

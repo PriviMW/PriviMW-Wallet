@@ -1630,6 +1630,10 @@ fun ChatScreen(
             onScheduleMessage = { text, scheduledAt -> scheduleMessage(text, scheduledAt) },
         )
 
+        com.privimemobile.ui.chat.chrome.ChatViewStickerPackDialog(
+            emoji = emoji,
+            messages = messages,
+        )
 
         com.privimemobile.ui.chat.dialogs.ChatContextMenuSheet(
             menu = menu,

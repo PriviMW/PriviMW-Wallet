@@ -155,23 +155,6 @@ import java.util.*
  * - Reply display + swipe-left to reply
  * - Pending file preview bar
  */
-/** Tracks which chats have been opened in this app session to avoid re-scrolling on re-entry. */
-private val openedChatSessions = mutableSetOf<String>()
-/** Saves scroll position per chat so re-entry preserves it. */
-private val chatScrollPositions = mutableMapOf<String, Pair<Int, Int>>()
-/** Saves badge floor per chat so re-entry preserves the seen-unread count. */
-private val chatBadgeFloors = mutableMapOf<String, Pair<Int, Int>>() // floor, version
-/** Saves initial unread count so re-entry preserves it (DB acked status is cleared by setActiveChat). */
-private val chatInitialUnread = mutableMapOf<String, Int>()
-
-/** Room snapshot on DM open — avoids input-bar flash while contact/conv Flows emit from empty initial. */
-private data class DmOpenSeed(
-    val contact: com.privimemobile.chat.db.entities.ContactEntity?,
-    val conv: com.privimemobile.chat.db.entities.ConversationEntity?,
-    val resolvedAddress: String?,
-    val draftText: String?,
-)
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
@@ -256,8 +239,8 @@ fun ChatScreen(
     }
 
     // Track first open per session
-    val isFirstOpen = remember(convKey) { !openedChatSessions.contains(convKey) }
-    if (isFirstOpen) openedChatSessions.add(convKey)
+    val isFirstOpen = remember(convKey) { !ChatSessionStore.openedChatSessions.contains(convKey) }
+    if (isFirstOpen) ChatSessionStore.openedChatSessions.add(convKey)
 
     // Observe conversation reactively
     val conversations by com.privimemobile.chat.ChatService.db?.conversationDao()?.observeAll()
@@ -384,7 +367,6 @@ fun ChatScreen(
     // Pending file to send
     var pendingFile by remember { mutableStateOf<PendingFile?>(null) }
     // Sticker metadata for the pending file (null = regular file, non-null = sticker)
-    data class StickerMeta(val packName: String, val packId: String, val packTotal: Int, val emoji: String? = null)
     var pendingStickerMeta by remember { mutableStateOf<StickerMeta?>(null) }
 
     // Reply target — set by swiping left on a message
@@ -562,11 +544,10 @@ fun ChatScreen(
     var sendingFromPreview by remember { mutableStateOf(false) }
 
     // Fullscreen image viewer
-    data class FullscreenImageData(val filePath: String, val fileName: String, val msgId: Long = 0, val msgTs: Long = 0, val isMine: Boolean = false)
     var fullscreenImage by remember { mutableStateOf<FullscreenImageData?>(null) }
 
     // Restore saved scroll position on re-entry; first open starts at bottom (index 0)
-    val savedScroll = if (isFirstOpen) null else chatScrollPositions[convKey]
+    val savedScroll = if (isFirstOpen) null else ChatSessionStore.chatScrollPositions[convKey]
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = savedScroll?.first ?: 0,
         initialFirstVisibleItemScrollOffset = savedScroll?.second ?: 0,
@@ -575,7 +556,7 @@ fun ChatScreen(
     // Save scroll position when leaving the chat so re-entry preserves it
     DisposableEffect(convKey) {
         onDispose {
-            chatScrollPositions[convKey] = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            ChatSessionStore.chatScrollPositions[convKey] = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }
     }
 
@@ -584,7 +565,7 @@ fun ChatScreen(
     // Use nullable to distinguish "not loaded yet" from "loaded, count = 0"
     // Restore from persisted state on re-entry (DB acks are cleared by first visit's setActiveChat)
     var initialUnreadCount by remember {
-        mutableStateOf<Int?>(chatInitialUnread[convKey])
+        mutableStateOf<Int?>(ChatSessionStore.chatInitialUnread[convKey])
     }
     // Keep latest convId available for DisposableEffect (plain val isn't captured correctly)
     val currentConvId by rememberUpdatedState(convId)
@@ -594,7 +575,7 @@ fun ChatScreen(
     LaunchedEffect(convId, handle, groupId) {
         if (convId > 0L) {
             // Capture unread count BEFORE setActiveChat sends acks
-            if (chatInitialUnread[convKey] == null) {
+            if (ChatSessionStore.chatInitialUnread[convKey] == null) {
                 initialUnreadCount = null
                 // Group chats track unread on GroupEntity, DMs track on ConversationEntity
                 initialUnreadCount = if (isGroupMode && groupId != null) {
@@ -657,13 +638,13 @@ fun ChatScreen(
     // or user reaches bottom. This prevents scroll-up from re-incrementing the badge.
     // Restore persisted floor on re-entry so the user sees the same count they left with.
     var badgeFloor by remember {
-        mutableIntStateOf(chatBadgeFloors[convKey]?.first ?: Int.MAX_VALUE)
+        mutableIntStateOf(ChatSessionStore.chatBadgeFloors[convKey]?.first ?: Int.MAX_VALUE)
     }
     var badgeFloorVersion by remember {
-        mutableIntStateOf(chatBadgeFloors[convKey]?.second ?: -1)
+        mutableIntStateOf(ChatSessionStore.chatBadgeFloors[convKey]?.second ?: -1)
     }
     LaunchedEffect(convId) {
-        if (convId > 0L && chatBadgeFloors[convKey] == null) {
+        if (convId > 0L && ChatSessionStore.chatBadgeFloors[convKey] == null) {
             badgeFloor = Int.MAX_VALUE
             badgeFloorVersion = -1
         }
@@ -673,11 +654,11 @@ fun ChatScreen(
     DisposableEffect(convKey) {
         onDispose {
             if (badgeFloor != Int.MAX_VALUE) {
-                chatBadgeFloors[convKey] = badgeFloor to badgeFloorVersion
+                ChatSessionStore.chatBadgeFloors[convKey] = badgeFloor to badgeFloorVersion
             }
             val unread = initialUnreadCount
             if (unread != null && unread > 0) {
-                chatInitialUnread[convKey] = unread
+                ChatSessionStore.chatInitialUnread[convKey] = unread
             }
         }
     }
@@ -702,8 +683,8 @@ fun ChatScreen(
             )
         ) {
             lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
-            chatBadgeFloors.remove(convKey)
-            chatInitialUnread.remove(convKey)
+            ChatSessionStore.chatBadgeFloors.remove(convKey)
+            ChatSessionStore.chatInitialUnread.remove(convKey)
             badgeFloor = Int.MAX_VALUE
             if (initialUnreadCount != null && initialUnreadCount!! > 0) {
                 initialUnreadCount = 0
@@ -5872,34 +5853,6 @@ fun ChatScreen(
     }
     } // end Box
 
-
-// Holds state for a file that's awaiting send
-private data class PendingFile(
-    val uri: Uri,
-    val name: String,
-    val size: Long,
-    val mimeType: String,
-)
-
-private fun getFileInfo(context: Context, uri: Uri): FileInfo? {
-    return try {
-        val cursor = context.contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
-                val name = if (nameIndex >= 0) it.getString(nameIndex) else "file"
-                val size = if (sizeIndex >= 0) it.getLong(sizeIndex) else 0L
-                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                FileInfo(name, size, mimeType)
-            } else null
-        }
-    } catch (_: Exception) {
-        null
-    }
-}
-
-private data class FileInfo(val name: String, val size: Long, val mimeType: String)
 
 private class TelegramFlingBehavior : androidx.compose.foundation.gestures.FlingBehavior {
     override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float {

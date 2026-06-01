@@ -260,8 +260,7 @@ fun ChatScreen(
     val pollUi = rememberChatPollUiState(roomMessages)
 
     // File download tracking (declared early so attachment loading can pre-populate)
-    val filePaths = remember { mutableStateMapOf<String, String>() }
-    val downloadStatuses = remember { mutableStateMapOf<String, String>() } // idle, downloading, decrypting, done, error
+    val files = remember { ChatMessageListState() }
 
     // Load attachments for file messages + pre-populate cached file paths
     var attachmentMap by remember { mutableStateOf<Map<Long, com.privimemobile.chat.db.entities.AttachmentEntity>>(emptyMap()) }
@@ -273,9 +272,9 @@ fun ChatScreen(
                 map[msg.id] = att
                 // Pre-load cached path so images show instantly (no placeholder flash)
                 val cid = att.ipfsCid ?: ""
-                if (cid.isNotEmpty() && !filePaths.containsKey(cid)) {
+                if (cid.isNotEmpty() && !files.filePaths.containsKey(cid)) {
                     val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(cid)
-                    if (path != null) filePaths[cid] = path
+                    if (path != null) files.filePaths[cid] = path
                 }
             }
         }
@@ -348,83 +347,45 @@ fun ChatScreen(
     }
     val isDeletedAccount = contact?.isDeleted == true
 
-    // Input state — use TextFieldValue for cursor control; seed DM draft so right-side icons do not morph on open
-    var inputText by remember(handle, isGroupMode) {
-        mutableStateOf(
-            androidx.compose.ui.text.input.TextFieldValue(
-                if (isGroupMode) "" else dmOpenSeed?.draftText ?: "",
-            ),
-        )
+    val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+    val chatPrefs = context.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE)
+
+    // State holders (plain Kotlin — orchestrator wires side effects)
+    val input = remember(handle, isGroupMode) {
+        ChatInputState(if (isGroupMode) "" else dmOpenSeed?.draftText ?: "")
     }
-    fun setInputText(text: String) {
-        inputText = androidx.compose.ui.text.input.TextFieldValue(
-            text = text,
-            selection = androidx.compose.ui.text.TextRange(text.length), // cursor at end
-        )
+    val voice = remember { ChatVoiceState() }
+    val emoji = remember { ChatEmojiStickerState() }
+    val menu = remember { ChatContextMenuState() }
+    val media = remember { ChatImagePreviewState() }
+    val scrollBadge = remember(convKey) { ChatScrollBadgeState.forConv(convKey) }
+    val chrome = remember(convKey) {
+        ChatChromeState(prefs.getString("wallpaper_$convKey", "default") ?: "default").also { state ->
+            state.groupNotifSoundName = chatPrefs.getString(
+                "notif_sound_name_$convKey",
+                context.getString(R.string.contact_notif_sound_default),
+            ) ?: context.getString(R.string.contact_notif_sound_default)
+        }
     }
+    val selection = remember { ChatSelectionState() }
+    val forward = remember { ChatForwardState() }
+    val search = remember { ChatSearchState() }
+    val pinState = remember { ChatPinState() }
+
+    LaunchedEffect(Unit) {
+        voice.hasRecordPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     var uploading by remember { mutableStateOf(false) }
-
-    // Pending file to send
-    var pendingFile by remember { mutableStateOf<PendingFile?>(null) }
-    // Sticker metadata for the pending file (null = regular file, non-null = sticker)
-    var pendingStickerMeta by remember { mutableStateOf<StickerMeta?>(null) }
-
-    // Reply target — set by swiping left on a message
-    var replyingTo by remember { mutableStateOf<ChatMessage?>(null) }
-
-    // Edit target — set from context menu on own messages
-    var editingMsg by remember { mutableStateOf<ChatMessage?>(null) }
-
-    // Per-message self-destruct timer (one-shot, independent of conversation-level timer)
-    var oneShotTimer by remember { mutableStateOf(0) }  // 0=off, seconds
-    var showOneShotTimerPicker by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showEmojiPicker by remember { mutableStateOf(false) }
-
-    // Voice recording state
-    var voiceRecording by remember { mutableStateOf(false) }
-    var voiceLocked by remember { mutableStateOf(false) }  // locked for hands-free
-    var voiceCanceling by remember { mutableStateOf(false) }  // sliding left to cancel
-    var voicePaused by remember { mutableStateOf(false) }     // paused before send (locked → pause)
-    var voicePauseDuration by remember { mutableStateOf(0L) } // duration at time of pause
-    var voicePreviewFile by remember { mutableStateOf<java.io.File?>(null) }
-    var voicePreviewWaveform by remember { mutableStateOf<ByteArray?>(null) }
-    var voicePreviewDuration by remember { mutableStateOf(0L) }
-    var voiceRecorder by remember { mutableStateOf<com.privimemobile.chat.voice.VoiceRecorder?>(null) }
-    var voiceRecordDuration by remember { mutableStateOf(0L) }  // live duration for display
-
-    // Mic button hint state — hoisted outside AnimatedContent to survive recomposition
-    var micShowRecordHint by remember { mutableStateOf(false) }
-    var micSlideOffset by remember { mutableStateOf(0f) }
-    var micIsRecordingVisual by remember { mutableStateOf(false) }
-
-    // Voice recording permission
-    var hasRecordPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-    // After first-time permission grant, auto-enter locked recording so the recording
-    // bar shows immediately — the finger gesture is lost due to the permission dialog
-    // lifecycle interruption, so we auto-lock instead of re-triggering hold-to-record.
-    var startRecordingAfterPermission by remember { mutableStateOf(false) }
     val voicePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        hasRecordPermission = granted
-        if (granted) startRecordingAfterPermission = true
+        voice.hasRecordPermission = granted
+        if (granted) voice.startRecordingAfterPermission = true
     }
-
-    // Multi-select mode
-    val selection = remember { ChatSelectionState() }
-    var viewPackId by remember { mutableStateOf<String?>(null) }  // pack_id to show in View Pack dialog
-
-    // Long-press context menu target
-    var contextMenuMsg by remember { mutableStateOf<ChatMessage?>(null) }
-
-    // Reaction detail — long-press a reaction pill to see who reacted
-    var reactionDetailMsg by remember { mutableStateOf<ChatMessage?>(null) }
-    var reactionDetailEmoji by remember { mutableStateOf("") }
 
     // Reactions — observe all reactions for this conversation
     val reactions by remember(convId) {
@@ -450,19 +411,10 @@ fun ChatScreen(
             }
     }
 
-    // Forward message — contact picker dialog
-    val forward = remember { ChatForwardState() }
-
     // All contacts for forward picker
     val allContacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeDmContacts()
         ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
-    // 3-dot overflow menu
-    var showOverflowMenu by remember { mutableStateOf(false) }
-    // Chat wallpaper
-    var showWallpaperPicker by remember { mutableStateOf(false) }
-    val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
-    var chatWallpaper by remember { mutableStateOf(prefs.getString("wallpaper_$convKey", "default") ?: "default") }
     val wallpaperImagePicker = rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri ->
@@ -472,9 +424,9 @@ fun ChatScreen(
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     file.outputStream().use { output -> input.copyTo(output) }
                 }
-                chatWallpaper = "custom:${file.absolutePath}#${System.currentTimeMillis()}"
-                prefs.edit().putString("wallpaper_$convKey", chatWallpaper).apply()
-                showWallpaperPicker = false
+                chrome.setWallpaper("custom:${file.absolutePath}#${System.currentTimeMillis()}")
+                prefs.edit().putString("wallpaper_$convKey", chrome.chatWallpaper).apply()
+                chrome.showWallpaperPicker = false
             } catch (_: Exception) {}
         }
     }
@@ -491,11 +443,6 @@ fun ChatScreen(
                 m.displayName?.contains(mentionFilter, ignoreCase = true) == true)
         }.take(5)
     }
-    var showSchedulePicker by remember { mutableStateOf(false) }
-    var showCreateStickerPack by remember { mutableStateOf(false) }
-    // Group notification sound (same system as ContactInfoScreen)
-    val chatPrefs = context.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE)
-    var groupNotifSoundName by remember { mutableStateOf(chatPrefs.getString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_default)) ?: context.getString(R.string.contact_notif_sound_default)) }
     val groupSoundPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -507,37 +454,16 @@ fun ChatScreen(
             chatPrefs.edit().putString("notif_sound_$convKey", uri.toString())
                 .putString("notif_sound_name_$convKey", name)
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            groupNotifSoundName = name
+            chrome.groupNotifSoundName = name
         } else {
             chatPrefs.edit().putString("notif_sound_$convKey", "silent")
                 .putString("notif_sound_name_$convKey", context.getString(R.string.contact_notif_sound_silent))
                 .putInt("notif_channel_ver_$convKey", ver).apply()
-            groupNotifSoundName = context.getString(R.string.contact_notif_sound_silent)
+            chrome.groupNotifSoundName = context.getString(R.string.contact_notif_sound_silent)
         }
     }
-    var emojiMainTab by remember { mutableStateOf(0) }  // 0=Emoji, 1=Stickers
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    var showClearConfirm by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    // showDisappearPicker removed — per-message self-destruct replaces conversation-level timer
-
-    // In-chat search
-    val search = remember { ChatSearchState() }
-    val pinState = remember { ChatPinState() }
-    var replyHighlightTs by remember { mutableStateOf<Long?>(null) }
-
-    // Attachment picker
-    var showAttachPicker by remember { mutableStateOf(false) }
-    var attachPickerTab by remember { mutableStateOf(0) } // 0 = Gallery, 1 = Files
-
-    // Single-image preview (from gallery grid → fullscreen preview with caption + send)
-    var imagePreview by remember { mutableStateOf<ImagePreviewData?>(null) }
-    var previewCaption by remember { mutableStateOf("") }
-    var sendingFromPreview by remember { mutableStateOf(false) }
-
-    // Fullscreen image viewer
-    var fullscreenImage by remember { mutableStateOf<FullscreenImageData?>(null) }
 
     // Restore saved scroll position on re-entry; first open starts at bottom (index 0)
     val savedScroll = if (isFirstOpen) null else ChatSessionStore.chatScrollPositions[convKey]
@@ -580,8 +506,8 @@ fun ChatScreen(
             }
             // Load draft when not already seeded (DM open uses dmOpenSeed; groups may get convId late)
             val draft = com.privimemobile.chat.ChatService.db?.conversationDao()?.findById(convId)?.draftText
-            if (!draft.isNullOrEmpty() && inputText.text.isEmpty()) {
-                setInputText(draft)
+            if (!draft.isNullOrEmpty() && input.inputText.text.isEmpty()) {
+                input.setInputText(draft)
             }
             // Set active chat (sends acks via internal scope.launch — async)
             com.privimemobile.chat.ChatService.setActiveChat(convKey)
@@ -597,7 +523,7 @@ fun ChatScreen(
         onDispose {
             com.privimemobile.chat.ChatService.setActiveChat(null)
             // Save draft on dispose
-            val draftText = inputText.text.trim().ifEmpty { null }
+            val draftText = input.inputText.text.trim().ifEmpty { null }
             if (currentConvId > 0L) {
                 kotlinx.coroutines.GlobalScope.launch {
                     com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(currentConvId, draftText)
@@ -606,48 +532,28 @@ fun ChatScreen(
         }
     }
 
-    // Track initial scroll state - reset when conversation changes
-    var hasScrolledInitially by remember { mutableStateOf(false) }
     LaunchedEffect(convId) {
-        hasScrolledInitially = false
+        scrollBadge.hasScrolledInitially = false
     }
 
-    // Track the newest message timestamp when user was last at the bottom.
-    // Badge only counts messages newer than this that arrived while scrolled up.
-    var lastBottomTimestamp by remember { mutableLongStateOf(0L) }
-
-    // Track message arrivals: version bumps when message count changes, so badge
-    // can distinguish "new messages arrived" (allow increase) from "scrolled up" (don't).
-    var newMsgVersion by remember { mutableIntStateOf(0) }
-    var lastMsgCount by remember { mutableIntStateOf(0) }
     LaunchedEffect(messages.size) {
-        if (messages.size != lastMsgCount) {
-            lastMsgCount = messages.size
-            newMsgVersion++
+        if (messages.size != scrollBadge.lastMsgCount) {
+            scrollBadge.lastMsgCount = messages.size
+            scrollBadge.newMsgVersion++
         }
     }
 
-    // Badge floor: only decreases as user scrolls down. Resets when new messages arrive
-    // or user reaches bottom. This prevents scroll-up from re-incrementing the badge.
-    // Restore persisted floor on re-entry so the user sees the same count they left with.
-    var badgeFloor by remember {
-        mutableIntStateOf(ChatSessionStore.chatBadgeFloors[convKey]?.first ?: Int.MAX_VALUE)
-    }
-    var badgeFloorVersion by remember {
-        mutableIntStateOf(ChatSessionStore.chatBadgeFloors[convKey]?.second ?: -1)
-    }
     LaunchedEffect(convId) {
         if (convId > 0L && ChatSessionStore.chatBadgeFloors[convKey] == null) {
-            badgeFloor = Int.MAX_VALUE
-            badgeFloorVersion = -1
+            scrollBadge.resetBadgeFloorForNewConv()
         }
     }
 
     // Persist badge floor and initial unread count when leaving, restore on re-entry
     DisposableEffect(convKey) {
         onDispose {
-            if (badgeFloor != Int.MAX_VALUE) {
-                ChatSessionStore.chatBadgeFloors[convKey] = badgeFloor to badgeFloorVersion
+            if (scrollBadge.badgeFloor != Int.MAX_VALUE) {
+                ChatSessionStore.chatBadgeFloors[convKey] = scrollBadge.badgeFloor to scrollBadge.badgeFloorVersion
             }
             val unread = initialUnreadCount
             if (unread != null && unread > 0) {
@@ -658,27 +564,27 @@ fun ChatScreen(
 
     // Initialize baseline when messages first load (covers first open and re-entry)
     LaunchedEffect(messages.isNotEmpty()) {
-        if (messages.isNotEmpty() && lastBottomTimestamp == 0L) {
-            lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
+        if (messages.isNotEmpty() && scrollBadge.lastBottomTimestamp == 0L) {
+            scrollBadge.lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
         }
     }
 
     // Clear unread divider when user is at the bottom and can see all messages.
-    // Use hasScrolledInitially to avoid clearing during the initial scroll animation
+    // Use scrollBadge.hasScrolledInitially to avoid clearing during the initial scroll animation
     // (which would cause a flash before the list settles at its target position).
     LaunchedEffect(listState.firstVisibleItemIndex, messages) {
         val current = listState.firstVisibleItemIndex
         if (ChatScrollMath.shouldClearUnreadWhenAtBottom(
                 current,
-                hasScrolledInitially,
+                scrollBadge.hasScrolledInitially,
                 messages.isNotEmpty(),
                 initialUnreadCount,
             )
         ) {
-            lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
+            scrollBadge.lastBottomTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
             ChatSessionStore.chatBadgeFloors.remove(convKey)
             ChatSessionStore.chatInitialUnread.remove(convKey)
-            badgeFloor = Int.MAX_VALUE
+            scrollBadge.badgeFloor = Int.MAX_VALUE
             if (initialUnreadCount != null && initialUnreadCount!! > 0) {
                 initialUnreadCount = 0
             }
@@ -702,21 +608,21 @@ fun ChatScreen(
     // - New message while scrolled up: don't auto-scroll, badge counts it
     LaunchedEffect(messages.size, initialUnreadCount) {
         if (messages.isNotEmpty() && scrollToTimestamp == 0L && initialUnreadCount != null) {
-            if (!hasScrolledInitially) {
+            if (!scrollBadge.hasScrolledInitially) {
                 val unread = initialUnreadCount!!
                 val wasAtBottom = savedScroll == null || savedScroll.first <= 2
                 if (unread == 0) {
-                    hasScrolledInitially = true
+                    scrollBadge.hasScrolledInitially = true
                     if (savedScroll == null) {
                         listState.animateScrollToItem(0) // first open, no unread → bottom
                     }
                     // re-entry, no unread → stay at saved position
                 } else if (unreadBoundaryIndex >= 0 && wasAtBottom) {
-                    hasScrolledInitially = true
+                    scrollBadge.hasScrolledInitially = true
                     listState.scrollToItem(unreadBoundaryIndex)
                 } else if (unreadBoundaryIndex >= 0) {
                     // unread > 0, wasAtBottom = false: stay at saved position
-                    hasScrolledInitially = true
+                    scrollBadge.hasScrolledInitially = true
                 }
                 // else: boundary not found, messages not loaded yet — wait
             } else {
@@ -748,16 +654,16 @@ fun ChatScreen(
     LaunchedEffect(messages) {
         messages.forEach { msg ->
             val fileCid = msg.file?.cid ?: ""
-            if (fileCid.isNotEmpty() && !filePaths.containsKey(fileCid)) {
+            if (fileCid.isNotEmpty() && !files.filePaths.containsKey(fileCid)) {
                 val path = com.privimemobile.chat.transport.IpfsTransport.getLocalFilePath(fileCid)
                 if (path != null) {
-                    filePaths[fileCid] = path
+                    files.filePaths[fileCid] = path
                 } else if ((Helpers.isImageMime(msg.file?.mime ?: "") || msg.type == "sticker_pack" || msg.type == "sticker" || Helpers.isVoiceMime(msg.file?.mime))
                     && (msg.file?.size ?: 0) <= Config.AUTO_DL_MAX_SIZE
-                    && downloadStatuses[fileCid] == null
+                    && files.downloadStatuses[fileCid] == null
                 ) {
                     // Auto-download images, GIFs, stickers, and voice messages
-                    downloadStatuses[fileCid] = "downloading"
+                    files.downloadStatuses[fileCid] = "downloading"
                     scope.launch {
                         try {
                             val attachment = com.privimemobile.chat.ChatService.db?.attachmentDao()?.findByCid(fileCid)
@@ -769,13 +675,13 @@ fun ChatScreen(
                                     ivHex = msg.file?.iv ?: "",
                                     inlineData = attachment.inlineData ?: msg.file?.data,
                                 )
-                                filePaths[fileCid] = dlPath
-                                downloadStatuses[fileCid] = "done"
+                                files.filePaths[fileCid] = dlPath
+                                files.downloadStatuses[fileCid] = "done"
                             } else {
-                                downloadStatuses[fileCid] = "error"
+                                files.downloadStatuses[fileCid] = "error"
                             }
                         } catch (_: Exception) {
-                            downloadStatuses[fileCid] = "error"
+                            files.downloadStatuses[fileCid] = "error"
                         }
                     }
                 }
@@ -802,8 +708,8 @@ fun ChatScreen(
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 return
             }
-            pendingFile = PendingFile(uri = uri, name = info.name, size = info.size, mimeType = info.mimeType)
-            showAttachPicker = false
+            input.pendingFile = PendingFile(uri = uri, name = info.name, size = info.size, mimeType = info.mimeType)
+            media.showAttachPicker = false
         } else {
             Log.w("ChatScreen", "File info is null for uri: $uri")
         }
@@ -859,14 +765,14 @@ fun ChatScreen(
                 Toast.makeText(context, context.getString(R.string.toast_message_scheduled, timeStr), Toast.LENGTH_LONG).show()
             }
         }
-        setInputText("")
+        input.setInputText("")
     }
 
     // Send voice message (from preview)
     suspend fun sendVoiceMessage() {
-        val file = voicePreviewFile ?: return
-        val waveform = voicePreviewWaveform
-        val durationMs = voicePreviewDuration
+        val file = voice.voicePreviewFile ?: return
+        val waveform = voice.voicePreviewWaveform
+        val durationMs = voice.voicePreviewDuration
 
         if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
             Toast.makeText(context, R.string.toast_cannot_send_no_address, Toast.LENGTH_SHORT).show()
@@ -893,9 +799,9 @@ fun ChatScreen(
                 Toast.makeText(context, context.getString(R.string.toast_voice_too_large, sizeKB, limitKB), Toast.LENGTH_LONG).show()
             }
             file.delete()
-            voicePreviewFile = null
-            voicePreviewWaveform = null
-            voicePreviewDuration = 0L
+            voice.voicePreviewFile = null
+            voice.voicePreviewWaveform = null
+            voice.voicePreviewDuration = 0L
             return
         }
 
@@ -960,9 +866,9 @@ fun ChatScreen(
 
         // Delete temp recording file and clear preview state
         file.delete()
-        voicePreviewFile = null
-        voicePreviewWaveform = null
-        voicePreviewDuration = 0L
+        voice.voicePreviewFile = null
+        voice.voicePreviewWaveform = null
+        voice.voicePreviewDuration = 0L
 
         // Send via SBBS
         // Update preview BEFORE network send — survives early navigation
@@ -1088,33 +994,33 @@ fun ChatScreen(
 
     // After permission granted, auto-start recording in locked mode (hands-free)
     // Must be AFTER sendVoiceMessage() definition so the capture sees it
-    LaunchedEffect(startRecordingAfterPermission) {
-        if (!startRecordingAfterPermission) return@LaunchedEffect
+    LaunchedEffect(voice.startRecordingAfterPermission) {
+        if (!voice.startRecordingAfterPermission) return@LaunchedEffect
         val recorder = com.privimemobile.chat.voice.VoiceRecorder(
             context,
             amplitudeCallback = { },
             onMaxDurationReached = {
-                val result = voiceRecorder?.stop()
+                val result = voice.voiceRecorder?.stop()
                 if (result != null && result.durationMs >= 700L) {
                     scope.launch { sendVoiceMessage(result) }
                 } else if (result != null) {
                     result.file.delete()
                 }
-                voiceRecording = false
-                voiceLocked = false
-                voicePaused = false
-                voiceRecorder = null
-                micIsRecordingVisual = false
-                startRecordingAfterPermission = false
+                voice.voiceRecording = false
+                voice.voiceLocked = false
+                voice.voicePaused = false
+                voice.voiceRecorder = null
+                voice.micIsRecordingVisual = false
+                voice.startRecordingAfterPermission = false
             }
         )
         if (recorder.start() != null) {
-            voiceRecorder = recorder
-            voiceRecording = true
-            voiceLocked = true        // show locked UI: CANCEL + pause circle + send button
-            micIsRecordingVisual = false
+            voice.voiceRecorder = recorder
+            voice.voiceRecording = true
+            voice.voiceLocked = true        // show locked UI: CANCEL + pause circle + send button
+            voice.micIsRecordingVisual = false
         }
-        startRecordingAfterPermission = false
+        voice.startRecordingAfterPermission = false
     }
 
     // Send message
@@ -1132,11 +1038,11 @@ fun ChatScreen(
             scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(convId, null) }
         }
 
-        val trimmed = inputText.text.trim()
+        val trimmed = input.inputText.text.trim()
 
         // Edit mode — update existing message instead of creating new one
-        if (editingMsg != null) {
-            val editTarget = editingMsg!!
+        if (input.editingMsg != null) {
+            val editTarget = input.editingMsg!!
             if (trimmed.isNotEmpty() && trimmed != editTarget.text) {
                 scope.launch {
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
@@ -1179,8 +1085,8 @@ fun ChatScreen(
                     }
                 }
             }
-            editingMsg = null
-            setInputText("")
+            input.editingMsg = null
+            input.setInputText("")
             return
         }
 
@@ -1201,13 +1107,13 @@ fun ChatScreen(
                     // Explicit @handle
                     tipTargetHandle = firstToken.removePrefix("@")
                     tipTokens = tokens.drop(1)
-                } else if (replyingTo != null && !replyingTo!!.from.isNullOrEmpty() && !replyingTo!!.sent) {
+                } else if (input.replyingTo != null && !input.replyingTo!!.from.isNullOrEmpty() && !input.replyingTo!!.sent) {
                     // Quoted reply — tip the sender of the quoted message
-                    tipTargetHandle = replyingTo!!.from
+                    tipTargetHandle = input.replyingTo!!.from
                     tipTokens = tokens // all tokens are amount/asset/msg
                 } else {
                     Toast.makeText(context, R.string.toast_reply_or_tip_hint, Toast.LENGTH_LONG).show()
-                    setInputText(""); return
+                    input.setInputText(""); return
                 }
             } else {
                 tipTargetHandle = handle
@@ -1352,8 +1258,8 @@ fun ChatScreen(
                     }
                 }
             }
-            setInputText("")
-            replyingTo = null
+            input.setInputText("")
+            input.replyingTo = null
             return
         }
 
@@ -1410,20 +1316,20 @@ fun ChatScreen(
             } else {
                 Toast.makeText(context, R.string.toast_poll_usage, Toast.LENGTH_LONG).show()
             }
-            setInputText("")
+            input.setInputText("")
             return
         }
 
         // Send file if pending
-        if (pendingFile != null) {
-            val file = pendingFile!!
+        if (input.pendingFile != null) {
+            val file = input.pendingFile!!
             Log.d("ChatScreen", "Sending file: ${file.name}, ${file.size} bytes, isGroup=$isGroupMode")
             if (!isGroupMode && resolvedSbbsAddress.isNullOrEmpty()) {
                 Log.w("ChatScreen", "Cannot send file — no resolved wallet ID")
                 return
             }
             // Capture reply text BEFORE coroutine
-            val fileReplyText = replyingTo?.text?.take(200)?.ifEmpty { null }
+            val fileReplyText = input.replyingTo?.text?.take(200)?.ifEmpty { null }
             uploading = true
             scope.launch {
                 try {
@@ -1436,7 +1342,7 @@ fun ChatScreen(
                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                         if (state?.myHandle != null) {
                             val ts = System.currentTimeMillis() / 1000
-                            val stickerMeta = pendingStickerMeta
+                            val stickerMeta = input.pendingStickerMeta
                             val msgType = if (stickerMeta != null) "sticker" else "file"
                             val payload = mutableMapOf<String, Any?>(
                                 "v" to 1, "t" to msgType, "ts" to ts,
@@ -1484,7 +1390,7 @@ fun ChatScreen(
                                         fileMeta["iv"] as? String ?: "",
                                         fileMeta["data"] as? String,
                                     )
-                                    filePaths[cid] = dlPath
+                                    files.filePaths[cid] = dlPath
                                 } catch (_: Exception) {}
                             }
                             if (msgId > 0) {
@@ -1511,10 +1417,10 @@ fun ChatScreen(
 
                             // Clear UI state BEFORE SBBS send (message already in DB and visible)
                             uploading = false
-                            pendingFile = null
-                            pendingStickerMeta = null
-                            setInputText("")
-                            replyingTo = null
+                            input.pendingFile = null
+                            input.pendingStickerMeta = null
+                            input.setInputText("")
+                            input.replyingTo = null
 
                             if (isGroupMode && groupId != null) {
                                 // Update preview BEFORE network send — survives early navigation
@@ -1532,10 +1438,10 @@ fun ChatScreen(
                     android.widget.Toast.makeText(context, context.getString(R.string.chat_file_send_failed) + ": " + (e.message ?: ""), android.widget.Toast.LENGTH_LONG).show()
                 } finally {
                     uploading = false
-                    pendingFile = null
-                    pendingStickerMeta = null
-                    setInputText("")
-                    replyingTo = null
+                    input.pendingFile = null
+                    input.pendingStickerMeta = null
+                    input.setInputText("")
+                    input.replyingTo = null
                 }
             }
             return
@@ -1546,10 +1452,10 @@ fun ChatScreen(
 
         // Group mode — send via GroupManager
         if (isGroupMode && groupId != null) {
-            val grpReplyText = replyingTo?.text?.take(200)?.ifEmpty { null }
-            val grpReplySender = replyingTo?.from
-            val grpReplyTs = replyingTo?.timestamp ?: 0L
-            val grpTimer = oneShotTimer
+            val grpReplyText = input.replyingTo?.text?.take(200)?.ifEmpty { null }
+            val grpReplySender = input.replyingTo?.from
+            val grpReplyTs = input.replyingTo?.timestamp ?: 0L
+            val grpTimer = input.oneShotTimer
             scope.launch {
                 com.privimemobile.chat.ChatService.groups.sendGroupMessage(
                     groupId, trimmed, replyText = grpReplyText,
@@ -1557,9 +1463,9 @@ fun ChatScreen(
                     ttl = grpTimer,
                 )
             }
-            setInputText("")
-            replyingTo = null
-            oneShotTimer = 0
+            input.setInputText("")
+            input.replyingTo = null
+            input.oneShotTimer = 0
             // Clear draft
             if (convId > 0L) {
                 scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setDraft(convId, null) }
@@ -1571,10 +1477,10 @@ fun ChatScreen(
         if (sendAddress.isNullOrEmpty()) return
 
         // Capture state BEFORE coroutine (state may be cleared by main thread before coroutine runs)
-        val replyText = replyingTo?.text?.take(200)?.ifEmpty { null }
-        val replySenderHandle = replyingTo?.from
-        val replyMsgTs = replyingTo?.timestamp ?: 0L
-        val capturedTimer = oneShotTimer
+        val replyText = input.replyingTo?.text?.take(200)?.ifEmpty { null }
+        val replySenderHandle = input.replyingTo?.from
+        val replyMsgTs = input.replyingTo?.timestamp ?: 0L
+        val capturedTimer = input.oneShotTimer
 
         // Send via new chat system
         scope.launch {
@@ -1625,9 +1531,9 @@ fun ChatScreen(
             }
         }
 
-        setInputText("")
-        replyingTo = null
-        oneShotTimer = 0  // clear per-message timer after send
+        input.setInputText("")
+        input.replyingTo = null
+        input.oneShotTimer = 0  // clear per-message timer after send
     }
 
     // Update conversation preview after message deletion
@@ -1664,7 +1570,7 @@ fun ChatScreen(
 
     // Download a file via IpfsTransport
     fun handleDownload(cid: String, keyHex: String, ivHex: String, mime: String, inlineData: String? = null) {
-        downloadStatuses[cid] = "downloading"
+        files.downloadStatuses[cid] = "downloading"
         scope.launch {
             try {
                 // Find attachment by CID
@@ -1677,23 +1583,23 @@ fun ChatScreen(
                         ivHex = ivHex,
                         inlineData = attachment.inlineData ?: inlineData,
                     )
-                    filePaths[cid] = path
-                    downloadStatuses[cid] = "done"
+                    files.filePaths[cid] = path
+                    files.downloadStatuses[cid] = "done"
                 } else {
-                    downloadStatuses[cid] = "error"
+                    files.downloadStatuses[cid] = "error"
                 }
             } catch (e: Exception) {
-                downloadStatuses[cid] = "error"
+                files.downloadStatuses[cid] = "error"
             }
         }
     }
 
-    val canSend = (inputText.text.isNotBlank() || pendingFile != null) && (isGroupMode || !resolvedSbbsAddress.isNullOrEmpty())
+    val canSend = (input.inputText.text.isNotBlank() || input.pendingFile != null) && (isGroupMode || !resolvedSbbsAddress.isNullOrEmpty())
 
     // BackHandler: intercept system back when overlays are visible
     BackHandler(enabled = selection.selectionMode) { selection.exitSelection() }
-    BackHandler(enabled = fullscreenImage != null) { fullscreenImage = null }
-    BackHandler(enabled = showAttachPicker) { showAttachPicker = false }
+    BackHandler(enabled = media.fullscreenImage != null) { media.fullscreenImage = null }
+    BackHandler(enabled = media.showAttachPicker) { media.showAttachPicker = false }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -1881,29 +1787,29 @@ fun ChatScreen(
                 // 3-dot overflow menu (animated rotation + smooth dropdown)
                 Box {
                     val menuRotation by animateFloatAsState(
-                        targetValue = if (showOverflowMenu) 90f else 0f,
+                        targetValue = if (chrome.showOverflowMenu) 90f else 0f,
                         animationSpec = tween(200),
                         label = "menuRotation",
                     )
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            showOverflowMenu = !showOverflowMenu
+                            chrome.showOverflowMenu = !chrome.showOverflowMenu
                         },
                         modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
                             contentDescription = stringResource(R.string.chat_overflow_search),
-                            tint = if (showOverflowMenu) C.accent else C.textSecondary,
+                            tint = if (chrome.showOverflowMenu) C.accent else C.textSecondary,
                             modifier = Modifier
                                 .size(22.dp)
                                 .graphicsLayer { rotationZ = menuRotation },
                         )
                     }
                     DropdownMenu(
-                        expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false },
+                        expanded = chrome.showOverflowMenu,
+                        onDismissRequest = { chrome.showOverflowMenu = false },
                         modifier = Modifier.background(C.card).widthIn(min = 200.dp),
                     ) {
                         @Composable fun OverflowItem(icon: String, label: String, color: Color = C.text, action: () -> Unit) {
@@ -1928,13 +1834,13 @@ fun ChatScreen(
                         }
                         OverflowItem("\uD83D\uDD0D", if (search.showSearch) stringResource(R.string.chat_overflow_close_search) else stringResource(R.string.chat_overflow_search)) {
                             search.toggle()
-                            showOverflowMenu = false
+                            chrome.showOverflowMenu = false
                         }
-                        OverflowItem("\uD83D\uDDBC", stringResource(R.string.chat_overflow_media)) { showOverflowMenu = false; onMediaGallery() }
+                        OverflowItem("\uD83D\uDDBC", stringResource(R.string.chat_overflow_media)) { chrome.showOverflowMenu = false; onMediaGallery() }
                         if (isGroupMode) {
-                            OverflowItem("\u2699\uFE0F", stringResource(R.string.chat_overflow_group_info)) { showOverflowMenu = false; onGroupSettings() }
-                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, groupNotifSoundName)) {
-                                showOverflowMenu = false
+                            OverflowItem("\u2699\uFE0F", stringResource(R.string.chat_overflow_group_info)) { chrome.showOverflowMenu = false; onGroupSettings() }
+                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, chrome.groupNotifSoundName)) {
+                                chrome.showOverflowMenu = false
                                 val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
@@ -1948,9 +1854,9 @@ fun ChatScreen(
                                 groupSoundPicker.launch(intent)
                             }
                         } else {
-                            OverflowItem("\uD83D\uDC64", stringResource(R.string.chat_overflow_view_profile)) { showOverflowMenu = false; onContactInfo() }
-                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, groupNotifSoundName)) {
-                                showOverflowMenu = false
+                            OverflowItem("\uD83D\uDC64", stringResource(R.string.chat_overflow_view_profile)) { chrome.showOverflowMenu = false; onContactInfo() }
+                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, chrome.groupNotifSoundName)) {
+                                chrome.showOverflowMenu = false
                                 val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
                                     putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
@@ -1964,14 +1870,14 @@ fun ChatScreen(
                                 groupSoundPicker.launch(intent)
                             }
                         }
-                        OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { showOverflowMenu = false; showWallpaperPicker = true }
+                        OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { chrome.showOverflowMenu = false; chrome.showWallpaperPicker = true }
                         // Per-message self-destruct timer
-                        OverflowItem("\u23F1", if (oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(context, oneShotTimer))) {
-                            showOverflowMenu = false
-                            showOneShotTimerPicker = true
+                        OverflowItem("\u23F1", if (input.oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(context, input.oneShotTimer))) {
+                            chrome.showOverflowMenu = false
+                            input.showOneShotTimerPicker = true
                         }
                         OverflowItem("\uD83D\uDCE4", stringResource(R.string.chat_overflow_export_chat)) {
-                            showOverflowMenu = false
+                            chrome.showOverflowMenu = false
                             val exportTitle = if (isGroupMode) context.getString(R.string.chat_export_group_label, group?.name ?: context.getString(R.string.chat_group_name_fallback)) else context.getString(R.string.chat_export_dm_label, "@$handle")
                             scope.launch {
                                 val sb = StringBuilder()
@@ -2008,18 +1914,18 @@ fun ChatScreen(
                                     com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted)
                                 }
                             }
-                            showOverflowMenu = false
+                            chrome.showOverflowMenu = false
                         }
                         if (!isGroupMode) {
                             val isBlocked = conv?.isBlocked == true
                             OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) stringResource(R.string.chat_overflow_unblock) else stringResource(R.string.chat_overflow_block), color = if (isBlocked) C.text else C.error) {
                                 if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
-                                showOverflowMenu = false
+                                chrome.showOverflowMenu = false
                             }
                         }
                         HorizontalDivider(color = C.border)
-                        OverflowItem("\uD83D\uDDD1", stringResource(R.string.chat_clear_history), color = C.error) { showOverflowMenu = false; showClearConfirm = true }
-                        OverflowItem("\u274C", if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.error) { showOverflowMenu = false; showDeleteConfirm = true }
+                        OverflowItem("\uD83D\uDDD1", stringResource(R.string.chat_clear_history), color = C.error) { chrome.showOverflowMenu = false; chrome.showClearConfirm = true }
+                        OverflowItem("\u274C", if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.error) { chrome.showOverflowMenu = false; chrome.showDeleteConfirm = true }
                     }
                 }
             }
@@ -2322,12 +2228,12 @@ fun ChatScreen(
 
         // Messages list + scroll-to-bottom button
         val wallpaperBg = when {
-            chatWallpaper.startsWith("custom:") -> {
-                val path = chatWallpaper.removePrefix("custom:").substringBefore("#")
+            chrome.chatWallpaper.startsWith("custom:") -> {
+                val path = chrome.chatWallpaper.removePrefix("custom:").substringBefore("#")
                 val file = java.io.File(path)
                 if (file.exists()) {
                     // Cache decoded bitmap to avoid re-decoding on every recomposition
-                    val cachedBmp = remember(chatWallpaper) { android.graphics.BitmapFactory.decodeFile(path) }
+                    val cachedBmp = remember(chrome.chatWallpaper) { android.graphics.BitmapFactory.decodeFile(path) }
                     if (cachedBmp != null) {
                         Modifier.drawBehind {
                             // Center-crop: scale to fill, crop overflow
@@ -2348,12 +2254,12 @@ fun ChatScreen(
                     } else Modifier
                 } else Modifier
             }
-            chatWallpaper == "dark_blue" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838))))
-            chatWallpaper == "teal" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF004D40), Color(0xFF00695C))))
-            chatWallpaper == "purple" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A0033), Color(0xFF2D1B69))))
-            chatWallpaper == "midnight" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0F0F23), Color(0xFF1A1A3E))))
-            chatWallpaper == "forest" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B3A2D), Color(0xFF2D5016))))
-            chatWallpaper == "sunset" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2D1B00), Color(0xFF4A2600))))
+            chrome.chatWallpaper == "dark_blue" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838))))
+            chrome.chatWallpaper == "teal" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF004D40), Color(0xFF00695C))))
+            chrome.chatWallpaper == "purple" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A0033), Color(0xFF2D1B69))))
+            chrome.chatWallpaper == "midnight" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF0F0F23), Color(0xFF1A1A3E))))
+            chrome.chatWallpaper == "forest" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B3A2D), Color(0xFF2D5016))))
+            chrome.chatWallpaper == "sunset" -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2D1B00), Color(0xFF4A2600))))
             else -> Modifier  // default uses C.bg from parent
         }
         // Pre-compute album groups outside LazyColumn (composable context)
@@ -2475,7 +2381,7 @@ fun ChatScreen(
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = C.card.copy(alpha = 0.8f),
-                                modifier = Modifier.clickable { showDatePicker = true },
+                                modifier = Modifier.clickable { input.showDatePicker = true },
                             ) {
                                 Text(
                                     formatDateSeparator(msg.timestamp, context),
@@ -2543,14 +2449,14 @@ fun ChatScreen(
                                 albumMsgs.chunked(columns).forEach { row ->
                                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         row.forEach { albumMsg ->
-                                            val fp = filePaths[albumMsg.file?.cid ?: ""]
+                                            val fp = files.filePaths[albumMsg.file?.cid ?: ""]
                                             Box(
                                                 modifier = Modifier
                                                     .weight(1f)
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .clickable {
-                                                        if (fp != null) fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: context.getString(R.string.chat_pinned_file), albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
+                                                        if (fp != null) media.fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: context.getString(R.string.chat_pinned_file), albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
                                                     },
                                             ) {
                                                 if (fp != null) {
@@ -2572,7 +2478,7 @@ fun ChatScreen(
                                                     }
                                                     // Trigger download
                                                     val cid = albumMsg.file?.cid ?: ""
-                                                    if (cid.isNotEmpty() && downloadStatuses[cid] != "downloading") {
+                                                    if (cid.isNotEmpty() && files.downloadStatuses[cid] != "downloading") {
                                                         LaunchedEffect(cid) {
                                                             handleDownload(
                                                                 cid,
@@ -2612,8 +2518,8 @@ fun ChatScreen(
                     } else
                     MessageBubble(
                         msg = msg,
-                        filePath = filePaths[msg.file?.cid ?: ""],
-                        downloadStatus = downloadStatuses[msg.file?.cid ?: ""],
+                        filePath = files.filePaths[msg.file?.cid ?: ""],
+                        downloadStatus = files.downloadStatuses[msg.file?.cid ?: ""],
                         attachmentExtras = attachmentMap[msg.id.toLong()]?.extras,
                         isFirstInCluster = isFirstInCluster,
                         isLastInCluster = isLastInCluster,
@@ -2621,21 +2527,21 @@ fun ChatScreen(
                         onDownload = { cid, key, iv, mime, data ->
                             handleDownload(cid, key, iv, mime, data)
                         },
-                        onReply = if (selection.selectionMode) {{ /* no-op in selection mode */ }} else {{ replyingTo = msg }},
+                        onReply = if (selection.selectionMode) {{ /* no-op in selection mode */ }} else {{ input.replyingTo = msg }},
                         onTap = {
                             if (selection.selectionMode) {
                                 selection.toggleSelected(msg.id)
                             } else if (msg.type == "sticker" && msg.stickerPackId != null) {
                                 // Sticker tap → view pack
-                                viewPackId = msg.stickerPackId
+                                emoji.viewPackId = msg.stickerPackId
                             } else {
-                                contextMenuMsg = msg
+                                menu.contextMenuMsg = msg
                             }
                         },
                         onLongPress = {
                             if (!selection.selectionMode) {
                                 if (msg.type == "sticker") {
-                                    contextMenuMsg = msg
+                                    menu.contextMenuMsg = msg
                                 } else {
                                     selection.enterSelectionWith(msg.id)
                                 }
@@ -2644,8 +2550,8 @@ fun ChatScreen(
                             }
                         },
                         onFullscreenImage = {
-                            val fp = filePaths[msg.file?.cid ?: ""]
-                            if (fp != null) fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: context.getString(R.string.chat_pinned_file), msg.id.toLong(), msg.timestamp, msg.sent)
+                            val fp = files.filePaths[msg.file?.cid ?: ""]
+                            if (fp != null) media.fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: context.getString(R.string.chat_pinned_file), msg.id.toLong(), msg.timestamp, msg.sent)
                         },
                         isSelected = selection.selectionMode && msg.id in selection.selectedIds,
                         onPollVote = { optIdx ->
@@ -2768,10 +2674,10 @@ fun ChatScreen(
                         },
                         onReactionLongPress = { emoji, msgTs ->
                             // Long-press any pill → show who reacted with this emoji
-                            reactionDetailMsg = msg
-                            reactionDetailEmoji = emoji
+                            menu.reactionDetailMsg = msg
+                            menu.reactionDetailEmoji = emoji
                         },
-                        isHighlighted = search.searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinState.pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
+                        isHighlighted = search.searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinState.pinHighlightTs == msg.timestamp || menu.replyHighlightTs == msg.timestamp,
                         isGroupMode = isGroupMode,
                         onSenderTap = { senderHandle ->
                             if (senderHandle.isNotEmpty()) onViewContact(senderHandle)
@@ -2782,9 +2688,9 @@ fun ChatScreen(
                             if (targetIdx >= 0) {
                                 scope.launch {
                                     listState.animateScrollToItem(targetIdx)
-                                    replyHighlightTs = replyTs
+                                    menu.replyHighlightTs = replyTs
                                     kotlinx.coroutines.delay(2000)
-                                    replyHighlightTs = null
+                                    menu.replyHighlightTs = null
                                 }
                             }
                         },
@@ -2795,7 +2701,7 @@ fun ChatScreen(
         }
 
         // Pending file preview bar with thumbnail
-        if (pendingFile != null) {
+        if (input.pendingFile != null) {
             Surface(
                 color = C.card,
                 modifier = Modifier.fillMaxWidth(),
@@ -2804,14 +2710,14 @@ fun ChatScreen(
                     modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (Helpers.isImageMime(pendingFile!!.mimeType)) {
+                    if (Helpers.isImageMime(input.pendingFile!!.mimeType)) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(6.dp)),
                         ) {
                             coil.compose.AsyncImage(
-                                model = pendingFile!!.uri,
+                                model = input.pendingFile!!.uri,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
@@ -2824,7 +2730,7 @@ fun ChatScreen(
                                     .size(18.dp)
                                     .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.6f))
-                                    .clickable { pendingFile = null },
+                                    .clickable { input.pendingFile = null },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -2837,7 +2743,7 @@ fun ChatScreen(
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
+                            "${input.pendingFile!!.name} (${Helpers.formatFileSize(input.pendingFile!!.size)})",
                             color = C.text,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -2848,7 +2754,7 @@ fun ChatScreen(
                         Text("\uD83D\uDCCE", fontSize = 20.sp)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "${pendingFile!!.name} (${Helpers.formatFileSize(pendingFile!!.size)})",
+                            "${input.pendingFile!!.name} (${Helpers.formatFileSize(input.pendingFile!!.size)})",
                             color = C.text,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -2856,7 +2762,7 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { pendingFile = null }) {
+                        TextButton(onClick = { input.pendingFile = null }) {
                             Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -2869,8 +2775,8 @@ fun ChatScreen(
             derivedStateOf { listState.firstVisibleItemIndex > 3 }
         }
         // Badge: counts unseen messages below current scroll position.
-        // badgeFloor prevents re-increment on scroll-up: it only decreases as the user
-        // scrolls down. Resets when newMsgVersion changes (new messages arrived) or
+        // scrollBadge.badgeFloor prevents re-increment on scroll-up: it only decreases as the user
+        // scrolls down. Resets when scrollBadge.newMsgVersion changes (new messages arrived) or
         // when user reaches the bottom.
         val unreadBelow by remember(messages, reversedMessages) {
             derivedStateOf {
@@ -2881,15 +2787,15 @@ fun ChatScreen(
                     reversedMessages,
                     current,
                     initialUnreadCount,
-                    lastBottomTimestamp,
+                    scrollBadge.lastBottomTimestamp,
                 )
                 val (newFloorState, display) = ChatScrollMath.applyBadgeFloor(
                     raw,
-                    ChatScrollMath.BadgeFloorState(badgeFloor, badgeFloorVersion),
-                    newMsgVersion,
+                    ChatScrollMath.BadgeFloorState(scrollBadge.badgeFloor, scrollBadge.badgeFloorVersion),
+                    scrollBadge.newMsgVersion,
                 )
-                badgeFloor = newFloorState.floor
-                badgeFloorVersion = newFloorState.floorVersion
+                scrollBadge.badgeFloor = newFloorState.floor
+                scrollBadge.badgeFloorVersion = newFloorState.floorVersion
                 display
             }
         }
@@ -2941,14 +2847,13 @@ fun ChatScreen(
         }
         val isScrolling = listState.isScrollInProgress
 
-        var stickyVisible by remember { mutableStateOf(false) }
         LaunchedEffect(isScrolling) {
-            if (isScrolling) stickyVisible = true
-            else { kotlinx.coroutines.delay(1500); stickyVisible = false }
+            if (isScrolling) scrollBadge.stickyVisible = true
+            else { kotlinx.coroutines.delay(1500); scrollBadge.stickyVisible = false }
         }
         val stickyAlpha by animateFloatAsState(
-            targetValue = if (stickyVisible && stickyDateText != null) 1f else 0f,
-            animationSpec = tween(if (stickyVisible) 200 else 400),
+            targetValue = if (scrollBadge.stickyVisible && stickyDateText != null) 1f else 0f,
+            animationSpec = tween(if (scrollBadge.stickyVisible) 200 else 400),
             label = "stickyAlpha",
         )
         if (stickyAlpha > 0f) {
@@ -2971,7 +2876,7 @@ fun ChatScreen(
         } // end Box wrapper
 
         // Emoji picker panel (Telegram-style: recent + scrollable categories, 9 columns)
-        if (showEmojiPicker) {
+        if (emoji.showEmojiPicker) {
             // Track recent emojis in SharedPreferences
             val recentPrefs = context.getSharedPreferences("emoji_recent", Context.MODE_PRIVATE)
             val recentEmojis = remember {
@@ -2986,9 +2891,9 @@ fun ChatScreen(
                 recentPrefs.edit().putString("recent", recentEmojis.joinToString(",")).apply()
             }
             fun insertEmoji(emoji: String) {
-                val current = inputText.text
-                val sel = inputText.selection.start
-                setInputText(current.substring(0, sel) + emoji + current.substring(sel))
+                val current = input.inputText.text
+                val sel = input.inputText.selection.start
+                input.setInputText(current.substring(0, sel) + emoji + current.substring(sel))
                 addRecent(emoji)
             }
 
@@ -3040,7 +2945,7 @@ fun ChatScreen(
 
             // Category tab icons (matching Telegram)
             val categoryIcons = listOf("\uD83D\uDD53", "\uD83D\uDE00", "\uD83D\uDC4B", "\u2764\uFE0F", "\uD83D\uDC3B", "\uD83C\uDF54", "\uD83D\uDCF1", "\uD83C\uDFAD")
-            // emojiMainTab declared at screen level for IME detection access
+            // emoji.emojiMainTab declared at screen level for IME detection access
             val emojiGridState = rememberLazyGridState()
 
             // Pre-compute grid indices for each category header (for tab scrolling)
@@ -3072,7 +2977,7 @@ fun ChatScreen(
                         // Category icon tabs (Telegram-style)
                         var activeTabIdx by remember { mutableStateOf(0) }
                         categoryIcons.forEachIndexed { idx, icon ->
-                            val isActive = if (idx == categoryIcons.size - 1) emojiMainTab == 1 else emojiMainTab == 0 && activeTabIdx == idx
+                            val isActive = if (idx == categoryIcons.size - 1) emoji.emojiMainTab == 1 else emoji.emojiMainTab == 0 && activeTabIdx == idx
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -3080,9 +2985,9 @@ fun ChatScreen(
                                     .background(if (isActive) C.accent.copy(alpha = 0.15f) else Color.Transparent)
                                     .clickable {
                                         if (idx == categoryIcons.size - 1) {
-                                            emojiMainTab = 1 // Stickers tab
+                                            emoji.emojiMainTab = 1 // Stickers tab
                                         } else {
-                                            emojiMainTab = 0
+                                            emoji.emojiMainTab = 0
                                             activeTabIdx = idx
                                             if (idx == 0) {
                                                 // Recent — scroll to top
@@ -3102,7 +3007,7 @@ fun ChatScreen(
 
                     HorizontalDivider(color = C.border.copy(alpha = 0.3f))
 
-                    if (emojiMainTab == 0) {
+                    if (emoji.emojiMainTab == 0) {
                         // Emoji tab — single scrollable list with recent + all categories
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(9),
@@ -3239,7 +3144,7 @@ fun ChatScreen(
                                 Box(
                                     modifier = Modifier.size(36.dp).clip(CircleShape)
                                         .background(C.accent.copy(alpha = 0.15f))
-                                        .clickable { showCreateStickerPack = true },
+                                        .clickable { emoji.showCreateStickerPack = true },
                                     contentAlignment = Alignment.Center,
                                 ) { Text("+", color = C.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                                 Spacer(Modifier.width(4.dp))
@@ -3308,7 +3213,7 @@ fun ChatScreen(
                                                 val pName = currentPack!!.first
                                                 val pId = pName.hashCode().toString(16)
                                                 val pTotal = packFiles.size
-                                                showEmojiPicker = false
+                                                emoji.showEmojiPicker = false
                                                 Toast.makeText(context, context.getString(R.string.toast_packaging_stickers, pTotal), Toast.LENGTH_SHORT).show()
                                                 com.privimemobile.chat.ChatService.scope.launch {
                                                     try {
@@ -3457,10 +3362,10 @@ fun ChatScreen(
                                                                 val ext = if (isTgs) "tgs" else "webp"
                                                                 val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
                                                                 file.copyTo(cached, overwrite = true)
-                                                                pendingFile = PendingFile(uri = android.net.Uri.fromFile(cached), name = file.name, size = cached.length(), mimeType = mime)
+                                                                input.pendingFile = PendingFile(uri = android.net.Uri.fromFile(cached), name = file.name, size = cached.length(), mimeType = mime)
                                                                 val pName = currentPack?.first ?: context.getString(R.string.chat_sticker_pack_label)
-                                                                pendingStickerMeta = StickerMeta(pName, pName.hashCode().toString(16), currentPack?.second?.size ?: 0)
-                                                                showEmojiPicker = false
+                                                                input.pendingStickerMeta = StickerMeta(pName, pName.hashCode().toString(16), currentPack?.second?.size ?: 0)
+                                                                emoji.showEmojiPicker = false
                                                                 handleSend()
                                                             },
                                                             onLongPress = {
@@ -3510,9 +3415,9 @@ fun ChatScreen(
                         }
 
                         // Create pack dialog
-                        if (showCreateStickerPack) {
+                        if (emoji.showCreateStickerPack) {
                             AlertDialog(
-                                onDismissRequest = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() },
+                                onDismissRequest = { emoji.showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() },
                                 containerColor = C.card,
                                 title = { Text(stringResource(R.string.chat_new_sticker_pack), color = C.text) },
                                 text = {
@@ -3534,13 +3439,13 @@ fun ChatScreen(
                                             java.io.File(stickersRoot, name).mkdirs()
                                             packs = loadPacks()
                                             activePackIdx = packs.indexOfFirst { it.first == name }.coerceAtLeast(0)
-                                            showCreateStickerPack = false; newPackName = ""
+                                            emoji.showCreateStickerPack = false; newPackName = ""
                                             focusManager.clearFocus(); keyboardController?.hide()
                                         }
                                     }) { Text(stringResource(R.string.chat_create), color = C.accent) }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() }) {
+                                    TextButton(onClick = { emoji.showCreateStickerPack = false; newPackName = ""; focusManager.clearFocus(); keyboardController?.hide() }) {
                                         Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                                     }
                                 },
@@ -3552,7 +3457,7 @@ fun ChatScreen(
         }
 
         // Self-destruct timer indicator bar
-        if (oneShotTimer > 0) {
+        if (input.oneShotTimer > 0) {
             Surface(
                 color = C.card,
                 modifier = Modifier.fillMaxWidth(),
@@ -3564,13 +3469,13 @@ fun ChatScreen(
                     Text("\u23F3", fontSize = 14.sp)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        context.getString(R.string.chat_self_destruct_timer) + ": ${formatTimerLabel(context, oneShotTimer)}",
+                        context.getString(R.string.chat_self_destruct_timer) + ": ${formatTimerLabel(context, input.oneShotTimer)}",
                         color = C.accent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { oneShotTimer = 0 }) {
+                    TextButton(onClick = { input.oneShotTimer = 0 }) {
                         Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -3578,7 +3483,7 @@ fun ChatScreen(
         }
 
         // Edit preview bar
-        if (editingMsg != null) {
+        if (input.editingMsg != null) {
             Surface(
                 color = C.card,
                 modifier = Modifier.fillMaxWidth(),
@@ -3605,7 +3510,7 @@ fun ChatScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            editingMsg!!.text.take(80),
+                            input.editingMsg!!.text.take(80),
                             color = C.textSecondary,
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -3613,8 +3518,8 @@ fun ChatScreen(
                         )
                     }
                     TextButton(onClick = {
-                        editingMsg = null
-                        setInputText("")
+                        input.editingMsg = null
+                        input.setInputText("")
                     }) {
                         Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
@@ -3623,7 +3528,7 @@ fun ChatScreen(
         }
 
         // Reply preview bar
-        if (replyingTo != null) {
+        if (input.replyingTo != null) {
             Surface(
                 color = C.card,
                 modifier = Modifier.fillMaxWidth(),
@@ -3644,16 +3549,16 @@ fun ChatScreen(
                             .padding(start = 8.dp),
                     ) {
                         Text(
-                            if (replyingTo!!.sent) stringResource(R.string.chat_you_label) else "@${replyingTo!!.from}",
+                            if (input.replyingTo!!.sent) stringResource(R.string.chat_you_label) else "@${input.replyingTo!!.from}",
                             color = C.accent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            replyingTo!!.text.ifEmpty {
-                                when (replyingTo!!.type) {
+                            input.replyingTo!!.text.ifEmpty {
+                                when (input.replyingTo!!.type) {
                                     "file" -> stringResource(R.string.chat_reply_file)
-                                    "tip" -> context.getString(R.string.chat_tip_simple, "${Helpers.formatBeam(replyingTo!!.tipAmount)} ${com.privimemobile.wallet.assetTicker(replyingTo!!.tipAssetId)}")
+                                    "tip" -> context.getString(R.string.chat_tip_simple, "${Helpers.formatBeam(input.replyingTo!!.tipAmount)} ${com.privimemobile.wallet.assetTicker(input.replyingTo!!.tipAssetId)}")
                                     else -> context.getString(R.string.chat_message_label)
                                 }
                             }.take(80),
@@ -3663,7 +3568,7 @@ fun ChatScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    TextButton(onClick = { replyingTo = null }) {
+                    TextButton(onClick = { input.replyingTo = null }) {
                         Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -3672,18 +3577,18 @@ fun ChatScreen(
 
         // Input bar — Telegram-X style (48dp bar, 180ms animations)
         // keyboardController declared at screen level
-        val hasText = inputText.text.isNotBlank() || pendingFile != null
+        val hasText = input.inputText.text.isNotBlank() || input.pendingFile != null
         // Close emoji picker when system keyboard appears
         val imeVisible = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
         LaunchedEffect(imeVisible) {
-            if (imeVisible && showEmojiPicker && emojiMainTab == 0) showEmojiPicker = false
-            // Only auto-close on emoji tab (emojiMainTab=0). Sticker tab (emojiMainTab=1) uses dialogs/pickers that open keyboard.
+            if (imeVisible && emoji.showEmojiPicker && emoji.emojiMainTab == 0) emoji.showEmojiPicker = false
+            // Only auto-close on emoji tab (emoji.emojiMainTab=0). Sticker tab (emoji.emojiMainTab=1) uses dialogs/pickers that open keyboard.
         }
 
         // Live duration timer for voice recording
-        LaunchedEffect(voiceRecording) {
-            while (voiceRecording) {
-                voiceRecordDuration = voiceRecorder?.getDurationMs() ?: 0L
+        LaunchedEffect(voice.voiceRecording) {
+            while (voice.voiceRecording) {
+                voice.voiceRecordDuration = voice.voiceRecorder?.getDurationMs() ?: 0L
                 delay(100)
             }
         }
@@ -3698,7 +3603,7 @@ fun ChatScreen(
                 color = C.card,
                 shadowElevation = 2.dp,
                 modifier = Modifier
-                    .then(if (!showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
+                    .then(if (!emoji.showEmojiPicker) Modifier.navigationBarsPadding() else Modifier),
             ) {
                 // ── Input bar: left bar content animates, MicButton stays always stable ──
                 Row(
@@ -3711,7 +3616,7 @@ fun ChatScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         AnimatedContent(
-                            targetState = when { voicePaused -> 2; voiceRecording -> 1; else -> 0 },
+                            targetState = when { voice.voicePaused -> 2; voice.voiceRecording -> 1; else -> 0 },
                             transitionSpec = {
                                 fadeIn(tween(200)).togetherWith(fadeOut(tween(100)))
                             },
@@ -3719,62 +3624,62 @@ fun ChatScreen(
                         ) { state ->
                             if (state == 2) {
                                 VoicePreviewBar(
-                                    waveform = voicePreviewWaveform,
-                                    durationMs = voicePauseDuration,
+                                    waveform = voice.voicePreviewWaveform,
+                                    durationMs = voice.voicePauseDuration,
                                     onDelete = {
-                                        voiceRecorder?.cancel()
-                                        voicePreviewFile = null
-                                        voicePreviewWaveform = null
-                                        voicePreviewDuration = 0L
-                                        voicePauseDuration = 0L
-                                        voicePaused = false
-                                        voiceRecording = false
-                                        voiceLocked = false
-                                        voiceRecorder = null
-                                        micIsRecordingVisual = false
-                                        micSlideOffset = 0f
+                                        voice.voiceRecorder?.cancel()
+                                        voice.voicePreviewFile = null
+                                        voice.voicePreviewWaveform = null
+                                        voice.voicePreviewDuration = 0L
+                                        voice.voicePauseDuration = 0L
+                                        voice.voicePaused = false
+                                        voice.voiceRecording = false
+                                        voice.voiceLocked = false
+                                        voice.voiceRecorder = null
+                                        voice.micIsRecordingVisual = false
+                                        voice.micSlideOffset = 0f
                                     },
                                     onSend = {
-                                        val result = voiceRecorder?.stop()
+                                        val result = voice.voiceRecorder?.stop()
                                         if (result != null) {
                                             scope.launch { sendVoiceMessage(result) }
                                         }
-                                        voicePreviewFile = null
-                                        voicePreviewWaveform = null
-                                        voicePreviewDuration = 0L
-                                        voicePauseDuration = 0L
-                                        voicePaused = false
-                                        voiceRecording = false
-                                        voiceLocked = false
-                                        voiceRecorder = null
-                                        micIsRecordingVisual = false
-                                        micSlideOffset = 0f
+                                        voice.voicePreviewFile = null
+                                        voice.voicePreviewWaveform = null
+                                        voice.voicePreviewDuration = 0L
+                                        voice.voicePauseDuration = 0L
+                                        voice.voicePaused = false
+                                        voice.voiceRecording = false
+                                        voice.voiceLocked = false
+                                        voice.voiceRecorder = null
+                                        voice.micIsRecordingVisual = false
+                                        voice.micSlideOffset = 0f
                                     },
                                     modifier = Modifier.fillMaxWidth().height(52.dp),
                                 )
                             } else if (state == 1) {
                                 VoiceRecordingBar(
-                                    durationMs = voiceRecordDuration,
-                                    isLocked = voiceLocked,
+                                    durationMs = voice.voiceRecordDuration,
+                                    isLocked = voice.voiceLocked,
                                     onCancel = {
-                                        voiceRecorder?.cancel()
-                                        voiceRecording = false
-                                        voiceLocked = false
-                                        voiceRecorder = null
-                                        micIsRecordingVisual = false
+                                        voice.voiceRecorder?.cancel()
+                                        voice.voiceRecording = false
+                                        voice.voiceLocked = false
+                                        voice.voiceRecorder = null
+                                        voice.micIsRecordingVisual = false
                                     },
                                     onLock = {
                                         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                        voiceLocked = true
+                                        voice.voiceLocked = true
                                     },
                                     onSend = {
-                                        val result = voiceRecorder?.stop()
+                                        val result = voice.voiceRecorder?.stop()
                                         if (result != null) {
                                             scope.launch { sendVoiceMessage(result) }
                                         }
-                                        voiceRecording = false
-                                        voiceLocked = false
-                                        voiceRecorder = null
+                                        voice.voiceRecording = false
+                                        voice.voiceLocked = false
+                                        voice.voiceRecorder = null
                                     },
                                     modifier = Modifier.fillMaxWidth().height(52.dp),
                                 )
@@ -3791,18 +3696,18 @@ fun ChatScreen(
                                     // Emoji toggle (left — 48dp like Telegram)
                                     IconButton(
                                         onClick = {
-                                            if (showEmojiPicker) {
-                                                showEmojiPicker = false
+                                            if (emoji.showEmojiPicker) {
+                                                emoji.showEmojiPicker = false
                                                 keyboardController?.show()
                                             } else {
-                                                showEmojiPicker = true
+                                                emoji.showEmojiPicker = true
                                                 keyboardController?.hide()
                                             }
                                         },
                                         modifier = Modifier.size(48.dp),
                                     ) {
                                         AnimatedContent(
-                                            targetState = showEmojiPicker,
+                                            targetState = emoji.showEmojiPicker,
                                             transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.6f)).togetherWith(fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.6f)) },
                                             label = "emojiIcon",
                                         ) { isEmoji ->
@@ -3816,9 +3721,9 @@ fun ChatScreen(
 
                                     // Text field (center — fills available space)
                                     OutlinedTextField(
-                                        value = inputText,
+                                        value = input.inputText,
                                         onValueChange = { newValue ->
-                                            inputText = newValue
+                                            input.inputText = newValue
                                             val text = newValue.text
                                             val cursor = newValue.selection.start
                                             if (text == "/") showCommandMenu = true
@@ -3850,7 +3755,7 @@ fun ChatScreen(
                                         placeholder = {
                                             Text(
                                                 when {
-                                                    pendingFile != null -> stringResource(R.string.chat_add_caption)
+                                                    input.pendingFile != null -> stringResource(R.string.chat_add_caption)
                                                     isDeletedAccount -> stringResource(R.string.chat_account_deleted_notice)
                                                     !isGroupMode && resolvedSbbsAddress.isNullOrEmpty() -> stringResource(R.string.chat_resolving_address)
                                                     else -> stringResource(R.string.chat_message_placeholder)
@@ -3873,7 +3778,7 @@ fun ChatScreen(
 
                                     // Right side: animated morph icons ↔ send
                                     AnimatedContent(
-                                        targetState = inputText.text.isNotBlank() || pendingFile != null || uploading,
+                                        targetState = input.inputText.text.isNotBlank() || input.pendingFile != null || uploading,
                                         transitionSpec = {
                                             (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.4f) +
                                                 slideInVertically(tween(180)) { it / 4 })
@@ -3891,7 +3796,7 @@ fun ChatScreen(
                                                 Box(
                                                     modifier = Modifier.size(48.dp).clip(CircleShape).background(C.accent)
                                                         .pointerInput(Unit) {
-                                                            detectTapGestures(onTap = { handleSend() }, onLongPress = { showSchedulePicker = true })
+                                                            detectTapGestures(onTap = { handleSend() }, onLongPress = { input.showSchedulePicker = true })
                                                         },
                                                     contentAlignment = Alignment.Center,
                                                 ) {
@@ -3910,7 +3815,7 @@ fun ChatScreen(
                                                     }
                                                 }
                                                 IconButton(
-                                                    onClick = { showAttachPicker = true },
+                                                    onClick = { media.showAttachPicker = true },
                                                     enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
                                                     modifier = Modifier.size(42.dp),
                                                 ) {
@@ -3928,7 +3833,7 @@ fun ChatScreen(
                     androidx.compose.foundation.layout.Box(
                         modifier = Modifier.padding(end = 2.dp, bottom = 2.dp),
                     ) {
-                        if (voiceRecording && voiceLocked) {
+                        if (voice.voiceRecording && voice.voiceLocked) {
                             // ── Locked mode: large send button (Telegram-style) ──
                             Box(
                                 modifier = Modifier
@@ -3936,14 +3841,14 @@ fun ChatScreen(
                                     .clip(CircleShape)
                                     .background(C.accent)
                                     .clickable {
-                                        val result = voiceRecorder?.stop()
+                                        val result = voice.voiceRecorder?.stop()
                                         if (result != null) {
                                             scope.launch { sendVoiceMessage(result) }
                                         }
-                                        voiceRecording = false
-                                        voiceLocked = false
-                                        voiceRecorder = null
-                                        micIsRecordingVisual = false
+                                        voice.voiceRecording = false
+                                        voice.voiceLocked = false
+                                        voice.voiceRecorder = null
+                                        voice.micIsRecordingVisual = false
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -3954,12 +3859,12 @@ fun ChatScreen(
                                     modifier = Modifier.size(26.dp),
                                 )
                             }
-                        } else if (inputText.text.isEmpty() && pendingFile == null && !voicePaused) {
+                        } else if (input.inputText.text.isEmpty() && input.pendingFile == null && !voice.voicePaused) {
                             // ── Normal + recording (unlocked): mic button with swipe-to-lock ──
                             MicButton(
-                                isRecordingVisual = micIsRecordingVisual,
-                                slideOffset = micSlideOffset,
-                                hasRecordPermission = hasRecordPermission,
+                                isRecordingVisual = voice.micIsRecordingVisual,
+                                slideOffset = voice.micSlideOffset,
+                                hasRecordPermission = voice.hasRecordPermission,
                                 onRecordPermissionRequest = {
                                     voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 },
@@ -3967,53 +3872,53 @@ fun ChatScreen(
                                 view = view,
                                 context = context,
                                 onStartRecording = {
-                                    voiceRecorder = com.privimemobile.chat.voice.VoiceRecorder(
+                                    voice.voiceRecorder = com.privimemobile.chat.voice.VoiceRecorder(
                                         context = context,
                                         amplitudeCallback = { },
                                         onMaxDurationReached = {
-                                            val result = voiceRecorder?.stop()
+                                            val result = voice.voiceRecorder?.stop()
                                             if (result != null && result.durationMs >= 700L) {
                                                 scope.launch { sendVoiceMessage(result) }
                                             } else if (result != null) {
                                                 result.file.delete()
                                             }
-                                            micIsRecordingVisual = false
-                                            voiceRecording = false
-                                            voiceLocked = false
-                                            voiceRecorder = null
+                                            voice.micIsRecordingVisual = false
+                                            voice.voiceRecording = false
+                                            voice.voiceLocked = false
+                                            voice.voiceRecorder = null
                                         }
                                     ).also { recorder ->
                                         if (recorder.start() != null) {
-                                            voiceRecording = true
-                                            micIsRecordingVisual = true
+                                            voice.voiceRecording = true
+                                            voice.micIsRecordingVisual = true
                                         }
                                     }
                                 },
                                 onSendRecording = {
-                                    voiceRecorder?.stop()?.let { result ->
+                                    voice.voiceRecorder?.stop()?.let { result ->
                                         if (result.durationMs >= 700L) {
                                             scope.launch { sendVoiceMessage(result) }
                                         } else {
                                             result.file.delete()
                                         }
                                     }
-                                    voiceRecording = false
-                                    voiceRecorder = null
-                                    micIsRecordingVisual = false
-                                    micSlideOffset = 0f
+                                    voice.voiceRecording = false
+                                    voice.voiceRecorder = null
+                                    voice.micIsRecordingVisual = false
+                                    voice.micSlideOffset = 0f
                                 },
                                 onCancelRecording = {
-                                    voiceRecorder?.cancel()
-                                    micIsRecordingVisual = false
-                                    voiceRecording = false
-                                    voiceRecorder = null
+                                    voice.voiceRecorder?.cancel()
+                                    voice.micIsRecordingVisual = false
+                                    voice.voiceRecording = false
+                                    voice.voiceRecorder = null
                                 },
                                 onShowHint = { show ->
-                                    micShowRecordHint = show
+                                    voice.micShowRecordHint = show
                                 },
                                 onLockSwipe = {
                                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                    voiceLocked = true
+                                    voice.voiceLocked = true
                                 },
                             )
                         }
@@ -4026,7 +3931,7 @@ fun ChatScreen(
                 ChatCommandMenu(
                     isGroupMode = isGroupMode,
                     onCommandSelect = { cmd ->
-                        setInputText(cmd)
+                        input.setInputText(cmd)
                         showCommandMenu = false
                     },
                 )
@@ -4037,11 +3942,11 @@ fun ChatScreen(
                 MentionAutocompleteMenu(
                     members = filteredMembers,
                     onSelect = { member ->
-                        val text = inputText.text
+                        val text = input.inputText.text
                         val before = text.substring(0, mentionStartIdx)
-                        val after = if (inputText.selection.start < text.length) text.substring(inputText.selection.start) else ""
+                        val after = if (input.inputText.selection.start < text.length) text.substring(input.inputText.selection.start) else ""
                         val newText = "$before@${member.handle} $after"
-                        inputText = androidx.compose.ui.text.input.TextFieldValue(
+                        input.inputText = androidx.compose.ui.text.input.TextFieldValue(
                             text = newText,
                             selection = androidx.compose.ui.text.TextRange(before.length + member.handle.length + 2),
                         )
@@ -4051,7 +3956,7 @@ fun ChatScreen(
             }
 
             // ── Record hint tooltip (anchored to input bar top-right, floats above into chat) ──
-            if (micShowRecordHint) {
+            if (voice.micShowRecordHint) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -4062,8 +3967,8 @@ fun ChatScreen(
             }
 
             // ── Floating indicator: lock pill (recording), pause circle (locked), mic circle (paused) ──
-            if (voiceRecording && !voicePaused) {
-                if (voiceLocked) {
+            if (voice.voiceRecording && !voice.voicePaused) {
+                if (voice.voiceLocked) {
                     // Pause circle (locked — tap to pause, see waveform preview, then resume or send)
                     Box(
                         modifier = Modifier
@@ -4077,18 +3982,18 @@ fun ChatScreen(
                                 .background(Color(0xFF2A2D2E).copy(alpha = 0.9f))
                                 .clickable {
                                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                    val ok = voiceRecorder?.pause()
+                                    val ok = voice.voiceRecorder?.pause()
                                     if (ok == true) {
                                         // Populate preview data from live recorder
-                                        val amps = voiceRecorder?.getAmplitudes() ?: emptyList()
-                                        voicePreviewWaveform = com.privimemobile.chat.voice.VoiceRecorder.Companion.packWaveform(amps)
-                                        voicePauseDuration = voiceRecorder?.getDurationMs() ?: 0L
-                                        voicePreviewDuration = voicePauseDuration
-                                        voiceRecordDuration = voicePauseDuration
-                                        voiceLocked = false
-                                        voicePaused = true
-                                        micIsRecordingVisual = false
-                                        micSlideOffset = 0f
+                                        val amps = voice.voiceRecorder?.getAmplitudes() ?: emptyList()
+                                        voice.voicePreviewWaveform = com.privimemobile.chat.voice.VoiceRecorder.Companion.packWaveform(amps)
+                                        voice.voicePauseDuration = voice.voiceRecorder?.getDurationMs() ?: 0L
+                                        voice.voicePreviewDuration = voice.voicePauseDuration
+                                        voice.voiceRecordDuration = voice.voicePauseDuration
+                                        voice.voiceLocked = false
+                                        voice.voicePaused = true
+                                        voice.micIsRecordingVisual = false
+                                        voice.micSlideOffset = 0f
                                     }
                                 },
                             contentAlignment = Alignment.Center,
@@ -4120,7 +4025,7 @@ fun ChatScreen(
                     )
                 }
             }
-            if (voicePaused) {
+            if (voice.voicePaused) {
                 // Mic circle (paused — tap to resume recording in the same session)
                 // Trash is in VoicePreviewBar (left side of the bar), so no floating trash needed
                 Box(
@@ -4136,11 +4041,11 @@ fun ChatScreen(
                             .background(Color(0xFF2A2D2E).copy(alpha = 0.9f))
                             .clickable {
                                     // Resume the existing recording session — return to locked state
-                                    voicePaused = false
-                                    voiceRecording = true
-                                    voiceLocked = true
-                                    voiceRecorder?.resume()
-                                    micIsRecordingVisual = true
+                                    voice.voicePaused = false
+                                    voice.voiceRecording = true
+                                    voice.voiceLocked = true
+                                    voice.voiceRecorder?.resume()
+                                    voice.micIsRecordingVisual = true
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
@@ -4156,9 +4061,9 @@ fun ChatScreen(
         } // close Box (input bar + tooltip overlay)
 
         // ── Clear history confirmation ──
-        if (showClearConfirm) {
+        if (chrome.showClearConfirm) {
             AlertDialog(
-                onDismissRequest = { showClearConfirm = false },
+                onDismissRequest = { chrome.showClearConfirm = false },
                 containerColor = C.card,
                 title = { Text(stringResource(R.string.chat_clear_history), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = { Text(stringResource(R.string.chat_clear_history_body), color = C.textSecondary) },
@@ -4170,13 +4075,13 @@ fun ChatScreen(
                                 com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, 0, null)
                             }
                         }
-                        showClearConfirm = false
+                        chrome.showClearConfirm = false
                     }) {
                         Text(stringResource(R.string.chat_clear), color = C.error, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showClearConfirm = false }) {
+                    TextButton(onClick = { chrome.showClearConfirm = false }) {
                         Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
@@ -4184,9 +4089,9 @@ fun ChatScreen(
         }
 
         // ── Delete chat confirmation ──
-        if (showDeleteConfirm) {
+        if (chrome.showDeleteConfirm) {
             AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
+                onDismissRequest = { chrome.showDeleteConfirm = false },
                 containerColor = C.card,
                 title = { Text(if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = { Text(
@@ -4196,7 +4101,7 @@ fun ChatScreen(
                 ) },
                 confirmButton = {
                     TextButton(onClick = {
-                        showDeleteConfirm = false
+                        chrome.showDeleteConfirm = false
                         if (isGroupMode && groupId != null) {
                             // Fire contract TX first — wallet popup must be confirmed by user
                             com.privimemobile.chat.ChatService.groups.leaveGroup(groupId) { success, error ->
@@ -4234,7 +4139,7 @@ fun ChatScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDeleteConfirm = false }) {
+                    TextButton(onClick = { chrome.showDeleteConfirm = false }) {
                         Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
@@ -4325,7 +4230,7 @@ fun ChatScreen(
         }
 
         // ── Wallpaper picker ──
-        if (showWallpaperPicker) {
+        if (chrome.showWallpaperPicker) {
             val wallpaperOptions = listOf(
                 "default" to stringResource(R.string.chat_wallpaper_default),
                 "dark_blue" to stringResource(R.string.chat_wallpaper_dark_blue),
@@ -4336,7 +4241,7 @@ fun ChatScreen(
                 "sunset" to stringResource(R.string.chat_wallpaper_sunset),
             )
             AlertDialog(
-                onDismissRequest = { showWallpaperPicker = false },
+                onDismissRequest = { chrome.showWallpaperPicker = false },
                 containerColor = C.card,
                 title = { Text(stringResource(R.string.chat_wallpaper), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
@@ -4353,12 +4258,12 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier.size(32.dp).clip(CircleShape)
                                     .background(C.accent.copy(alpha = 0.3f))
-                                    .then(if (chatWallpaper.startsWith("custom:")) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
+                                    .then(if (chrome.chatWallpaper.startsWith("custom:")) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
                                 contentAlignment = Alignment.Center,
                             ) { Text("\uD83D\uDDBC", fontSize = 16.sp) }
                             Spacer(Modifier.width(12.dp))
                             Text(stringResource(R.string.chat_custom_image), color = C.text, fontSize = 15.sp)
-                            if (chatWallpaper.startsWith("custom:")) {
+                            if (chrome.chatWallpaper.startsWith("custom:")) {
                                 Spacer(Modifier.weight(1f))
                                 Text("\u2713", color = C.accent, fontSize = 16.sp)
                             }
@@ -4370,9 +4275,9 @@ fun ChatScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
-                                        chatWallpaper = key
+                                        chrome.chatWallpaper = key
                                         prefs.edit().putString("wallpaper_$convKey", key).apply()
-                                        showWallpaperPicker = false
+                                        chrome.showWallpaperPicker = false
                                     }
                                     .padding(vertical = 10.dp, horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -4392,11 +4297,11 @@ fun ChatScreen(
                                         .size(32.dp)
                                         .clip(CircleShape)
                                         .background(previewColor)
-                                        .then(if (chatWallpaper == key) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
+                                        .then(if (chrome.chatWallpaper == key) Modifier.border(2.dp, C.accent, CircleShape) else Modifier),
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(label, color = C.text, fontSize = 15.sp)
-                                if (chatWallpaper == key) {
+                                if (chrome.chatWallpaper == key) {
                                     Spacer(Modifier.weight(1f))
                                     Text("\u2713", color = C.accent, fontSize = 16.sp)
                                 }
@@ -4409,7 +4314,7 @@ fun ChatScreen(
         }
 
         // ── Schedule message picker ──
-        if (showSchedulePicker) {
+        if (input.showSchedulePicker) {
             val scheduleOptions = listOf(
                 "10min" to stringResource(R.string.chat_schedule_in_10min),
                 "30min" to stringResource(R.string.chat_schedule_in_30min),
@@ -4422,7 +4327,7 @@ fun ChatScreen(
 
             if (!showCustomDateTime) {
                 AlertDialog(
-                    onDismissRequest = { showSchedulePicker = false },
+                    onDismissRequest = { input.showSchedulePicker = false },
                     containerColor = C.card,
                     title = { Text(stringResource(R.string.chat_schedule_message), color = C.text, fontWeight = FontWeight.SemiBold) },
                     text = {
@@ -4452,8 +4357,8 @@ fun ChatScreen(
                                                     }
                                                     else -> now + 600
                                                 }
-                                                scheduleMessage(inputText.text, scheduledAt)
-                                                showSchedulePicker = false
+                                                scheduleMessage(input.inputText.text, scheduledAt)
+                                                input.showSchedulePicker = false
                                             }
                                         }
                                         .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -4476,7 +4381,7 @@ fun ChatScreen(
                     // Step 1: Date picker
                     val dateState = rememberDatePickerState()
                     DatePickerDialog(
-                        onDismissRequest = { showCustomDateTime = false; showSchedulePicker = false },
+                        onDismissRequest = { showCustomDateTime = false; input.showSchedulePicker = false },
                         confirmButton = {
                             TextButton(onClick = {
                                 val millis = dateState.selectedDateMillis
@@ -4484,7 +4389,7 @@ fun ChatScreen(
                             }) { Text(stringResource(R.string.general_next), color = C.accent) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showCustomDateTime = false; showSchedulePicker = false }) {
+                            TextButton(onClick = { showCustomDateTime = false; input.showSchedulePicker = false }) {
                                 Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                             }
                         },
@@ -4500,7 +4405,7 @@ fun ChatScreen(
                         initialMinute = initMin % 60,
                     )
                     AlertDialog(
-                        onDismissRequest = { showCustomDateTime = false; showSchedulePicker = false },
+                        onDismissRequest = { showCustomDateTime = false; input.showSchedulePicker = false },
                         containerColor = C.card,
                         title = { Text(stringResource(R.string.chat_pick_time), color = C.text, fontWeight = FontWeight.SemiBold) },
                         text = {
@@ -4518,12 +4423,12 @@ fun ChatScreen(
                                 val scheduledAt = dateCal.timeInMillis / 1000
                                 val now = System.currentTimeMillis() / 1000
                                 if (scheduledAt > now) {
-                                    scheduleMessage(inputText.text, scheduledAt)
+                                    scheduleMessage(input.inputText.text, scheduledAt)
                                 } else {
                                     Toast.makeText(context, R.string.toast_time_future, Toast.LENGTH_SHORT).show()
                                 }
                                 showCustomDateTime = false
-                                showSchedulePicker = false
+                                input.showSchedulePicker = false
                             }) { Text(stringResource(R.string.chat_schedule), color = C.accent) }
                         },
                         dismissButton = {
@@ -4537,18 +4442,18 @@ fun ChatScreen(
         }
 
         // ── View Sticker Pack dialog (local only) ──
-        if (viewPackId != null) {
+        if (emoji.viewPackId != null) {
             // Get pack name from the sticker message that triggered this
-            val packName = messages.firstOrNull { it.stickerPackId == viewPackId }?.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)
+            val packName = messages.firstOrNull { it.stickerPackId == emoji.viewPackId }?.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)
             val stickersRoot = java.io.File(context.filesDir, "stickers")
             val localPackDir = java.io.File(stickersRoot, packName)
-            val localFiles = remember(viewPackId) {
+            val localFiles = remember(emoji.viewPackId) {
                 if (localPackDir.exists()) localPackDir.listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
                 else emptyList()
             }
 
             AlertDialog(
-                onDismissRequest = { viewPackId = null },
+                onDismissRequest = { emoji.viewPackId = null },
                 containerColor = C.card,
                 title = {
                     Column {
@@ -4605,17 +4510,17 @@ fun ChatScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { viewPackId = null }) { Text(stringResource(R.string.general_ok), color = C.accent) }
+                    TextButton(onClick = { emoji.viewPackId = null }) { Text(stringResource(R.string.general_ok), color = C.accent) }
                 },
                 dismissButton = {},
             )
         }
 
         // ── Date jump picker ──
-        if (showDatePicker) {
+        if (input.showDatePicker) {
             val datePickerState = rememberDatePickerState()
             DatePickerDialog(
-                onDismissRequest = { showDatePicker = false },
+                onDismissRequest = { input.showDatePicker = false },
                 confirmButton = {
                     TextButton(onClick = {
                         val selectedMillis = datePickerState.selectedDateMillis
@@ -4631,13 +4536,13 @@ fun ChatScreen(
                                 scope.launch { listState.animateScrollToItem(0) }
                             }
                         }
-                        showDatePicker = false
+                        input.showDatePicker = false
                     }) {
                         Text(stringResource(R.string.chat_jump), color = C.accent)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) {
+                    TextButton(onClick = { input.showDatePicker = false }) {
                         Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
@@ -4648,7 +4553,7 @@ fun ChatScreen(
         }
 
         // ── Per-message self-destruct timer picker ──
-        if (showOneShotTimerPicker) {
+        if (input.showOneShotTimerPicker) {
             val timerOptions = listOf(
                 0 to stringResource(R.string.chat_overflow_timer_off),
                 30 to stringResource(R.string.chat_timer_30s),
@@ -4657,7 +4562,7 @@ fun ChatScreen(
                 86400 to stringResource(R.string.chat_timer_1day),
             )
             AlertDialog(
-                onDismissRequest = { showOneShotTimerPicker = false },
+                onDismissRequest = { input.showOneShotTimerPicker = false },
                 containerColor = C.card,
                 shape = RoundedCornerShape(16.dp),
                 title = { Text(stringResource(R.string.chat_self_destruct_timer), color = C.text, fontWeight = FontWeight.SemiBold) },
@@ -4674,14 +4579,14 @@ fun ChatScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
-                                        oneShotTimer = seconds
-                                        showOneShotTimerPicker = false
+                                        input.oneShotTimer = seconds
+                                        input.showOneShotTimerPicker = false
                                     }
                                     .padding(vertical = 12.dp, horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(
-                                    selected = oneShotTimer == seconds,
+                                    selected = input.oneShotTimer == seconds,
                                     onClick = null,
                                     colors = RadioButtonDefaults.colors(
                                         selectedColor = C.accent,
@@ -4699,12 +4604,12 @@ fun ChatScreen(
         }
 
         // ── Context menu (long-press on message) — Telegram-style bottom sheet ──
-        if (contextMenuMsg != null) {
-            val targetMsg = contextMenuMsg!!
+        if (menu.contextMenuMsg != null) {
+            val targetMsg = menu.contextMenuMsg!!
             val menuMsgId = targetMsg.id.toLong()
             val menuPollData = pollUi.resolve(menuMsgId, targetMsg.pollData)
             ModalBottomSheet(
-                onDismissRequest = { contextMenuMsg = null },
+                onDismissRequest = { menu.contextMenuMsg = null },
                 containerColor = C.card,
                 dragHandle = {
                     Box(
@@ -4769,7 +4674,7 @@ fun ChatScreen(
                                     }
                                 }
                             }
-                            contextMenuMsg = null
+                            menu.contextMenuMsg = null
                         }
 
                         // First row: 7 quick emojis + expand button
@@ -4840,8 +4745,8 @@ fun ChatScreen(
                         // View Pack for sticker messages
                         if (targetMsg.type == "sticker" && targetMsg.stickerPackId != null) {
                             MenuItemRow(context.getString(R.string.chat_view_pack) + " \u2014 ${targetMsg.stickerPackName ?: stringResource(R.string.chat_sticker_pack_label)}") {
-                                viewPackId = targetMsg.stickerPackId
-                                contextMenuMsg = null
+                                emoji.viewPackId = targetMsg.stickerPackId
+                                menu.contextMenuMsg = null
                             }
                         }
 
@@ -4850,16 +4755,16 @@ fun ChatScreen(
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_clip_label), targetMsg.text))
                                 Toast.makeText(context, R.string.general_copied, Toast.LENGTH_SHORT).show()
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                             }
                         }
 
                         if (targetMsg.file != null) {
-                            val targetPath = filePaths[targetMsg.file.cid]
+                            val targetPath = files.filePaths[targetMsg.file.cid]
                             if (targetPath != null) {
                                 MenuItemRow(stringResource(R.string.chat_save_to_downloads)) {
                                     saveFileToDownloads(context, targetPath, targetMsg.file.name, targetMsg.file.mime)
-                                    contextMenuMsg = null
+                                    menu.contextMenuMsg = null
                                 }
                                 // Save to stickers for image files
                                 if (Helpers.isImageMime(targetMsg.file.mime)) {
@@ -4899,7 +4804,7 @@ fun ChatScreen(
                                                                         }
                                                                     } catch (_: Exception) {}
                                                                     showSaveToPackPicker = false
-                                                                    contextMenuMsg = null
+                                                                    menu.contextMenuMsg = null
                                                                 }
                                                                 .padding(vertical = 10.dp, horizontal = 8.dp),
                                                             verticalAlignment = Alignment.CenterVertically,
@@ -4925,7 +4830,7 @@ fun ChatScreen(
                             }
                         }
 
-                        MenuItemRow(stringResource(R.string.chat_reply)) { replyingTo = targetMsg; contextMenuMsg = null }
+                        MenuItemRow(stringResource(R.string.chat_reply)) { input.replyingTo = targetMsg; menu.contextMenuMsg = null }
 
                         // Poll creator: close or reopen voting
                         if (targetMsg.type == "poll" && menuPollData != null &&
@@ -4974,7 +4879,7 @@ fun ChatScreen(
                                         }
                                     }
                                 }
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                             }
                         }
 
@@ -4998,20 +4903,20 @@ fun ChatScreen(
                                         com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, pinPayload)
                                     }
                                 }
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                             }
                         }
 
                         if (targetMsg.sent && targetMsg.text.isNotEmpty() && targetMsg.type != "tip") {
                             MenuItemRow(stringResource(R.string.chat_edit)) {
-                                editingMsg = targetMsg; replyingTo = null
-                                setInputText(targetMsg.text); contextMenuMsg = null
+                                input.editingMsg = targetMsg; input.replyingTo = null
+                                input.setInputText(targetMsg.text); menu.contextMenuMsg = null
                             }
                         }
 
                         if (targetMsg.text.isNotEmpty() || targetMsg.file != null) {
                             MenuItemRow(stringResource(R.string.chat_forward)) {
-                                forward.openSingle(targetMsg); contextMenuMsg = null
+                                forward.openSingle(targetMsg); menu.contextMenuMsg = null
                             }
                         }
 
@@ -5133,12 +5038,12 @@ fun ChatScreen(
                                         }
                                     }
                                 }
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                             }
                         }
 
                         MenuItemRow(stringResource(R.string.chat_select)) {
-                            selection.enterSelectionWith(targetMsg.id); contextMenuMsg = null
+                            selection.enterSelectionWith(targetMsg.id); menu.contextMenuMsg = null
                         }
 
                         // Cancel scheduled message option
@@ -5149,7 +5054,7 @@ fun ChatScreen(
                                     com.privimemobile.chat.ChatService.db?.messageDao()?.cancelScheduled(targetMsg.id.toLong())
                                     refreshConversationPreview(cid)
                                 }
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                                 Toast.makeText(context, R.string.toast_scheduled_cancelled, Toast.LENGTH_SHORT).show()
                             }
                         }
@@ -5160,7 +5065,7 @@ fun ChatScreen(
                                 com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
                                 refreshConversationPreview(cid)
                             }
-                            contextMenuMsg = null
+                            menu.contextMenuMsg = null
                         }
 
                         if (targetMsg.sent) {
@@ -5187,7 +5092,7 @@ fun ChatScreen(
                                         }
                                     }
                                 }
-                                contextMenuMsg = null
+                                menu.contextMenuMsg = null
                             }
                         }
                     }
@@ -5196,8 +5101,8 @@ fun ChatScreen(
         }
 
         // ── Reaction detail — long-press a reaction pill → tabbed reaction info ──
-        if (reactionDetailMsg != null) {
-            val detailMsg = reactionDetailMsg!!
+        if (menu.reactionDetailMsg != null) {
+            val detailMsg = menu.reactionDetailMsg!!
             // Load ALL reactions for this message (for "All" tab + tab list)
             val allReactorsFlow = remember(detailMsg.timestamp) {
                 com.privimemobile.chat.ChatService.db!!.reactionDao()
@@ -5220,7 +5125,7 @@ fun ChatScreen(
             var selectedTabIdx by remember { mutableIntStateOf(0) }
 
             ModalBottomSheet(
-                onDismissRequest = { reactionDetailMsg = null },
+                onDismissRequest = { menu.reactionDetailMsg = null },
                 containerColor = C.card,
                 dragHandle = {
                     Box(
@@ -5664,25 +5569,25 @@ fun ChatScreen(
     // ── Overlays rendered OUTSIDE Column, filling entire screen ──
 
     // Attachment picker bottom sheet (Telegram-style)
-    if (showAttachPicker) {
+    if (media.showAttachPicker) {
         AttachmentPickerSheet(
-            onDismiss = { showAttachPicker = false },
+            onDismiss = { media.showAttachPicker = false },
             onPickGallery = {
-                showAttachPicker = false
+                media.showAttachPicker = false
                 galleryPickerLauncher.launch("image/*")
             },
             onPickFile = {
-                showAttachPicker = false
+                media.showAttachPicker = false
                 filePickerLauncher.launch("*/*")
             },
             onPreviewImage = { uri, _, _, _ ->
-                showAttachPicker = false
+                media.showAttachPicker = false
                 // Open fullscreen preview for single image
-                imagePreview = ImagePreviewData(uri, name = "", size = 0L, mimeType = "")
-                previewCaption = ""
+                media.imagePreview = ImagePreviewData(uri, name = "", size = 0L, mimeType = "")
+                media.previewCaption = ""
             },
             onMultiImageSelected = { uris ->
-                showAttachPicker = false
+                media.showAttachPicker = false
                 // Send images one by one with buffer
                 scope.launch {
                     uris.forEach { uri ->
@@ -5700,19 +5605,19 @@ fun ChatScreen(
 
     // Single-image preview from gallery (Telegram-style: fullscreen + caption + send)
     AnimatedVisibility(
-        visible = imagePreview != null,
+        visible = media.imagePreview != null,
         enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.6f, animationSpec = tween(180)),
         exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.8f, animationSpec = tween(120)),
     ) {
-        imagePreview?.let { preview ->
+        media.imagePreview?.let { preview ->
             ImagePreviewSheet(
                 previewData = preview,
-                caption = previewCaption,
-                onCaptionChange = { previewCaption = it },
-                onDismiss = { imagePreview = null },
-                isSending = sendingFromPreview,
+                caption = media.previewCaption,
+                onCaptionChange = { media.previewCaption = it },
+                onDismiss = { media.imagePreview = null },
+                isSending = media.sendingFromPreview,
                 onSend = { caption ->
-                sendingFromPreview = true
+                media.sendingFromPreview = true
                 // First validate file size via getFileInfo
                 val info = getFileInfo(context, preview.uri)
                 if (info != null) {
@@ -5722,24 +5627,24 @@ fun ChatScreen(
                         val msg = if (isImage) context.getString(R.string.chat_image_too_large, Config.MAX_FILE_SIZE / 1024 / 1024)
                         else context.getString(R.string.chat_file_too_large, Config.MAX_INLINE_SIZE / 1024)
                         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                        imagePreview = null
-                        sendingFromPreview = false
+                        media.imagePreview = null
+                        media.sendingFromPreview = false
                         return@ImagePreviewSheet
                     }
                 }
                 // Set the caption text if provided
                 if (caption.trim().isNotEmpty()) {
-                    inputText = androidx.compose.ui.text.input.TextFieldValue(caption.trim())
+                    input.inputText = androidx.compose.ui.text.input.TextFieldValue(caption.trim())
                 }
-                // Pass through handlePickedUri to set pendingFile, then send
+                // Pass through handlePickedUri to set input.pendingFile, then send
                 handlePickedUri(preview.uri)
                 scope.launch {
-                    delay(500) // brief wait for pendingFile to be set
-                    if (pendingFile != null) {
+                    delay(500) // brief wait for input.pendingFile to be set
+                    if (input.pendingFile != null) {
                         handleSend()
                     }
-                    imagePreview = null
-                    sendingFromPreview = false
+                    media.imagePreview = null
+                    media.sendingFromPreview = false
                 }
             },
         )
@@ -5747,13 +5652,13 @@ fun ChatScreen(
     }
 
     // Fullscreen image viewer
-    if (fullscreenImage != null) {
-        val fImg = fullscreenImage!!
+    if (media.fullscreenImage != null) {
+        val fImg = media.fullscreenImage!!
         FullscreenImageViewer(
             filePath = fImg.filePath,
             fileName = fImg.fileName,
             isMine = fImg.isMine,
-            onDismiss = { fullscreenImage = null },
+            onDismiss = { media.fullscreenImage = null },
             onSave = {
                 val mime = when {
                     fImg.fileName.endsWith(".png", true) -> "image/png"
@@ -5768,7 +5673,7 @@ fun ChatScreen(
                     com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
                     refreshConversationPreview(convId)
                 }
-                fullscreenImage = null
+                media.fullscreenImage = null
             },
             onDeleteForEveryone = if (fImg.isMine) { {
                 scope.launch {
@@ -5793,7 +5698,7 @@ fun ChatScreen(
                         }
                     }
                 }
-                fullscreenImage = null
+                media.fullscreenImage = null
             } } else null,
         )
     }

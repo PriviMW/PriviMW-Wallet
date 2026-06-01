@@ -18,7 +18,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
@@ -38,6 +38,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,50 @@ import com.privimemobile.ui.components.VoiceMessageBubble
 import com.privimemobile.ui.theme.C
 import com.privimemobile.wallet.assetTicker
 import org.json.JSONObject
+
+/**
+ * Message body with link taps and long-press for selection.
+ * [androidx.compose.foundation.text.ClickableText] adds its own tap detector after any
+ * outer [Modifier], so it always wins gestures — use plain [Text] + [detectTapGestures] instead.
+ */
+@Composable
+private fun MessageBodyText(
+    annotated: AnnotatedString,
+    view: android.view.View,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onUrlClick: (String) -> Unit,
+) {
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val latestLayout = rememberUpdatedState(textLayout)
+    Text(
+        text = annotated,
+        style = TextStyle(color = C.text, fontSize = 15.sp, lineHeight = 20.sp),
+        onTextLayout = { textLayout = it },
+        modifier = Modifier.pointerInput(annotated, onTap, onLongPress) {
+            detectTapGestures(
+                onTap = { position ->
+                    val layout = latestLayout.value ?: return@detectTapGestures
+                    val offset = layout.getOffsetForPosition(position)
+                    val urlAnnotation = annotated.getStringAnnotations(
+                        tag = "url",
+                        start = offset,
+                        end = offset,
+                    ).firstOrNull()
+                    if (urlAnnotation != null) {
+                        onUrlClick(urlAnnotation.item)
+                    } else {
+                        onTap()
+                    }
+                },
+                onLongPress = {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    onLongPress()
+                },
+            )
+        },
+    )
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -699,19 +745,12 @@ fun MessageBubble(
                 } else msg.text
                 if (displayText.isNotEmpty()) {
                     val annotated = parseMarkdown(displayText)
-                    androidx.compose.foundation.text.ClickableText(
-                        text = annotated,
-                        style = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 15.sp, lineHeight = 20.sp),
-                        onClick = { offset ->
-                            val urlAnnotation = annotated.getStringAnnotations(tag = "url", start = offset, end = offset).firstOrNull()
-                            if (urlAnnotation != null) {
-                                val url = urlAnnotation.item
-                                // Show confirmation dialog
-                                pendingOpenUrl = url
-                            } else {
-                                onTap()
-                            }
-                        },
+                    MessageBodyText(
+                        annotated = annotated,
+                        view = bubbleView,
+                        onTap = onTap,
+                        onLongPress = onLongPress,
+                        onUrlClick = { pendingOpenUrl = it },
                     )
                 }
                 }

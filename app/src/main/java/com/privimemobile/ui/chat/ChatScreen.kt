@@ -416,11 +416,8 @@ fun ChatScreen(
     }
 
     // Multi-select mode
-    var selectionMode by remember { mutableStateOf(false) }
-    val selectedIds = remember { mutableStateListOf<String>() }
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val selection = remember { ChatSelectionState() }
     var viewPackId by remember { mutableStateOf<String?>(null) }  // pack_id to show in View Pack dialog
-    var pendingDeleteIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Long-press context menu target
     var contextMenuMsg by remember { mutableStateOf<ChatMessage?>(null) }
@@ -454,8 +451,7 @@ fun ChatScreen(
     }
 
     // Forward message — contact picker dialog
-    var forwardingMsg by remember { mutableStateOf<ChatMessage?>(null) }
-    var forwardingMsgs by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    val forward = remember { ChatForwardState() }
 
     // All contacts for forward picker
     val allContacts by com.privimemobile.chat.ChatService.db?.contactDao()?.observeDmContacts()
@@ -1698,7 +1694,7 @@ fun ChatScreen(
     val canSend = (inputText.text.isNotBlank() || pendingFile != null) && (isGroupMode || !resolvedSbbsAddress.isNullOrEmpty())
 
     // BackHandler: intercept system back when overlays are visible
-    BackHandler(enabled = selectionMode) { selectionMode = false; selectedIds.clear() }
+    BackHandler(enabled = selection.selectionMode) { selection.exitSelection() }
     BackHandler(enabled = fullscreenImage != null) { fullscreenImage = null }
     BackHandler(enabled = showAttachPicker) { showAttachPicker = false }
 
@@ -1709,37 +1705,31 @@ fun ChatScreen(
             .background(C.bg),
     ) {
         // Selection mode header bar
-        if (selectionMode) {
+        if (selection.selectionMode) {
             Surface(color = C.card, shadowElevation = 2.dp) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { selectionMode = false; selectedIds.clear() }, modifier = Modifier.size(40.dp)) {
+                    IconButton(onClick = { selection.exitSelection() }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_cancel_scheduled), tint = C.text, modifier = Modifier.size(22.dp))
                     }
                     Text(
-                        context.getString(R.string.chat_x_selected, selectedIds.size),
+                        context.getString(R.string.chat_x_selected, selection.selectedIds.size),
                         color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
                     // Delete selected — show confirmation dialog
-                    IconButton(onClick = {
-                        pendingDeleteIds = selectedIds.toList()
-                        showDeleteConfirmDialog = true
-                    }, modifier = Modifier.size(40.dp)) {
+                    IconButton(onClick = { selection.openBulkDeleteConfirm() }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Default.Delete, stringResource(R.string.chat_label_delete), tint = C.error, modifier = Modifier.size(22.dp))
                     }
                     // Forward selected — forward ALL selected messages (not just first)
                     IconButton(onClick = {
-                        val msgsToForward = messages.filter { it.id in selectedIds && (it.text.isNotEmpty() || it.file != null) }
+                        val msgsToForward = messages.filter { it.id in selection.selectedIds && (it.text.isNotEmpty() || it.file != null) }
                         if (msgsToForward.isNotEmpty()) {
-                            // Use first message to trigger forward dialog; store all in forwardingMsgs
-                            forwardingMsgs = msgsToForward
-                            forwardingMsg = msgsToForward.first()
+                            forward.openMultiple(msgsToForward)
                         }
-                        selectionMode = false
-                        selectedIds.clear()
+                        selection.exitSelection()
                     }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_forward), tint = C.accent, modifier = Modifier.size(22.dp))
                     }
@@ -2544,13 +2534,10 @@ fun ChatScreen(
 
                     // Selection mode: checkbox + tap toggles selection
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (selectionMode) {
+                        if (selection.selectionMode) {
                             Checkbox(
-                                checked = msg.id in selectedIds,
-                                onCheckedChange = {
-                                    if (msg.id in selectedIds) selectedIds.remove(msg.id)
-                                    else selectedIds.add(msg.id)
-                                },
+                                checked = msg.id in selection.selectedIds,
+                                onCheckedChange = { selection.toggleSelected(msg.id) },
                                 colors = CheckboxDefaults.colors(
                                     checkedColor = C.accent,
                                     uncheckedColor = C.textSecondary,
@@ -2656,11 +2643,10 @@ fun ChatScreen(
                         onDownload = { cid, key, iv, mime, data ->
                             handleDownload(cid, key, iv, mime, data)
                         },
-                        onReply = if (selectionMode) {{ /* no-op in selection mode */ }} else {{ replyingTo = msg }},
+                        onReply = if (selection.selectionMode) {{ /* no-op in selection mode */ }} else {{ replyingTo = msg }},
                         onTap = {
-                            if (selectionMode) {
-                                if (msg.id in selectedIds) selectedIds.remove(msg.id)
-                                else selectedIds.add(msg.id)
+                            if (selection.selectionMode) {
+                                selection.toggleSelected(msg.id)
                             } else if (msg.type == "sticker" && msg.stickerPackId != null) {
                                 // Sticker tap → view pack
                                 viewPackId = msg.stickerPackId
@@ -2669,24 +2655,21 @@ fun ChatScreen(
                             }
                         },
                         onLongPress = {
-                            if (!selectionMode) {
+                            if (!selection.selectionMode) {
                                 if (msg.type == "sticker") {
                                     contextMenuMsg = msg
                                 } else {
-                                    selectionMode = true
-                                    selectedIds.clear()
-                                    selectedIds.add(msg.id)
+                                    selection.enterSelectionWith(msg.id)
                                 }
                             } else {
-                                if (msg.id in selectedIds) selectedIds.remove(msg.id)
-                                else selectedIds.add(msg.id)
+                                selection.toggleSelected(msg.id)
                             }
                         },
                         onFullscreenImage = {
                             val fp = filePaths[msg.file?.cid ?: ""]
                             if (fp != null) fullscreenImage = FullscreenImageData(fp, msg.file?.name ?: context.getString(R.string.chat_pinned_file), msg.id.toLong(), msg.timestamp, msg.sent)
                         },
-                        isSelected = selectionMode && msg.id in selectedIds,
+                        isSelected = selection.selectionMode && msg.id in selection.selectedIds,
                         onPollVote = { optIdx ->
                             val now = System.currentTimeMillis()
                             if (now - lastSendTime < 3000) {
@@ -4281,15 +4264,12 @@ fun ChatScreen(
         }
 
         // ── Multi-select delete confirmation ──
-        if (showDeleteConfirmDialog && pendingDeleteIds.isNotEmpty()) {
-            val count = pendingDeleteIds.size
+        if (selection.showDeleteConfirmDialog && selection.pendingDeleteIds.isNotEmpty()) {
+            val count = selection.pendingDeleteIds.size
             // Check if any selected message is ours (for "delete for everyone" option)
-            val hasOwnMessages = messages.any { it.id in pendingDeleteIds && it.sent }
+            val hasOwnMessages = messages.any { it.id in selection.pendingDeleteIds && it.sent }
             AlertDialog(
-                onDismissRequest = {
-                    showDeleteConfirmDialog = false
-                    pendingDeleteIds = emptyList()
-                },
+                onDismissRequest = { selection.dismissDeleteConfirm() },
                 containerColor = C.card,
                 title = { Text(context.getString(R.string.chat_delete_messages_title, count, if (count > 1) "s" else ""), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
@@ -4297,7 +4277,7 @@ fun ChatScreen(
                         // Delete for me
                         TextButton(
                             onClick = {
-                                val ids = pendingDeleteIds.toList()
+                                val ids = selection.pendingDeleteIds.toList()
                                 val cid = convId
                                 scope.launch {
                                     ids.forEach { id ->
@@ -4306,10 +4286,7 @@ fun ChatScreen(
                                     // Update chat list preview
                                     refreshConversationPreview(cid)
                                 }
-                                showDeleteConfirmDialog = false
-                                pendingDeleteIds = emptyList()
-                                selectionMode = false
-                                selectedIds.clear()
+                                selection.clearAfterBulkAction()
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -4320,12 +4297,9 @@ fun ChatScreen(
                             TextButton(
                                 onClick = {
                                     // Capture message data BEFORE coroutine — messages state changes after each delete
-                                    val msgsToDelete = messages.filter { it.id in pendingDeleteIds }
+                                    val msgsToDelete = messages.filter { it.id in selection.pendingDeleteIds }
                                     val capturedConvId = convId
-                                    showDeleteConfirmDialog = false
-                                    pendingDeleteIds = emptyList()
-                                    selectionMode = false
-                                    selectedIds.clear()
+                                    selection.clearAfterBulkAction()
                                     scope.launch {
                                         val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                         if (state?.myHandle != null) {
@@ -4365,10 +4339,7 @@ fun ChatScreen(
                 },
                 confirmButton = {},
                 dismissButton = {
-                    TextButton(onClick = {
-                        showDeleteConfirmDialog = false
-                        pendingDeleteIds = emptyList()
-                    }) {
+                    TextButton(onClick = { selection.dismissDeleteConfirm() }) {
                         Text(stringResource(R.string.general_cancel), color = C.textSecondary)
                     }
                 },
@@ -5190,8 +5161,7 @@ fun ChatScreen(
                         }
 
                         MenuItemRow(stringResource(R.string.chat_select)) {
-                            selectionMode = true; selectedIds.clear()
-                            selectedIds.add(targetMsg.id); contextMenuMsg = null
+                            selection.enterSelectionWith(targetMsg.id); contextMenuMsg = null
                         }
 
                         // Cancel scheduled message option

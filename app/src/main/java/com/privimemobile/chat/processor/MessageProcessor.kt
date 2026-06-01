@@ -3,6 +3,7 @@ package com.privimemobile.chat.processor
 import android.util.Log
 import com.privimemobile.R
 import com.privimemobile.chat.ChatService
+import com.privimemobile.chat.DeleteAuthorization
 import com.privimemobile.chat.contacts.ContactManager
 import com.privimemobile.chat.poll.PollLogic
 import com.privimemobile.chat.db.ChatDatabase
@@ -155,11 +156,11 @@ class MessageProcessor(
         // Determine if this is sent by us
         val sent = from == myHandle
 
-        // NOTE: SBBS envelope "sender" wallet_id is NOT the same as the on-chain registered
-        // wallet_id. Beam uses different SBBS channel addresses per conversation. Therefore
-        // we cannot verify sender identity via raw["sender"]. SBBS messages are encrypted
-        // per-recipient, so only the intended recipient can decrypt — this provides the
-        // primary authentication guarantee.
+        // NOTE: SBBS envelope "sender" (raw["sender"]) is per-conversation channel identity, not
+        // the on-chain wallet id — do not use it to authenticate payload["from"].
+        // DMs: per-recipient encryption is the primary authenticity guarantee for who sent traffic.
+        // Groups: all members share the group key; payload["from"] can be spoofed — enforce
+        // authorization in handlers (e.g. delete-for-everyone via [DeleteAuthorization]).
 
         // ── Group payloads: route FIRST, before DM convKey/blocked/tombstone checks ──
         val groupId = payload["group_id"] as? String
@@ -842,7 +843,27 @@ class MessageProcessor(
     private suspend fun handleDelete(payload: Map<String, Any?>, convKey: String, from: String) {
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val conv = db.conversationDao().findByKey(convKey) ?: return
-        db.messageDao().markDeleted(conv.id, msgTs, from)
+        val msg = db.messageDao().findByTimestamp(conv.id, msgTs) ?: run {
+            Log.d(TAG, "Delete ignored: no message at ts=$msgTs in $convKey")
+            return
+        }
+        val senderHandle = msg.senderHandle ?: run {
+            Log.w(TAG, "Delete ignored: message at ts=$msgTs has no sender_handle")
+            return
+        }
+        if (convKey.startsWith("g_")) {
+            val groupPrefix = convKey.removePrefix("g_")
+            val group = db.groupDao().findByConvKey(groupPrefix) ?: return
+            if (!canDeleteGroupMessage(group.groupId, from, senderHandle)) {
+                Log.w(TAG, "Reject group delete: @$from cannot delete @${senderHandle}'s message ts=$msgTs")
+                return
+            }
+        } else if (!DeleteAuthorization.normalizeHandle(from)
+                .equals(DeleteAuthorization.normalizeHandle(senderHandle), ignoreCase = true)) {
+            Log.w(TAG, "Reject DM delete: @$from is not author @$senderHandle ts=$msgTs")
+            return
+        }
+        db.messageDao().markDeleted(conv.id, msgTs, senderHandle)
         // Update chat list preview if the deleted message was the latest
         if (conv.lastMessageTs == msgTs) {
             updateConversationPreview(conv.id)
@@ -986,29 +1007,14 @@ class MessageProcessor(
         return gid.replace(Regex("[^a-fA-F0-9]"), "").take(64)
     }
 
-    /**
-     * Verify SBBS sender authenticity.
-     * Compares the SBBS envelope sender (raw["sender"], set by Beam core, not spoofable)
-     * against the stored sbbs_address for the claimed "from" handle.
-     *
-     * Returns:
-     *   true  — sender is verified (sbbs_address matches) or is unknown (new contact)
-     *   false — sender sbbs_address DOES NOT match stored sbbs_address (spoofed)
-     *
-     * For state-changing actions (edit, delete, service messages), reject on false.
-     * For new messages, allow unknown senders (first contact scenario).
-     */
-    private suspend fun verifySender(from: String, senderWalletId: String?): Boolean {
-        if (from.isEmpty() || senderWalletId.isNullOrEmpty()) return false
-        val normalizedSender = Helpers.normalizeWalletId(senderWalletId) ?: return false
-        val contact = db.contactDao().findByHandle(from) ?: return true // unknown contact = allow
-        val storedSbbs = contact.sbbsAddress ?: return true // no stored sbbs_address = allow
-        val normalizedStored = Helpers.normalizeWalletId(storedSbbs) ?: return true
-        val match = normalizedSender == normalizedStored
-        if (!match) {
-            Log.w(TAG, "verifySender MISMATCH for @$from: sender=${senderWalletId.take(16)}... stored=${storedSbbs.take(16)}... normSender=${normalizedSender.take(16)}... normStored=${normalizedStored.take(16)}...")
-        }
-        return match
+    private suspend fun canDeleteGroupMessage(groupId: String, deleterHandle: String, messageSenderHandle: String): Boolean {
+        val deleter = sanitizeHandle(deleterHandle)
+        val member = db.groupDao().findMember(groupId, deleter) ?: return false
+        return DeleteAuthorization.canDeleteGroupMessage(
+            deleterRole = member.role,
+            deleterHandle = deleter,
+            messageSenderHandle = messageSenderHandle,
+        )
     }
 
     // ========================================================================
@@ -1637,16 +1643,20 @@ class MessageProcessor(
         }
     }
 
-    /** Handle group_delete — admin deleted a message for everyone. */
+    /** Handle legacy group_delete payloads (prefer type=delete via [handleGroupGenericPayload]). */
     private suspend fun handleGroupDelete(payload: Map<String, Any?>, from: String) {
         val groupId = payload["group_id"] as? String ?: return
         val msgTs = (payload["msg_ts"] as? Number)?.toLong() ?: return
         val senderHandle = payload["msg_sender"] as? String ?: return
 
+        if (!canDeleteGroupMessage(groupId, from, senderHandle)) {
+            Log.w(TAG, "Reject group_delete: @$from cannot delete @${senderHandle}'s message ts=$msgTs")
+            return
+        }
+
         val group = db.groupDao().findByGroupId(groupId) ?: return
         val convId = ChatService.groups.getOrCreateGroupConversation(groupId, group.name)
 
-        // Soft-delete the message
-        db.messageDao().markDeleted(convId, msgTs, senderHandle)
+        db.messageDao().markDeleted(convId, msgTs, sanitizeHandle(senderHandle))
     }
 }

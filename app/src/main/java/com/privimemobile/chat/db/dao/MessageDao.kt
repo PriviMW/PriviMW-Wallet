@@ -103,6 +103,10 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND sent = 1 LIMIT 1")
     suspend fun findSentByTimestamp(convId: Long, ts: Long): MessageEntity?
 
+    /** Find a non-deleted message by timestamp (for delete-for-everyone authorization). */
+    @Query("SELECT * FROM messages WHERE conversation_id = :convId AND timestamp = :ts AND deleted = 0 LIMIT 1")
+    suspend fun findByTimestamp(convId: Long, ts: Long): MessageEntity?
+
     /** Get conversation IDs that have expiring messages (for preview update after cleanup). */
     @Query("SELECT DISTINCT conversation_id FROM messages WHERE expires_at > 0 AND expires_at < :now AND deleted = 0")
     suspend fun getConversationsWithExpired(now: Long): List<Long>

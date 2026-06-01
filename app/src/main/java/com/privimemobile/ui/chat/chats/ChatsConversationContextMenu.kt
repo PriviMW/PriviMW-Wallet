@@ -135,7 +135,7 @@ internal fun ChatsConversationContextMenu(
                     // Delete wallpaper file + prefs
                     val handle = target.convKey.removePrefix("@")
                     try { java.io.File(context.filesDir, "wallpaper_$handle.jpg").delete() } catch (_: Exception) {}
-                    context.getSharedPreferences("privime_prefs", 0).edit()
+                    context.getSharedPreferences("chat_prefs", android.content.Context.MODE_PRIVATE).edit()
                         .remove("wallpaper_${target.convKey}").apply()
                     // Clear draft
                     db.conversationDao().setDraft(target.id, null)

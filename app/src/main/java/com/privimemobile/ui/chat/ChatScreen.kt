@@ -260,7 +260,7 @@ fun ChatScreen(
     val pollUi = rememberChatPollUiState(roomMessages)
 
     // File download tracking (declared early so attachment loading can pre-populate)
-    val files = remember { ChatMessageListState() }
+    val files = remember(convKey) { ChatMessageListState() }
 
     // Load attachments for file messages + pre-populate cached file paths
     var attachmentMap by remember { mutableStateOf<Map<Long, com.privimemobile.chat.db.entities.AttachmentEntity>>(emptyMap()) }
@@ -354,10 +354,10 @@ fun ChatScreen(
     val input = remember(handle, isGroupMode) {
         ChatInputState(if (isGroupMode) "" else dmOpenSeed?.draftText ?: "")
     }
-    val voice = remember { ChatVoiceState() }
-    val emoji = remember { ChatEmojiStickerState() }
-    val menu = remember { ChatContextMenuState() }
-    val media = remember { ChatImagePreviewState() }
+    val voice = remember(convKey) { ChatVoiceState() }
+    val emoji = remember(convKey) { ChatEmojiStickerState() }
+    val menu = remember(convKey) { ChatContextMenuState() }
+    val media = remember(convKey) { ChatImagePreviewState() }
     val scrollBadge = remember(convKey) { ChatScrollBadgeState.forConv(convKey) }
     val chrome = remember(convKey) {
         ChatChromeState(prefs.getString("wallpaper_$convKey", "default") ?: "default").also { state ->
@@ -367,12 +367,12 @@ fun ChatScreen(
             ) ?: context.getString(R.string.contact_notif_sound_default)
         }
     }
-    val selection = remember { ChatSelectionState() }
-    val forward = remember { ChatForwardState() }
-    val search = remember { ChatSearchState() }
-    val pinState = remember { ChatPinState() }
+    val selection = remember(convKey) { ChatSelectionState() }
+    val forward = remember(convKey) { ChatForwardState() }
+    val search = remember(convKey) { ChatSearchState() }
+    val pinState = remember(convKey) { ChatPinState() }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(convKey) {
         voice.hasRecordPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO,
@@ -552,9 +552,7 @@ fun ChatScreen(
     // Persist badge floor and initial unread count when leaving, restore on re-entry
     DisposableEffect(convKey) {
         onDispose {
-            if (scrollBadge.badgeFloor != Int.MAX_VALUE) {
-                ChatSessionStore.chatBadgeFloors[convKey] = scrollBadge.badgeFloor to scrollBadge.badgeFloorVersion
-            }
+            scrollBadge.persistBadgeFloor(convKey)
             val unread = initialUnreadCount
             if (unread != null && unread > 0) {
                 ChatSessionStore.chatInitialUnread[convKey] = unread

@@ -53,6 +53,7 @@ class ChatSearchState {
         showSearch = false
         searchQuery = ""
         searchResults = emptyList()
+        cancelSearchJob()
         // searchHighlightTs kept until orchestrator clears after scroll animation
     }
 }

@@ -2169,174 +2169,20 @@ fun ChatScreen(
         )
 
 
-        // ── Clear history confirmation ──
-        if (chrome.showClearConfirm) {
-            AlertDialog(
-                onDismissRequest = { chrome.showClearConfirm = false },
-                containerColor = C.card,
-                title = { Text(stringResource(R.string.chat_clear_history), color = C.text, fontWeight = FontWeight.SemiBold) },
-                text = { Text(stringResource(R.string.chat_clear_history_body), color = C.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (convId > 0L) {
-                            scope.launch {
-                                com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
-                                com.privimemobile.chat.ChatService.db?.conversationDao()?.updateLastMessage(convId, 0, null)
-                            }
-                        }
-                        chrome.showClearConfirm = false
-                    }) {
-                        Text(stringResource(R.string.chat_clear), color = C.error, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { chrome.showClearConfirm = false }) {
-                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
-                    }
-                },
-            )
-        }
-
-        // ── Delete chat confirmation ──
-        if (chrome.showDeleteConfirm) {
-            AlertDialog(
-                onDismissRequest = { chrome.showDeleteConfirm = false },
-                containerColor = C.card,
-                title = { Text(if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.text, fontWeight = FontWeight.SemiBold) },
-                text = { Text(
-                    if (isGroupMode) stringResource(R.string.chat_leave_confirm)
-                    else stringResource(R.string.chat_delete_confirm),
-                    color = C.textSecondary,
-                ) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        chrome.showDeleteConfirm = false
-                        if (isGroupMode && groupId != null) {
-                            // Fire contract TX first — wallet popup must be confirmed by user
-                            com.privimemobile.chat.ChatService.groups.leaveGroup(groupId) { success, error ->
-                                if (!success) {
-                                    scope.launch {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            context.getString(R.string.chat_leave_failed, error ?: context.getString(R.string.chat_tx_failed)),
-                                            android.widget.Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-                                } else {
-                                    // Wallet accepted the TX data — wait for on-chain confirmation before deleting local data
-                                    scope.launch {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            context.getString(R.string.chat_leave_tx_submitted),
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                    onBack()
-                                }
-                            }
-                        } else if (convId > 0L) {
-                            // DM: delete immediately (no contract TX for DMs)
-                            scope.launch {
-                                com.privimemobile.chat.ChatService.db?.messageDao()?.softDeleteByConversation(convId)
-                                com.privimemobile.chat.ChatService.db?.conversationDao()?.softDelete(convId)
-                                com.privimemobile.chat.ChatService.db?.contactDao()?.deleteByHandle(handle)
-                            }
-                            onBack()
-                        }
-                    }) {
-                        Text(stringResource(R.string.general_delete), color = C.error, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { chrome.showDeleteConfirm = false }) {
-                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
-                    }
-                },
-            )
-        }
-
-        // ── Multi-select delete confirmation ──
-        if (selection.showDeleteConfirmDialog && selection.pendingDeleteIds.isNotEmpty()) {
-            val count = selection.pendingDeleteIds.size
-            // Check if any selected message is ours (for "delete for everyone" option)
-            val hasOwnMessages = messages.any { it.id in selection.pendingDeleteIds && it.sent }
-            AlertDialog(
-                onDismissRequest = { selection.dismissDeleteConfirm() },
-                containerColor = C.card,
-                title = { Text(context.getString(R.string.chat_delete_messages_title, count, if (count > 1) "s" else ""), color = C.text, fontWeight = FontWeight.SemiBold) },
-                text = {
-                    Column {
-                        // Delete for me
-                        TextButton(
-                            onClick = {
-                                val ids = selection.pendingDeleteIds.toList()
-                                val cid = convId
-                                scope.launch {
-                                    ids.forEach { id ->
-                                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(id.toLong())
-                                    }
-                                    // Update chat list preview
-                                    refreshConversationPreview(cid)
-                                }
-                                selection.clearAfterBulkAction()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.chat_delete_for_me), color = C.text, fontSize = 15.sp, modifier = Modifier.fillMaxWidth())
-                        }
-                        // Delete for everyone (only if we have own messages selected)
-                        if (hasOwnMessages) {
-                            TextButton(
-                                onClick = {
-                                    // Capture message data BEFORE coroutine — messages state changes after each delete
-                                    val msgsToDelete = messages.filter { it.id in selection.pendingDeleteIds }
-                                    val capturedConvId = convId
-                                    selection.clearAfterBulkAction()
-                                    scope.launch {
-                                        val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
-                                        if (state?.myHandle != null) {
-                                            for ((i, msg) in msgsToDelete.withIndex()) {
-                                                com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(msg.id.toLong())
-                                            }
-                                            // Update preview BEFORE network sends — survives early navigation
-                                            refreshConversationPreview(capturedConvId)
-                                            for (msg in msgsToDelete) {
-                                                if (msg.sent) {
-                                                    val delPayload = mapOf(
-                                                        "v" to 1, "t" to "delete",
-                                                        "ts" to System.currentTimeMillis() / 1000,
-                                                        "from" to state.myHandle!!,
-                                                        "to" to (if (isGroupMode) groupId!! else handle),
-                                                        "msg_ts" to msg.timestamp,
-                                                    )
-                                                    if (isGroupMode && groupId != null) {
-                                                        com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
-                                                    } else {
-                                                        val walletId = resolvedSbbsAddress
-                                                        if (!walletId.isNullOrEmpty()) {
-                                                            com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(stringResource(R.string.chat_delete_for_everyone), color = C.error, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
-                            }
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { selection.dismissDeleteConfirm() }) {
-                        Text(stringResource(R.string.general_cancel), color = C.textSecondary)
-                    }
-                },
-            )
-        }
+        com.privimemobile.ui.chat.dialogs.ChatClearDeleteDialogs(
+            chrome = chrome,
+            selection = selection,
+            convId = convId,
+            handle = handle,
+            isGroupMode = isGroupMode,
+            groupId = groupId,
+            messages = messages,
+            resolvedSbbsAddress = resolvedSbbsAddress,
+            context = context,
+            scope = scope,
+            onBack = onBack,
+            onRefreshConversationPreview = { cid -> refreshConversationPreview(cid) },
+        )
 
         // ── Wallpaper picker ──
         if (chrome.showWallpaperPicker) {

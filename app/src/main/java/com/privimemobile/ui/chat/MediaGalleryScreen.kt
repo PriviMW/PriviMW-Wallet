@@ -337,10 +337,16 @@ fun MediaGalleryScreen(
                         // Delete button
                         var isMine by remember { mutableStateOf(false) }
                         var msgTs by remember { mutableLongStateOf(0L) }
-                        LaunchedEffect(att.messageId) {
+                        var groupMyRole by remember { mutableIntStateOf(0) }
+                        LaunchedEffect(att.messageId, handle, isGroup) {
                             val msg = ChatService.db?.messageDao()?.findById(att.messageId)
                             isMine = msg?.sent == true
                             msgTs = msg?.timestamp ?: 0L
+                            groupMyRole = if (isGroup) {
+                                ChatService.db?.groupDao()?.findByGroupId(handle)?.myRole ?: 0
+                            } else {
+                                0
+                            }
                         }
                         var showDelMenu by remember { mutableStateOf(false) }
                         Box {
@@ -356,7 +362,11 @@ fun MediaGalleryScreen(
                                         Toast.makeText(context, context.getString(R.string.media_deleted), Toast.LENGTH_SHORT).show()
                                     },
                                 )
-                                if (isMine) {
+                                if (com.privimemobile.chat.DeleteAuthorization.canOfferDeleteForEveryone(
+                                        isGroup,
+                                        groupMyRole,
+                                        isMine,
+                                    )) {
                                     DropdownMenuItem(
                                         text = { Text(context.getString(R.string.media_delete_for_everyone), color = C.error) },
                                         onClick = {

@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.privimemobile.R
+import com.privimemobile.chat.DeleteAuthorization
 import com.privimemobile.protocol.ChatMessage
 import com.privimemobile.ui.chat.ChatChromeState
 import com.privimemobile.ui.chat.ChatSelectionState
@@ -29,6 +30,7 @@ fun ChatClearDeleteDialogs(
     handle: String,
     isGroupMode: Boolean,
     groupId: String?,
+    groupMyRole: Int,
     messages: List<ChatMessage>,
     resolvedSbbsAddress: String?,
     context: Context,
@@ -127,9 +129,16 @@ fun ChatClearDeleteDialogs(
     if (selection.showDeleteConfirmDialog && selection.pendingDeleteIds.isNotEmpty()) {
         val count = selection.pendingDeleteIds.size
         val msgsToDelete = messages.filter { it.id in selection.pendingDeleteIds }
-        val ownCount = msgsToDelete.count { it.sent }
-        val hasOwnMessages = ownCount > 0
-        val hasOthersMessages = ownCount < count
+        val broadcastMsgs = DeleteAuthorization.filterForDeleteForEveryoneBroadcast(
+            isGroup = isGroupMode,
+            myGroupRole = groupMyRole,
+            selected = msgsToDelete,
+            isSentByMe = { it.sent },
+        )
+        val broadcastCount = broadcastMsgs.size
+        val isGroupModerator = DeleteAuthorization.isGroupModerator(isGroupMode, groupMyRole)
+        val hasOwnMessages = broadcastCount > 0
+        val hasOthersMessages = !isGroupModerator && broadcastMsgs.size < msgsToDelete.size
         AlertDialog(
             onDismissRequest = { selection.dismissDeleteConfirm() },
             containerColor = C.card,
@@ -175,7 +184,7 @@ fun ChatClearDeleteDialogs(
                         TextButton(
                             onClick = {
                                 val capturedConvId = convId
-                                val ownMsgs = msgsToDelete.filter { it.sent }
+                                val toBroadcast = broadcastMsgs
                                 selection.clearAfterBulkAction()
                                 com.privimemobile.chat.ChatService.scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
@@ -188,7 +197,7 @@ fun ChatClearDeleteDialogs(
                                         val delPayloads = com.privimemobile.chat.DeleteForEveryone.payloads(
                                             myHandle = state.myHandle!!,
                                             to = toPeer,
-                                            msgTimestamps = ownMsgs.map { it.timestamp },
+                                            msgTimestamps = toBroadcast.map { it.timestamp },
                                         )
                                         if (isGroupMode && groupId != null) {
                                             com.privimemobile.chat.ChatService.groups
@@ -206,8 +215,8 @@ fun ChatClearDeleteDialogs(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                if (hasOthersMessages) {
-                                    stringResource(R.string.chat_bulk_delete_for_everyone_count, ownCount)
+                                if (hasOthersMessages || (isGroupModerator && broadcastCount > 1)) {
+                                    stringResource(R.string.chat_bulk_delete_for_everyone_count, broadcastCount)
                                 } else {
                                     stringResource(R.string.chat_delete_for_everyone)
                                 },

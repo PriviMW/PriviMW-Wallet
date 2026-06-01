@@ -995,6 +995,7 @@ fun ChatScreen(
             handle = handle,
             isGroupMode = isGroupMode,
             groupId = groupId,
+            groupMyRole = group?.myRole ?: 0,
             messages = messages,
             resolvedSbbsAddress = resolvedSbbsAddress,
             context = context,
@@ -1161,7 +1162,11 @@ fun ChatScreen(
                 }
                 media.fullscreenImage = null
             },
-            onDeleteForEveryone = if (fImg.isMine) { {
+            onDeleteForEveryone = if (com.privimemobile.chat.DeleteAuthorization.canOfferDeleteForEveryone(
+                    isGroupMode,
+                    group?.myRole ?: 0,
+                    fImg.isMine,
+                )) { {
                 scope.launch {
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {

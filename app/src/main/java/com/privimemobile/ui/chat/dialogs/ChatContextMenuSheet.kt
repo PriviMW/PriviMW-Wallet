@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.privimemobile.R
+import com.privimemobile.chat.DeleteAuthorization
 import com.privimemobile.chat.db.entities.GroupEntity
 import com.privimemobile.ui.chat.ChatContextMenuState
 import com.privimemobile.ui.chat.ChatEmojiStickerState
@@ -550,7 +551,11 @@ fun ChatContextMenuSheet(
                         menu.contextMenuMsg = null
                     }
 
-                    if (targetMsg.sent) {
+                    if (DeleteAuthorization.canOfferDeleteForEveryone(
+                            isGroupMode,
+                            group?.myRole ?: 0,
+                            targetMsg.sent,
+                        )) {
                         MenuItemRow(stringResource(R.string.chat_delete_for_everyone), color = C.error) {
                             scope.launch {
                                 val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()

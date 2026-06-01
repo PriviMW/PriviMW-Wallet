@@ -523,11 +523,7 @@ fun ChatScreen(
     // showDisappearPicker removed — per-message self-destruct replaces conversation-level timer
 
     // In-chat search
-    var showSearch by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<com.privimemobile.chat.db.entities.MessageEntity>>(emptyList()) }
-    var searchJob by remember { mutableStateOf<Job?>(null) }
-    var searchHighlightTs by remember { mutableStateOf<Long?>(null) }
+    val search = remember { ChatSearchState() }
     var replyHighlightTs by remember { mutableStateOf<Long?>(null) }
 
     // Attachment picker
@@ -1929,9 +1925,8 @@ fun ChatScreen(
                                 Text(label, color = color, fontSize = 15.sp)
                             }
                         }
-                        OverflowItem("\uD83D\uDD0D", if (showSearch) stringResource(R.string.chat_overflow_close_search) else stringResource(R.string.chat_overflow_search)) {
-                            showSearch = !showSearch
-                            if (!showSearch) { searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null }
+                        OverflowItem("\uD83D\uDD0D", if (search.showSearch) stringResource(R.string.chat_overflow_close_search) else stringResource(R.string.chat_overflow_search)) {
+                            search.toggle()
                             showOverflowMenu = false
                         }
                         OverflowItem("\uD83D\uDDBC", stringResource(R.string.chat_overflow_media)) { showOverflowMenu = false; onMediaGallery() }
@@ -2032,7 +2027,7 @@ fun ChatScreen(
 
         // In-chat search bar (Telegram-style: back arrow + field + X to clear)
         androidx.compose.animation.AnimatedVisibility(
-            visible = showSearch,
+            visible = search.showSearch,
             enter = androidx.compose.animation.expandVertically(tween(200)) + androidx.compose.animation.fadeIn(tween(200)),
             exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(200)),
         ) {
@@ -2042,34 +2037,26 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Back arrow — closes search
-                    IconButton(onClick = {
-                        showSearch = false; searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null
-                    }) {
+                    IconButton(onClick = { search.close() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_overflow_close_search), tint = C.textSecondary)
                     }
                     OutlinedTextField(
-                        value = searchQuery,
+                        value = search.searchQuery,
                         onValueChange = { query: String ->
-                            searchQuery = query
-                            searchJob?.cancel()
-                            if (query.isBlank()) {
-                                searchResults = emptyList()
-                                searchHighlightTs = null
-                            } else {
-                                searchJob = scope.launch {
+                            search.onQueryChanged(query)
+                            if (query.isNotBlank()) {
+                                search.searchJob = scope.launch {
                                     delay(300) // debounce
                                     val results = com.privimemobile.chat.ChatService.db?.messageDao()
                                         ?.searchInConversation(convId, "%${query.trim()}%") ?: emptyList()
-                                    searchResults = results
+                                    search.searchResults = results
                                 }
                             }
                         },
                         placeholder = { Text(stringResource(R.string.chat_search_in_chat), color = C.textMuted, fontSize = 14.sp) },
                         singleLine = true,
-                        trailingIcon = if (searchQuery.isNotEmpty()) { {
-                            IconButton(onClick = {
-                                searchQuery = ""; searchResults = emptyList(); searchHighlightTs = null
-                            }) {
+                        trailingIcon = if (search.searchQuery.isNotEmpty()) { {
+                            IconButton(onClick = { search.clearQueryAndResults() }) {
                                 Text("✕", color = C.textSecondary, fontSize = 18.sp)
                             }
                         } } else null,
@@ -2081,9 +2068,9 @@ fun ChatScreen(
                             cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
                         ),
                     )
-                    if (searchResults.isNotEmpty()) {
+                    if (search.searchResults.isNotEmpty()) {
                         Text(
-                            "${searchResults.size}",
+                            "${search.searchResults.size}",
                             color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(start = 8.dp),
                         )
@@ -2091,12 +2078,12 @@ fun ChatScreen(
                 }
             }
             // Search results list
-            if (searchResults.isNotEmpty()) {
+            if (search.searchResults.isNotEmpty()) {
                 Surface(color = C.card.copy(alpha = 0.95f)) {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
                     ) {
-                        items(searchResults, key = { it.id }) { result ->
+                        items(search.searchResults, key = { it.id }) { result ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2105,17 +2092,15 @@ fun ChatScreen(
                                         val reversedMessages = messages.reversed()
                                         val idx = reversedMessages.indexOfFirst { it.timestamp == result.timestamp }
                                         if (idx >= 0) {
-                                            searchHighlightTs = result.timestamp
+                                            search.searchHighlightTs = result.timestamp
                                             scope.launch {
                                                 listState.animateScrollToItem(idx)
                                                 // Auto-clear highlight after 2s
                                                 delay(2000)
-                                                searchHighlightTs = null
+                                                search.searchHighlightTs = null
                                             }
                                         }
-                                        showSearch = false
-                                        searchQuery = ""
-                                        searchResults = emptyList()
+                                        search.closeAfterResultPick()
                                     }
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                             ) {
@@ -2793,7 +2778,7 @@ fun ChatScreen(
                             reactionDetailMsg = msg
                             reactionDetailEmoji = emoji
                         },
-                        isHighlighted = searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
+                        isHighlighted = search.searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
                         isGroupMode = isGroupMode,
                         onSenderTap = { senderHandle ->
                             if (senderHandle.isNotEmpty()) onViewContact(senderHandle)

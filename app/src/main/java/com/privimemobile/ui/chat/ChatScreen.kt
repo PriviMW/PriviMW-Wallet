@@ -846,626 +846,72 @@ fun ChatScreen(
             .fillMaxSize()
             .background(C.bg),
     ) {
-        // Selection mode header bar
         if (selection.selectionMode) {
-            Surface(color = C.card, shadowElevation = 2.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = { selection.exitSelection() }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_cancel_scheduled), tint = C.text, modifier = Modifier.size(22.dp))
-                    }
-                    Text(
-                        context.getString(R.string.chat_x_selected, selection.selectedIds.size),
-                        color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f).padding(start = 8.dp),
-                    )
-                    // Delete selected — show confirmation dialog
-                    IconButton(onClick = { selection.openBulkDeleteConfirm() }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Delete, stringResource(R.string.chat_label_delete), tint = C.error, modifier = Modifier.size(22.dp))
-                    }
-                    // Forward selected — forward ALL selected messages (not just first)
-                    IconButton(onClick = {
-                        val msgsToForward = messages.filter { it.id in selection.selectedIds && (it.text.isNotEmpty() || it.file != null) }
-                        if (msgsToForward.isNotEmpty()) {
-                            forward.openMultiple(msgsToForward)
-                        }
-                        selection.exitSelection()
-                    }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_forward), tint = C.accent, modifier = Modifier.size(22.dp))
-                    }
-                }
-            }
+            com.privimemobile.ui.chat.chrome.ChatSelectionHeader(
+                selection = selection,
+                messages = messages,
+                onForwardSelected = { msgs -> forward.openMultiple(msgs) },
+            )
         } else {
-        // Header — Telegram-style with avatar + back arrow
-        Surface(
-            color = C.card,
-            shadowElevation = 2.dp,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.general_back), tint = C.text, modifier = Modifier.size(22.dp))
-                }
-                if (isGroupMode) {
-                    // Group avatar — custom image or default icon
-                    val groupAvatarBmp = remember(groupId, group?.avatarHash) {
-                        try {
-                            val f = java.io.File(context.filesDir, "group_avatars/$groupId.webp")
-                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
-                        } catch (_: Exception) { null }
-                    }
-                    if (groupAvatarBmp != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = groupAvatarBmp.asImageBitmap(),
-                            contentDescription = stringResource(R.string.chat_section_groups),
-                            modifier = Modifier.size(38.dp).clip(CircleShape).clickable { onGroupSettings() },
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier.size(38.dp).background(C.accent, CircleShape).clickable { onGroupSettings() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Default.Group, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        }
-                    }
-                } else {
-                // Avatar
-                val avatarKey = handle
-                val avatarColors = listOf(
-                    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
-                    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
-                )
-                val avatarBg = avatarColors[kotlin.math.abs(avatarKey.hashCode()) % avatarColors.size]
-                val initial = (resolvedName.removePrefix("@")).firstOrNull()?.uppercase() ?: "?"
-                Box(
-                    modifier = Modifier.clickable { onContactInfo() },
-                ) {
-                    com.privimemobile.ui.components.AvatarDisplay(
-                        handle = handle,
-                        displayName = resolvedName,
-                        size = 38.dp,
-                    )
-                }
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(
-                    modifier = Modifier.weight(1f).clickable {
-                        if (isGroupMode) onGroupSettings() else onContactInfo()
-                    },
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isGroupMode && group?.isPublic == false) {
-                            Icon(Icons.Default.Lock, stringResource(R.string.chat_send_message), tint = C.textSecondary, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        Text(
-                            resolvedName,
-                            color = C.text,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (isGroupMode) {
-                        val typingVer2 by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
-                        val groupTypers = if (typingVer2 >= 0) com.privimemobile.chat.ChatService.getGroupTyping(convKey) else emptyList()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (groupTypers.isNotEmpty()) {
-                                val typingText = if (groupTypers.size == 1) context.getString(R.string.chat_group_typing_singular, "@${groupTypers[0]}")
-                                    else if (groupTypers.size == 2) context.getString(R.string.chat_group_typing_two, "@${groupTypers[0]}", "@${groupTypers[1]}")
-                                    else context.getString(R.string.chat_group_typing_multiple, groupTypers.size)
-                                Text(typingText, color = C.accent, fontSize = 12.sp)
-                                val infiniteTransition = rememberInfiniteTransition(label = "grpTypingDots")
-                                repeat(3) { i ->
-                                    val offsetY by infiniteTransition.animateFloat(
-                                        initialValue = 0f, targetValue = -3f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(400, easing = FastOutSlowInEasing, delayMillis = i * 120),
-                                            repeatMode = RepeatMode.Reverse,
-                                        ), label = "grpDot$i",
-                                    )
-                                    Text(".", color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.offset(y = offsetY.dp))
-                                }
-                            } else {
-                                Text(stringResource(R.string.group_member_count_format, groupMemberCount), color = C.textSecondary, fontSize = 12.sp)
-                            }
-                            if (group?.muted == true) {
-                                Icon(Icons.Default.NotificationsOff, stringResource(R.string.chat_overflow_mute), tint = C.textSecondary,
-                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
-                            }
-                        }
-                    } else {
-                    val typingVer by com.privimemobile.chat.ChatService.typingVersion.collectAsState()
-                    val peerTyping = typingVer >= 0 && com.privimemobile.chat.ChatService.isTyping(convKey)
-                    if (peerTyping) {
-                        // Bouncing dots animation (Telegram-style)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.chat_typing), color = C.accent, fontSize = 12.sp)
-                            val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
-                            repeat(3) { i ->
-                                val offsetY by infiniteTransition.animateFloat(
-                                    initialValue = 0f, targetValue = -3f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(400, easing = FastOutSlowInEasing, delayMillis = i * 120),
-                                        repeatMode = RepeatMode.Reverse,
-                                    ), label = "dot$i",
-                                )
-                                Text(
-                                    ".",
-                                    color = C.accent,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.offset(y = offsetY.dp),
-                                )
-                            }
-                        }
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("@$handle", color = C.textSecondary, fontSize = 12.sp)
-                            if (conv?.muted == true) {
-                                Icon(Icons.Default.NotificationsOff, stringResource(R.string.chat_overflow_mute), tint = C.textSecondary,
-                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
-                            }
-                            if (conv?.isBlocked == true) {
-                                Icon(Icons.Default.Block, stringResource(R.string.chat_overflow_block), tint = Color(0xFFEF5350),
-                                    modifier = Modifier.padding(start = 4.dp).size(13.dp))
-                            }
-                        }
-                    }
-                    } // end !isGroupMode else
-                }
-                // 3-dot overflow menu (animated rotation + smooth dropdown)
-                Box {
-                    val menuRotation by animateFloatAsState(
-                        targetValue = if (chrome.showOverflowMenu) 90f else 0f,
-                        animationSpec = tween(200),
-                        label = "menuRotation",
-                    )
-                    IconButton(
-                        onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            chrome.showOverflowMenu = !chrome.showOverflowMenu
-                        },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.chat_overflow_search),
-                            tint = if (chrome.showOverflowMenu) C.accent else C.textSecondary,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .graphicsLayer { rotationZ = menuRotation },
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = chrome.showOverflowMenu,
-                        onDismissRequest = { chrome.showOverflowMenu = false },
-                        modifier = Modifier.background(C.card).widthIn(min = 200.dp),
-                    ) {
-                        @Composable fun OverflowItem(icon: String, label: String, color: Color = C.text, action: () -> Unit) {
-                            var pressed by remember { mutableStateOf(false) }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (pressed) C.accent.copy(alpha = 0.15f) else Color.Transparent)
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onPress = { pressed = true; tryAwaitRelease(); pressed = false },
-                                            onTap = { action() },
-                                        )
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(icon, fontSize = 16.sp)
-                                Spacer(Modifier.width(14.dp))
-                                Text(label, color = color, fontSize = 15.sp)
-                            }
-                        }
-                        OverflowItem("\uD83D\uDD0D", if (search.showSearch) stringResource(R.string.chat_overflow_close_search) else stringResource(R.string.chat_overflow_search)) {
-                            search.toggle()
-                            chrome.showOverflowMenu = false
-                        }
-                        OverflowItem("\uD83D\uDDBC", stringResource(R.string.chat_overflow_media)) { chrome.showOverflowMenu = false; onMediaGallery() }
-                        if (isGroupMode) {
-                            OverflowItem("\u2699\uFE0F", stringResource(R.string.chat_overflow_group_info)) { chrome.showOverflowMenu = false; onGroupSettings() }
-                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, chrome.groupNotifSoundName)) {
-                                chrome.showOverflowMenu = false
-                                val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                                    val current = chatPrefs.getString("notif_sound_$convKey", null)
-                                    if (current != null && current != "silent") {
-                                        putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(current))
-                                    }
-                                }
-                                groupSoundPicker.launch(intent)
-                            }
-                        } else {
-                            OverflowItem("\uD83D\uDC64", stringResource(R.string.chat_overflow_view_profile)) { chrome.showOverflowMenu = false; onContactInfo() }
-                            OverflowItem("\uD83D\uDD14", context.getString(R.string.chat_overflow_sound, chrome.groupNotifSoundName)) {
-                                chrome.showOverflowMenu = false
-                                val intent = android.content.Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION)
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.chat_notification_sound))
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
-                                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                                    val current = chatPrefs.getString("notif_sound_$convKey", null)
-                                    if (current != null && current != "silent") {
-                                        putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(current))
-                                    }
-                                }
-                                groupSoundPicker.launch(intent)
-                            }
-                        }
-                        OverflowItem("\uD83C\uDFA8", stringResource(R.string.chat_overflow_wallpaper)) { chrome.showOverflowMenu = false; chrome.showWallpaperPicker = true }
-                        // Per-message self-destruct timer
-                        OverflowItem("\u23F1", if (input.oneShotTimer == 0) stringResource(R.string.chat_overflow_timer_off) else context.getString(R.string.chat_overflow_timer_on, Helpers.formatDuration(context, input.oneShotTimer))) {
-                            chrome.showOverflowMenu = false
-                            input.showOneShotTimerPicker = true
-                        }
-                        OverflowItem("\uD83D\uDCE4", stringResource(R.string.chat_overflow_export_chat)) {
-                            chrome.showOverflowMenu = false
-                            val exportTitle = if (isGroupMode) context.getString(R.string.chat_export_group_label, group?.name ?: context.getString(R.string.chat_group_name_fallback)) else context.getString(R.string.chat_export_dm_label, "@$handle")
-                            scope.launch {
-                                val sb = StringBuilder()
-                                sb.appendLine(exportTitle)
-                                sb.appendLine(context.getString(R.string.chat_export_date, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())))
-                                sb.appendLine("---")
-                                messages.forEach { msg ->
-                                    val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                                        .format(java.util.Date(msg.timestamp * 1000))
-                                    val sender = if (msg.sent) context.getString(R.string.chat_you_label) else "@${msg.from}"
-                                    val text = when {
-                                        msg.isTip -> "[Tip: ${Helpers.formatBeam(msg.tipAmount)} ${com.privimemobile.wallet.assetTicker(msg.tipAssetId)}] ${msg.text}"
-                                        msg.type == "file" -> "[File: ${msg.file?.name ?: "file"}] ${msg.text}"
-                                        else -> msg.text
-                                    }
-                                    sb.appendLine("[$time] $sender: $text")
-                                }
-                                withContext(Dispatchers.Main) {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
-                                        putExtra(android.content.Intent.EXTRA_SUBJECT, exportTitle)
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.chat_overflow_export_chat)))
-                                }
-                            }
-                        }
-                        val isMuted = if (isGroupMode) group?.muted == true else conv?.muted == true
-                        OverflowItem(if (isMuted) "\uD83D\uDD14" else "\uD83D\uDD07", if (isMuted) stringResource(R.string.chat_overflow_unmute) else stringResource(R.string.chat_overflow_mute)) {
-                            scope.launch {
-                                if (isGroupMode && groupId != null) {
-                                    com.privimemobile.chat.ChatService.db?.groupDao()?.setMuted(groupId, !isMuted)
-                                } else if (convId > 0L) {
-                                    com.privimemobile.chat.ChatService.db?.conversationDao()?.setMuted(convId, !isMuted)
-                                }
-                            }
-                            chrome.showOverflowMenu = false
-                        }
-                        if (!isGroupMode) {
-                            val isBlocked = conv?.isBlocked == true
-                            OverflowItem(if (isBlocked) "\u2705" else "\uD83D\uDEAB", if (isBlocked) stringResource(R.string.chat_overflow_unblock) else stringResource(R.string.chat_overflow_block), color = if (isBlocked) C.text else C.error) {
-                                if (convId > 0L) { scope.launch { com.privimemobile.chat.ChatService.db?.conversationDao()?.setBlocked(convId, !isBlocked) } }
-                                chrome.showOverflowMenu = false
-                            }
-                        }
-                        HorizontalDivider(color = C.border)
-                        OverflowItem("\uD83D\uDDD1", stringResource(R.string.chat_clear_history), color = C.error) { chrome.showOverflowMenu = false; chrome.showClearConfirm = true }
-                        OverflowItem("\u274C", if (isGroupMode) stringResource(R.string.chat_leave_group) else stringResource(R.string.chat_delete_chat), color = C.error) { chrome.showOverflowMenu = false; chrome.showDeleteConfirm = true }
-                    }
-                }
-            }
-        }
-        } // close else (normal header vs selection header)
-
-        // In-chat search bar (Telegram-style: back arrow + field + X to clear)
-        androidx.compose.animation.AnimatedVisibility(
-            visible = search.showSearch,
-            enter = androidx.compose.animation.expandVertically(tween(200)) + androidx.compose.animation.fadeIn(tween(200)),
-            exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(200)),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-            Surface(color = C.card) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Back arrow — closes search
-                    IconButton(onClick = { search.close() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_overflow_close_search), tint = C.textSecondary)
-                    }
-                    OutlinedTextField(
-                        value = search.searchQuery,
-                        onValueChange = { query: String ->
-                            search.onQueryChanged(query)
-                            if (query.isNotBlank()) {
-                                search.searchJob = scope.launch {
-                                    delay(300) // debounce
-                                    val results = com.privimemobile.chat.ChatService.db?.messageDao()
-                                        ?.searchInConversation(convId, "%${query.trim()}%") ?: emptyList()
-                                    search.searchResults = results
-                                }
-                            }
-                        },
-                        placeholder = { Text(stringResource(R.string.chat_search_in_chat), color = C.textMuted, fontSize = 14.sp) },
-                        singleLine = true,
-                        trailingIcon = if (search.searchQuery.isNotEmpty()) { {
-                            IconButton(onClick = { search.clearQueryAndResults() }) {
-                                Text("✕", color = C.textSecondary, fontSize = 18.sp)
-                            }
-                        } } else null,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = C.accent, unfocusedBorderColor = C.border,
-                            focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
-                            cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
-                        ),
-                    )
-                    if (search.searchResults.isNotEmpty()) {
-                        Text(
-                            "${search.searchResults.size}",
-                            color = C.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                }
-            }
-            // Search results list
-            if (search.searchResults.isNotEmpty()) {
-                Surface(color = C.card.copy(alpha = 0.95f)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-                    ) {
-                        items(search.searchResults, key = { it.id }) { result ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        // Find index in reversed messages and scroll to it
-                                        val reversedMessages = messages.reversed()
-                                        val idx = reversedMessages.indexOfFirst { it.timestamp == result.timestamp }
-                                        if (idx >= 0) {
-                                            search.searchHighlightTs = result.timestamp
-                                            scope.launch {
-                                                listState.animateScrollToItem(idx)
-                                                // Auto-clear highlight after 2s
-                                                delay(2000)
-                                                search.searchHighlightTs = null
-                                            }
-                                        }
-                                        search.closeAfterResultPick()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        result.text?.take(80) ?: "",
-                                        color = C.text, fontSize = 13.sp, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        formatMessageTime(result.timestamp),
-                                        color = C.textSecondary, fontSize = 11.sp,
-                                    )
-                                }
-                                if (result.sent) {
-                                    Text(stringResource(R.string.chat_you_label), color = C.textSecondary, fontSize = 11.sp)
-                                }
-                            }
-                            HorizontalDivider(color = C.border, thickness = 0.5.dp)
-                        }
-                    }
-                }
-            }
-            } // Column: search bar above results (no overlap)
+            com.privimemobile.ui.chat.chrome.ChatHeader(
+                view = view,
+                scope = scope,
+                chrome = chrome,
+                search = search,
+                input = input,
+                messages = messages,
+                handle = handle,
+                resolvedName = resolvedName,
+                convKey = convKey,
+                convId = convId,
+                conv = conv,
+                isGroupMode = isGroupMode,
+                groupId = groupId,
+                group = group,
+                groupMemberCount = groupMemberCount,
+                chatPrefs = chatPrefs,
+                groupSoundPicker = groupSoundPicker,
+                onBack = onBack,
+                onContactInfo = onContactInfo,
+                onGroupSettings = onGroupSettings,
+                onMediaGallery = onMediaGallery,
+            )
         }
 
-        // Pinned messages bar — scroll-aware, ordered by pin time
-        val pinnedByOrder = messages.filter { it.pinned }.sortedBy { it.pinnedAt }  // #1 = first pinned
-        if (pinnedByOrder.isNotEmpty()) {
-            // Scroll-aware pin index (default)
-            val scrollAwarePinIndex by remember(pinnedByOrder) {
-                derivedStateOf {
-                    val visibleIdx = listState.firstVisibleItemIndex
-                    val revMsgs = messages.reversed()
-                    val pinPositions = pinnedByOrder.mapIndexedNotNull { pmIdx, pin ->
-                        val lcIdx = revMsgs.indexOfFirst { it.timestamp == pin.timestamp && it.id == pin.id }
-                        if (lcIdx >= 0) pmIdx to lcIdx else null
-                    }
-                    if (pinPositions.isEmpty()) 0
-                    else {
-                        val nextPin = pinPositions.filter { it.second >= visibleIdx }.minByOrNull { it.second }
-                        nextPin?.first ?: pinPositions.maxByOrNull { it.second }?.first ?: 0
-                    }
+        com.privimemobile.ui.chat.chrome.ChatSearchOverlay(
+            search = search,
+            scope = scope,
+            onQuerySearch = { query ->
+                scope.launch {
+                    search.searchResults = com.privimemobile.chat.ChatService.db?.messageDao()
+                        ?.searchInConversation(convId, "%$query%") ?: emptyList()
                 }
-            }
-
-            // Clear override when user scrolls AWAY from where the tap-scroll landed
-            LaunchedEffect(listState.firstVisibleItemIndex) {
-                if (pinState.manualOverrideIndex >= 0 && pinState.scrollPosAtOverride >= 0) {
-                    // Wait for the programmatic scroll to finish first
-                    delay(1000)
-                    // Only clear if user has actually scrolled from the landing position
-                    if (listState.firstVisibleItemIndex != pinState.scrollPosAtOverride) {
-                        pinState.clearManualOverride()
-                    }
-                }
-            }
-
-            val safeIndex = if (pinState.manualOverrideIndex >= 0)
-                pinState.manualOverrideIndex.coerceIn(0, pinnedByOrder.size - 1)
-            else
-                scrollAwarePinIndex.coerceIn(0, pinnedByOrder.size - 1)
-            val currentPin = pinnedByOrder[safeIndex]
-
-            fun scrollToPinMsg(pin: ChatMessage) {
-                val revMsgs = messages.reversed()
-                val idx = revMsgs.indexOfFirst { it.timestamp == pin.timestamp && it.id == pin.id }
+            },
+            onResultClick = { ts ->
+                val reversedMessages = messages.reversed()
+                val idx = reversedMessages.indexOfFirst { it.timestamp == ts }
                 if (idx >= 0) {
-                    pinState.pinHighlightTs = pin.timestamp
+                    search.searchHighlightTs = ts
                     scope.launch {
                         listState.animateScrollToItem(idx)
                         delay(2000)
-                        pinState.pinHighlightTs = 0L
+                        search.searchHighlightTs = null
                     }
                 }
-            }
+            },
+        )
 
-            Surface(
-                color = C.card,
-                shadowElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .clickable {
-                            scrollToPinMsg(currentPin)
-                            val revMsgs = messages.reversed()
-                            val landingIdx = revMsgs.indexOfFirst { it.timestamp == currentPin.timestamp && it.id == currentPin.id }
-                            pinState.applyBarTapOverride(safeIndex, landingIdx)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Accent segment bar
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val segments = pinnedByOrder.size.coerceAtMost(5)
-                        val segH = (26 / segments).coerceAtLeast(3)
-                        repeat(segments) { i ->
-                            Box(
-                                modifier = Modifier
-                                    .width(3.dp)
-                                    .height(segH.dp)
-                                    .padding(vertical = 0.5.dp)
-                                    .background(if (i == safeIndex % segments) C.accent else C.accent.copy(alpha = 0.25f))
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text(
-                            if (pinnedByOrder.size > 1) context.getString(R.string.chat_pinned_message_num, safeIndex + 1) else stringResource(R.string.chat_pinned_message),
-                            color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            currentPin.text.ifEmpty { if (currentPin.file != null) stringResource(R.string.chat_file_label) else stringResource(R.string.chat_message_label) },
-                            color = C.textSecondary, fontSize = 13.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    // Pin list icon — opens full pin list screen
-                    IconButton(
-                        onClick = { pinState.showPinListDialog = true },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(Icons.Default.PushPin, stringResource(R.string.chat_pinned_messages), tint = C.textSecondary, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-
-            // Pin list dialog (full screen style)
-            if (pinState.showPinListDialog) {
-                AlertDialog(
-                    onDismissRequest = { pinState.dismissPinListDialog() },
-                    containerColor = C.card,
-                    title = {
-                        Text(stringResource(R.string.chat_pinned_messages, pinnedByOrder.size), color = C.text, fontWeight = FontWeight.SemiBold)
-                    },
-                    text = {
-                        Column(modifier = Modifier.heightIn(max = 400.dp)) {
-                            LazyColumn {
-                                items(pinnedByOrder.size) { idx ->
-                                    val pin = pinnedByOrder[idx]
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        // Pin number
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(CircleShape)
-                                                .background(C.accent.copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Text("#${idx + 1}", color = C.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                        Spacer(Modifier.width(10.dp))
-                                        // Message preview
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                pin.text.ifEmpty { if (pin.file != null) stringResource(R.string.chat_pinned_file) else stringResource(R.string.chat_pinned_message) },
-                                                color = C.text, fontSize = 14.sp,
-                                                maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                formatMessageTime(pin.timestamp),
-                                                color = C.textMuted, fontSize = 11.sp,
-                                            )
-                                        }
-                                        Spacer(Modifier.width(8.dp))
-                                        // Navigate to message button (chat bubble with arrow)
-                                        IconButton(
-                                            onClick = {
-                                                pinState.dismissPinListDialog()
-                                                scrollToPinMsg(pin)
-                                            },
-                                            modifier = Modifier.size(32.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.AutoMirrored.Filled.ArrowForward,
-                                                context.getString(R.string.chat_jump),
-                                                tint = C.accent,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                    }
-                                    if (idx < pinnedByOrder.size - 1) {
-                                        HorizontalDivider(color = C.border.copy(alpha = 0.3f))
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        // Unpin all — only admin/creator in group mode, always in DM
-                        val canUnpin = !isGroupMode || (group?.myRole ?: 0) >= 1
-                        if (canUnpin) {
-                            TextButton(onClick = {
-                                scope.launch {
-                                    if (convId > 0L) {
-                                        com.privimemobile.chat.ChatService.db?.messageDao()?.unpinAll(convId)
-                                    }
-                                }
-                                pinState.dismissPinListDialog()
-                            }) {
-                                Text(stringResource(R.string.chat_unpin_all), color = C.error, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { pinState.dismissPinListDialog() }) {
-                            Text(stringResource(R.string.general_close), color = C.textSecondary)
-                        }
-                    },
-                )
-            }
-        }
+        val pinnedByOrder = messages.filter { it.pinned }.sortedBy { it.pinnedAt }
+        com.privimemobile.ui.chat.chrome.ChatPinnedBar(
+            pinnedByOrder = pinnedByOrder,
+            messages = messages,
+            pinState = pinState,
+            listState = listState,
+            scope = scope,
+            isGroupMode = isGroupMode,
+            groupMyRole = group?.myRole ?: 0,
+            convId = convId,
+        )
 
         // Messages list + scroll-to-bottom button
         val wallpaperBg = when {

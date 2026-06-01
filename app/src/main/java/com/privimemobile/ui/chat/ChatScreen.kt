@@ -524,6 +524,7 @@ fun ChatScreen(
 
     // In-chat search
     val search = remember { ChatSearchState() }
+    val pinState = remember { ChatPinState() }
     var replyHighlightTs by remember { mutableStateOf<Long?>(null) }
 
     // Attachment picker
@@ -2128,8 +2129,6 @@ fun ChatScreen(
 
         // Pinned messages bar — scroll-aware, ordered by pin time
         val pinnedByOrder = messages.filter { it.pinned }.sortedBy { it.pinnedAt }  // #1 = first pinned
-        var pinHighlightTs by remember { mutableStateOf(0L) }
-        var showPinListDialog by remember { mutableStateOf(false) }
         if (pinnedByOrder.isNotEmpty()) {
             // Scroll-aware pin index (default)
             val scrollAwarePinIndex by remember(pinnedByOrder) {
@@ -2148,24 +2147,20 @@ fun ChatScreen(
                 }
             }
 
-            // Manual override from tap — cleared only on user-initiated scroll
-            var manualOverrideIndex by remember { mutableStateOf(-1) }
-            var scrollPosAtOverride by remember { mutableStateOf(-1) }
             // Clear override when user scrolls AWAY from where the tap-scroll landed
             LaunchedEffect(listState.firstVisibleItemIndex) {
-                if (manualOverrideIndex >= 0 && scrollPosAtOverride >= 0) {
+                if (pinState.manualOverrideIndex >= 0 && pinState.scrollPosAtOverride >= 0) {
                     // Wait for the programmatic scroll to finish first
                     delay(1000)
                     // Only clear if user has actually scrolled from the landing position
-                    if (listState.firstVisibleItemIndex != scrollPosAtOverride) {
-                        manualOverrideIndex = -1
-                        scrollPosAtOverride = -1
+                    if (listState.firstVisibleItemIndex != pinState.scrollPosAtOverride) {
+                        pinState.clearManualOverride()
                     }
                 }
             }
 
-            val safeIndex = if (manualOverrideIndex >= 0)
-                manualOverrideIndex.coerceIn(0, pinnedByOrder.size - 1)
+            val safeIndex = if (pinState.manualOverrideIndex >= 0)
+                pinState.manualOverrideIndex.coerceIn(0, pinnedByOrder.size - 1)
             else
                 scrollAwarePinIndex.coerceIn(0, pinnedByOrder.size - 1)
             val currentPin = pinnedByOrder[safeIndex]
@@ -2174,11 +2169,11 @@ fun ChatScreen(
                 val revMsgs = messages.reversed()
                 val idx = revMsgs.indexOfFirst { it.timestamp == pin.timestamp && it.id == pin.id }
                 if (idx >= 0) {
-                    pinHighlightTs = pin.timestamp
+                    pinState.pinHighlightTs = pin.timestamp
                     scope.launch {
                         listState.animateScrollToItem(idx)
                         delay(2000)
-                        pinHighlightTs = 0L
+                        pinState.pinHighlightTs = 0L
                     }
                 }
             }
@@ -2192,11 +2187,9 @@ fun ChatScreen(
                     modifier = Modifier
                         .clickable {
                             scrollToPinMsg(currentPin)
-                            // Set manual override to previous pin (stop at #1, don't cycle)
-                            manualOverrideIndex = if (safeIndex > 0) safeIndex - 1 else 0
-                            // Record where scroll will land so we only clear on USER scroll
                             val revMsgs = messages.reversed()
-                            scrollPosAtOverride = revMsgs.indexOfFirst { it.timestamp == currentPin.timestamp && it.id == currentPin.id }
+                            val landingIdx = revMsgs.indexOfFirst { it.timestamp == currentPin.timestamp && it.id == currentPin.id }
+                            pinState.applyBarTapOverride(safeIndex, landingIdx)
                         }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2228,7 +2221,7 @@ fun ChatScreen(
                     }
                     // Pin list icon — opens full pin list screen
                     IconButton(
-                        onClick = { showPinListDialog = true },
+                        onClick = { pinState.showPinListDialog = true },
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(Icons.Default.PushPin, stringResource(R.string.chat_pinned_messages), tint = C.textSecondary, modifier = Modifier.size(18.dp))
@@ -2237,9 +2230,9 @@ fun ChatScreen(
             }
 
             // Pin list dialog (full screen style)
-            if (showPinListDialog) {
+            if (pinState.showPinListDialog) {
                 AlertDialog(
-                    onDismissRequest = { showPinListDialog = false },
+                    onDismissRequest = { pinState.dismissPinListDialog() },
                     containerColor = C.card,
                     title = {
                         Text(stringResource(R.string.chat_pinned_messages, pinnedByOrder.size), color = C.text, fontWeight = FontWeight.SemiBold)
@@ -2282,7 +2275,7 @@ fun ChatScreen(
                                         // Navigate to message button (chat bubble with arrow)
                                         IconButton(
                                             onClick = {
-                                                showPinListDialog = false
+                                                pinState.dismissPinListDialog()
                                                 scrollToPinMsg(pin)
                                             },
                                             modifier = Modifier.size(32.dp),
@@ -2312,14 +2305,14 @@ fun ChatScreen(
                                         com.privimemobile.chat.ChatService.db?.messageDao()?.unpinAll(convId)
                                     }
                                 }
-                                showPinListDialog = false
+                                pinState.dismissPinListDialog()
                             }) {
                                 Text(stringResource(R.string.chat_unpin_all), color = C.error, fontWeight = FontWeight.Bold)
                             }
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showPinListDialog = false }) {
+                        TextButton(onClick = { pinState.dismissPinListDialog() }) {
                             Text(stringResource(R.string.general_close), color = C.textSecondary)
                         }
                     },
@@ -2778,7 +2771,7 @@ fun ChatScreen(
                             reactionDetailMsg = msg
                             reactionDetailEmoji = emoji
                         },
-                        isHighlighted = search.searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
+                        isHighlighted = search.searchHighlightTs == msg.timestamp || searchHighlightFromNav == msg.timestamp || pinState.pinHighlightTs == msg.timestamp || replyHighlightTs == msg.timestamp,
                         isGroupMode = isGroupMode,
                         onSenderTap = { senderHandle ->
                             if (senderHandle.isNotEmpty()) onViewContact(senderHandle)

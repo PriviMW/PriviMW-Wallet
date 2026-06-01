@@ -1936,6 +1936,7 @@ fun ChatScreen(
             enter = androidx.compose.animation.expandVertically(tween(200)) + androidx.compose.animation.fadeIn(tween(200)),
             exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(200)),
         ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
             Surface(color = C.card) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
@@ -2029,6 +2030,7 @@ fun ChatScreen(
                     }
                 }
             }
+            } // Column: search bar above results (no overlap)
         }
 
         // Pinned messages bar — scroll-aware, ordered by pin time

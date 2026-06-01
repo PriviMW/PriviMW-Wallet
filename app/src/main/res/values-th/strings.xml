@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">ส่งคำขอเข้าร่วมแล้ว!</string>
     <string name="dapps_updated_toast">อัปเดต %1$s สำเร็จ</string>
     <string name="dapps_updated_reopen_toast">อัปเดต %1$s ในพื้นหลังแล้ว ปิดแล้วเปิดใหม่เพื่อใช้เวอร์ชันล่าสุด</string>
+    <string name="dapps_launch_store_timeout">ไม่สามารถเชื่อมต่อ DApp Store ได้ทันเวลา กำลังเปิด %1$s จากอุปกรณ์นี้</string>
     <string name="settings_file_empty">ไฟล์ที่เลือกว่างเปล่า</string>
     <string name="settings_invalid_json">ไฟล์ JSON ไม่ถูกต้อง</string>
     <string name="settings_file_read_failed">อ่านไฟล์ไม่สำเร็จ: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">ลบ %1$d ข้อความ%2$s?</string>
     <string name="chat_delete_for_me">ลบสำหรับฉัน</string>
     <string name="chat_delete_for_everyone">ลบสำหรับทุกคน</string>
+    <string name="chat_bulk_delete_for_everyone_count">ลบสำหรับทุกคน (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">ข้อความที่คุณส่งเท่านั้นที่จะถูกลบสำหรับทุกคน ข้อความอื่นที่เลือกจะถูกลบบนอุปกรณ์นี้เท่านั้น</string>
     <string name="chat_wallpaper">วอลเปเปอร์แชท</string>
     <string name="chat_custom_image">รูปภาพที่กำหนดเอง</string>
     <string name="chat_schedule_message">กำหนดเวลาส่งข้อความ</string>

@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">参加リクエストを送信しました！</string>
     <string name="dapps_updated_toast">%1$sを更新しました</string>
     <string name="dapps_updated_reopen_toast">%1$sはバックグラウンドで更新されました。最新版を使うには閉じて再度開いてください。</string>
+    <string name="dapps_launch_store_timeout">DAppストアに時間内に接続できませんでした。この端末から%1$sを開きます。</string>
     <string name="settings_file_empty">選択されたファイルは空です</string>
     <string name="settings_invalid_json">無効なJSONファイル</string>
     <string name="settings_file_read_failed">ファイルの読み取りに失敗しました: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">%1$d件のメッセージ%2$sを削除しますか？</string>
     <string name="chat_delete_for_me">自分から削除</string>
     <string name="chat_delete_for_everyone">全員から削除</string>
+    <string name="chat_bulk_delete_for_everyone_count">全員から削除（%1$d）</string>
+    <string name="chat_bulk_delete_everyone_hint">全員から削除されるのは自分が送信したメッセージのみです。それ以外の選択したメッセージはこの端末でのみ削除されます。</string>
     <string name="chat_wallpaper">チャットの壁紙</string>
     <string name="chat_custom_image">カスタム画像</string>
     <string name="chat_schedule_message">メッセージを予約</string>

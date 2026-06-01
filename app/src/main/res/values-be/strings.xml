@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Запыт на далучэнне адпраўлены!</string>
     <string name="dapps_updated_toast">%1$s паспяхова абноўлены</string>
     <string name="dapps_updated_reopen_toast">%1$s быў абноўлены ў фоне. Закрыйце і адкрыйце яго зноў, каб выкарыстоўваць апошнюю версію.</string>
+    <string name="dapps_launch_store_timeout">Не ўдалося своечасова дастаўчыцца да крамы DApp. Адкрываем %1$s з гэтай прылады.</string>
     <string name="settings_file_empty">Выбраны файл пусты</string>
     <string name="settings_invalid_json">Няправільны JSON-файл</string>
     <string name="settings_file_read_failed">Не атрымалася прачытаць файл: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Выдаліць %1$d паведамленне%2$s?</string>
     <string name="chat_delete_for_me">Выдаліць для мяне</string>
     <string name="chat_delete_for_everyone">Выдаліць для ўсіх</string>
+    <string name="chat_bulk_delete_for_everyone_count">Выдаліць для ўсіх (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Для ўсіх выдаляюцца толькі паведамленні, якія вы адправілі. Іншыя выбраныя паведамленні выдаляюцца толькі на гэтай прыладзе.</string>
     <string name="chat_wallpaper">Фон чата</string>
     <string name="chat_custom_image">Карыстацкая выява</string>
     <string name="chat_schedule_message">Запланаваць паведамленне</string>

@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Medlemsförfrågan skickad!</string>
     <string name="dapps_updated_toast">%1$s uppdaterad framgångsrikt</string>
     <string name="dapps_updated_reopen_toast">%1$s uppdaterades i bakgrunden. Stäng och öppna igen för att använda den senaste versionen.</string>
+    <string name="dapps_launch_store_timeout">Kunde inte nå DApp Store i tid. Öppnar %1$s från den här enheten.</string>
     <string name="settings_file_empty">Vald fil är tom</string>
     <string name="settings_invalid_json">Ogiltig JSON-fil</string>
     <string name="settings_file_read_failed">Misslyckades att läsa fil: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Radera %1$d meddelande%2$s?</string>
     <string name="chat_delete_for_me">Radera för mig</string>
     <string name="chat_delete_for_everyone">Radera för alla</string>
+    <string name="chat_bulk_delete_for_everyone_count">Radera för alla (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Endast meddelanden du skickade tas bort för alla. Övriga valda meddelanden tas bort endast på den här enheten.</string>
     <string name="chat_wallpaper">Chattbakgrund</string>
     <string name="chat_custom_image">Anpassad bild</string>
     <string name="chat_schedule_message">Planera meddelande</string>

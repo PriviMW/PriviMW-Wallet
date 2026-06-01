@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Deelnameverzoek verzonden!</string>
     <string name="dapps_updated_toast">%1$s succesvol bijgewerkt</string>
     <string name="dapps_updated_reopen_toast">%1$s is op de achtergrond bijgewerkt. Sluit en open opnieuw om de nieuwste versie te gebruiken.</string>
+    <string name="dapps_launch_store_timeout">Kan de DApp Store niet op tijd bereiken. %1$s wordt op dit apparaat geopend.</string>
     <string name="settings_file_empty">Geselecteerd bestand is leeg</string>
     <string name="settings_invalid_json">Ongeldig JSON-bestand</string>
     <string name="settings_file_read_failed">Bestand lezen mislukt: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">%1$d bericht%2$s verwijderen?</string>
     <string name="chat_delete_for_me">Voor mij verwijderen</string>
     <string name="chat_delete_for_everyone">Voor iedereen verwijderen</string>
+    <string name="chat_bulk_delete_for_everyone_count">Voor iedereen verwijderen (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Alleen berichten die u hebt verzonden worden voor iedereen verwijderd. Andere geselecteerde berichten worden alleen op dit apparaat verwijderd.</string>
     <string name="chat_wallpaper">Chat-achtergrond</string>
     <string name="chat_custom_image">Eigen afbeelding</string>
     <string name="chat_schedule_message">Bericht inplannen</string>

@@ -1319,6 +1319,7 @@
     <string name="new_chat_join_request_sent">加入请求已发送！</string>
     <string name="dapps_updated_toast">%1$s 已成功更新</string>
     <string name="dapps_updated_reopen_toast">%1$s 已在后台更新。请关闭后重新打开以使用最新版本。</string>
+    <string name="dapps_launch_store_timeout">无法及时连接 DApp 商店。正在从此设备打开 %1$s。</string>
     <string name="settings_file_empty">文件为空</string>
     <string name="settings_invalid_json">无效的 JSON 文件</string>
     <string name="settings_file_read_failed">读取文件失败：%1$s</string>
@@ -1419,6 +1420,8 @@
     <string name="chat_delete_messages_title">删除 %1$d 条消息%2$s？</string>
     <string name="chat_delete_for_me">为我删除</string>
     <string name="chat_delete_for_everyone">为所有人删除</string>
+    <string name="chat_bulk_delete_for_everyone_count">为所有人删除（%1$d）</string>
+    <string name="chat_bulk_delete_everyone_hint">仅您发送的消息会为所有人删除。其他所选消息仅在此设备上删除。</string>
     <string name="chat_wallpaper">聊天壁纸</string>
     <string name="chat_custom_image">自定义图片</string>
     <string name="chat_schedule_message">定时消息</string>

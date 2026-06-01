@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Đã gửi yêu cầu tham gia!</string>
     <string name="dapps_updated_toast">%1$s đã cập nhật thành công</string>
     <string name="dapps_updated_reopen_toast">%1$s đã được cập nhật trong nền. Đóng và mở lại để dùng phiên bản mới nhất.</string>
+    <string name="dapps_launch_store_timeout">Không thể kết nối DApp Store kịp thời. Đang mở %1$s từ thiết bị này.</string>
     <string name="settings_file_empty">Tệp đã chọn trống</string>
     <string name="settings_invalid_json">Tệp JSON không hợp lệ</string>
     <string name="settings_file_read_failed">Không thể đọc tệp: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Xóa %1$d tin nhắn%2$s?</string>
     <string name="chat_delete_for_me">Xóa ở phía tôi</string>
     <string name="chat_delete_for_everyone">Xóa ở mọi người</string>
+    <string name="chat_bulk_delete_for_everyone_count">Xóa ở mọi người (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Chỉ tin nhắn bạn đã gửi mới bị xóa ở mọi người. Các tin nhắn đã chọn khác chỉ bị xóa trên thiết bị này.</string>
     <string name="chat_wallpaper">Hình nền trò chuyện</string>
     <string name="chat_custom_image">Hình tùy chỉnh</string>
     <string name="chat_schedule_message">Lên lịch tin nhắn</string>

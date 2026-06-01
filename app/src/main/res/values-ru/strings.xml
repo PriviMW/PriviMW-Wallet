@@ -1319,6 +1319,7 @@
     <string name="new_chat_join_request_sent">Запрос на вступление отправлен!</string>
     <string name="dapps_updated_toast">%1$s успешно обновлён</string>
     <string name="dapps_updated_reopen_toast">%1$s обновлён в фоне. Закройте и откройте снова, чтобы использовать последнюю версию.</string>
+    <string name="dapps_launch_store_timeout">Не удалось вовремя подключиться к магазину DApp. Открываем %1$s с этого устройства.</string>
     <string name="settings_file_empty">Файл пуст</string>
     <string name="settings_invalid_json">Неверный JSON-файл</string>
     <string name="settings_file_read_failed">Ошибка чтения файла: %1$s</string>
@@ -1419,6 +1420,8 @@
     <string name="chat_delete_messages_title">Удалить %1$d сообщение%2$s?</string>
     <string name="chat_delete_for_me">Удалить для себя</string>
     <string name="chat_delete_for_everyone">Удалить для всех</string>
+    <string name="chat_bulk_delete_for_everyone_count">Удалить для всех (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Для всех удаляются только отправленные вами сообщения. Остальные выбранные сообщения удаляются только на этом устройстве.</string>
     <string name="chat_wallpaper">Обои чата</string>
     <string name="chat_custom_image">Свое изображение</string>
     <string name="chat_schedule_message">Запланировать сообщение</string>

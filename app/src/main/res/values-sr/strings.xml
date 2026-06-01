@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Захтев за придруживање послат!</string>
     <string name="dapps_updated_toast">%1$s је успешно ажурирано</string>
     <string name="dapps_updated_reopen_toast">%1$s је ажуриран у позадини. Затворите и поново отворите да бисте користили најновију верзију.</string>
+    <string name="dapps_launch_store_timeout">Није могуће на време приступити DApp продавници. Отвара се %1$s са овог уређаја.</string>
     <string name="settings_file_empty">Изабрани фајл је празан</string>
     <string name="settings_invalid_json">Неисправан JSON фајл</string>
     <string name="settings_file_read_failed">Неуспешно читање фајла: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Обрисати %1$d пору%2$s?</string>
     <string name="chat_delete_for_me">Обриши за мене</string>
     <string name="chat_delete_for_everyone">Обриши за све</string>
+    <string name="chat_bulk_delete_for_everyone_count">Обриши за све (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">За све се бришу само поруке које сте ви послали. Остале изабране поруке се бришу само на овом уређају.</string>
     <string name="chat_wallpaper">Зидна слика чата</string>
     <string name="chat_custom_image">Прилагођена слика</string>
     <string name="chat_schedule_message">Закажи поруку</string>

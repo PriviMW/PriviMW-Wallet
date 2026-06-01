@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Liittymispyyntö lähetetty!</string>
     <string name="dapps_updated_toast">%1$s päivitetty onnistuneesti</string>
     <string name="dapps_updated_reopen_toast">%1$s päivitettiin taustalla. Sulje ja avaa uudelleen käyttääksesi uusinta versiota.</string>
+    <string name="dapps_launch_store_timeout">DApp-kauppaa ei tavoitettu ajoissa. Avataan %1$s tästä laitteesta.</string>
     <string name="settings_file_empty">Valittu tiedosto on tyhjä</string>
     <string name="settings_invalid_json">Virheellinen JSON-tiedosto</string>
     <string name="settings_file_read_failed">Tiedoston luku epäonnistui: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Poistetaanko %1$d viesti%2$s?</string>
     <string name="chat_delete_for_me">Poista minulta</string>
     <string name="chat_delete_for_everyone">Poista kaikilta</string>
+    <string name="chat_bulk_delete_for_everyone_count">Poista kaikilta (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Kaikilta poistetaan vain lähettämäsi viestit. Muut valitut viestit poistetaan vain tältä laitteelta.</string>
     <string name="chat_wallpaper">Keskustelun taustakuva</string>
     <string name="chat_custom_image">Mukautettu kuva</string>
     <string name="chat_schedule_message">Ajoita viesti</string>

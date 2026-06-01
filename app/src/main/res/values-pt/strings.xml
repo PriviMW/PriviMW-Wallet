@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Solicitacao de entrada enviada!</string>
     <string name="dapps_updated_toast">%1$s atualizado com sucesso</string>
     <string name="dapps_updated_reopen_toast">%1$s foi atualizado em segundo plano. Feche e abra novamente para usar a versão mais recente.</string>
+    <string name="dapps_launch_store_timeout">Não foi possível acessar a loja DApp a tempo. Abrindo %1$s neste dispositivo.</string>
     <string name="settings_file_empty">Arquivo selecionado está vazio</string>
     <string name="settings_invalid_json">Arquivo JSON invalido</string>
     <string name="settings_file_read_failed">Falha ao ler arquivo: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Excluir %1$d mensagem%2$s?</string>
     <string name="chat_delete_for_me">Excluir para mim</string>
     <string name="chat_delete_for_everyone">Excluir para todos</string>
+    <string name="chat_bulk_delete_for_everyone_count">Excluir para todos (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Apenas as mensagens que você enviou são removidas para todos. Outras mensagens selecionadas são removidas apenas neste dispositivo.</string>
     <string name="chat_wallpaper">Papel de Parede do Chat</string>
     <string name="chat_custom_image">Imagem Personalizada</string>
     <string name="chat_schedule_message">Agendar Mensagem</string>

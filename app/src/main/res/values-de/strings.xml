@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Beitrittsanfrage gesendet!</string>
     <string name="dapps_updated_toast">%1$s erfolgreich aktualisiert</string>
     <string name="dapps_updated_reopen_toast">%1$s wurde im Hintergrund aktualisiert. Schließen Sie die DApp und öffnen Sie sie erneut, um die neueste Version zu verwenden.</string>
+    <string name="dapps_launch_store_timeout">Der DApp Store konnte nicht rechtzeitig erreicht werden. %1$s wird auf diesem Gerät geöffnet.</string>
     <string name="settings_file_empty">Ausgewählte Datei ist leer</string>
     <string name="settings_invalid_json">Ungültige JSON-Datei</string>
     <string name="settings_file_read_failed">Datei lesen fehlgeschlagen: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">%1$d Nachricht%2$s löschen?</string>
     <string name="chat_delete_for_me">Für mich löschen</string>
     <string name="chat_delete_for_everyone">Für alle löschen</string>
+    <string name="chat_bulk_delete_for_everyone_count">Für alle löschen (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Für alle werden nur von Ihnen gesendete Nachrichten entfernt. Andere ausgewählte Nachrichten werden nur auf diesem Gerät entfernt.</string>
     <string name="chat_wallpaper">Chat-Hintergrund</string>
     <string name="chat_custom_image">Benutzerdefiniertes Bild</string>
     <string name="chat_schedule_message">Nachricht planen</string>

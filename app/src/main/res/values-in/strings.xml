@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Permintaan bergabung dikirim!</string>
     <string name="dapps_updated_toast">%1$s berhasil diperbarui</string>
     <string name="dapps_updated_reopen_toast">%1$s diperbarui di latar belakang. Tutup dan buka lagi untuk menggunakan versi terbaru.</string>
+    <string name="dapps_launch_store_timeout">Tidak dapat menjangkau Toko DApp tepat waktu. Membuka %1$s dari perangkat ini.</string>
     <string name="settings_file_empty">File yang dipilih kosong</string>
     <string name="settings_invalid_json">File JSON tidak valid</string>
     <string name="settings_file_read_failed">Gagal membaca file: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">Hapus %1$d pesan%2$s?</string>
     <string name="chat_delete_for_me">Hapus untuk saya</string>
     <string name="chat_delete_for_everyone">Hapus untuk semua orang</string>
+    <string name="chat_bulk_delete_for_everyone_count">Hapus untuk semua orang (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Hanya pesan yang Anda kirim yang dihapus untuk semua orang. Pesan terpilih lainnya hanya dihapus di perangkat ini.</string>
     <string name="chat_wallpaper">Latar Belakang Obrolan</string>
     <string name="chat_custom_image">Gambar Kustom</string>
     <string name="chat_schedule_message">Jadwalkan Pesan</string>

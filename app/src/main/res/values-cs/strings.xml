@@ -1316,6 +1316,7 @@
     <string name="new_chat_join_request_sent">Žádost o připojení odeslána!</string>
     <string name="dapps_updated_toast">%1$s úspěšně aktualizován</string>
     <string name="dapps_updated_reopen_toast">%1$s byl aktualizován na pozadí. Zavřete jej a znovu otevřete, abyste použili nejnovější verzi.</string>
+    <string name="dapps_launch_store_timeout">Nepodařilo se včas dosáhnout obchodu DApp. Otevírání %1$s z tohoto zařízení.</string>
     <string name="settings_file_empty">Vybraný soubor je prázdný</string>
     <string name="settings_invalid_json">Neplatný JSON soubor</string>
     <string name="settings_file_read_failed">Selhalo čtení souboru: %1$s</string>
@@ -1416,6 +1417,8 @@
     <string name="chat_delete_messages_title">Smazat %1$d zprávu%2$s?</string>
     <string name="chat_delete_for_me">Smazat pro mě</string>
     <string name="chat_delete_for_everyone">Smazat pro všechny</string>
+    <string name="chat_bulk_delete_for_everyone_count">Smazat pro všechny (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Pro všechny se odstraní pouze zprávy, které jste odeslali vy. Ostatní vybrané zprávy se odstraní pouze na tomto zařízení.</string>
     <string name="chat_wallpaper">Tapeta chatu</string>
     <string name="chat_custom_image">Vlastní obrázek</string>
     <string name="chat_schedule_message">Naplánovat zprávu</string>

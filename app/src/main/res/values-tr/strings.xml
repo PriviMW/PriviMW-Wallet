@@ -1314,6 +1314,7 @@
     <string name="new_chat_join_request_sent">Katılma talebi gönderildi!</string>
     <string name="dapps_updated_toast">%1$s başarıyla güncellendi</string>
     <string name="dapps_updated_reopen_toast">%1$s arka planda güncellendi. En son sürümü kullanmak için kapatıp yeniden açın.</string>
+    <string name="dapps_launch_store_timeout">DApp Mağazasına zamanında ulaşılamadı. %1$s bu cihazdan açılıyor.</string>
     <string name="settings_file_empty">Seçilen dosya boş</string>
     <string name="settings_invalid_json">Geçersiz JSON dosyası</string>
     <string name="settings_file_read_failed">Dosya okuma başarısız: %1$s</string>
@@ -1414,6 +1415,8 @@
     <string name="chat_delete_messages_title">%1$d mesaj%2$s sil?</string>
     <string name="chat_delete_for_me">Benim için sil</string>
     <string name="chat_delete_for_everyone">Herkes için sil</string>
+    <string name="chat_bulk_delete_for_everyone_count">Herkes için sil (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Herkes için yalnızca gönderdiğiniz mesajlar kaldırılır. Seçilen diğer mesajlar yalnızca bu cihazdan kaldırılır.</string>
     <string name="chat_wallpaper">Sohbet Duvar Kağıdı</string>
     <string name="chat_custom_image">Özel Görüntü</string>
     <string name="chat_schedule_message">Mesaj Planla</string>

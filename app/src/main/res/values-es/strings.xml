@@ -1316,6 +1316,7 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="new_chat_join_request_sent">¡Solicitud de ingreso enviada!</string>
     <string name="dapps_updated_toast">%1$s actualizado correctamente</string>
     <string name="dapps_updated_reopen_toast">%1$s se actualizó en segundo plano. Ciérralo y ábrelo de nuevo para usar la última versión.</string>
+    <string name="dapps_launch_store_timeout">No se pudo acceder a la tienda DApp a tiempo. Abriendo %1$s desde este dispositivo.</string>
     <string name="settings_file_empty">Archivo vacío</string>
     <string name="settings_invalid_json">Archivo JSON no válido</string>
     <string name="settings_file_read_failed">Error al leer archivo: %1$s</string>
@@ -1416,6 +1417,8 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="chat_delete_messages_title">¿Eliminar %1$d mensaje%2$s?</string>
     <string name="chat_delete_for_me">Eliminar para mí</string>
     <string name="chat_delete_for_everyone">Eliminar para todos</string>
+    <string name="chat_bulk_delete_for_everyone_count">Eliminar para todos (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Solo se eliminan para todos los mensajes que enviaste. Los demás mensajes seleccionados se eliminan solo en este dispositivo.</string>
     <string name="chat_wallpaper">Fondo del chat</string>
     <string name="chat_custom_image">Imagen personalizada</string>
     <string name="chat_schedule_message">Programar mensaje</string>

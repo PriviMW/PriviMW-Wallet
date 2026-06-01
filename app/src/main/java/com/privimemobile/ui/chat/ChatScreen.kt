@@ -114,7 +114,6 @@ import com.privimemobile.R
 import com.privimemobile.protocol.*
 import com.privimemobile.ui.chat.format.formatDateSeparator
 import com.privimemobile.ui.chat.format.formatMessageTime
-import com.privimemobile.ui.chat.format.formatTimerLabel
 import com.privimemobile.ui.chat.format.parseMarkdown
 import com.privimemobile.ui.chat.media.AttachmentPickerSheet
 import com.privimemobile.ui.chat.media.FullscreenImageViewer
@@ -2141,124 +2140,7 @@ fun ChatScreen(
             }
         }
 
-        // Self-destruct timer indicator bar
-        if (input.oneShotTimer > 0) {
-            Surface(
-                color = C.card,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("\u23F3", fontSize = 14.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        context.getString(R.string.chat_self_destruct_timer) + ": ${formatTimerLabel(context, input.oneShotTimer)}",
-                        color = C.accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { input.oneShotTimer = 0 }) {
-                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Edit preview bar
-        if (input.editingMsg != null) {
-            Surface(
-                color = C.card,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(3.dp)
-                            .height(32.dp)
-                            .background(Color(0xFFFFA726)) // orange accent for edit
-                    )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp),
-                    ) {
-                        Text(
-                            stringResource(R.string.chat_editing_message),
-                            color = Color(0xFFFFA726),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            input.editingMsg!!.text.take(80),
-                            color = C.textSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    TextButton(onClick = {
-                        input.editingMsg = null
-                        input.setInputText("")
-                    }) {
-                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Reply preview bar
-        if (input.replyingTo != null) {
-            Surface(
-                color = C.card,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(3.dp)
-                            .height(32.dp)
-                            .background(C.accent)
-                    )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp),
-                    ) {
-                        Text(
-                            if (input.replyingTo!!.sent) stringResource(R.string.chat_you_label) else "@${input.replyingTo!!.from}",
-                            color = C.accent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            input.replyingTo!!.text.ifEmpty {
-                                when (input.replyingTo!!.type) {
-                                    "file" -> stringResource(R.string.chat_reply_file)
-                                    "tip" -> context.getString(R.string.chat_tip_simple, "${Helpers.formatBeam(input.replyingTo!!.tipAmount)} ${com.privimemobile.wallet.assetTicker(input.replyingTo!!.tipAssetId)}")
-                                    else -> context.getString(R.string.chat_message_label)
-                                }
-                            }.take(80),
-                            color = C.textSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    TextButton(onClick = { input.replyingTo = null }) {
-                        Text(stringResource(R.string.chat_close), color = C.error, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
+        com.privimemobile.ui.chat.chrome.ChatReplyEditBars(input = input)
 
         com.privimemobile.ui.chat.chrome.ChatInputBar(
             view = view,

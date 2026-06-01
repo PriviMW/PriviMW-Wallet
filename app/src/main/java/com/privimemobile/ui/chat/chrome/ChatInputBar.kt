@@ -139,7 +139,9 @@ fun ChatInputBar(
             ) {
                 // Left: AnimatedContent for bar content only (normal ↔ recording ↔ preview)
                 androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(C.card),
                     contentAlignment = Alignment.Center,
                 ) {
                     AnimatedContent(
@@ -147,6 +149,7 @@ fun ChatInputBar(
                         transitionSpec = {
                             fadeIn(tween(200)).togetherWith(fadeOut(tween(100)))
                         },
+                        contentAlignment = Alignment.Center,
                         label = "inputBarMode",
                     ) { state ->
                         if (state == 2) {
@@ -293,9 +296,16 @@ fun ChatInputBar(
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(20.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
-                                        focusedContainerColor = C.bg, unfocusedContainerColor = C.bg,
-                                        cursorColor = C.accent, focusedTextColor = C.text, unfocusedTextColor = C.text,
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        disabledBorderColor = Color.Transparent,
+                                        focusedContainerColor = C.bg,
+                                        unfocusedContainerColor = C.bg,
+                                        disabledContainerColor = C.bg,
+                                        cursorColor = C.accent,
+                                        focusedTextColor = C.text,
+                                        unfocusedTextColor = C.text,
+                                        disabledTextColor = C.text.copy(alpha = 0.45f),
                                     ),
                                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
                                     maxLines = 4,
@@ -312,6 +322,10 @@ fun ChatInputBar(
                                             .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.4f) +
                                                 slideOutVertically(tween(150)) { -it / 4 })
                                     },
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .background(C.card),
                                     label = "rightIcons",
                                 ) { showSend ->
                                     if (showSend) {

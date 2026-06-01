@@ -39,8 +39,8 @@ class MessageProcessor(
         "avatar_request", "avatar_response",
     )
 
-    /** Receipt types must run even when SBBS id was seen (e.g. previously skipped in an older build). */
-    private val alwaysReprocessTypes = setOf("ack", "delivered")
+    /** Idempotent inbound types — must run even when SBBS id was already claimed (retries / replay). */
+    private val alwaysReprocessTypes = setOf("ack", "delivered", "delete", "unreact")
 
     /** True if ack/delivered still needs applying (e.g. SBBS id was seen but bulk-replay skipped earlier). */
     private suspend fun receiptStillNeeded(type: String, payload: Map<String, Any?>): Boolean {

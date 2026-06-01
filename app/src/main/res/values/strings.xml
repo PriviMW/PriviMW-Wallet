@@ -1693,6 +1693,8 @@
     <string name="chat_delete_messages_title">Delete %1$d message%2$s?</string>
     <string name="chat_delete_for_me">Delete for me</string>
     <string name="chat_delete_for_everyone">Delete for everyone</string>
+    <string name="chat_bulk_delete_for_everyone_count">Delete for everyone (%1$d)</string>
+    <string name="chat_bulk_delete_everyone_hint">Only messages you sent are removed for everyone. Other selected messages are removed on this device only.</string>
     <string name="chat_wallpaper">Chat Wallpaper</string>
     <string name="chat_custom_image">Custom Image</string>
     <string name="chat_schedule_message">Schedule Message</string>

@@ -558,11 +558,10 @@ fun ChatContextMenuSheet(
                                     com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(targetMsg.id.toLong())
                                     // Update preview BEFORE network send — survives early navigation
                                     onRefreshConversationPreview(convId)
-                                    val delPayload = mapOf(
-                                        "v" to 1, "t" to "delete",
-                                        "ts" to System.currentTimeMillis() / 1000,
-                                        "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
-                                        "msg_ts" to targetMsg.timestamp,
+                                    val delPayload = com.privimemobile.chat.DeleteForEveryone.payload(
+                                        myHandle = state.myHandle!!,
+                                        to = if (isGroupMode) groupId!! else handle,
+                                        msgTimestamp = targetMsg.timestamp,
                                     )
                                     if (isGroupMode && groupId != null) {
                                         com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)

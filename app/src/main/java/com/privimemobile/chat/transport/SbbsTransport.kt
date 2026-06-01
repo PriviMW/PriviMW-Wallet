@@ -30,6 +30,10 @@ class SbbsTransport(
     companion object {
         const val POLL_ACTIVE_MS = 2_000L    // 2s when chat is open — near-instant feel
         const val POLL_IDLE_MS = 180_000L   // 3 min safety net when idle (onInstantMessage is primary)
+        /** Gap between back-to-back SBBS sends (bulk delete-for-everyone). JNI queue drops bursts. */
+        const val BULK_SEND_SPACING_MS = 1000L
+        /** Yield after each send so WalletApi.call can drain before the next payload. */
+        const val BULK_SEND_DRAIN_MS = 300L
         private val RECEIPT_TYPES = setOf("ack", "delivered")
     }
 
@@ -177,6 +181,21 @@ class SbbsTransport(
         scope.launch {
             delay(10000)
             sendSbbsMessage(toWalletId, payload)
+        }
+    }
+
+    /**
+     * Send multiple payloads to one peer with spacing — used for bulk delete-for-everyone.
+     * Each payload still gets sendWithRetry's 5s/10s follow-ups; waits [BULK_SEND_SPACING_MS] between starts.
+     */
+    suspend fun sendPayloadsWithRetrySpaced(toWalletId: String, payloads: List<Map<String, Any?>>) {
+        if (payloads.isEmpty()) return
+        for ((index, payload) in payloads.withIndex()) {
+            sendWithRetry(toWalletId, payload)
+            delay(BULK_SEND_DRAIN_MS)
+            if (index < payloads.lastIndex) {
+                delay(BULK_SEND_SPACING_MS)
+            }
         }
     }
 

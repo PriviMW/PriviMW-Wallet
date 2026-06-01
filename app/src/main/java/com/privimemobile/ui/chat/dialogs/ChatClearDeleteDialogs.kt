@@ -3,6 +3,8 @@ package com.privimemobile.ui.chat.dialogs
 import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -124,7 +126,10 @@ fun ChatClearDeleteDialogs(
 
     if (selection.showDeleteConfirmDialog && selection.pendingDeleteIds.isNotEmpty()) {
         val count = selection.pendingDeleteIds.size
-        val hasOwnMessages = messages.any { it.id in selection.pendingDeleteIds && it.sent }
+        val msgsToDelete = messages.filter { it.id in selection.pendingDeleteIds }
+        val ownCount = msgsToDelete.count { it.sent }
+        val hasOwnMessages = ownCount > 0
+        val hasOthersMessages = ownCount < count
         AlertDialog(
             onDismissRequest = { selection.dismissDeleteConfirm() },
             containerColor = C.card,
@@ -159,36 +164,40 @@ fun ChatClearDeleteDialogs(
                         )
                     }
                     if (hasOwnMessages) {
+                        if (hasOthersMessages) {
+                            Text(
+                                stringResource(R.string.chat_bulk_delete_everyone_hint),
+                                color = C.textSecondary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
                         TextButton(
                             onClick = {
-                                val msgsToDelete = messages.filter { it.id in selection.pendingDeleteIds }
                                 val capturedConvId = convId
+                                val ownMsgs = msgsToDelete.filter { it.sent }
                                 selection.clearAfterBulkAction()
-                                scope.launch {
+                                com.privimemobile.chat.ChatService.scope.launch {
                                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                                     if (state?.myHandle != null) {
                                         for (msg in msgsToDelete) {
                                             com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(msg.id.toLong())
                                         }
                                         onRefreshConversationPreview(capturedConvId)
-                                        for (msg in msgsToDelete) {
-                                            if (msg.sent) {
-                                                val delPayload = mapOf(
-                                                    "v" to 1,
-                                                    "t" to "delete",
-                                                    "ts" to System.currentTimeMillis() / 1000,
-                                                    "from" to state.myHandle!!,
-                                                    "to" to (if (isGroupMode) groupId!! else handle),
-                                                    "msg_ts" to msg.timestamp,
-                                                )
-                                                if (isGroupMode && groupId != null) {
-                                                    com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)
-                                                } else {
-                                                    val walletId = resolvedSbbsAddress
-                                                    if (!walletId.isNullOrEmpty()) {
-                                                        com.privimemobile.chat.ChatService.sbbs.sendWithRetry(walletId, delPayload)
-                                                    }
-                                                }
+                                        val toPeer = if (isGroupMode) groupId!! else handle
+                                        val delPayloads = com.privimemobile.chat.DeleteForEveryone.payloads(
+                                            myHandle = state.myHandle!!,
+                                            to = toPeer,
+                                            msgTimestamps = ownMsgs.map { it.timestamp },
+                                        )
+                                        if (isGroupMode && groupId != null) {
+                                            com.privimemobile.chat.ChatService.groups
+                                                .deliverGroupPayloadsSequentially(groupId, delPayloads)
+                                        } else {
+                                            val walletId = resolvedSbbsAddress
+                                            if (!walletId.isNullOrEmpty()) {
+                                                com.privimemobile.chat.ChatService.sbbs
+                                                    .sendPayloadsWithRetrySpaced(walletId, delPayloads)
                                             }
                                         }
                                     }
@@ -197,7 +206,11 @@ fun ChatClearDeleteDialogs(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                stringResource(R.string.chat_delete_for_everyone),
+                                if (hasOthersMessages) {
+                                    stringResource(R.string.chat_bulk_delete_for_everyone_count, ownCount)
+                                } else {
+                                    stringResource(R.string.chat_delete_for_everyone)
+                                },
                                 color = C.error,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,

@@ -770,40 +770,55 @@ class GroupManager(
      * Runs in ChatService.scope so the full send (with retry) survives leaving ChatScreen.
      */
     fun sendGroupPayload(groupId: String, payload: Map<String, Any?>) {
-        scope.launch {
-            val state = db.chatStateDao().get() ?: return@launch
-            val myHandle = state.myHandle ?: return@launch
+        scope.launch { deliverGroupPayload(groupId, payload) }
+    }
 
-            // Block sending if banned
-            val myMember = db.groupDao().findMember(groupId, myHandle)
-            if (myMember?.role == 3) { Log.w(TAG, "Cannot send — banned from group $groupId"); return@launch }
+    /** Full fan-out to all members (both send rounds). Use for bulk delete so jobs do not overlap. */
+    suspend fun deliverGroupPayload(groupId: String, payload: Map<String, Any?>) {
+        val state = db.chatStateDao().get() ?: return
+        val myHandle = state.myHandle ?: return
 
-            val memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
-                .filterNotNull()
-                .filter { it.isNotEmpty() }
+        val myMember = db.groupDao().findMember(groupId, myHandle)
+        if (myMember?.role == 3) {
+            Log.w(TAG, "Cannot send — banned from group $groupId")
+            return
+        }
 
-            val fullPayload = mutableMapOf<String, Any?>()
-            fullPayload.putAll(payload)
-            fullPayload["group_id"] = groupId
-            fullPayload["from"] = myHandle
+        val memberSbbsAddresses = db.groupDao().getMemberSbbsAddresses(groupId, myHandle)
+            .filterNotNull()
+            .filter { it.isNotEmpty() }
 
-            for (addr in memberSbbsAddresses) {
-                try {
-                    ChatService.sbbs.sendOnce(addr, fullPayload)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to send group payload to $addr: ${e.message}")
-                }
-                delay(200)
+        val fullPayload = mutableMapOf<String, Any?>()
+        fullPayload.putAll(payload)
+        fullPayload["group_id"] = groupId
+        fullPayload["from"] = myHandle
+
+        for (addr in memberSbbsAddresses) {
+            try {
+                ChatService.sbbs.sendOnce(addr, fullPayload)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send group payload to $addr: ${e.message}")
             }
-            Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberSbbsAddresses.size} members in $groupId")
+            delay(200)
+        }
+        Log.d(TAG, "Sent group payload (${payload["t"]}) to ${memberSbbsAddresses.size} members in $groupId")
 
-            // Retry after 5s for reliability (receiver dedup prevents duplicates)
-            delay(5000)
-            for (addr in memberSbbsAddresses) {
-                try {
-                    ChatService.sbbs.sendOnce(addr, fullPayload)
-                } catch (_: Exception) {}
-                delay(200)
+        delay(5000)
+        for (addr in memberSbbsAddresses) {
+            try {
+                ChatService.sbbs.sendOnce(addr, fullPayload)
+            } catch (_: Exception) {}
+            delay(200)
+        }
+    }
+
+    /** Bulk delete-for-everyone: one complete fan-out at a time (avoids overlapping group sends). */
+    suspend fun deliverGroupPayloadsSequentially(groupId: String, payloads: List<Map<String, Any?>>) {
+        if (payloads.isEmpty()) return
+        for ((index, payload) in payloads.withIndex()) {
+            deliverGroupPayload(groupId, payload)
+            if (index < payloads.lastIndex) {
+                delay(400)
             }
         }
     }

@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +105,7 @@ fun ChatInputBar(
     onSendVoice: suspend (com.privimemobile.chat.voice.VoiceRecorder.RecordingResult) -> Unit,
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     // Close emoji picker when system keyboard appears
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
@@ -356,7 +358,12 @@ fun ChatInputBar(
                                                 }
                                             }
                                             IconButton(
-                                                onClick = { media.showAttachPicker = true },
+                                                onClick = {
+                                                    focusManager.clearFocus()
+                                                    keyboardController?.hide()
+                                                    if (emoji.showEmojiPicker) emoji.showEmojiPicker = false
+                                                    media.showAttachPicker = true
+                                                },
                                                 enabled = !uploading && !com.privimemobile.chat.transport.IpfsTransport.uploadInProgress,
                                                 modifier = Modifier.size(42.dp),
                                             ) {

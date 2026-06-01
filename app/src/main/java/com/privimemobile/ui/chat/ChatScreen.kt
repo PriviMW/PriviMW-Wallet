@@ -882,10 +882,8 @@ fun ChatScreen(
             search = search,
             scope = scope,
             onQuerySearch = { query ->
-                scope.launch {
-                    search.searchResults = com.privimemobile.chat.ChatService.db?.messageDao()
-                        ?.searchInConversation(convId, "%$query%") ?: emptyList()
-                }
+                search.searchResults = com.privimemobile.chat.ChatService.db?.messageDao()
+                    ?.searchInConversation(convId, "%$query%") ?: emptyList()
             },
             onResultClick = { ts ->
                 val reversedMessages = messages.reversed()

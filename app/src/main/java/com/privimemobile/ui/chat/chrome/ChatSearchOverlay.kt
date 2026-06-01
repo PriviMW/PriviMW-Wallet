@@ -48,7 +48,7 @@ fun ChatSearchOverlay(
     search: ChatSearchState,
     scope: CoroutineScope,
     onResultClick: (timestamp: Long) -> Unit,
-    onQuerySearch: (query: String) -> Unit,
+    onQuerySearch: suspend (query: String) -> Unit,
 ) {
     AnimatedVisibility(
         visible = search.showSearch,

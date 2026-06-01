@@ -1,6 +1,7 @@
 package com.privimemobile.ui.chat.scroll
 
 import com.privimemobile.protocol.ChatMessage
+import com.privimemobile.protocol.FileAttachment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -53,6 +54,46 @@ class ChatListDeriveTest {
         assertFalse(flagsNewer.isFirstInCluster)
         assertTrue(flagsNewer.isLastInCluster)
         assertTrue(flagsNewer.showTimestamp)
+    }
+
+    @Test
+    fun albumGroups_consecutiveImagesSameSender() {
+        fun image(id: String, sent: Boolean, ts: Long) = ChatMessage(
+            id = id,
+            from = if (sent) "me" else "them",
+            to = "x",
+            text = "",
+            timestamp = ts,
+            sent = sent,
+            type = "file",
+            file = FileAttachment(mime = "image/jpeg"),
+        )
+        val reversed = listOf(
+            image("3", sent = true, ts = 1020L),
+            image("2", sent = true, ts = 1010L),
+            image("1", sent = true, ts = 1000L),
+            msg("t", sent = false, ts = 500L),
+        )
+        val layout = ChatListDerive.computeAlbumGroups(reversed)
+        assertEquals(listOf("3", "2", "1"), layout.groups["3"])
+        assertEquals(setOf("2", "1"), layout.skipIds)
+    }
+
+    @Test
+    fun albumGroups_skipsCaptionedImages() {
+        val withCaption = ChatMessage(
+            id = "c",
+            from = "me",
+            to = "x",
+            text = "look",
+            timestamp = 1000L,
+            sent = true,
+            type = "file",
+            file = FileAttachment(mime = "image/jpeg"),
+        )
+        val layout = ChatListDerive.computeAlbumGroups(listOf(withCaption))
+        assertTrue(layout.groups.isEmpty())
+        assertTrue(layout.skipIds.isEmpty())
     }
 
     @Test

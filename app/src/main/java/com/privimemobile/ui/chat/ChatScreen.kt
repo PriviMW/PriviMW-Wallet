@@ -5033,8 +5033,7 @@ fun ChatScreen(
 
                         if (targetMsg.text.isNotEmpty() || targetMsg.file != null) {
                             MenuItemRow(stringResource(R.string.chat_forward)) {
-                                forwardingMsgs = emptyList()
-                                forwardingMsg = targetMsg; contextMenuMsg = null
+                                forward.openSingle(targetMsg); contextMenuMsg = null
                             }
                         }
 
@@ -5386,9 +5385,9 @@ fun ChatScreen(
         }
 
         // ── Forward contact picker dialog ──
-        if (forwardingMsg != null) {
-            val fwdMsg = forwardingMsg!!
-            val allFwdMsgs = forwardingMsgs.ifEmpty { listOf(fwdMsg) }
+        if (forward.isPickerOpen) {
+            val fwdMsg = forward.forwardingMsg!!
+            val allFwdMsgs = forward.messagesToForward()
             val chatState by com.privimemobile.chat.ChatService.observeState().collectAsState(initial = null)
             val myHandle = chatState?.myHandle
             val forwardContacts = remember(allContacts, myHandle) {
@@ -5398,7 +5397,7 @@ fun ChatScreen(
                 ?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
             AlertDialog(
-                onDismissRequest = { forwardingMsg = null; forwardingMsgs = emptyList() },
+                onDismissRequest = { forward.dismiss() },
                 containerColor = C.card,
                 title = { Text(stringResource(R.string.chat_forward_to, if (allFwdMsgs.size > 1) "${allFwdMsgs.size} messages" else ""), color = C.text, fontWeight = FontWeight.SemiBold) },
                 text = {
@@ -5524,7 +5523,7 @@ fun ChatScreen(
                                                             Log.w("ChatScreen", "Forward failed: myHandle is null")
                                                         }
                                                     }
-                                                    forwardingMsg = null; forwardingMsgs = emptyList()
+                                                    forward.dismiss()
                                                     onNavigateToChat("group:$targetGid")
                                                 }
                                                 .padding(vertical = 10.dp),
@@ -5646,8 +5645,7 @@ fun ChatScreen(
                                                         Toast.makeText(context, context.getString(R.string.toast_forwarded_count, count, if (count > 1) "s" else "", toHandle), Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
-                                                forwardingMsg = null
-                                                forwardingMsgs = emptyList()
+                                                forward.dismiss()
                                                 // Navigate to the forwarded-to chat
                                                 onNavigateToChat(contact.handle)
                                             }

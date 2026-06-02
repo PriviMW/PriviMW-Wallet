@@ -141,6 +141,66 @@ internal fun formatFiatCurrent(groth: Long, rate: Double? = null): String? {
 /** Masked placeholder for hidden amounts. */
 internal const val MASKED = "••••"
 
+/** Primary amount line for list/detail when transfer is zero but a fee was paid (e.g. contract calls). */
+internal data class TxPrimaryAmount(
+    val groth: Long,
+    val ticker: String,
+    val prefix: String,
+    val isFeeOnly: Boolean,
+)
+
+internal fun contractAssetsHaveDisplayAmount(contractAssets: List<ContractAsset>): Boolean =
+    contractAssets.any { ca ->
+        val isSpending = ca.sending != 0L
+        kotlin.math.abs(if (isSpending) ca.sending else ca.receiving) > 0
+    }
+
+/** Resolves the main amount to show; returns fee when transfer is 0 and user paid a network fee. */
+internal fun resolveTxPrimaryAmount(
+    amount: Long,
+    fee: Long,
+    contractAssets: List<ContractAsset>,
+    effectiveOutgoing: Boolean,
+    assetLabel: String,
+): TxPrimaryAmount? {
+    if (contractAssets.isNotEmpty() && contractAssetsHaveDisplayAmount(contractAssets)) {
+        return null
+    }
+    if (amount > 0) {
+        return TxPrimaryAmount(
+            groth = amount,
+            ticker = assetLabel,
+            prefix = if (effectiveOutgoing) "-" else "+",
+            isFeeOnly = false,
+        )
+    }
+    if (effectiveOutgoing && fee > 0) {
+        return TxPrimaryAmount(
+            groth = fee,
+            ticker = "BEAM",
+            prefix = "-",
+            isFeeOnly = true,
+        )
+    }
+    if (amount == 0L) {
+        return TxPrimaryAmount(
+            groth = 0,
+            ticker = assetLabel,
+            prefix = if (effectiveOutgoing) "-" else "+",
+            isFeeOnly = false,
+        )
+    }
+    return null
+}
+
+internal fun resolveTxPrimaryAmount(
+    tx: TxItem,
+    effectiveOutgoing: Boolean,
+    assetLabel: String,
+): TxPrimaryAmount? = resolveTxPrimaryAmount(
+    tx.amount, tx.fee, tx.contractAssets, effectiveOutgoing, assetLabel,
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletScreen(
@@ -931,8 +991,12 @@ internal fun TxCard(
 
             // Amount + status
             Column(horizontalAlignment = Alignment.End) {
+                val effectiveSend = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !isSend else isSend
+                val primaryAmount = resolveTxPrimaryAmount(tx, effectiveSend, assetLabel)
+
                 if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
                     // Per-asset breakdown from JNI (like beam-ui)
+                    var anyContractLineShown = false
                     tx.contractAssets.forEach { ca ->
                         val isSpending = ca.sending != 0L
                         val displayAmount = Math.abs(if (isSpending) ca.sending else ca.receiving)
@@ -943,6 +1007,7 @@ internal fun TxCard(
                             info?.unitName?.ifEmpty { null } ?: info?.shortName?.ifEmpty { null } ?: "Asset #${ca.assetId}"
                         } else "BEAM"
                         if (displayAmount > 0) {
+                            anyContractLineShown = true
                             Text(
                                 text = "$caPrefix${maskedAmount(displayAmount)} $caTicker",
                                 color = caColor,
@@ -956,6 +1021,17 @@ internal fun TxCard(
                             }
                         }
                     }
+                    if (!anyContractLineShown) {
+                        primaryAmount?.let { primary ->
+                            val amountColor = if (effectiveSend) C.outgoing else C.incoming
+                            Text(
+                                text = "${primary.prefix}${maskedAmount(primary.groth)} ${primary.ticker}",
+                                color = amountColor,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                 } else if (isSelfTx) {
                     Text(
                         text = maskedAmount(tx.amount) + " $assetLabel",
@@ -964,21 +1040,23 @@ internal fun TxCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                 } else {
-                    // Fallback: use sender flag (inverted for contract DApp TXs only, not tx_send tips)
-                    val effectiveSend = if (tx.isDapps && tx.amount > 0 && !tx.contractCids.isNullOrEmpty()) !isSend else isSend
-                    val amountPrefix = if (effectiveSend) "-" else "+"
-                    val amountColor = if (effectiveSend) C.outgoing else C.incoming
-                    Text(
-                        text = "$amountPrefix${maskedAmount(tx.amount)} $assetLabel",
-                        color = amountColor,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    primaryAmount?.let { primary ->
+                        val amountColor = if (effectiveSend) C.outgoing else C.incoming
+                        Text(
+                            text = "${primary.prefix}${maskedAmount(primary.groth)} ${primary.ticker}",
+                            color = amountColor,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
                 // Fiat value in preferred currency (skip if contractAssets already showed it)
-                if (!balanceHidden && rate > 0 && !(tx.isDapps && tx.contractAssets.isNotEmpty())) {
-                    val fiatStr = if (tx.assetId == 0) formatFiatCurrent(tx.amount, rate)
-                                   else CurrencyManager.assetToFiat(tx.assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                val skipFiat = tx.isDapps && tx.contractAssets.isNotEmpty() && contractAssetsHaveDisplayAmount(tx.contractAssets)
+                if (!balanceHidden && rate > 0 && !skipFiat && primaryAmount != null) {
+                    val fiatGroth = primaryAmount.groth
+                    val fiatAssetId = if (primaryAmount.isFeeOnly) 0 else tx.assetId
+                    val fiatStr = if (fiatAssetId == 0) formatFiatCurrent(fiatGroth, rate)
+                                   else CurrencyManager.assetToFiat(fiatAssetId, fiatGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                     if (fiatStr != null) {
                         Text(
                             "≈ $fiatStr",

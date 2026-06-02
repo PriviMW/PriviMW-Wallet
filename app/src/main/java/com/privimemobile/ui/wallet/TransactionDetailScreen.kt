@@ -282,8 +282,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val primaryAmount = resolveTxPrimaryAmount(
+                tx.amount, tx.fee, tx.contractAssets, isOutgoing, ticker,
+            )
+
             if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
                 // Per-asset breakdown from JNI
+                var anyContractLineShown = false
                 tx.contractAssets.forEach { ca ->
                     val isSpending = ca.sending != 0L
                     val displayAmount = Math.abs(if (isSpending) ca.sending else ca.receiving)
@@ -291,6 +296,7 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     val caColor = if (isSpending) C.outgoing else C.incoming
                     val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else "BEAM"
                     if (displayAmount > 0) {
+                        anyContractLineShown = true
                         AutoSizeAmount(
                             text = "$caPrefix${Helpers.formatBeam(displayAmount)} $caTicker",
                             color = caColor,
@@ -302,6 +308,36 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                             if (caFiat != null) {
                                 Text(
                                     "≈ $caFiat",
+                                    color = C.textSecondary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                if (!anyContractLineShown) {
+                    primaryAmount?.let { primary ->
+                        AutoSizeAmount(
+                            text = "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
+                            color = amountColor,
+                        )
+                        if (primary.isFeeOnly) {
+                            Text(
+                                stringResource(R.string.general_fee),
+                                color = C.textSecondary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        if (rate > 0) {
+                            val fiatGroth = primary.groth
+                            val fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId
+                            val txFiat = if (fiatAssetId == 0) formatFiatCurrent(fiatGroth, rate)
+                                          else CurrencyManager.assetToFiat(fiatAssetId, fiatGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                            if (txFiat != null) {
+                                Text(
+                                    "≈ $txFiat",
                                     color = C.textSecondary,
                                     fontSize = 13.sp,
                                     modifier = Modifier.padding(top = 2.dp),
@@ -336,25 +372,32 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                     }
                 }
             } else {
-                val sign = when {
-                    isOutgoing -> "-"
-                    else -> "+"
-                }
-                AutoSizeAmount(
-                    text = "$sign${Helpers.formatBeam(tx.amount)} $ticker",
-                    color = amountColor,
-                )
-                // Fiat value in preferred currency
-                if (rate > 0) {
-                    val txFiat = if (tx.assetId == 0) formatFiatCurrent(tx.amount, rate)
-                                  else CurrencyManager.assetToFiat(tx.assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
-                    if (txFiat != null) {
+                primaryAmount?.let { primary ->
+                    AutoSizeAmount(
+                        text = "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
+                        color = amountColor,
+                    )
+                    if (primary.isFeeOnly) {
                         Text(
-                            "≈ $txFiat",
+                            stringResource(R.string.general_fee),
                             color = C.textSecondary,
                             fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 2.dp),
+                            modifier = Modifier.padding(top = 4.dp),
                         )
+                    }
+                    if (rate > 0) {
+                        val fiatGroth = primary.groth
+                        val fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId
+                        val txFiat = if (fiatAssetId == 0) formatFiatCurrent(fiatGroth, rate)
+                                      else CurrencyManager.assetToFiat(fiatAssetId, fiatGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                        if (txFiat != null) {
+                            Text(
+                                "≈ $txFiat",
+                                color = C.textSecondary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
                     }
                 }
             }

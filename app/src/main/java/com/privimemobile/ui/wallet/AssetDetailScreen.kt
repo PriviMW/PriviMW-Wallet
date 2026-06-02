@@ -414,7 +414,10 @@ fun AssetDetailScreen(
 
                         // Amount + time
                         Column(horizontalAlignment = Alignment.End) {
+                            val primaryAmount = resolveTxPrimaryAmount(tx, effectiveOut, assetName)
+
                             if (tx.isDapps && tx.contractAssets.isNotEmpty()) {
+                                var anyContractLineShown = false
                                 tx.contractAssets.forEach { ca ->
                                     val isSpending = ca.sending != 0L
                                     val displayAmt = Math.abs(if (isSpending) ca.sending else ca.receiving)
@@ -422,18 +425,36 @@ fun AssetDetailScreen(
                                     val caColor = if (isFailed) C.textSecondary else if (isSpending) C.outgoing else C.incoming
                                     val caTicker = if (ca.assetId != 0) assetTicker(ca.assetId) else "BEAM"
                                     if (displayAmt > 0) {
+                                        anyContractLineShown = true
                                         Text(
                                             "$caPrefix${Helpers.formatBeam(displayAmt)} $caTicker",
                                             color = caColor,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                         )
-                                        // Show fiat for priced assets
                                         if (rate > 0) {
                                             val caFiat = if (ca.assetId == 0) formatFiatCurrent(displayAmt, rate)
                                                           else CurrencyManager.assetToFiat(ca.assetId, displayAmt, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
                                             if (caFiat != null) {
                                                 Text("≈ $caFiat", color = C.textSecondary, fontSize = 10.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                                if (!anyContractLineShown) {
+                                    primaryAmount?.let { primary ->
+                                        Text(
+                                            "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
+                                            color = amountColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        if (rate > 0) {
+                                            val fiatAssetId = if (primary.isFeeOnly) 0 else assetId
+                                            val txFiat = if (fiatAssetId == 0) formatFiatCurrent(primary.groth, rate)
+                                                          else CurrencyManager.assetToFiat(fiatAssetId, primary.groth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                                            if (txFiat != null) {
+                                                Text("≈ $txFiat", color = C.textSecondary, fontSize = 10.sp)
                                             }
                                         }
                                     }
@@ -453,18 +474,20 @@ fun AssetDetailScreen(
                                     }
                                 }
                             } else {
-                                Text(
-                                    "${if (effectiveOut) "−" else "+"}${Helpers.formatBeam(tx.amount)} $assetName",
-                                    color = amountColor,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                // Fiat for priced assets
-                                if (rate > 0) {
-                                    val txFiat = if (assetId == 0) formatFiatCurrent(tx.amount, rate)
-                                                  else CurrencyManager.assetToFiat(assetId, tx.amount, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
-                                    if (txFiat != null) {
-                                        Text("≈ $txFiat", color = C.textSecondary, fontSize = 10.sp)
+                                primaryAmount?.let { primary ->
+                                    Text(
+                                        "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
+                                        color = amountColor,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    if (rate > 0) {
+                                        val fiatAssetId = if (primary.isFeeOnly) 0 else assetId
+                                        val txFiat = if (fiatAssetId == 0) formatFiatCurrent(primary.groth, rate)
+                                                      else CurrencyManager.assetToFiat(fiatAssetId, primary.groth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+                                        if (txFiat != null) {
+                                            Text("≈ $txFiat", color = C.textSecondary, fontSize = 10.sp)
+                                        }
                                     }
                                 }
                             }

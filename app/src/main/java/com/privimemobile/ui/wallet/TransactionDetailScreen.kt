@@ -318,32 +318,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 }
                 if (!anyContractLineShown) {
                     primaryAmount?.let { primary ->
-                        AutoSizeAmount(
-                            text = "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
-                            color = amountColor,
+                        FeePrimaryAmountHeader(
+                            primary = primary,
+                            amountColor = amountColor,
+                            fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId,
+                            rate = rate,
+                            currency = currency,
                         )
-                        if (primary.isFeeOnly) {
-                            Text(
-                                stringResource(R.string.general_fee),
-                                color = C.textSecondary,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                        if (rate > 0) {
-                            val fiatGroth = primary.groth
-                            val fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId
-                            val txFiat = if (fiatAssetId == 0) formatFiatCurrent(fiatGroth, rate)
-                                          else CurrencyManager.assetToFiat(fiatAssetId, fiatGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
-                            if (txFiat != null) {
-                                Text(
-                                    "≈ $txFiat",
-                                    color = C.textSecondary,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
-                            }
-                        }
                     }
                 }
             } else if (isSelf) {
@@ -373,32 +354,13 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
                 }
             } else {
                 primaryAmount?.let { primary ->
-                    AutoSizeAmount(
-                        text = "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
-                        color = amountColor,
+                    FeePrimaryAmountHeader(
+                        primary = primary,
+                        amountColor = amountColor,
+                        fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId,
+                        rate = rate,
+                        currency = currency,
                     )
-                    if (primary.isFeeOnly) {
-                        Text(
-                            stringResource(R.string.general_fee),
-                            color = C.textSecondary,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    if (rate > 0) {
-                        val fiatGroth = primary.groth
-                        val fiatAssetId = if (primary.isFeeOnly) 0 else tx.assetId
-                        val txFiat = if (fiatAssetId == 0) formatFiatCurrent(fiatGroth, rate)
-                                      else CurrencyManager.assetToFiat(fiatAssetId, fiatGroth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
-                        if (txFiat != null) {
-                            Text(
-                                "≈ $txFiat",
-                                color = C.textSecondary,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                    }
                 }
             }
 
@@ -782,6 +744,40 @@ fun TransactionDetailScreen(txId: String, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun FeePrimaryAmountHeader(
+    primary: TxPrimaryAmount,
+    amountColor: Color,
+    fiatAssetId: Int,
+    rate: Double,
+    currency: String,
+) {
+    AutoSizeAmount(
+        text = "${primary.prefix}${Helpers.formatBeam(primary.groth)} ${primary.ticker}",
+        color = amountColor,
+    )
+    if (rate > 0) {
+        val txFiat = if (fiatAssetId == 0) formatFiatCurrent(primary.groth, rate)
+                      else CurrencyManager.assetToFiat(fiatAssetId, primary.groth, currency, rate)?.let { CurrencyManager.formatFiat(it, currency) }
+        if (txFiat != null) {
+            Text(
+                "≈ $txFiat",
+                color = C.textSecondary,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+    if (primary.isFeeOnly) {
+        Text(
+            stringResource(R.string.general_fee),
+            color = C.textSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

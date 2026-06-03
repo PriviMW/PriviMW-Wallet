@@ -136,7 +136,11 @@ object ChatService {
      * Safe to call multiple times — skips if already initialized.
      */
     fun init(context: Context) {
-        appContext = context.applicationContext
+        // Apply user's locale override to the application context so that
+        // getString() calls from background components (MessageProcessor,
+        // ChatNotificationManager, TxNotificationManager) respect the app's
+        // language setting rather than always using the device system language.
+        appContext = com.privimemobile.protocol.LocaleHelper.applyLocale(context.applicationContext)
         if (_initialized.value && db != null) {
             Log.d(TAG, "Already initialized — restarting polling")
             com.privimemobile.protocol.WalletApi.subscribeToEvents()
@@ -157,30 +161,29 @@ object ChatService {
             Log.d(TAG, "DB opened — groups in DB: ${groups?.size}, ids: ${groups?.map { it.groupId.take(8) + "(p=${it.pinned},m=${it.muted})" }}")
         }
 
-        // Initialize components
+        // Initialize components — all use appContext (locale-wrapped above)
         IpfsTransport.init(context)
-        ChatNotificationManager.init(context)
-        com.privimemobile.wallet.TxNotificationManager.init(context)
+        ChatNotificationManager.init(appContext)
+        com.privimemobile.wallet.TxNotificationManager.init(appContext)
         com.privimemobile.wallet.TxNotificationManager.startObserving(scope)
-        val localeContext = com.privimemobile.protocol.LocaleHelper.applyLocale(context.applicationContext)
-        identity = IdentityManager(db!!, scope, localeContext)
+        identity = IdentityManager(db!!, scope, appContext)
         contacts = ContactManager(db!!, scope)
-        processor = MessageProcessor(db!!, contacts, scope, context.applicationContext)
-        sbbs = SbbsTransport(db!!, processor, scope, context.applicationContext)
-        groups = com.privimemobile.chat.group.GroupManager(db!!, scope, localeContext)
+        processor = MessageProcessor(db!!, contacts, scope, appContext)
+        sbbs = SbbsTransport(db!!, processor, scope, appContext)
+        groups = com.privimemobile.chat.group.GroupManager(db!!, scope, appContext)
         pendingTxs = com.privimemobile.chat.group.PendingTxManager(db!!, scope)
 
         // Initialize chat_state row + migrate legacy SharedPreferences data
         scope.launch {
             db!!.chatStateDao().ensureInitialized()
-            LegacyMigration.migrateIfNeeded(context.applicationContext, db!!)
+            LegacyMigration.migrateIfNeeded(appContext, db!!)
         }
 
         // Ensure wallet events are subscribed (may have been skipped on wallet reuse path)
         com.privimemobile.protocol.WalletApi.subscribeToEvents()
 
         // Start SBBS polling immediately (don't wait for contract calls)
-        com.privimemobile.chat.SbbsSeenStore.ensureLoaded(context.applicationContext)
+        com.privimemobile.chat.SbbsSeenStore.ensureLoaded(appContext)
         sbbs.startPolling()
 
         // Start identity check + contact resolution in parallel with polling

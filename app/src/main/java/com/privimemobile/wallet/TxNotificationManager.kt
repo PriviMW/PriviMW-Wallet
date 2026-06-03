@@ -61,7 +61,9 @@ object TxNotificationManager {
     private const val ACTION_CANCELLED = 4
 
     fun init(context: Context) {
-        appContext = context.applicationContext
+        // Use the context directly — it's already locale-wrapped by ChatService.
+        // Calling .applicationContext would strip the locale override.
+        appContext = context
         createChannel()
         initialized = true
     }

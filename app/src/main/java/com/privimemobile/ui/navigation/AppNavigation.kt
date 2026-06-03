@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.navigation.NavHostController
 import androidx.navigation.NavBackStackEntry
 import androidx.compose.ui.unit.LayoutDirection
@@ -675,9 +676,15 @@ fun AppNavigation() {
             enter = fadeIn(tween(200, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))),
             exit = fadeOut(tween(CHAT_OVERLAY_EXIT_MS, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))),
             // Same top/side insets as NavHost (status bar); no bottom inset — chat stays full-screen above nav bar.
+            // Block touch passthrough: the persisted ChatsScreen layer stays composed underneath for smooth
+            // pop-back animation. Without this pointerInput, taps/drags on the chat overlay's empty edges
+            // fall through to SwipeToDismissBox and ConversationRow, causing random chat switches or archive/delete swipes.
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding.withoutBottomPadding()),
+                .padding(innerPadding.withoutBottomPadding())
+                .pointerInput(Unit) {
+                    awaitPointerEventScope { while (true) { awaitPointerEvent() } }
+                },
         ) {
             ChatRouteOverlay(
                 route = currentRoute,

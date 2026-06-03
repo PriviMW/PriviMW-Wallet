@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +61,28 @@ private sealed class AddrType {
     data object PublicOffline : AddrType()
 }
 
+/** Saver for AddrType? so it survives rememberSaveable across navigation. */
+private val AddrTypeSaver: Saver<AddrType?, String> = Saver(
+    save = { type ->
+        when (type) {
+            is AddrType.Sbbs -> "sbbs"
+            is AddrType.Regular -> "regular"
+            is AddrType.MaxPrivacy -> "max_privacy"
+            is AddrType.PublicOffline -> "public_offline"
+            null -> ""
+        }
+    },
+    restore = { str ->
+        when (str) {
+            "sbbs" -> AddrType.Sbbs
+            "regular" -> AddrType.Regular
+            "max_privacy" -> AddrType.MaxPrivacy
+            "public_offline" -> AddrType.PublicOffline
+            else -> null
+        }
+    },
+)
+
 @Composable
 private fun addrTypeLabel(type: AddrType?): String = when (type) {
     is AddrType.Sbbs -> stringResource(R.string.send_addr_type_sbbs)
@@ -84,44 +108,52 @@ fun SendScreen(
     scannedAddress: String? = null,
     initialAssetId: Int = 0,
     onNavigateConfirm: (address: String, amountGroth: Long, fee: Long, comment: String, assetId: Int, txType: String) -> Unit = { _, _, _, _, _, _ -> },
+    onScannedAddressConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val beamStatus by WalletEventBus.beamStatus.collectAsState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    var address by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var isUsdMode by remember { mutableStateOf(false) }
+    var address by rememberSaveable { mutableStateOf("") }
+    var amount by rememberSaveable { mutableStateOf("") }
+    var isUsdMode by rememberSaveable { mutableStateOf(false) }
     val exchangeRates by WalletEventBus.exchangeRates.collectAsState()
     val currency = CurrencyManager.getPreferredCurrency()
     val currencyRate = exchangeRates["beam_$currency"] ?: 0.0
-    var comment by remember { mutableStateOf("") }
-    var commentExpanded by remember { mutableStateOf(false) }
+    var comment by rememberSaveable { mutableStateOf("") }
+    var commentExpanded by rememberSaveable { mutableStateOf(false) }
 
     // @handle search state
-    var handleQuery by remember { mutableStateOf("") }
+    var handleQuery by rememberSaveable { mutableStateOf("") }
     var handleResults by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) } // handle, displayName
-    var showHandleDropdown by remember { mutableStateOf(false) }
-    var resolvingHandle by remember { mutableStateOf(false) }
-    var resolvedHandle by remember { mutableStateOf<String?>(null) } // the @handle that was resolved
+    var showHandleDropdown by rememberSaveable { mutableStateOf(false) }
+    var resolvingHandle by remember { mutableStateOf(false) } // ephemeral — always false on restore
+    var resolvedHandle by rememberSaveable { mutableStateOf<String?>(null) } // the @handle that was resolved
 
     // Address validation state
+    // validatingAddr and validateReqId are NOT saved — they represent in-flight async work
+    // that won't survive navigation. addressValid and addrType ARE saved so the user
+    // sees the previously-validated result immediately on return.
     var validatingAddr by remember { mutableStateOf(false) }
-    var addressValid by remember { mutableStateOf<Boolean?>(null) }
-    var addrType by remember { mutableStateOf<AddrType?>(null) }
-    var sendOffline by remember { mutableStateOf(false) }
+    var addressValid by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var addrType by rememberSaveable(stateSaver = AddrTypeSaver) { mutableStateOf<AddrType?>(null) }
+    var sendOffline by rememberSaveable { mutableStateOf(false) }
     var validateReqId by remember { mutableIntStateOf(0) }
 
     // Own node / mobile protocol detection
-    var ownNode by remember { mutableStateOf(false) }
+    // Guard with initialized flag so we don't overwrite restored sendOffline on recomposition
+    var ownNode by rememberSaveable { mutableStateOf(false) }
+    var sendDefaultsInitialized by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        if (sendDefaultsInitialized) return@LaunchedEffect
         try {
             val trusted = WalletManager.walletInstance?.isConnectionTrusted() ?: false
             val mobileProtocol = com.privimemobile.protocol.SecureStorage.getString("node_mode") == "mobile"
             ownNode = trusted || mobileProtocol
             if (ownNode) sendOffline = true // default offline for own/mobile node
         } catch (_: Exception) {}
+        sendDefaultsInitialized = true
     }
 
     // Per-asset balances + asset info for picker
@@ -154,8 +186,8 @@ fun SendScreen(
         list.sortedBy { it.assetId }
     }
 
-    var selectedAssetId by remember { mutableIntStateOf(initialAssetId) }
-    var assetPickerOpen by remember { mutableStateOf(false) }
+    var selectedAssetId by rememberSaveable { mutableStateOf(initialAssetId) }
+    var assetPickerOpen by rememberSaveable { mutableStateOf(false) }
     val selectedAsset = assetList.find { it.assetId == selectedAssetId } ?: assetList[0]
     val ticker = selectedAsset.ticker
     val assetAvailable = selectedAsset.available
@@ -190,6 +222,9 @@ fun SendScreen(
             addressValid = null
             addrType = null
             sendOffline = ownNode
+            // Clear scanned address so it doesn't re-trigger on recomposition
+            // (e.g., returning from SendConfirm back to Send)
+            onScannedAddressConsumed()
         }
     }
 

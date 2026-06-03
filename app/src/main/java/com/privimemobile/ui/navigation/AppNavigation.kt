@@ -373,6 +373,9 @@ fun AppNavigation() {
                             "send_confirm/$address/$amount/$fee/${java.net.URLEncoder.encode(comment, "UTF-8")}/$asset/$txType"
                         )
                     },
+                    onScannedAddressConsumed = {
+                        backStackEntry.savedStateHandle?.set("scanned_address", null)
+                    },
                 )
             }
             composable(

@@ -6,8 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -96,28 +95,18 @@ fun FullscreenImageViewer(
                 val item = images[page]
                 val scaleState = remember(page) { mutableFloatStateOf(1f) }
                 var scale by scaleState
-                var offsetX by remember(page) { mutableFloatStateOf(0f) }
-                var offsetY by remember(page) { mutableFloatStateOf(0f) }
+                val offsetXState = remember(page) { mutableFloatStateOf(0f) }
+                val offsetYState = remember(page) { mutableFloatStateOf(0f) }
+                var offsetX by offsetXState
+                var offsetY by offsetYState
                 val isZoomed = scale > 1.05f
 
                 LaunchedEffect(pagerState.currentPage) {
                     if (page != pagerState.currentPage) {
-                        scale = 1f
-                        offsetX = 0f
-                        offsetY = 0f
+                        scaleState.floatValue = 1f
+                        offsetXState.floatValue = 0f
+                        offsetYState.floatValue = 0f
                         pageZoomScales[page].floatValue = 1f
-                    }
-                }
-
-                val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-                    scaleState.floatValue = (scaleState.floatValue * zoomChange).coerceIn(1f, 5f)
-                    pageZoomScales[page].floatValue = scaleState.floatValue
-                    if (scaleState.floatValue > 1f) {
-                        offsetX += panChange.x
-                        offsetY += panChange.y
-                    } else {
-                        offsetX = 0f
-                        offsetY = 0f
                     }
                 }
 
@@ -132,22 +121,30 @@ fun FullscreenImageViewer(
                             translationX = offsetX,
                             translationY = offsetY,
                         )
-                        // Only steal drags when zoomed — at scale 1 the pager owns horizontal swipes.
-                        .then(
-                            if (isZoomed) {
-                                Modifier.transformable(state = transformState)
-                            } else {
-                                Modifier
-                            },
-                        )
+                        // panZoomLock at 1x: pinch zooms, single-finger swipe falls through to pager.
+                        // When zoomed: pan + pinch both work (Telegram-style).
+                        .pointerInput(page, isZoomed) {
+                            detectTransformGestures(panZoomLock = !isZoomed) { _, pan, zoom, _ ->
+                                val newScale = (scaleState.floatValue * zoom).coerceIn(1f, 5f)
+                                scaleState.floatValue = newScale
+                                pageZoomScales[page].floatValue = newScale
+                                if (newScale > 1.05f) {
+                                    offsetXState.floatValue += pan.x
+                                    offsetYState.floatValue += pan.y
+                                } else {
+                                    offsetXState.floatValue = 0f
+                                    offsetYState.floatValue = 0f
+                                }
+                            }
+                        }
                         .pointerInput(page) {
                             detectTapGestures(
                                 onTap = { showBars = !showBars },
                                 onDoubleTap = {
                                     if (scaleState.floatValue > 1.1f) {
                                         scaleState.floatValue = 1f
-                                        offsetX = 0f
-                                        offsetY = 0f
+                                        offsetXState.floatValue = 0f
+                                        offsetYState.floatValue = 0f
                                         pageZoomScales[page].floatValue = 1f
                                     } else {
                                         scaleState.floatValue = 2.5f

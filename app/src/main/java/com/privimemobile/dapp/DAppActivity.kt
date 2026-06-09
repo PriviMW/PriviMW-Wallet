@@ -1,9 +1,13 @@
 package com.privimemobile.dapp
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.mw.beam.beamwallet.core.Api
 import com.privimemobile.wallet.WalletManager
@@ -27,6 +31,20 @@ class DAppActivity : AppCompatActivity() {
 
     private val TAG = "DAppActivity"
     private var webView: BeamDAppWebView? = null
+    private var pendingFileChooserCallback: ((Array<Uri>?) -> Unit)? = null
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = pendingFileChooserCallback
+        pendingFileChooserCallback = null
+        val uris = if (result.resultCode == Activity.RESULT_OK) {
+            result.data.selectedUrisFromChooserResult()
+        } else {
+            null
+        }
+        callback?.invoke(uris)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +74,16 @@ class DAppActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             ))
+            wv.onRequestFileChooser = { intent, callback ->
+                pendingFileChooserCallback = callback
+                try {
+                    fileChooserLauncher.launch(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "fileChooserLauncher failed: ${e.message}")
+                    pendingFileChooserCallback = null
+                    callback(null)
+                }
+            }
             wv.launchDApp(name, path, guid)
         }
 

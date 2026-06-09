@@ -2,10 +2,13 @@ package com.privimemobile.dapp
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.ConsoleMessage
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -39,6 +42,23 @@ class BeamDAppWebView(context: Context) : WebView(context) {
 
     private var backCallback: androidx.activity.OnBackPressedCallback? = null
     private var trueDappRootPath: String = "" // canonical path of dapps/{guid}/ — for traversal guard
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    /**
+     * Host Activity/Compose screen launches the system picker for `<input type="file">`.
+     * Callback receives selected URIs or null when cancelled.
+     */
+    var onRequestFileChooser: ((Intent, (Array<Uri>?) -> Unit) -> Unit)? = null
+
+    fun deliverFileChooserResult(uris: Array<Uri>?) {
+        val cb = filePathCallback
+        filePathCallback = null
+        cb?.onReceiveValue(uris)
+    }
+
+    fun cancelFileChooser() {
+        deliverFileChooserResult(null)
+    }
 
     init {
         setupWebView()
@@ -118,6 +138,36 @@ class BeamDAppWebView(context: Context) : WebView(context) {
                     "DAppConsole",
                     "[${msg.sourceId()?.substringAfterLast('/') ?: "?"}:${msg.lineNumber()}] ${msg.message()}"
                 )
+                return true
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                callback: ValueCallback<Array<Uri>>?,
+                params: FileChooserParams?,
+            ): Boolean {
+                filePathCallback?.onReceiveValue(null)
+                filePathCallback = callback
+
+                val intent = try {
+                    params?.createIntent()
+                } catch (e: Exception) {
+                    Log.w(TAG, "createIntent failed: ${e.message}")
+                    null
+                } ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = params?.acceptTypes?.firstOrNull()?.takeIf { it.isNotBlank() } ?: "*/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
+                }
+
+                val handler = onRequestFileChooser
+                if (handler == null) {
+                    Log.w(TAG, "onShowFileChooser: no host handler registered")
+                    cancelFileChooser()
+                    return false
+                }
+
+                handler(intent) { uris -> deliverFileChooserResult(uris) }
                 return true
             }
         }
@@ -207,6 +257,8 @@ class BeamDAppWebView(context: Context) : WebView(context) {
     fun cleanup() {
         if (!isActive) return // Already cleaned up
         isActive = false
+        cancelFileChooser()
+        onRequestFileChooser = null
         DAppResponseRouter.setActiveWebView(null)
 
         // Stop JS execution. Do NOT call destroy() — it blocks the shared UI thread

@@ -1,9 +1,13 @@
 package com.privimemobile.ui.dapps
 
+import android.app.Activity
+import android.net.Uri
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -39,6 +43,7 @@ import com.privimemobile.R
 import com.privimemobile.dapp.BeamDAppWebView
 import com.privimemobile.dapp.DAppResponseRouter
 import com.privimemobile.dapp.NativeTxApprovalDialog
+import com.privimemobile.dapp.selectedUrisFromChooserResult
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.theme.C
 import com.privimemobile.ui.wallet.*
@@ -82,6 +87,8 @@ object DAppWebViewHolder {
 
     fun destroy() {
         activeWebView?.let { wv ->
+            wv.cancelFileChooser()
+            wv.onRequestFileChooser = null
             wv.stopLoading()
             wv.removeJavascriptInterface("BEAM")
             DAppResponseRouter.setActiveWebView(null)
@@ -118,6 +125,39 @@ fun DAppScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
+    val pendingFileChooser = remember {
+        object {
+            var callback: ((Array<Uri>?) -> Unit)? = null
+        }
+    }
+
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = pendingFileChooser.callback
+        pendingFileChooser.callback = null
+        val uris = if (result.resultCode == Activity.RESULT_OK) {
+            result.data.selectedUrisFromChooserResult()
+        } else {
+            null
+        }
+        callback?.invoke(uris)
+    }
+
+    val bindFileChooser = remember(fileChooserLauncher) {
+        { wv: BeamDAppWebView ->
+            wv.onRequestFileChooser = { intent, callback ->
+                pendingFileChooser.callback = callback
+                try {
+                    fileChooserLauncher.launch(intent)
+                } catch (e: Exception) {
+                    Log.w("DAppScreen", "fileChooserLauncher failed: ${e.message}")
+                    pendingFileChooser.callback = null
+                    callback(null)
+                }
+            }
+        }
+    }
 
     // Pause WebView + restore PriviMe context when navigating away, resume on return
     DisposableEffect(Unit) {
@@ -245,8 +285,10 @@ fun DAppScreen(
                 factory = { ctx ->
                     val wv = DAppWebViewHolder.getOrCreate(ctx, dappName, dappPath, dappGuid)
                     (wv.parent as? ViewGroup)?.removeView(wv)
+                    bindFileChooser(wv)
                     wv
                 },
+                update = { wv -> bindFileChooser(wv) },
                 modifier = Modifier.fillMaxSize(),
             )
         }

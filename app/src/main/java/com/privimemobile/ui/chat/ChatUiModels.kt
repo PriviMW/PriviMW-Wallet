@@ -21,13 +21,31 @@ data class StickerMeta(
     val emoji: String? = null,
 )
 
-data class FullscreenImageData(
+data class FullscreenImageItem(
     val filePath: String,
     val fileName: String,
     val msgId: Long = 0,
     val msgTs: Long = 0,
     val isMine: Boolean = false,
 )
+
+data class FullscreenImageData(
+    val images: List<FullscreenImageItem>,
+    val initialIndex: Int = 0,
+) {
+    init {
+        require(images.isNotEmpty())
+        require(initialIndex in images.indices)
+    }
+
+    constructor(
+        filePath: String,
+        fileName: String,
+        msgId: Long = 0,
+        msgTs: Long = 0,
+        isMine: Boolean = false,
+    ) : this(listOf(FullscreenImageItem(filePath, fileName, msgId, msgTs, isMine)))
+}
 
 /** File picked for send (URI + metadata). */
 data class PendingFile(

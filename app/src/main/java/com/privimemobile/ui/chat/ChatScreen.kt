@@ -1142,22 +1142,21 @@ fun ChatScreen(
     if (media.fullscreenImage != null) {
         val fImg = media.fullscreenImage!!
         FullscreenImageViewer(
-            filePath = fImg.filePath,
-            fileName = fImg.fileName,
-            isMine = fImg.isMine,
+            images = fImg.images,
+            initialIndex = fImg.initialIndex,
             onDismiss = { media.fullscreenImage = null },
-            onSave = {
+            onSave = { item ->
                 val mime = when {
-                    fImg.fileName.endsWith(".png", true) -> "image/png"
-                    fImg.fileName.endsWith(".gif", true) -> "image/gif"
-                    fImg.fileName.endsWith(".webp", true) -> "image/webp"
+                    item.fileName.endsWith(".png", true) -> "image/png"
+                    item.fileName.endsWith(".gif", true) -> "image/gif"
+                    item.fileName.endsWith(".webp", true) -> "image/webp"
                     else -> "image/jpeg"
                 }
-                saveFileToDownloads(context, fImg.filePath, fImg.fileName, mime)
+                saveFileToDownloads(context, item.filePath, item.fileName, mime)
             },
-            onDeleteForMe = {
+            onDeleteForMe = { item ->
                 scope.launch {
-                    com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
+                    com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(item.msgId)
                     refreshConversationPreview(convId)
                 }
                 media.fullscreenImage = null
@@ -1165,19 +1164,19 @@ fun ChatScreen(
             onDeleteForEveryone = if (com.privimemobile.chat.DeleteAuthorization.canOfferDeleteForEveryone(
                     isGroupMode,
                     group?.myRole ?: 0,
-                    fImg.isMine,
-                )) { {
+                    fImg.images[fImg.initialIndex].isMine,
+                )) { { item ->
                 scope.launch {
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {
-                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(fImg.msgId)
+                        com.privimemobile.chat.ChatService.db?.messageDao()?.markDeletedById(item.msgId)
                         // Update preview BEFORE network send — survives early navigation
                         refreshConversationPreview(convId)
                         val delPayload = mapOf(
                             "v" to 1, "t" to "delete",
                             "ts" to System.currentTimeMillis() / 1000,
                             "from" to state.myHandle!!, "to" to (if (isGroupMode) groupId!! else handle),
-                            "msg_ts" to fImg.msgTs,
+                            "msg_ts" to item.msgTs,
                         )
                         if (isGroupMode && groupId != null) {
                             com.privimemobile.chat.ChatService.groups.sendGroupPayload(groupId, delPayload)

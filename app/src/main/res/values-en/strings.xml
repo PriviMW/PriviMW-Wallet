@@ -1766,6 +1766,7 @@
     <string name="chat_join_failed">Join failed</string>
     <string name="chat_sticker_pack_label">Stickers</string>
     <string name="chat_album_photos">%1$d photos</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
     <string name="chat_sticker_pack_header">Sticker Pack</string>
     <string name="chat_poll_label">Poll</string>
     <string name="chat_clip_label">Message</string>

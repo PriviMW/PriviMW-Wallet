@@ -74,6 +74,7 @@ import com.privimemobile.protocol.ChatMessage
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.chat.ChatSearchState
 import com.privimemobile.ui.chat.FullscreenImageData
+import com.privimemobile.ui.chat.FullscreenImageItem
 import com.privimemobile.ui.chat.ChatChromeState
 import com.privimemobile.ui.chat.ChatContextMenuState
 import com.privimemobile.ui.chat.ChatEmojiStickerState
@@ -331,7 +332,20 @@ LazyColumn(
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(4.dp))
                                             .clickable {
-                                                if (fp != null) media.fullscreenImage = FullscreenImageData(fp, albumMsg.file?.name ?: context.getString(R.string.chat_pinned_file), albumMsg.id.toLong(), albumMsg.timestamp, albumMsg.sent)
+                                                val items = albumMsgs.mapNotNull { m ->
+                                                    val path = files.filePaths[m.file?.cid ?: ""] ?: return@mapNotNull null
+                                                    FullscreenImageItem(
+                                                        filePath = path,
+                                                        fileName = m.file?.name ?: context.getString(R.string.chat_pinned_file),
+                                                        msgId = m.id.toLong(),
+                                                        msgTs = m.timestamp,
+                                                        isMine = m.sent,
+                                                    )
+                                                }
+                                                if (items.isNotEmpty()) {
+                                                    val startIndex = items.indexOfFirst { it.msgId == albumMsg.id.toLong() }.coerceAtLeast(0)
+                                                    media.fullscreenImage = FullscreenImageData(items, startIndex)
+                                                }
                                             },
                                     ) {
                                         if (fp != null) {

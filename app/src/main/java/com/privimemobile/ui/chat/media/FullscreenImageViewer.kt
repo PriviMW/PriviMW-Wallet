@@ -94,9 +94,11 @@ fun FullscreenImageViewer(
                 userScrollEnabled = currentPageScale <= 1.05f,
             ) { page ->
                 val item = images[page]
-                var scale by remember(page) { mutableFloatStateOf(1f) }
+                val scaleState = remember(page) { mutableFloatStateOf(1f) }
+                var scale by scaleState
                 var offsetX by remember(page) { mutableFloatStateOf(0f) }
                 var offsetY by remember(page) { mutableFloatStateOf(0f) }
+                val isZoomed = scale > 1.05f
 
                 LaunchedEffect(pagerState.currentPage) {
                     if (page != pagerState.currentPage) {
@@ -108,9 +110,9 @@ fun FullscreenImageViewer(
                 }
 
                 val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-                    scale = (scale * zoomChange).coerceIn(1f, 5f)
-                    pageZoomScales[page].floatValue = scale
-                    if (scale > 1f) {
+                    scaleState.floatValue = (scaleState.floatValue * zoomChange).coerceIn(1f, 5f)
+                    pageZoomScales[page].floatValue = scaleState.floatValue
+                    if (scaleState.floatValue > 1f) {
                         offsetX += panChange.x
                         offsetY += panChange.y
                     } else {
@@ -123,26 +125,33 @@ fun FullscreenImageViewer(
                     model = "file://${item.filePath}",
                     contentDescription = item.fileName,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .graphicsLayer(
                             scaleX = scale,
                             scaleY = scale,
                             translationX = offsetX,
                             translationY = offsetY,
                         )
-                        .transformable(state = transformState)
+                        // Only steal drags when zoomed — at scale 1 the pager owns horizontal swipes.
+                        .then(
+                            if (isZoomed) {
+                                Modifier.transformable(state = transformState)
+                            } else {
+                                Modifier
+                            },
+                        )
                         .pointerInput(page) {
                             detectTapGestures(
                                 onTap = { showBars = !showBars },
                                 onDoubleTap = {
-                                    if (scale > 1.1f) {
-                                        scale = 1f
+                                    if (scaleState.floatValue > 1.1f) {
+                                        scaleState.floatValue = 1f
                                         offsetX = 0f
                                         offsetY = 0f
                                         pageZoomScales[page].floatValue = 1f
                                     } else {
-                                        scale = 2.5f
-                                        pageZoomScales[page].floatValue = scale
+                                        scaleState.floatValue = 2.5f
+                                        pageZoomScales[page].floatValue = scaleState.floatValue
                                     }
                                 },
                             )

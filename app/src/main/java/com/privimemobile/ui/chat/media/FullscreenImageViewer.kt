@@ -5,8 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -94,12 +97,11 @@ fun FullscreenImageViewer(
             ) { page ->
                 val item = images[page]
                 val scaleState = remember(page) { mutableFloatStateOf(1f) }
-                var scale by scaleState
                 val offsetXState = remember(page) { mutableFloatStateOf(0f) }
                 val offsetYState = remember(page) { mutableFloatStateOf(0f) }
-                var offsetX by offsetXState
-                var offsetY by offsetYState
-                val isZoomed = scale > 1.05f
+                val scale by scaleState
+                val offsetX by offsetXState
+                val offsetY by offsetYState
 
                 LaunchedEffect(pagerState.currentPage) {
                     if (page != pagerState.currentPage) {
@@ -121,20 +123,42 @@ fun FullscreenImageViewer(
                             translationX = offsetX,
                             translationY = offsetY,
                         )
-                        // panZoomLock at 1x: pinch zooms, single-finger swipe falls through to pager.
-                        // When zoomed: pan + pinch both work (Telegram-style).
-                        .pointerInput(page, isZoomed) {
-                            detectTransformGestures(panZoomLock = !isZoomed) { _, pan, zoom, _ ->
-                                val newScale = (scaleState.floatValue * zoom).coerceIn(1f, 5f)
-                                scaleState.floatValue = newScale
-                                pageZoomScales[page].floatValue = newScale
-                                if (newScale > 1.05f) {
-                                    offsetXState.floatValue += pan.x
-                                    offsetYState.floatValue += pan.y
-                                } else {
-                                    offsetXState.floatValue = 0f
-                                    offsetYState.floatValue = 0f
-                                }
+                        // Telegram-style arbitration: only consume pointer events when
+                        // pinching (2+ fingers) or already zoomed in (1-finger pan).
+                        // At 1x with one finger we leave events UNCONSUMED so the parent
+                        // HorizontalPager handles the left/right swipe. Keyed on `page`
+                        // only, so the scale crossing 1x never restarts the detector.
+                        .pointerInput(page) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val pressedCount = event.changes.count { it.pressed }
+                                    val currentScale = scaleState.floatValue
+                                    val pinching = pressedCount >= 2
+                                    val panningZoomed = pressedCount == 1 && currentScale > 1.05f
+
+                                    if (pinching || panningZoomed) {
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        val newScale = (currentScale * zoom).coerceIn(1f, 5f)
+                                        scaleState.floatValue = newScale
+                                        pageZoomScales[page].floatValue = newScale
+                                        if (newScale > 1.05f) {
+                                            val maxX = (size.width * (newScale - 1f)) / 2f
+                                            val maxY = (size.height * (newScale - 1f)) / 2f
+                                            offsetXState.floatValue =
+                                                (offsetXState.floatValue + pan.x).coerceIn(-maxX, maxX)
+                                            offsetYState.floatValue =
+                                                (offsetYState.floatValue + pan.y).coerceIn(-maxY, maxY)
+                                        } else {
+                                            offsetXState.floatValue = 0f
+                                            offsetYState.floatValue = 0f
+                                        }
+                                        event.changes.forEach { if (it.pressed) it.consume() }
+                                    }
+                                    // else: single finger at 1x → leave unconsumed for the pager
+                                } while (event.changes.any { it.pressed })
                             }
                         }
                         .pointerInput(page) {

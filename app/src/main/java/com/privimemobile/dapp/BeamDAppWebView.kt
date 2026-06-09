@@ -15,6 +15,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.mw.beam.beamwallet.core.Api
+import com.privimemobile.ui.chat.media.saveFileToDownloads
 import com.privimemobile.wallet.WalletManager
 import java.io.File
 
@@ -332,6 +333,29 @@ class BeamDAppWebView(context: Context) : WebView(context) {
         fun getStyle(): String {
             return """{"background_main":"#042548","background_main_top":"#035b8f","background_popup":"#00446c","navigation_background":"#000000","content_main":"#ffffff","content_secondary":"#8da1ad","accent_incoming":"#0bccf7","accent_outgoing":"#da68f5","active":"#00f6d2","validator_error":"#ff625c","appsGradientOffset":-174,"appsGradientTop":56}"""
         }
+
+        /** Save base64 file bytes to public Downloads (PriviMe DApp attachments). */
+        @JavascriptInterface
+        fun saveToDownloads(base64: String, fileName: String, mimeType: String): Boolean {
+            return try {
+                val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                val safeName = File(fileName.ifBlank { "download" }).name.ifBlank { "download" }
+                val cacheFile = File(context.cacheDir, "dapp-save-${System.currentTimeMillis()}-$safeName")
+                cacheFile.writeBytes(bytes)
+                post {
+                    saveFileToDownloads(
+                        context,
+                        cacheFile.absolutePath,
+                        safeName,
+                        mimeType.ifBlank { "application/octet-stream" },
+                    )
+                }
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "saveToDownloads failed: ${e.message}", e)
+                false
+            }
+        }
     }
 
     /**
@@ -508,6 +532,10 @@ body { height: 100vh !important; margin: 0 !important; padding: 0 !important; ba
                 catch(e) {}
             },
             getStyle: function() { return STYLE; },
+            saveToDownloads: function(b64, name, mime) {
+                try { return native.ref.saveToDownloads(b64, name, mime); }
+                catch(e) { console.error('[BEAM Bridge] saveToDownloads error:', e.message); return false; }
+            },
             api: {
                 callWalletApi: function(j) {
                     try { return native.ref.callWalletApi(j); }

@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -306,11 +307,75 @@ LazyColumn(
                         modifier = Modifier.size(32.dp),
                     )
                 }
-            // Album grid for grouped consecutive images
+            // Album grid for grouped consecutive images — Telegram-style adaptive layouts
             val albumIds = albumGroups[msg.id]
             if (albumIds != null && albumIds.size > 1) {
                 val albumMsgs = albumIds.mapNotNull { id -> reversedMessages.firstOrNull { it.id == id } }
                 val isMine = msg.sent
+                val screenWidthDp = LocalConfiguration.current.screenWidthDp
+                val albumMaxWidth = (screenWidthDp * 0.72f).dp  // wider than old 280dp
+
+                // Helper: open fullscreen viewer starting from a specific album image
+                fun openAlbumViewer(startMsg: ChatMessage) {
+                    val items = albumMsgs.mapNotNull { m ->
+                        val path = files.filePaths[m.file?.cid ?: ""] ?: return@mapNotNull null
+                        FullscreenImageItem(
+                            filePath = path,
+                            fileName = m.file?.name ?: context.getString(R.string.chat_pinned_file),
+                            msgId = m.id.toLong(),
+                            msgTs = m.timestamp,
+                            isMine = m.sent,
+                        )
+                    }
+                    if (items.isNotEmpty()) {
+                        val startIndex = items.indexOfFirst { it.msgId == startMsg.id.toLong() }.coerceAtLeast(0)
+                        media.fullscreenImage = FullscreenImageData(items, startIndex)
+                    }
+                }
+
+                // Reusable cell composable for each album image
+                @Composable
+                fun AlbumCell(albumMsg: ChatMessage, modifier: Modifier = Modifier) {
+                    val fp = files.filePaths[albumMsg.file?.cid ?: ""]
+                    Box(
+                        modifier = modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { openAlbumViewer(albumMsg) },
+                    ) {
+                        if (fp != null) {
+                            AsyncImage(
+                                model = java.io.File(fp),
+                                contentDescription = stringResource(R.string.chat_media_section),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(C.bg),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = C.accent, strokeWidth = 2.dp,
+                                )
+                            }
+                            // Trigger download
+                            val cid = albumMsg.file?.cid ?: ""
+                            if (cid.isNotEmpty() && files.downloadStatuses[cid] != "downloading") {
+                                LaunchedEffect(cid) {
+                                    onDownload(
+                                        cid,
+                                        albumMsg.file?.key ?: "",
+                                        albumMsg.file?.iv ?: "",
+                                        albumMsg.file?.mime ?: "image/jpeg",
+                                        albumMsg.file?.data,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
@@ -318,88 +383,95 @@ LazyColumn(
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = if (isMine) C.bubbleMine else C.bubbleOther),
-                        modifier = Modifier.widthIn(max = 280.dp),
+                        modifier = Modifier.widthIn(max = albumMaxWidth),
                     ) {
-                        // 2-column grid
-                        val columns = 2
-                        albumMsgs.chunked(columns).forEach { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                row.forEach { albumMsg ->
-                                    val fp = files.filePaths[albumMsg.file?.cid ?: ""]
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .clickable {
-                                                val items = albumMsgs.mapNotNull { m ->
-                                                    val path = files.filePaths[m.file?.cid ?: ""] ?: return@mapNotNull null
-                                                    FullscreenImageItem(
-                                                        filePath = path,
-                                                        fileName = m.file?.name ?: context.getString(R.string.chat_pinned_file),
-                                                        msgId = m.id.toLong(),
-                                                        msgTs = m.timestamp,
-                                                        isMine = m.sent,
-                                                    )
-                                                }
-                                                if (items.isNotEmpty()) {
-                                                    val startIndex = items.indexOfFirst { it.msgId == albumMsg.id.toLong() }.coerceAtLeast(0)
-                                                    media.fullscreenImage = FullscreenImageData(items, startIndex)
-                                                }
-                                            },
+                        Column {
+                            when (albumMsgs.size) {
+                                2 -> {
+                                    // 2 photos: side by side, nearly square
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                                     ) {
-                                        if (fp != null) {
-                                            AsyncImage(
-                                                model = java.io.File(fp),
-                                                contentDescription = stringResource(R.string.chat_media_section),
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize(),
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize().background(C.bg),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(20.dp),
-                                                    color = C.accent, strokeWidth = 2.dp,
-                                                )
-                                            }
-                                            // Trigger download
-                                            val cid = albumMsg.file?.cid ?: ""
-                                            if (cid.isNotEmpty() && files.downloadStatuses[cid] != "downloading") {
-                                                LaunchedEffect(cid) {
-                                                    onDownload(
-                                                        cid,
-                                                        albumMsg.file?.key ?: "",
-                                                        albumMsg.file?.iv ?: "",
-                                                        albumMsg.file?.mime ?: "image/jpeg",
-                                                        albumMsg.file?.data,
-                                                    )
+                                        AlbumCell(albumMsgs[0], modifier = Modifier.weight(1f).aspectRatio(1f))
+                                        AlbumCell(albumMsgs[1], modifier = Modifier.weight(1f).aspectRatio(1f))
+                                    }
+                                }
+                                3 -> {
+                                    // 3 photos: 1 large left (2 rows) + 2 stacked right — Telegram signature
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        AlbumCell(albumMsgs[0], modifier = Modifier.weight(1f).aspectRatio(0.667f))
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            AlbumCell(albumMsgs[1], modifier = Modifier.fillMaxWidth().aspectRatio(1.334f))
+                                            AlbumCell(albumMsgs[2], modifier = Modifier.fillMaxWidth().aspectRatio(1.334f))
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    // 4+ photos: 2-column grid, square cells, "+N" overlay on last
+                                    val maxVisible = if (albumMsgs.size > 6) 6 else albumMsgs.size
+                                    val visibleMsgs = albumMsgs.take(maxVisible)
+                                    val remaining = albumMsgs.size - maxVisible
+                                    visibleMsgs.chunked(2).forEachIndexed { rowIndex, row ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            row.forEachIndexed { cellIndex, albumMsg ->
+                                                val isLastCell = rowIndex == (maxVisible - 1) / 2
+                                                    && cellIndex == row.size - 1
+                                                    && remaining > 0
+                                                Box(
+                                                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                                                ) {
+                                                    AlbumCell(albumMsg)
+                                                    // "+N" overlay on last visible cell
+                                                    if (isLastCell) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxSize()
+                                                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                                                                .clip(RoundedCornerShape(4.dp)),
+                                                            contentAlignment = Alignment.Center,
+                                                        ) {
+                                                            Text(
+                                                                "+$remaining",
+                                                                color = androidx.compose.ui.graphics.Color.White,
+                                                                fontSize = 22.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                            )
+                                                        }
+                                                    }
                                                 }
+                                            }
+                                            // Pad incomplete rows
+                                            if (row.size < 2) {
+                                                Spacer(Modifier.weight(1f))
                                             }
                                         }
                                     }
                                 }
-                                // Pad incomplete rows
-                                if (row.size < columns) {
-                                    Spacer(Modifier.weight(1f))
-                                }
                             }
-                        }
-                        // Time + status row
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(context.getString(R.string.chat_album_photos, albumMsgs.size), color = C.textMuted, fontSize = 10.sp)
-                            Spacer(Modifier.width(6.dp))
-                            Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
-                            if (isMine) {
+                            // Time + status row
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(context.getString(R.string.chat_album_photos, albumMsgs.size), color = C.textMuted, fontSize = 10.sp)
                                 Spacer(Modifier.width(6.dp))
-                                val lastMsg = albumMsgs.last()
-                                TickIndicator(read = lastMsg.read, delivered = lastMsg.delivered)
+                                Text(formatMessageTime(msg.timestamp), color = C.textSecondary, fontSize = 10.sp)
+                                if (isMine) {
+                                    Spacer(Modifier.width(6.dp))
+                                    val lastMsg = albumMsgs.last()
+                                    TickIndicator(read = lastMsg.read, delivered = lastMsg.delivered)
+                                }
                             }
                         }
                     }

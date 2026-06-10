@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -339,9 +340,12 @@ fun MessageBubble(
                 Spacer(Modifier.width(6.dp))
             }
             // Wrap group sender name + bubble content
+            // Telegram-style: image messages get wider bubble (70% screen), text stays narrower (75% of that)
+            val screenWidthDp = LocalConfiguration.current.screenWidthDp
+            val maxColWidth = if (isImage) (screenWidthDp * 0.70f).dp else 300.dp
             Column(
                 horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
-                modifier = Modifier.widthIn(max = 300.dp),
+                modifier = Modifier.widthIn(max = maxColWidth),
             ) {
             // Group mode: sender name only for first message in cluster
             if (isGroupMode && !isMine && msg.from.isNotEmpty() && isFirstInCluster) {
@@ -531,7 +535,7 @@ fun MessageBubble(
                         label = "bubbleColor",
                     ).value,
                 ),
-                modifier = Modifier.widthIn(max = if (isImage) 300.dp else 280.dp),
+                modifier = Modifier.widthIn(max = if (isImage) (screenWidthDp * 0.70f).dp else 280.dp),
             ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Forwarded label

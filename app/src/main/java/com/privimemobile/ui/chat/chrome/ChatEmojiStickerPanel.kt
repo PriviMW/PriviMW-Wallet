@@ -643,11 +643,14 @@ fun ChatEmojiStickerPanel(
     }
 }
 
-/** View local sticker pack (composed after wallpaper dialogs in [com.privimemobile.ui.chat.ChatScreen] for overlay z-order). */
+/** View local sticker pack (composed after wallpaper dialogs in [com.privimemobile.ui.chat.ChatScreen] for overlay z-order).
+ *  Tapping a sticker sends it immediately (Telegram-style). */
 @Composable
 fun ChatViewStickerPackDialog(
     emoji: ChatEmojiStickerState,
+    input: ChatInputState,
     messages: List<ChatMessage>,
+    onSend: () -> Unit,
 ) {
     val context = LocalContext.current
     if (emoji.viewPackId == null) return
@@ -662,6 +665,25 @@ fun ChatViewStickerPackDialog(
         } else {
             emptyList()
         }
+    }
+    val packId = packName.hashCode().toString(16)
+    val packSize = localFiles.size
+
+    fun sendSticker(file: java.io.File) {
+        val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
+        val mime = if (isTgs) "application/x-tgsticker" else "image/webp"
+        val ext = if (isTgs) "tgs" else "webp"
+        val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
+        file.copyTo(cached, overwrite = true)
+        input.pendingFile = PendingFile(
+            uri = android.net.Uri.fromFile(cached),
+            name = file.name,
+            size = cached.length(),
+            mimeType = mime,
+        )
+        input.pendingStickerMeta = StickerMeta(packName, packId, packSize)
+        emoji.viewPackId = null
+        onSend()
     }
 
     AlertDialog(
@@ -689,6 +711,12 @@ fun ChatViewStickerPackDialog(
                     items(localFiles.size) { idx ->
                         val file = localFiles[idx]
                         val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
+                        // Shared tap modifier — Telegram-style: tap sticker to send
+                        val tapMod = Modifier
+                            .aspectRatio(1f)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { sendSticker(file) }
                         if (isTgs) {
                             val lottieJson = remember(file.absolutePath) {
                                 try {
@@ -704,7 +732,7 @@ fun ChatViewStickerPackDialog(
                                 com.airbnb.lottie.compose.LottieAnimation(
                                     composition = composition,
                                     iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
-                                    modifier = Modifier.aspectRatio(1f).padding(4.dp).clip(RoundedCornerShape(8.dp)),
+                                    modifier = tapMod,
                                 )
                             }
                         } else {
@@ -715,7 +743,7 @@ fun ChatViewStickerPackDialog(
                                 Image(
                                     bitmap = bmp.asImageBitmap(),
                                     contentDescription = stringResource(R.string.chat_sticker_pack_label),
-                                    modifier = Modifier.aspectRatio(1f).padding(4.dp).clip(RoundedCornerShape(8.dp)),
+                                    modifier = tapMod,
                                     contentScale = ContentScale.Fit,
                                 )
                             }

@@ -1019,7 +1019,9 @@ fun ChatScreen(
 
         com.privimemobile.ui.chat.chrome.ChatViewStickerPackDialog(
             emoji = emoji,
+            input = input,
             messages = messages,
+            onSend = { handleSend() },
         )
 
         com.privimemobile.ui.chat.dialogs.ChatContextMenuSheet(

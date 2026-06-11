@@ -50,11 +50,24 @@ class MessageProcessor(
     // payload per conversation, spaced between sends.
     private val pendingDeliveryAcks = mutableMapOf<String, MutableSet<Long>>()
     private val pendingReadAcks = mutableMapOf<String, MutableSet<Long>>()
+    // groupId → senderHandle → timestamps
+    private val pendingGroupDeliveryAcks = mutableMapOf<String, MutableMap<String, MutableSet<Long>>>()
+    private val pendingGroupReadAcks = mutableMapOf<String, MutableMap<String, MutableSet<Long>>>()
 
     private fun queueOutboundReceipt(convKey: String, ts: Long, chatOpen: Boolean) {
         val target = if (chatOpen) pendingReadAcks else pendingDeliveryAcks
         synchronized(target) {
             target.getOrPut(convKey) { mutableSetOf() }.add(ts)
+        }
+    }
+
+    private fun queueGroupOutboundReceipt(groupId: String, from: String, ts: Long, chatOpen: Boolean) {
+        if (from.isEmpty()) return
+        val target = if (chatOpen) pendingGroupReadAcks else pendingGroupDeliveryAcks
+        synchronized(target) {
+            target.getOrPut(groupId) { mutableMapOf() }
+                .getOrPut(from) { mutableSetOf() }
+                .add(ts)
         }
     }
 
@@ -69,12 +82,35 @@ class MessageProcessor(
             pendingReadAcks.clear()
             copy
         }
-        if (delivery.isEmpty() && read.isEmpty()) return
+        val groupDelivery = synchronized(pendingGroupDeliveryAcks) {
+            val copy = pendingGroupDeliveryAcks.mapValues { outer ->
+                outer.value.mapValues { it.value.sorted() }
+            }
+            pendingGroupDeliveryAcks.clear()
+            copy
+        }
+        val groupRead = synchronized(pendingGroupReadAcks) {
+            val copy = pendingGroupReadAcks.mapValues { outer ->
+                outer.value.mapValues { it.value.sorted() }
+            }
+            pendingGroupReadAcks.clear()
+            copy
+        }
+        if (delivery.isEmpty() && read.isEmpty() && groupDelivery.isEmpty() && groupRead.isEmpty()) return
+
+        val drainMs = com.privimemobile.chat.transport.SbbsTransport.BULK_SEND_DRAIN_MS
 
         for ((convKey, tsList) in delivery) {
             Log.d(TAG, "flushOutboundReceipts: delivered x${tsList.size} → $convKey")
             ChatService.sbbs.sendDeliveryAck(convKey, tsList)
-            kotlinx.coroutines.delay(com.privimemobile.chat.transport.SbbsTransport.BULK_SEND_DRAIN_MS)
+            kotlinx.coroutines.delay(drainMs)
+        }
+        for ((groupId, bySender) in groupDelivery) {
+            for ((from, tsList) in bySender) {
+                Log.d(TAG, "flushOutboundReceipts: group delivered x${tsList.size} → $groupId @$from")
+                ChatService.sbbs.sendGroupDeliveryReceipt(groupId, from, tsList)
+                kotlinx.coroutines.delay(drainMs)
+            }
         }
         for ((convKey, tsList) in read) {
             // Union with any other unacked received messages (matches sendAcksForConv behavior)
@@ -83,7 +119,14 @@ class MessageProcessor(
             val union = (tsList + unacked).distinct().sorted()
             Log.d(TAG, "flushOutboundReceipts: read x${union.size} → $convKey")
             ChatService.sbbs.sendReadReceipts(convKey, union)
-            kotlinx.coroutines.delay(com.privimemobile.chat.transport.SbbsTransport.BULK_SEND_DRAIN_MS)
+            kotlinx.coroutines.delay(drainMs)
+        }
+        for ((groupId, bySender) in groupRead) {
+            for ((from, tsList) in bySender) {
+                Log.d(TAG, "flushOutboundReceipts: group read x${tsList.size} → $groupId @$from")
+                ChatService.sbbs.sendGroupReadReceipt(groupId, from, tsList)
+                kotlinx.coroutines.delay(drainMs)
+            }
         }
     }
 
@@ -1139,7 +1182,15 @@ class MessageProcessor(
         )
 
         val insertedId = db.messageDao().insert(entity)
-        if (insertedId == -1L) return // Dedup — already exists
+        val groupConvKey = "g_${groupId.take(16)}"
+        val isActive = ChatService.activeChat.value == groupConvKey
+        if (insertedId == -1L) {
+            // Duplicate = sender retransmit — re-queue receipt (idempotent on sender).
+            if (!sent) {
+                queueGroupOutboundReceipt(groupId, from, ts, isActive)
+            }
+            return
+        }
 
         // Update group last message + unread
         val senderLabel = if (sent) ctx.getString(R.string.chat_sender_you) else (displayName ?: "@$from")
@@ -1147,39 +1198,12 @@ class MessageProcessor(
         db.groupDao().updateLastMessage(groupId, ts, preview)
 
         if (!sent) {
-            val groupConvKey = "g_${groupId.take(16)}"
-            val isActive = ChatService.activeChat.value == groupConvKey
-
             // Only increment unread if user is NOT viewing this group chat
             if (!isActive) {
                 db.groupDao().incrementUnread(groupId)
             }
 
-            // Resolve sender's sbbs_address for receipts
-            val senderAddress = db.groupDao().getMemberSbbsAddress(groupId, from)
-                ?: db.contactDao().findByHandle(from)?.sbbsAddress
-                ?: db.contactDao().findByHandle(from)?.walletId
-            val state = db.chatStateDao().get()
-
-            if (isActive && senderAddress != null && state?.myHandle != null) {
-                // Chat is open — send read receipt directly (✓✓ blue)
-                val ackPayload = mapOf(
-                    "v" to 1, "t" to "ack",
-                    "from" to state.myHandle,
-                    "group_id" to groupId,
-                    "read" to listOf(ts),
-                )
-                ChatService.sbbs.sendOnce(senderAddress, ackPayload)
-            } else if (senderAddress != null && state?.myHandle != null) {
-                // Chat is NOT open — send delivery receipt (✓✓ grey)
-                val deliveredPayload = mapOf(
-                    "v" to 1, "t" to "delivered",
-                    "from" to state.myHandle,
-                    "group_id" to groupId,
-                    "delivered" to listOf(ts),
-                )
-                ChatService.sbbs.sendOnce(senderAddress, deliveredPayload)
-            }
+            queueGroupOutboundReceipt(groupId, from, ts, isActive)
 
             // Notification — bypass mute if @mentioned
             val isMentioned = text != null &&
@@ -1299,7 +1323,13 @@ class MessageProcessor(
                     stickerPackTotal = (payload["pack_total"] as? Number)?.toInt() ?: 0,
                 )
                 val insertedId = db.messageDao().insert(entity)
-                if (insertedId == -1L) return // Dedup
+                val isActive = ChatService.activeChat.value == groupConvKey
+                if (insertedId == -1L) {
+                    if (!sent) {
+                        queueGroupOutboundReceipt(groupId, from, ts, isActive)
+                    }
+                    return
+                }
 
                 // Handle file attachment if present
                 val fileData = payload["file"] as? Map<*, *>
@@ -1353,31 +1383,11 @@ class MessageProcessor(
                 db.groupDao().updateLastMessage(groupId, ts, preview)
 
                 if (!sent) {
-                    val isActive = ChatService.activeChat.value == groupConvKey
                     if (!isActive) {
                         db.groupDao().incrementUnread(groupId)
                     }
 
-  // Send delivery/read receipt
-                    val senderAddress2 = db.groupDao().getMemberSbbsAddress(groupId, from)
-                        ?: db.contactDao().findByHandle(from)?.sbbsAddress
-                        ?: db.contactDao().findByHandle(from)?.walletId
-                    val state2 = db.chatStateDao().get()
-                    if (senderAddress2 != null && state2?.myHandle != null) {
-                        if (isActive) {
-                            // Chat open → read receipt (✓✓ blue)
-                            ChatService.sbbs.sendOnce(senderAddress2, mapOf(
-                                "v" to 1, "t" to "ack", "from" to state2.myHandle,
-                                "group_id" to groupId, "read" to listOf(ts),
-                            ))
-                        } else {
-                            // Chat closed → delivery receipt (✓✓ grey)
-                            ChatService.sbbs.sendOnce(senderAddress2, mapOf(
-                                "v" to 1, "t" to "delivered", "from" to state2.myHandle,
-                                "group_id" to groupId, "delivered" to listOf(ts),
-                            ))
-                        }
-                    }
+                    queueGroupOutboundReceipt(groupId, from, ts, isActive)
 
                     if (!isActive && !group.muted) {
                         val totalUnread = (db.conversationDao().getTotalUnread()

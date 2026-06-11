@@ -238,6 +238,49 @@ class SbbsTransport(
         return toAddress
     }
 
+    /** Resolve group sender SBBS address (member sbbs → contact → walletId). */
+    private suspend fun resolveGroupSenderAddress(groupId: String, senderHandle: String): String? {
+        return db.groupDao().getMemberSbbsAddress(groupId, senderHandle)
+            ?: db.contactDao().findByHandle(senderHandle)?.sbbsAddress
+            ?: db.contactDao().findByHandle(senderHandle)?.walletId
+    }
+
+    /** Batched group delivery receipt with extended retry. */
+    fun sendGroupDeliveryReceipt(groupId: String, senderHandle: String, timestamps: List<Long>) {
+        Log.d(TAG, "sendGroupDeliveryReceipt($groupId, @$senderHandle): ${timestamps.size} timestamps")
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            if (state.myHandle == null) return@launch
+            val toAddress = resolveGroupSenderAddress(groupId, senderHandle) ?: return@launch
+            val payload = mapOf(
+                "v" to 1,
+                "t" to "delivered",
+                "from" to state.myHandle,
+                "group_id" to groupId,
+                "delivered" to timestamps,
+            )
+            sendReceiptWithRetry(toAddress, payload)
+        }
+    }
+
+    /** Batched group read receipt with extended retry. */
+    fun sendGroupReadReceipt(groupId: String, senderHandle: String, timestamps: List<Long>) {
+        Log.d(TAG, "sendGroupReadReceipt($groupId, @$senderHandle): ${timestamps.size} timestamps")
+        scope.launch {
+            val state = db.chatStateDao().get() ?: return@launch
+            if (state.myHandle == null) return@launch
+            val toAddress = resolveGroupSenderAddress(groupId, senderHandle) ?: return@launch
+            val payload = mapOf(
+                "v" to 1,
+                "t" to "ack",
+                "from" to state.myHandle,
+                "group_id" to groupId,
+                "read" to timestamps,
+            )
+            sendReceiptWithRetry(toAddress, payload)
+        }
+    }
+
     /** Send delivery ack — confirms message arrived (3x retry like regular messages). */
     fun sendDeliveryAck(convKey: String, timestamps: List<Long>) {
         Log.d(TAG, "sendDeliveryAck($convKey): ${timestamps.size} timestamps")

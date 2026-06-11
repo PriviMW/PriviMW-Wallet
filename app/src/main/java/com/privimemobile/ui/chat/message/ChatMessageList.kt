@@ -86,6 +86,7 @@ import com.privimemobile.ui.chat.ChatPinState
 import com.privimemobile.ui.chat.ChatPollUiState
 import com.privimemobile.ui.chat.ChatScrollBadgeState
 import com.privimemobile.ui.chat.ChatSelectionState
+import com.privimemobile.ui.chat.albumBubbleWidth
 import com.privimemobile.ui.chat.format.formatDateSeparator
 import com.privimemobile.ui.chat.format.formatMessageTime
 import com.privimemobile.ui.chat.message.MessageBubble
@@ -313,7 +314,7 @@ LazyColumn(
                 val albumMsgs = albumIds.mapNotNull { id -> reversedMessages.firstOrNull { it.id == id } }
                 val isMine = msg.sent
                 val screenWidthDp = LocalConfiguration.current.screenWidthDp
-                val albumMaxWidth = (screenWidthDp * 0.72f).dp  // wider than old 280dp
+                val albumMaxWidth = albumBubbleWidth(screenWidthDp)
 
                 // Helper: open fullscreen viewer starting from a specific album image
                 fun openAlbumViewer(startMsg: ChatMessage) {
@@ -327,10 +328,32 @@ LazyColumn(
                             isMine = m.sent,
                         )
                     }
-                    if (items.isNotEmpty()) {
-                        val startIndex = items.indexOfFirst { it.msgId == startMsg.id.toLong() }.coerceAtLeast(0)
-                        media.fullscreenImage = FullscreenImageData(items, startIndex)
+                    if (items.isEmpty()) return
+                    val startIndex = items.indexOfFirst { it.msgId == startMsg.id.toLong() }
+                    if (startIndex < 0) {
+                        // Tapped image is still downloading (was filtered out of items).
+                        // Don't open the viewer on a different image — wait for the
+                        // download to finish, or surface a retry toast.
+                        val cid = startMsg.file?.cid ?: ""
+                        if (cid.isNotEmpty() && files.downloadStatuses[cid] != "downloading") {
+                            onDownload(
+                                cid,
+                                startMsg.file?.key ?: "",
+                                startMsg.file?.iv ?: "",
+                                startMsg.file?.mime ?: "image/jpeg",
+                                startMsg.file?.data,
+                            )
+                            android.widget.Toast.makeText(
+                                context, R.string.chat_image_downloading, android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            android.widget.Toast.makeText(
+                                context, R.string.chat_image_downloading, android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                        return
                     }
+                    media.fullscreenImage = FullscreenImageData(items, startIndex)
                 }
 
                 // Reusable cell composable for each album image
@@ -340,7 +363,7 @@ LazyColumn(
                     Box(
                         modifier = modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .clickable { openAlbumViewer(albumMsg) },
+                            .clickable(enabled = fp != null) { openAlbumViewer(albumMsg) },
                     ) {
                         if (fp != null) {
                             AsyncImage(

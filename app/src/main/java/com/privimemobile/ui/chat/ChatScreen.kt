@@ -1143,9 +1143,21 @@ fun ChatScreen(
     // Fullscreen image viewer
     if (media.fullscreenImage != null) {
         val fImg = media.fullscreenImage!!
+        // Delete-for-everyone is offered if the user *can* delete the initial image
+        // (own image, or group admin/creator). The viewer re-evaluates this per-page
+        // as the user swipes, so the option correctly hides when on someone else's
+        // image and shows when on their own. We pass a non-null lambda unconditionally
+        // and let the viewer gate visibility via canOfferDeleteForEveryone(currentImage).
+        val canOfferDeleteForEveryone = com.privimemobile.chat.DeleteAuthorization.canOfferDeleteForEveryone(
+            isGroupMode,
+            group?.myRole ?: 0,
+            fImg.images[fImg.initialIndex].isMine,
+        )
         FullscreenImageViewer(
             images = fImg.images,
             initialIndex = fImg.initialIndex,
+            isGroupMode = isGroupMode,
+            myGroupRole = group?.myRole ?: 0,
             onDismiss = { media.fullscreenImage = null },
             onSave = { item ->
                 val mime = when {
@@ -1163,11 +1175,7 @@ fun ChatScreen(
                 }
                 media.fullscreenImage = null
             },
-            onDeleteForEveryone = if (com.privimemobile.chat.DeleteAuthorization.canOfferDeleteForEveryone(
-                    isGroupMode,
-                    group?.myRole ?: 0,
-                    fImg.images[fImg.initialIndex].isMine,
-                )) { { item ->
+            onDeleteForEveryone = if (canOfferDeleteForEveryone) { { item ->
                 scope.launch {
                     val state = com.privimemobile.chat.ChatService.db?.chatStateDao()?.get()
                     if (state?.myHandle != null) {

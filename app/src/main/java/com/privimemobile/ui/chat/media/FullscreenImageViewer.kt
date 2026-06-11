@@ -52,6 +52,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.privimemobile.R
+import com.privimemobile.chat.DeleteAuthorization
 import com.privimemobile.ui.chat.FullscreenImageItem
 import com.privimemobile.ui.theme.C
 
@@ -64,6 +65,8 @@ fun FullscreenImageViewer(
     onSave: (FullscreenImageItem) -> Unit,
     onDeleteForMe: ((FullscreenImageItem) -> Unit)? = null,
     onDeleteForEveryone: ((FullscreenImageItem) -> Unit)? = null,
+    isGroupMode: Boolean = false,
+    myGroupRole: Int = 0,
 ) {
     val safeInitial = initialIndex.coerceIn(0, images.lastIndex)
     val pagerState = rememberPagerState(
@@ -71,6 +74,12 @@ fun FullscreenImageViewer(
         pageCount = { images.size },
     )
     val currentImage = images[pagerState.currentPage]
+    // Re-evaluated every recomposition: as user swipes between album images, the
+    // "Delete for Everyone" option must track the *currently visible* image's owner,
+    // not the image the viewer was opened with. Previous bug: a once-computed gate
+    // let the user delete someone else's photo by opening the viewer on their own.
+    val canDeleteForEveryoneHere = onDeleteForEveryone != null &&
+        DeleteAuthorization.canOfferDeleteForEveryone(isGroupMode, myGroupRole, currentImage.isMine)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -240,12 +249,12 @@ fun FullscreenImageViewer(
                                         onDeleteForMe(currentImage)
                                     },
                                 )
-                                if (onDeleteForEveryone != null) {
+                                if (canDeleteForEveryoneHere) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chat_delete_for_everyone), color = C.error) },
                                         onClick = {
                                             showDeleteMenu = false
-                                            onDeleteForEveryone(currentImage)
+                                            onDeleteForEveryone?.invoke(currentImage)
                                         },
                                     )
                                 }

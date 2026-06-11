@@ -545,13 +545,15 @@ fun ChatEmojiStickerPanel(
                                             .pointerInput(file.absolutePath) {
                                                 detectTapGestures(
                                                     onTap = {
-                                                        val mime = if (isTgs) "application/x-tgsticker" else "image/webp"
-                                                        val ext = if (isTgs) "tgs" else "webp"
-                                                        val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
-                                                        file.copyTo(cached, overwrite = true)
-                                                        input.pendingFile = PendingFile(uri = android.net.Uri.fromFile(cached), name = file.name, size = cached.length(), mimeType = mime)
                                                         val pName = currentPack?.first ?: context.getString(R.string.chat_sticker_pack_label)
-                                                        input.pendingStickerMeta = StickerMeta(pName, pName.hashCode().toString(16), currentPack?.second?.size ?: 0)
+                                                        stageStickerForSend(
+                                                            context = context,
+                                                            input = input,
+                                                            file = file,
+                                                            packName = pName,
+                                                            packId = pName.hashCode().toString(16),
+                                                            packSize = currentPack?.second?.size ?: 0,
+                                                        )
                                                         emoji.showEmojiPicker = false
                                                         onSend()
                                                     },
@@ -643,6 +645,35 @@ fun ChatEmojiStickerPanel(
     }
 }
 
+/**
+ * Stage a sticker file for sending: copy it to a uniquely-named cache file, populate
+ * [ChatInputState.pendingFile] with the right MIME/extension, and tag the
+ * [ChatInputState.pendingStickerMeta] so the recipient can attribute the sticker
+ * to its pack. Used by both the emoji-panel sticker grid and the view-pack dialog
+ * — keep them in sync via this single function.
+ */
+internal fun stageStickerForSend(
+    context: android.content.Context,
+    input: ChatInputState,
+    file: java.io.File,
+    packName: String,
+    packId: String,
+    packSize: Int,
+) {
+    val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
+    val mime = if (isTgs) "application/x-tgsticker" else "image/webp"
+    val ext = if (isTgs) "tgs" else "webp"
+    val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
+    file.copyTo(cached, overwrite = true)
+    input.pendingFile = PendingFile(
+        uri = android.net.Uri.fromFile(cached),
+        name = file.name,
+        size = cached.length(),
+        mimeType = mime,
+    )
+    input.pendingStickerMeta = StickerMeta(packName, packId, packSize)
+}
+
 /** View local sticker pack (composed after wallpaper dialogs in [com.privimemobile.ui.chat.ChatScreen] for overlay z-order).
  *  Tapping a sticker sends it immediately (Telegram-style). */
 @Composable
@@ -670,18 +701,7 @@ fun ChatViewStickerPackDialog(
     val packSize = localFiles.size
 
     fun sendSticker(file: java.io.File) {
-        val isTgs = file.name.endsWith(".tgs", ignoreCase = true)
-        val mime = if (isTgs) "application/x-tgsticker" else "image/webp"
-        val ext = if (isTgs) "tgs" else "webp"
-        val cached = java.io.File(context.cacheDir, "sticker_send_${System.currentTimeMillis()}.$ext")
-        file.copyTo(cached, overwrite = true)
-        input.pendingFile = PendingFile(
-            uri = android.net.Uri.fromFile(cached),
-            name = file.name,
-            size = cached.length(),
-            mimeType = mime,
-        )
-        input.pendingStickerMeta = StickerMeta(packName, packId, packSize)
+        stageStickerForSend(context, input, file, packName, packId, packSize)
         emoji.viewPackId = null
         onSend()
     }

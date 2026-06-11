@@ -15,7 +15,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.mw.beam.beamwallet.core.Api
-import com.privimemobile.ui.chat.media.saveFileToDownloads
 import com.privimemobile.wallet.WalletManager
 import java.io.File
 
@@ -334,23 +333,35 @@ class BeamDAppWebView(context: Context) : WebView(context) {
             return """{"background_main":"#042548","background_main_top":"#035b8f","background_popup":"#00446c","navigation_background":"#000000","content_main":"#ffffff","content_secondary":"#8da1ad","accent_incoming":"#0bccf7","accent_outgoing":"#da68f5","active":"#00f6d2","validator_error":"#ff625c","appsGradientOffset":-174,"appsGradientTop":56}"""
         }
 
-        /** Save base64 file bytes to public Downloads (PriviMe DApp attachments). */
+        /** Save base64 file bytes to public Downloads (PriviMe DApp attachments).
+         *
+         * Runs synchronously from the JS caller's point of view: decode happens on
+         * the JS bridge thread, but the MediaStore write + Toast are dispatched to
+         * the main thread and the result is awaited via CompletableFuture.
+         *
+         * Bytes go straight to MediaStore — no intermediate cacheDir file (the
+         * previous implementation wrote to cacheDir and never deleted the temp file
+         * after copying it to Downloads, leaking one file per save).
+         *
+         * MIME type is validated against the filename extension in
+         * [com.privimemobile.ui.chat.media.saveBytesToDownloads] to prevent
+         * content-type confusion (e.g. .jpg file saved with text/html MIME).
+         */
         @JavascriptInterface
         fun saveToDownloads(base64: String, fileName: String, mimeType: String): Boolean {
             return try {
                 val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
                 val safeName = File(fileName.ifBlank { "download" }).name.ifBlank { "download" }
-                val cacheFile = File(context.cacheDir, "dapp-save-${System.currentTimeMillis()}-$safeName")
-                cacheFile.writeBytes(bytes)
+                val future = java.util.concurrent.CompletableFuture<Boolean>()
                 post {
-                    saveFileToDownloads(
-                        context,
-                        cacheFile.absolutePath,
-                        safeName,
-                        mimeType.ifBlank { "application/octet-stream" },
+                    val ok = com.privimemobile.ui.chat.media.saveBytesToDownloads(
+                        context, bytes, safeName, mimeType,
                     )
+                    future.complete(ok)
                 }
-                true
+                // Bound the wait so a stuck post doesn't hang the JS bridge.
+                // Typical save is <50ms; cap at 10s as a safety net.
+                future.get(10, java.util.concurrent.TimeUnit.SECONDS)
             } catch (e: Exception) {
                 Log.e(TAG, "saveToDownloads failed: ${e.message}", e)
                 false

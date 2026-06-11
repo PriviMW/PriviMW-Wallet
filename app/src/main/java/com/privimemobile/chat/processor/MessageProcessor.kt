@@ -43,6 +43,50 @@ class MessageProcessor(
     /** Idempotent inbound types — must run even when SBBS id was already claimed (retries / replay). */
     private val alwaysReprocessTypes = setOf("ack", "delivered", "delete", "unreact")
 
+    // ── Outbound DM receipt coalescing ──
+    // Per-message acks during a backlog replay fire SBBS send bursts that the JNI queue
+    // drops (see SbbsTransport.BULK_SEND_SPACING_MS). Collect ack timestamps per
+    // conversation while processing a batch, then flush once at the end — one delivered/ack
+    // payload per conversation, spaced between sends.
+    private val pendingDeliveryAcks = mutableMapOf<String, MutableSet<Long>>()
+    private val pendingReadAcks = mutableMapOf<String, MutableSet<Long>>()
+
+    private fun queueOutboundReceipt(convKey: String, ts: Long, chatOpen: Boolean) {
+        val target = if (chatOpen) pendingReadAcks else pendingDeliveryAcks
+        synchronized(target) {
+            target.getOrPut(convKey) { mutableSetOf() }.add(ts)
+        }
+    }
+
+    private suspend fun flushOutboundReceipts() {
+        val delivery = synchronized(pendingDeliveryAcks) {
+            val copy = pendingDeliveryAcks.mapValues { it.value.sorted() }
+            pendingDeliveryAcks.clear()
+            copy
+        }
+        val read = synchronized(pendingReadAcks) {
+            val copy = pendingReadAcks.mapValues { it.value.sorted() }
+            pendingReadAcks.clear()
+            copy
+        }
+        if (delivery.isEmpty() && read.isEmpty()) return
+
+        for ((convKey, tsList) in delivery) {
+            Log.d(TAG, "flushOutboundReceipts: delivered x${tsList.size} → $convKey")
+            ChatService.sbbs.sendDeliveryAck(convKey, tsList)
+            kotlinx.coroutines.delay(com.privimemobile.chat.transport.SbbsTransport.BULK_SEND_DRAIN_MS)
+        }
+        for ((convKey, tsList) in read) {
+            // Union with any other unacked received messages (matches sendAcksForConv behavior)
+            val conv = db.conversationDao().findByKey(convKey)
+            val unacked = conv?.let { db.messageDao().getUnackedTimestamps(it.id) } ?: emptyList()
+            val union = (tsList + unacked).distinct().sorted()
+            Log.d(TAG, "flushOutboundReceipts: read x${union.size} → $convKey")
+            ChatService.sbbs.sendReadReceipts(convKey, union)
+            kotlinx.coroutines.delay(com.privimemobile.chat.transport.SbbsTransport.BULK_SEND_DRAIN_MS)
+        }
+    }
+
     /** True if ack/delivered still needs applying (e.g. SBBS id was seen but bulk-replay skipped earlier). */
     private suspend fun receiptStillNeeded(type: String, payload: Map<String, Any?>): Boolean {
         val groupId = payload["group_id"] as? String
@@ -123,6 +167,11 @@ class MessageProcessor(
             }
         }
         com.privimemobile.chat.SbbsSeenStore.flush(ctx)
+        try {
+            flushOutboundReceipts()
+        } catch (e: Exception) {
+            Log.w(TAG, "flushOutboundReceipts error: ${e.message}")
+        }
     }
 
     private suspend fun processOneMessage(
@@ -290,7 +339,15 @@ class MessageProcessor(
 
         // Insert — IGNORE on duplicate
         val messageId = db.messageDao().insert(message)
-        if (messageId == -1L) { Log.d(TAG, "DEDUP: $dedupKey (${text?.take(20)})"); return }
+        if (messageId == -1L) {
+            Log.d(TAG, "DEDUP: $dedupKey (${text?.take(20)})")
+            // Duplicate = sender retransmit — our earlier receipt may have been lost in
+            // transit (SBBS is best-effort). Re-queue the ack; receipts are idempotent.
+            if (!sent) {
+                queueOutboundReceipt(convKey, ts, ChatService.activeChat.value == convKey)
+            }
+            return
+        }
 
         // Un-delete conversation if tombstoned (genuinely new message passed tombstone + dedup checks)
         if (conv.deletedAtTs > 0) {
@@ -372,15 +429,10 @@ class MessageProcessor(
             }
         }
 
-        // Send ack for received messages
+        // Send ack for received messages — queued per conversation and flushed once at the
+        // end of the inbox batch (burst-safe: one receipt payload per conv, spaced sends).
         if (!sent) {
-            if (ChatService.activeChat.value == convKey) {
-                // Chat is open — send read receipt directly (also marks delivered)
-                ChatService.sendAcksForConv(convKey, conv.id)
-            } else {
-                // Chat is closed — send delivery ack only
-                ChatService.sbbs.sendDeliveryAck(convKey, listOf(ts))
-            }
+            queueOutboundReceipt(convKey, ts, ChatService.activeChat.value == convKey)
         }
 
         // Queue contact resolution for unknown senders

@@ -185,6 +185,22 @@ class SbbsTransport(
     }
 
     /**
+     * Receipt send with extended retry (0s, 5s, 10s, 30s, 75s).
+     * The late retransmits cover the cold-start window right after a wallet comes online,
+     * where send_message is accepted but the BBS publish is silently lost. Receipts
+     * (ack/delivered) are idempotent on the receiving side, so duplicates are safe.
+     */
+    private fun sendReceiptWithRetry(toWalletId: String, payload: Map<String, Any?>) {
+        sendSbbsMessage(toWalletId, payload)
+        for (delayMs in listOf(5_000L, 10_000L, 30_000L, 75_000L)) {
+            scope.launch {
+                delay(delayMs)
+                sendSbbsMessage(toWalletId, payload)
+            }
+        }
+    }
+
+    /**
      * Send multiple payloads to one peer with spacing — used for bulk delete-for-everyone.
      * Each payload still gets sendWithRetry's 5s/10s follow-ups; waits [BULK_SEND_SPACING_MS] between starts.
      */
@@ -237,7 +253,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "delivered" to timestamps,
             )
-            sendWithRetry(toAddress, payload)
+            sendReceiptWithRetry(toAddress, payload)
         }
     }
 
@@ -259,7 +275,7 @@ class SbbsTransport(
                 "from" to state.myHandle,
                 "read" to timestamps,
             )
-            sendWithRetry(toAddress, payload)
+            sendReceiptWithRetry(toAddress, payload)
 
             // Mark local messages as acked
             db.messageDao().markAcked(conv.id, timestamps)

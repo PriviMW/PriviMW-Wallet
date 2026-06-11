@@ -66,6 +66,18 @@ object DAppWebViewHolder {
     var activeName: String = ""
         private set
 
+    // Pending file chooser callback. Lives on the holder (not in Compose state) so it
+    // survives Activity recreation (rotation) while a system file picker is open. The
+    // launcher result is delivered against whichever [DAppScreen] instance is currently
+    // composed — the holder outlives any single composition.
+    @Volatile
+    var pendingFileChooserCallback: ((Array<Uri>?) -> Unit)? = null
+        private set
+
+    fun setPendingFileChooserCallback(cb: ((Array<Uri>?) -> Unit)?) {
+        pendingFileChooserCallback = cb
+    }
+
     fun getOrCreate(ctx: android.content.Context, name: String, path: String, guid: String): BeamDAppWebView {
         val existing = activeWebView
         if (existing != null && activeGuid == guid) {
@@ -97,6 +109,8 @@ object DAppWebViewHolder {
         activeWebView = null
         activeGuid = ""
         activeName = ""
+        // Also clear any pending file chooser — its WebView is gone.
+        pendingFileChooserCallback = null
         val wallet = WalletManager.walletInstance
         if (wallet != null && Api.isWalletRunning()) {
             try { wallet.launchApp("PriviMe", "") } catch (_: Exception) {}
@@ -125,17 +139,14 @@ fun DAppScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
-    val pendingFileChooser = remember {
-        object {
-            var callback: ((Array<Uri>?) -> Unit)? = null
-        }
-    }
 
     val fileChooserLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val callback = pendingFileChooser.callback
-        pendingFileChooser.callback = null
+        // Read callback from the holder so we survive Activity recreation (rotation)
+        // while the system file picker is open.
+        val callback = DAppWebViewHolder.pendingFileChooserCallback
+        DAppWebViewHolder.setPendingFileChooserCallback(null)
         val uris = if (result.resultCode == Activity.RESULT_OK) {
             result.data.selectedUrisFromChooserResult()
         } else {
@@ -147,12 +158,12 @@ fun DAppScreen(
     val bindFileChooser = remember(fileChooserLauncher) {
         { wv: BeamDAppWebView ->
             wv.onRequestFileChooser = { intent, callback ->
-                pendingFileChooser.callback = callback
+                DAppWebViewHolder.setPendingFileChooserCallback(callback)
                 try {
                     fileChooserLauncher.launch(intent)
                 } catch (e: Exception) {
                     Log.w("DAppScreen", "fileChooserLauncher failed: ${e.message}")
-                    pendingFileChooser.callback = null
+                    DAppWebViewHolder.setPendingFileChooserCallback(null)
                     callback(null)
                 }
             }

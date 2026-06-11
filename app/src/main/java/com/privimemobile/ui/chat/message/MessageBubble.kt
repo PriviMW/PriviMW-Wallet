@@ -58,6 +58,7 @@ import com.privimemobile.protocol.ChatMessage
 import com.privimemobile.protocol.Helpers
 import com.privimemobile.ui.chat.format.formatMessageTime
 import com.privimemobile.ui.chat.format.parseMarkdown
+import com.privimemobile.ui.chat.imageBubbleWidth
 import com.privimemobile.ui.chat.media.saveFileToDownloads
 import com.privimemobile.ui.components.VoiceMessageBubble
 import com.privimemobile.ui.theme.C
@@ -342,7 +343,7 @@ fun MessageBubble(
             // Wrap group sender name + bubble content
             // Telegram-style: image messages get wider bubble (70% screen), text stays narrower (75% of that)
             val screenWidthDp = LocalConfiguration.current.screenWidthDp
-            val maxColWidth = if (isImage) (screenWidthDp * 0.70f).dp else 300.dp
+            val maxColWidth = if (isImage) imageBubbleWidth(screenWidthDp) else 300.dp
             Column(
                 horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
                 modifier = Modifier.widthIn(max = maxColWidth),
@@ -535,7 +536,7 @@ fun MessageBubble(
                         label = "bubbleColor",
                     ).value,
                 ),
-                modifier = Modifier.widthIn(max = if (isImage) (screenWidthDp * 0.70f).dp else 280.dp),
+                modifier = Modifier.widthIn(max = if (isImage) imageBubbleWidth(screenWidthDp) else 280.dp),
             ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 // Forwarded label

@@ -1474,6 +1474,8 @@ Esto fusionará la copia de seguridad en tu billetera actual.</string>
     <string name="chat_join_failed">Unión fallida</string>
     <string name="chat_sticker_pack_label">Stickers</string>
     <string name="chat_album_photos">%1$d fotos</string>
+    <string name="chat_image_viewer_position">%1$d de %2$d</string>
+    <string name="chat_image_downloading">La imagen aún se está descargando…</string>
     <string name="chat_sticker_pack_header">Paquete de pegatinas</string>
     <string name="chat_poll_label">Encuesta</string>
     <string name="chat_clip_label">Mensaje</string>

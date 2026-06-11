@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Deelnemen mislukt</string>
     <string name="chat_sticker_pack_label">Stickers</string>
     <string name="chat_album_photos">%1$d foto\'s</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Afbeelding wordt nog gedownload…</string>
     <string name="chat_sticker_pack_header">Stickerpack</string>
     <string name="chat_poll_label">Peiling</string>
     <string name="chat_clip_label">Bericht</string>

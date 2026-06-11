@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Не вдалося приєднатися</string>
     <string name="chat_sticker_pack_label">Пакет стікерів</string>
     <string name="chat_album_photos">%1$d фото</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Зображення ще завантажується…</string>
     <string name="chat_sticker_pack_header">Пакет стікерів</string>
     <string name="chat_poll_label">Опитування</string>
     <string name="chat_clip_label">Кліп</string>

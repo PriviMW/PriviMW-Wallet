@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Falha ao entrar</string>
     <string name="chat_sticker_pack_label">Adesivos</string>
     <string name="chat_album_photos">%1$d fotos</string>
+    <string name="chat_image_viewer_position">%1$d de %2$d</string>
+    <string name="chat_image_downloading">A imagem ainda está a ser transferida…</string>
     <string name="chat_sticker_pack_header">Pacote de Adesivos</string>
     <string name="chat_poll_label">Enquete</string>
     <string name="chat_clip_label">Mensagem</string>

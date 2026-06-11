@@ -1477,6 +1477,8 @@
     <string name="chat_join_failed">Ошибка присоединения</string>
     <string name="chat_sticker_pack_label">Стикеры</string>
     <string name="chat_album_photos">%1$d фото</string>
+    <string name="chat_image_viewer_position">%1$d из %2$d</string>
+    <string name="chat_image_downloading">Изображение ещё загружается…</string>
     <string name="chat_sticker_pack_header">Пакет наклеек</string>
     <string name="chat_poll_label">Опрос</string>
     <string name="chat_clip_label">Сообщение</string>

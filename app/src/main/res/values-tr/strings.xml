@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Katılma başarısız</string>
     <string name="chat_sticker_pack_label">Çıkartmalar</string>
     <string name="chat_album_photos">%1$d fotoğraflar</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Görsel hâlâ indiriliyor…</string>
     <string name="chat_sticker_pack_header">Çıkartma Paketi</string>
     <string name="chat_poll_label">Anket</string>
     <string name="chat_clip_label">Mesaj</string>

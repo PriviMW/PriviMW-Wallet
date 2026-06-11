@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">เข้าร่วมไม่สำเร็จ</string>
     <string name="chat_sticker_pack_label">สติกเกอร์</string>
     <string name="chat_album_photos">%1$d รูปภาพ</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">กำลังดาวน์โหลดรูปภาพอยู่…</string>
     <string name="chat_sticker_pack_header">แพ็กสติกเกอร์</string>
     <string name="chat_poll_label">โพล</string>
     <string name="chat_clip_label">ข้อความ</string>

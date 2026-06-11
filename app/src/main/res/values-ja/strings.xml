@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">参加失敗</string>
     <string name="chat_sticker_pack_label">スタンプ</string>
     <string name="chat_album_photos">%1$d枚の写真</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">画像をダウンロード中です…</string>
     <string name="chat_sticker_pack_header">スタンプパック</string>
     <string name="chat_poll_label">投票</string>
     <string name="chat_clip_label">メッセージ</string>

@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Придруживање неуспешно</string>
     <string name="chat_sticker_pack_label">Налепнице</string>
     <string name="chat_album_photos">%1$d фотографија</string>
+    <string name="chat_image_viewer_position">%1$d од %2$d</string>
+    <string name="chat_image_downloading">Слика се још преузима…</string>
     <string name="chat_sticker_pack_header">Паковање налепница</string>
     <string name="chat_poll_label">Анкета</string>
     <string name="chat_clip_label">Порука</string>

@@ -1474,6 +1474,8 @@
     <string name="chat_join_failed">Připojení selhalo</string>
     <string name="chat_sticker_pack_label">Nálepky</string>
     <string name="chat_album_photos">%1$d fotek</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Obrázek se stále stahuje…</string>
     <string name="chat_sticker_pack_header">Balíček nálepek</string>
     <string name="chat_poll_label">Hlasování</string>
     <string name="chat_clip_label">Zpráva</string>

@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Unione fallita</string>
     <string name="chat_sticker_pack_label">Pacchetto Adesivi</string>
     <string name="chat_album_photos">%1$d foto</string>
+    <string name="chat_image_viewer_position">%1$d di %2$d</string>
+    <string name="chat_image_downloading">L\'immagine è ancora in download…</string>
     <string name="chat_sticker_pack_header">Pacchetto Adesivi</string>
     <string name="chat_poll_label">Sondaggio</string>
     <string name="chat_clip_label">Allegato</string>

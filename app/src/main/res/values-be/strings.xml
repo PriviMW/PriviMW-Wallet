@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Не атрымалася далучыцца</string>
     <string name="chat_sticker_pack_label">Налепкі</string>
     <string name="chat_album_photos">%1$d фота</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Выява яшчэ спампоўваецца…</string>
     <string name="chat_sticker_pack_header">Набор налепак</string>
     <string name="chat_poll_label">Апытанне</string>
     <string name="chat_clip_label">Паведамленне</string>

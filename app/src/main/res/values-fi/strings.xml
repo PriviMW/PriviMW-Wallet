@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Liittyminen epäonnistui</string>
     <string name="chat_sticker_pack_label">Tarrat</string>
     <string name="chat_album_photos">%1$d kuvaa</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Kuvaa ladataan vielä…</string>
     <string name="chat_sticker_pack_header">Tarra-paketti</string>
     <string name="chat_poll_label">Kysely</string>
     <string name="chat_clip_label">Viesti</string>

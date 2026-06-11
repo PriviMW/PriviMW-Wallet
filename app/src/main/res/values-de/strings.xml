@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Beitreten fehlgeschlagen</string>
     <string name="chat_sticker_pack_label">Aufkleber</string>
     <string name="chat_album_photos">%1$d Fotos</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Bild wird noch heruntergeladen…</string>
     <string name="chat_sticker_pack_header">Aufkleber-Pack</string>
     <string name="chat_poll_label">Umfrage</string>
     <string name="chat_clip_label">Nachricht</string>

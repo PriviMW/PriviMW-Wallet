@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Échec de la connexion</string>
     <string name="chat_sticker_pack_label">Stickers</string>
     <string name="chat_album_photos">%1$d photos</string>
+    <string name="chat_image_viewer_position">%1$d sur %2$d</string>
+    <string name="chat_image_downloading">L\'image est encore en cours de téléchargement…</string>
     <string name="chat_sticker_pack_header">Pack de stickers</string>
     <string name="chat_poll_label">Sondage</string>
     <string name="chat_clip_label">Message</string>

@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">Misslyckades att gå med</string>
     <string name="chat_sticker_pack_label">Klistermärken</string>
     <string name="chat_album_photos">%1$d foton</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">Bilden laddas fortfarande ner…</string>
     <string name="chat_sticker_pack_header">Klistermärkespaket</string>
     <string name="chat_poll_label">Omröstning</string>
     <string name="chat_clip_label">Meddelande</string>

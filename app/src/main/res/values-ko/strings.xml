@@ -1472,6 +1472,8 @@
     <string name="chat_join_failed">가입 실패</string>
     <string name="chat_sticker_pack_label">스티커</string>
     <string name="chat_album_photos">사진 %1$d장</string>
+    <string name="chat_image_viewer_position">%1$d / %2$d</string>
+    <string name="chat_image_downloading">이미지를 아직 다운로드 중입니다…</string>
     <string name="chat_sticker_pack_header">스티커 팩</string>
     <string name="chat_poll_label">투표</string>
     <string name="chat_clip_label">메시지</string>

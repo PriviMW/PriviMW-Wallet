@@ -212,6 +212,11 @@ class MessageProcessor(
         com.privimemobile.chat.SbbsSeenStore.flush(ctx)
         try {
             flushOutboundReceipts()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Re-throw cancellation to honor structured concurrency — don't
+            // swallow it as a generic exception, or the coroutine would keep
+            // running past its cancellation signal.
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "flushOutboundReceipts error: ${e.message}")
         }

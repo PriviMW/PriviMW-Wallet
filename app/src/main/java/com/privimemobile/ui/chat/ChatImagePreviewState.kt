@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.privimemobile.ui.chat.media.ImagePreviewData
+import android.net.Uri
 
 /** Fullscreen image viewer, attachment picker, and gallery preview-before-send. */
 class ChatImagePreviewState {
@@ -13,6 +14,8 @@ class ChatImagePreviewState {
     var imagePreview by mutableStateOf<ImagePreviewData?>(null)
     var previewCaption by mutableStateOf("")
     var sendingFromPreview by mutableStateOf(false)
+    var multiImagePreview by mutableStateOf<List<Uri>?>(null)
+    var sendingMultiPreview by mutableStateOf(false)
 
     fun dismissFullscreen() {
         fullscreenImage = null
@@ -22,5 +25,17 @@ class ChatImagePreviewState {
         imagePreview = null
         previewCaption = ""
         sendingFromPreview = false
+    }
+
+    fun dismissMultiImagePreview() {
+        multiImagePreview = null
+        sendingMultiPreview = false
+    }
+
+    fun removeMultiPreviewItem(index: Int) {
+        val list = multiImagePreview ?: return
+        if (index !in list.indices) return
+        val next = list.toMutableList().apply { removeAt(index) }
+        multiImagePreview = if (next.isEmpty()) null else next
     }
 }

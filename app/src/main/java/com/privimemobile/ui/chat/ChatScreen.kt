@@ -119,6 +119,7 @@ import com.privimemobile.ui.chat.media.AttachmentPickerSheet
 import com.privimemobile.ui.chat.media.FullscreenImageViewer
 import com.privimemobile.ui.chat.media.ImagePreviewData
 import com.privimemobile.ui.chat.media.ImagePreviewSheet
+import com.privimemobile.ui.chat.media.MultiImagePreviewSheet
 import com.privimemobile.ui.chat.media.saveFileToDownloads
 import com.privimemobile.ui.chat.input.VoiceLockIndicator
 import com.privimemobile.ui.chat.input.VoicePreviewBar
@@ -837,6 +838,8 @@ fun ChatScreen(
     // BackHandler: intercept system back when overlays are visible
     BackHandler(enabled = selection.selectionMode) { selection.exitSelection() }
     BackHandler(enabled = media.fullscreenImage != null) { media.fullscreenImage = null }
+    BackHandler(enabled = media.multiImagePreview != null) { media.dismissMultiImagePreview() }
+    BackHandler(enabled = media.imagePreview != null) { media.dismissImagePreview() }
     BackHandler(enabled = media.showAttachPicker) { media.showAttachPicker = false }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1077,16 +1080,13 @@ fun ChatScreen(
             },
             onMultiImageSelected = { uris ->
                 media.showAttachPicker = false
-                // Send images one by one with buffer
-                scope.launch {
-                    uris.forEach { uri ->
-                        handlePickedUri(uri)
-                        // Wait for upload to complete + buffer between sends
-                        delay(2000)
-                        // Auto-send each pending file
-                        handleSend()
-                        delay(1000)
+                when (uris.size) {
+                    0 -> Unit
+                    1 -> {
+                        media.imagePreview = ImagePreviewData(uris[0], name = "", size = 0L, mimeType = "")
+                        media.previewCaption = ""
                     }
+                    else -> media.multiImagePreview = uris
                 }
             },
         )
@@ -1137,6 +1137,34 @@ fun ChatScreen(
                 }
             },
         )
+        }
+    }
+
+    // Multi-image preview before send (DApp MultiImagePreviewSheet parity)
+    AnimatedVisibility(
+        visible = media.multiImagePreview != null,
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(120)),
+    ) {
+        media.multiImagePreview?.let { uris ->
+            MultiImagePreviewSheet(
+                uris = uris,
+                onRemove = { index -> media.removeMultiPreviewItem(index) },
+                onDismiss = { media.dismissMultiImagePreview() },
+                isSending = media.sendingMultiPreview,
+                onSend = {
+                    val toSend = media.multiImagePreview?.toList() ?: return@MultiImagePreviewSheet
+                    media.dismissMultiImagePreview()
+                    scope.launch {
+                        toSend.forEach { uri ->
+                            handlePickedUri(uri)
+                            delay(2000)
+                            handleSend()
+                            delay(1000)
+                        }
+                    }
+                },
+            )
         }
     }
 

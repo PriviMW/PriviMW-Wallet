@@ -403,10 +403,47 @@ LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
+                    ) {
+                        if (isGroupMode && !isMine) {
+                            if (isFirstInCluster) {
+                                Box(modifier = Modifier.clickable { onViewContact(msg.from) }) {
+                                    com.privimemobile.ui.components.AvatarDisplay(
+                                        handle = msg.from,
+                                        size = 32.dp,
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.width(32.dp))
+                            }
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Column(
+                            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+                            modifier = Modifier.widthIn(max = albumMaxWidth),
+                        ) {
+                            if (isGroupMode && !isMine && msg.from.isNotEmpty() && isFirstInCluster) {
+                                val senderColors = listOf(
+                                    Color(0xFF5C6BC0), Color(0xFF26A69A), Color(0xFFEF5350), Color(0xFFAB47BC),
+                                    Color(0xFF42A5F5), Color(0xFFFF7043), Color(0xFF66BB6A), Color(0xFFEC407A),
+                                    Color(0xFFFFA726), Color(0xFF78909C),
+                                )
+                                val senderColor = senderColors[kotlin.math.abs(msg.from.hashCode()) % senderColors.size]
+                                val senderDisplayName = groupMemberNames[msg.from]
+                                Text(
+                                    senderDisplayName ?: "@${msg.from}",
+                                    color = senderColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 4.dp, bottom = 1.dp).clickable { onViewContact(msg.from) },
+                                )
+                            }
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = if (isMine) C.bubbleMine else C.bubbleOther),
-                        modifier = Modifier.widthIn(max = albumMaxWidth),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column {
                             when (albumMsgs.size) {
@@ -496,6 +533,8 @@ LazyColumn(
                                     TickIndicator(read = lastMsg.read, delivered = lastMsg.delivered)
                                 }
                             }
+                        }
+                    }
                         }
                     }
                 }

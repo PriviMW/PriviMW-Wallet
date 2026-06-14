@@ -30,17 +30,23 @@ object ChatListDerive {
 
   /**
    * Telegram-style bubble grouping for one message in [reversedMessages] (newest at index 0).
+   * Album siblings are skipped when finding cluster neighbors so album anchors show avatar/name.
    */
   fun computeClusterFlags(
       index: Int,
       reversedMessages: List<ChatMessage>,
-      prevDateLabel: String?,
       curDateLabel: String,
-      nextDateLabel: String?,
+      albumGroups: Map<String, List<String>> = emptyMap(),
+      dateLabelFor: (ChatMessage) -> String,
   ): ClusterFlags {
       val msg = reversedMessages[index]
-      val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null
-      val nextMsg = if (index > 0) reversedMessages[index - 1] else null
+      val albumMateIds = albumMemberIds(msg.id, albumGroups)
+
+      val prevMsg = neighborOutsideAlbum(index, reversedMessages, albumMateIds, older = true)
+      val nextMsg = neighborOutsideAlbum(index, reversedMessages, albumMateIds, older = false)
+
+      val prevDateLabel = prevMsg?.let(dateLabelFor)
+      val nextDateLabel = nextMsg?.let(dateLabelFor)
 
       val showDateSep = shouldShowDateSeparator(prevDateLabel, curDateLabel)
 
@@ -68,6 +74,33 @@ object ChatListDerive {
           isLastInCluster = isLastInCluster,
           showTimestamp = isLastInCluster,
       )
+  }
+
+  private fun albumMemberIds(messageId: String, albumGroups: Map<String, List<String>>): Set<String>? {
+      albumGroups[messageId]?.let { return it.toSet() }
+      for ((_, ids) in albumGroups) {
+          if (messageId in ids) return ids.toSet()
+      }
+      return null
+  }
+
+  /** Walk toward older (older=true) or newer (older=false) skipping same-album siblings. */
+  private fun neighborOutsideAlbum(
+      index: Int,
+      reversedMessages: List<ChatMessage>,
+      albumMateIds: Set<String>?,
+      older: Boolean,
+  ): ChatMessage? {
+      var i = if (older) index + 1 else index - 1
+      while (i in reversedMessages.indices) {
+          val candidate = reversedMessages[i]
+          if (albumMateIds != null && candidate.id in albumMateIds) {
+              i += if (older) 1 else -1
+              continue
+          }
+          return candidate
+      }
+      return null
   }
 
   fun indexInReversedList(reversedMessages: List<ChatMessage>, message: ChatMessage): Int =

@@ -216,16 +216,13 @@ LazyColumn(
         )
 
         val index = ChatListDerive.indexInReversedList(reversedMessages, msg)
-        val prevMsg = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null // older
-        val nextMsg = if (index > 0) reversedMessages[index - 1] else null // newer
         val curDateLabel = formatDateSeparator(msg.timestamp, context)
         val cluster = ChatListDerive.computeClusterFlags(
             index,
             reversedMessages,
-            prevMsg?.let { formatDateSeparator(it.timestamp, context) },
             curDateLabel,
-            nextMsg?.let { formatDateSeparator(it.timestamp, context) },
-        )
+            albumGroups,
+        ) { m -> formatDateSeparator(m.timestamp, context) }
         val showDateSep = cluster.showDateSep
         val isFirstInCluster = cluster.isFirstInCluster
         val isLastInCluster = cluster.isLastInCluster

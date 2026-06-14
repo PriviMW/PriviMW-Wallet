@@ -12,6 +12,8 @@ class ChatListDeriveTest {
     private fun msg(id: String, sent: Boolean, from: String = "a", ts: Long = 1000L) =
         ChatMessage(id, from, "b", "t", ts, sent)
 
+    private fun dateLabelFor(@Suppress("UNUSED_PARAMETER") m: ChatMessage) = "Today"
+
     @Test
     fun messageItemKey_pollIncludesPollData() {
         assertEquals("id1", ChatListDerive.messageItemKey("id1", "dm", null))
@@ -34,9 +36,8 @@ class ChatListDeriveTest {
         val flags = ChatListDerive.computeClusterFlags(
             index = 1,
             reversedMessages = reversed,
-            prevDateLabel = null,
             curDateLabel = "Today",
-            nextDateLabel = "Today",
+            dateLabelFor = ::dateLabelFor,
         )
         assertTrue(flags.showDateSep)
         assertTrue(flags.isFirstInCluster)
@@ -46,9 +47,8 @@ class ChatListDeriveTest {
         val flagsNewer = ChatListDerive.computeClusterFlags(
             index = 0,
             reversedMessages = reversed,
-            prevDateLabel = "Today",
             curDateLabel = "Today",
-            nextDateLabel = null,
+            dateLabelFor = ::dateLabelFor,
         )
         assertFalse(flagsNewer.showDateSep)
         assertFalse(flagsNewer.isFirstInCluster)
@@ -105,11 +105,40 @@ class ChatListDeriveTest {
         val flags = ChatListDerive.computeClusterFlags(
             index = 0,
             reversedMessages = reversed,
-            prevDateLabel = "Yesterday",
             curDateLabel = "Today",
-            nextDateLabel = "Yesterday",
+            dateLabelFor = { if (it.id == "1") "Yesterday" else "Today" },
         )
         assertFalse(flags.sameAsPrev)
         assertFalse(flags.sameAsNext)
+    }
+
+    @Test
+    fun clusterFlags_albumAnchorIsFirstInClusterWhenOnlyAlbumFromSender() {
+        fun image(id: String, from: String, ts: Long) = ChatMessage(
+            id = id,
+            from = from,
+            to = "g",
+            text = "",
+            timestamp = ts,
+            sent = false,
+            type = "file",
+            file = FileAttachment(mime = "image/jpeg"),
+        )
+        val reversed = listOf(
+            image("3", from = "fae", ts = 1020L),
+            image("2", from = "fae", ts = 1010L),
+            image("1", from = "fae", ts = 1000L),
+            msg("older", sent = false, from = "other", ts = 500L),
+        )
+        val albums = ChatListDerive.computeAlbumGroups(reversed)
+        val flags = ChatListDerive.computeClusterFlags(
+            index = 0,
+            reversedMessages = reversed,
+            curDateLabel = "Today",
+            albumGroups = albums.groups,
+            dateLabelFor = ::dateLabelFor,
+        )
+        assertTrue(flags.isFirstInCluster)
+        assertTrue(flags.isLastInCluster)
     }
 }

@@ -42,8 +42,8 @@ object ChatListDerive {
       val msg = reversedMessages[index]
       val albumMateIds = albumMemberIds(msg.id, albumGroups)
 
-      val prevMsg = neighborOutsideAlbum(index, reversedMessages, albumMateIds, older = true)
-      val nextMsg = neighborOutsideAlbum(index, reversedMessages, albumMateIds, older = false)
+      val prevMsg = neighborForCluster(index, reversedMessages, albumMateIds, older = true)
+      val nextMsg = neighborForCluster(index, reversedMessages, albumMateIds, older = false)
 
       val prevDateLabel = prevMsg?.let(dateLabelFor)
       val nextDateLabel = nextMsg?.let(dateLabelFor)
@@ -84,8 +84,12 @@ object ChatListDerive {
       return null
   }
 
-  /** Walk toward older (older=true) or newer (older=false) skipping same-album siblings. */
-  private fun neighborOutsideAlbum(
+  /** Centered/system rows are not bubble-cluster peers (join pills, invites, etc.). */
+  private fun breaksCluster(msg: ChatMessage): Boolean =
+      msg.type == "group_service" || msg.type == "group_invite"
+
+  /** Walk toward older/newer skipping album siblings and non-clusterable rows. */
+  private fun neighborForCluster(
       index: Int,
       reversedMessages: List<ChatMessage>,
       albumMateIds: Set<String>?,
@@ -95,6 +99,10 @@ object ChatListDerive {
       while (i in reversedMessages.indices) {
           val candidate = reversedMessages[i]
           if (albumMateIds != null && candidate.id in albumMateIds) {
+              i += if (older) 1 else -1
+              continue
+          }
+          if (breaksCluster(candidate)) {
               i += if (older) 1 else -1
               continue
           }

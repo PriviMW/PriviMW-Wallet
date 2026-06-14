@@ -141,4 +141,21 @@ class ChatListDeriveTest {
         assertTrue(flags.isFirstInCluster)
         assertTrue(flags.isLastInCluster)
     }
+
+    @Test
+    fun clusterFlags_firstMessageAfterJoinServiceShowsAvatar() {
+        val joinService = msg("svc", sent = false, from = "newbie", ts = 1000L)
+            .copy(type = "group_service", text = "@newbie joined")
+        val firstChat = msg("m1", sent = false, from = "newbie", ts = 1010L)
+        val reversed = listOf(firstChat, joinService)
+
+        val flags = ChatListDerive.computeClusterFlags(
+            index = 0,
+            reversedMessages = reversed,
+            curDateLabel = "Today",
+            dateLabelFor = ::dateLabelFor,
+        )
+        assertTrue(flags.isFirstInCluster)
+        assertTrue(flags.isLastInCluster)
+    }
 }

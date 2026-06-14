@@ -15,7 +15,6 @@ class ChatImagePreviewState {
     var previewCaption by mutableStateOf("")
     var sendingFromPreview by mutableStateOf(false)
     var multiImagePreview by mutableStateOf<List<Uri>?>(null)
-    var sendingMultiPreview by mutableStateOf(false)
 
     fun dismissFullscreen() {
         fullscreenImage = null
@@ -29,7 +28,6 @@ class ChatImagePreviewState {
 
     fun dismissMultiImagePreview() {
         multiImagePreview = null
-        sendingMultiPreview = false
     }
 
     fun removeMultiPreviewItem(index: Int) {

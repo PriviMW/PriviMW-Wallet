@@ -1151,7 +1151,6 @@ fun ChatScreen(
                 uris = uris,
                 onRemove = { index -> media.removeMultiPreviewItem(index) },
                 onDismiss = { media.dismissMultiImagePreview() },
-                isSending = media.sendingMultiPreview,
                 onSend = {
                     val toSend = media.multiImagePreview?.toList() ?: return@MultiImagePreviewSheet
                     media.dismissMultiImagePreview()

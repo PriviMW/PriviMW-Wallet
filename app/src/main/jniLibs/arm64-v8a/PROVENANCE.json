@@ -1,13 +1,13 @@
 {
   "beam_repo": "PriviMW/beam",
-  "beam_commit": "a7ece39dd8e108d275974fe7a2369e40eca42bef",
-  "asio_ipfs_commit": "5612d3eeef42b725279c53907430e93fdf6f111e",
-  "beam_release_tag": "jni-7.5.14518-a7ece39dd8e108d275974fe7a2369e40eca42bef",
-  "beam_run_id": "26621513354",
+  "beam_commit": "26cc57bb00b718f22e55f5a915b32c770552455e",
+  "asio_ipfs_commit": "e3a1637cdcc83cdf9b57c1e4810cb20ad1d87f42",
+  "beam_release_tag": "jni-7.5.14592-26cc57bb00b718f22e55f5a915b32c770552455e",
+  "beam_run_id": "28545542112",
   "abi": "arm64-v8a",
   "built_on": "ubuntu-22.04",
   "files": {
-    "libwallet-jni.so": "sha256:09541d25ea93e5f31cb20b9c13b61a6d29fe5d41e9aa1d6f3232b696a4e7fd52",
-    "libipfs-bindings.so": "sha256:affcf7ced3130df50a0fe184f9ea7e5c1caea811c1d6d4b43be4341ca6afae9e"
+    "libwallet-jni.so": "sha256:c7da7b8064a9cde0b45d45843310f9a735eccef62e91edc283fee96152568f8f",
+    "libipfs-bindings.so": "sha256:2309738b3d403c0e7960729eee22a136a3358bec6d25b6188435ef23c100404d"
   }
 }

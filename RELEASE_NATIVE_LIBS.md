@@ -38,8 +38,9 @@ Unchanged since vX.Y.Z (see that release for beam commit and .so hashes).
 
 | Field | Value |
 |-------|--------|
-| Beam commit | `a7ece39dd8e108d275974fe7a2369e40eca42bef` |
-| JNI release | [`jni-7.5.14518-a7ece39dd8e108d275974fe7a2369e40eca42bef`](https://github.com/PriviMW/beam/releases/tag/jni-7.5.14518-a7ece39dd8e108d275974fe7a2369e40eca42bef) |
-| libwallet-jni.so | `09541d25ea93e5f31cb20b9c13b61a6d29fe5d41e9aa1d6f3232b696a4e7fd52` |
-| libipfs-bindings.so | `affcf7ced3130df50a0fe184f9ea7e5c1caea811c1d6d4b43be4341ca6afae9e` |
-| Wallet commit (first pin) | `a390653` |
+| Beam commit | `26cc57bb00b718f22e55f5a915b32c770552455e` (HF6 hard fork, Boost 1.90) |
+| asio-ipfs commit | `e3a1637cdcc83cdf9b57c1e4810cb20ad1d87f42` (PriviMW/asio-ipfs, Boost 1.90 port) |
+| JNI release | [`jni-7.5.14592-26cc57bb00b718f22e55f5a915b32c770552455e`](https://github.com/PriviMW/beam/releases/tag/jni-7.5.14592-26cc57bb00b718f22e55f5a915b32c770552455e) |
+| libwallet-jni.so | `c7da7b8064a9cde0b45d45843310f9a735eccef62e91edc283fee96152568f8f` |
+| libipfs-bindings.so | `2309738b3d403c0e7960729eee22a136a3358bec6d25b6188435ef23c100404d` |
+| Wallet commit (first pin) | `a390653` (originally v1.7.4 / jni-7.5.14518); re-pinned for HF6 at v1.8.0 |

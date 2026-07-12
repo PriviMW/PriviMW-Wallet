@@ -268,11 +268,21 @@ object ProtocolStartup {
                 val prevTvl = seenTvl[aid2] ?: 0.0
                 if (prevTvl > 0 && tvl <= prevTvl) continue // keep the more liquid pool
 
+                // price_native = rate_1_2 = asset2-per-BEAM (reserve2/reserve1), NOT BEAM-per-asset.
+                // We need BEAM per 1 unit of asset2 (= reserve1/reserve2 = rate_2_1) so that
+                // humanBalance × beamRatio × beamRateInCurrency gives the correct fiat value.
+                // Using price_native directly inverts the ratio — e.g. TICO (291811 TICO/BEAM)
+                // showed ~$2,588 per TICO instead of ~$3e-08. Prefer rate_2_1 from the API;
+                // fall back to 1/price_native if it's missing/zero.
                 val priceNative = pair.optDouble("price_native", 0.0)
                 if (priceNative <= 0) continue
+                val beamPerAsset = pair.optDouble("rate_2_1", 0.0).let {
+                    if (it > 0) it else 1.0 / priceNative
+                }
+                if (beamPerAsset <= 0) continue
 
                 seenTvl[aid2] = tvl
-                rates["${aid2}_beam"] = priceNative
+                rates["${aid2}_beam"] = beamPerAsset
                 rates["${aid2}_decimals"] = pair.optInt("decimals2", 8).toDouble()
 
                 val priceChange24h = pair.optDouble("price_change_24h", 0.0)
